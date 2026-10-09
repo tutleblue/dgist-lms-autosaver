@@ -41,6 +41,14 @@ else:
     print("[붕어빵] data/ 가 없어 씨앗 데이터 없이 묶습니다. "
           "처음 켤 때 학사일정·개설강좌를 직접 받아 옵니다.")
 
+# 공공데이터포털 기본 인증키(개설강좌·학사일정·학교 행사). 공개 저장소에는 없고(.gitignore)
+# 이 PC 또는 CI(secrets.DGIST_API_KEY)에서 만든 파일만 묶는다. 없으면 설정에서 각자 넣는다.
+_pdkey = PROJECT / "public_data_key.txt"
+if _pdkey.exists():
+    datas.append((str(_pdkey), "."))
+else:
+    print("[붕어빵] public_data_key.txt 가 없어 공공데이터 기본 키 없이 묶습니다.")
+
 _client = PROJECT / "google_client.json"
 if _client.exists():
     datas.append((str(_client), "."))

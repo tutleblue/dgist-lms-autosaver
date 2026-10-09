@@ -52,7 +52,7 @@
             <span class="icon" data-icon="calendar"></span>
             캘린더
           </button>
-          <button class="nav-item" type="button" data-view="courses">
+          <button class="nav-item" type="button" data-view="courses" data-more>
             <span class="icon" data-icon="book"></span>
             강의
           </button>
@@ -69,15 +69,20 @@
           </button>
 
           <span class="nav-group-label">창고</span>
-          <button class="nav-item" type="button" data-view="storage">
+          <button class="nav-item" type="button" data-view="storage" data-more>
             <span class="icon" data-icon="box"></span>
             창고
           </button>
 
           <span class="nav-group-label">앱</span>
-          <button class="nav-item" type="button" data-view="settings">
+          <button class="nav-item" type="button" data-view="settings" data-more>
             <span class="icon" data-icon="settings"></span>
             설정
+          </button>
+          <!-- 휴대폰 아래 탭바: 자주 쓰는 다섯 개만 두고 나머지(data-more)는 '더보기' 시트로 (app.js bindMoreSheet) -->
+          <button class="nav-item nav-more" id="navMore" type="button" aria-haspopup="dialog" aria-expanded="false">
+            <span class="icon" data-icon="grid"></span>
+            더보기
           </button>
         </nav>
 
@@ -118,9 +123,14 @@
         <div class="tour-spot" id="tourSpot"></div>
         <div class="tour-card" id="tourCard">
           <div class="tour-bubble">
-            <span class="tour-count" id="tourCount"></span>
+            <div class="tour-head">
+              <span class="tour-chapter" id="tourChapter"></span>
+              <span class="tour-count" id="tourCount"></span>
+            </div>
             <h2 id="tourTitle"></h2>
             <p id="tourText"></p>
+            <ul class="tour-tips" id="tourTips" hidden></ul>
+            <p class="tour-note" id="tourNote" hidden></p>
           </div>
           <div class="tour-dots" id="tourDots" aria-hidden="true"></div>
           <div class="tour-actions">
@@ -1558,11 +1568,11 @@
               </label>
               <label class="st-field">
                 <span>
-                  DGIST 공공데이터 키 — 개설강좌·학사일정·세미나
-                  <button type="button" class="hint" data-hint="공공데이터포털(data.go.kr)에서 무료로 받습니다.">?</button>
+                  DGIST 공공데이터 키 — 개설강좌·학사일정·학교 행사
+                  <button type="button" class="hint" data-hint="앱에 기본 키가 들어 있어 비워 둬도 됩니다. 내 키를 넣으면 그 키를 먼저 씁니다(공공데이터포털 data.go.kr 에서 무료로 받음).">?</button>
                   <em class="badge-saved" id="dgistKeySavedBadge" hidden>저장됨</em>
                 </span>
-                <input name="dgistApiKey" type="password" placeholder="바꿀 때만 입력" autocomplete="off" />
+                <input name="dgistApiKey" type="password" placeholder="비워 두면 앱 기본 키 사용" autocomplete="off" />
               </label>
             </div>
           </details>

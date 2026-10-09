@@ -2280,7 +2280,12 @@ tbody tr:hover {
 .event-editor {
   border-top: 1px solid var(--bg-deep);
   background: var(--surface-soft);
-  flex: none;
+  /* 패널은 창 높이로 잘린다(overflow: hidden). 예전엔 flex: none 이라 그날 일정이 몇 개만 있어도
+     편집 칸이 아래로 밀려 '저장' 버튼이 잘려 보이지 않았다(1280×760 에서 실측).
+     목록이 먼저 줄어들고, 그래도 모자라면 편집 칸 안에서 스크롤한다. */
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow-y: auto;
 }
 .event-editor[hidden] { display: none; }
 .event-editor.opening {
@@ -2331,7 +2336,13 @@ tbody tr:hover {
   gap: 8px;
   flex: none;
 }
-.day-detail-body { padding: 6px 8px 10px; }
+.day-detail-body {
+  padding: 6px 8px 10px;
+  /* 편집 칸보다 먼저 줄어들게 shrink 를 크게 준다 */
+  flex: 1 1000 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
 
 .day-item {
   display: flex;
@@ -2408,12 +2419,73 @@ tbody tr:hover {
 .event-editor-foot {
   display: flex;
   gap: 8px;
-  padding: 0 16px 16px;
+  padding: 10px 16px 16px;
+  /* 편집 칸이 스크롤돼도 저장 버튼은 늘 보이게 */
+  position: sticky;
+  bottom: 0;
+  background: var(--surface-soft);
+  z-index: 1;
 }
 .event-editor-foot .button.ghost { color: var(--red); }
 
 @media (max-width: 620px) {
   .event-grid { grid-template-columns: 1fr; }
+}
+
+/* 일정 편집 대화 상자 (app.js openEventEditor 가 body 로 옮기고 as-dialog 를 붙인다).
+   창 높이 안에 들어오게 하고, 내용이 길면 안에서 굴리며 '저장'은 늘 아래에 붙어 있다. */
+.event-editor-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 900;
+  background: rgba(20, 18, 16, 0.45);
+  animation: tour-fade 0.2s ease-out;
+}
+.event-editor.as-dialog {
+  position: fixed;
+  z-index: 901;
+  left: 50%;
+  top: 50%;
+  width: min(540px, calc(100vw - 24px));
+  max-height: calc(100vh - 32px);
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  transform: translate(-50%, -50%);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-top: 1px solid var(--border);
+  border-radius: 18px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.3);
+}
+.event-editor.as-dialog .event-editor-foot { background: var(--surface); }
+.event-editor.as-dialog.opening { animation: editor-pop 0.26s cubic-bezier(0.22, 1, 0.36, 1); }
+@keyframes editor-pop {
+  from { opacity: 0; transform: translate(-50%, -48%) scale(0.97); }
+  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+/* 휴대폰 폭: 아래에서 올라오는 시트 */
+@media (max-width: 600px) {
+  .event-editor.as-dialog {
+    left: 0;
+    right: 0;
+    top: auto;
+    bottom: 0;
+    width: 100%;
+    max-height: 88vh;
+    max-height: 88dvh;
+    transform: none;
+    border-radius: 18px 18px 0 0;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .event-editor.as-dialog.opening { animation: editor-sheet 0.28s cubic-bezier(0.22, 1, 0.36, 1); }
+}
+@keyframes editor-sheet {
+  from { transform: translateY(40px); opacity: 0.4; }
+  to { transform: none; opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .event-editor.as-dialog.opening { animation: none; }
 }
 
 /* ===== 학교 사이트 바로가기 ===== */
@@ -8290,11 +8362,74 @@ label.st-dest, .st-dest label.st-dest-top { cursor: pointer; }
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.25);
   transition: left 0.32s cubic-bezier(0.22, 1, 0.36, 1), top 0.32s cubic-bezier(0.22, 1, 0.36, 1);
 }
-.tour-count { display: block; font-size: 11px; font-weight: 700; color: var(--accent-strong); letter-spacing: 0.04em; }
+.tour-card { width: min(380px, calc(100vw - 24px)); }
+.tour-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.tour-chapter {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent-strong);
+  background: var(--accent-soft);
+  border-radius: 999px;
+  padding: 2px 9px;
+  letter-spacing: 0.02em;
+}
+.tour-chapter:empty { display: none; }
+.tour-count { font-size: 11px; font-weight: 600; color: var(--text-faint); font-variant-numeric: tabular-nums; }
+/* 단계 안의 기능 목록: 짧은 줄마다 작은 체크 */
+.tour-tips { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 6px; }
+.tour-tips li {
+  position: relative;
+  padding-left: 22px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text);
+  word-break: keep-all;
+}
+.tour-tips li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 2px;
+  width: 15px;
+  height: 15px;
+  border-radius: 5px;
+  background: var(--accent-soft);
+}
+.tour-tips li::after {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: 5px;
+  width: 4px;
+  height: 7px;
+  border: solid var(--accent-strong);
+  border-width: 0 1.8px 1.8px 0;
+  transform: rotate(45deg);
+}
+/* 시작 화면: 모아 주는 것들을 알약으로 */
+.tour-tips.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.tour-tips.chips li {
+  padding: 4px 11px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.tour-tips.chips li::before, .tour-tips.chips li::after { content: none; }
+.tour-bubble .tour-note { margin: 12px 0 0; font-size: 12px; color: var(--text-faint); }
+.tour-bubble.swap { animation: tour-swap 0.28s ease-out; }
+@keyframes tour-swap { from { opacity: 0.2; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .tour-bubble.swap { animation: none; } }
 .tour-bubble h2 { margin: 4px 0 8px; font-family: var(--font-serif); font-size: 19px; line-height: 1.3; }
 .tour-bubble p { margin: 0; font-size: 13.5px; line-height: 1.7; color: var(--text-soft); }
-.tour-dots { display: flex; gap: 5px; margin: 14px 0 12px; }
+.tour-dots { display: flex; flex-wrap: wrap; gap: 4px; margin: 14px 0 12px; }
 .tour-dots span { width: 6px; height: 6px; border-radius: 999px; background: var(--border); transition: width 0.2s ease, background 0.2s ease; }
+/* 점을 눌러 그 단계로 건너뛴다. 묶음이 바뀌는 곳은 조금 띄운다 */
+.tour-dots .tour-dot { cursor: pointer; position: relative; }
+.tour-dots .tour-dot::after { content: ""; position: absolute; inset: -6px -2px; }
+.tour-dots .tour-dot.gap { margin-left: 7px; }
+.tour-dots .tour-dot:hover:not(.on) { background: color-mix(in srgb, var(--accent) 70%, var(--border)); }
 .tour-dots span.past { background: color-mix(in srgb, var(--accent) 45%, var(--border)); }
 .tour-dots span.on { width: 18px; background: var(--accent); }
 .tour-actions { display: flex; align-items: center; gap: 8px; }
@@ -9232,6 +9367,12 @@ html.vt-quick::view-transition-new(topbar) { animation: vt-soft-fade 0.15s ease 
 .ann-dialog-body { padding-top: 16px; }
 .ann-text { font-size: 14px; line-height: 1.75; white-space: pre-wrap; overflow-wrap: anywhere; }
 .ann-text a { color: var(--blue); text-decoration: underline; }
+/* 공지의 취소선(시험 범위에서 뺀 단원 등) — 흐리게 해서 '빠졌다' 가 바로 보이게 */
+.ann-text del { color: var(--text-faint); text-decoration-thickness: 1.5px; }
+/* 옆으로 끌어 넘기기: 세로 스크롤은 그대로 두고 가로 끌기만 우리가 받는다 */
+.ann-dialog-body { touch-action: pan-y; overflow-x: hidden; }
+.ann-dialog-body.ann-dragging { cursor: grabbing; user-select: none; }
+.ann-dialog .whats-new-head { overflow: hidden; }
 .ann-dialog-foot {
   display: flex;
   align-items: center;
@@ -9581,3 +9722,500 @@ body.mail-resizing iframe { pointer-events: none; } /* 끄는 중 본문 iframe 
   .mail-app, .mail-app.rail-folded, .mail-app.composing { grid-template-columns: minmax(0, 1fr); }
   .mail-app.rail-folded .mail-rail, .mail-app.composing .mail-rail { visibility: visible; padding: 10px 12px; }
 }
+
+
+/* =====================================================================
+   좁은 창·정사각형 창·휴대폰 (2026-10-09)
+   예전에는 폭만 줄어들고 배치는 데스크톱 그대로라, 정사각형 창에서는 사이드바 232px 가 본문을 밀고
+   휴대폰 폭에서는 상단(시계·화살표·검색·동기화·테마)이 화면의 1/3(278px/812px 실측)을 먹었다.
+   - 761~1100px: 사이드바를 아이콘 레일(76px)로 접고, 시계는 상단바로 (app.js NOW_MOBILE)
+   - ~760px    : 위는 한 줄 앱바 + 검색, 아래는 탭 다섯 개 + 더보기 시트. 실행 로그 손잡이는 숨김.
+   안드로이드판도 이 휴대폰 배치를 기준으로 삼는다.
+   ===================================================================== */
+
+/* ---------- 761~1100px: 아이콘 레일 ---------- */
+@media (min-width: 761px) and (max-width: 1100px) {
+  .app-shell,
+  .app-shell.mail-focus { grid-template-columns: 76px minmax(0, 1fr); }
+  .sidebar { padding: 14px 8px; gap: 14px; align-items: stretch; }
+  .sidebar .brand,
+  .nav-group-label,
+  .copyright { display: none; }
+  .nav-item {
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 4px;
+    padding: 9px 2px 7px;
+    font-size: 10.5px;
+    line-height: 1.15;
+    text-align: center;
+    white-space: nowrap;
+    position: relative;
+  }
+  .app-shell.mail-focus .nav-item { font-size: 10.5px; padding: 9px 2px 7px; }
+  .nav-item .icon { width: 20px; height: 20px; }
+  .nav-item .nav-badge { position: absolute; top: 3px; right: 10px; transform: none; font-size: 10px; }
+  /* 업데이트·문의는 아이콘만 */
+  .whats-new { justify-content: center; padding: 9px 0; font-size: 0; }
+  .whats-new .icon { width: 18px; height: 18px; }
+  /* 상태판은 불빛 점만 */
+  .status-card { justify-content: center; padding: 10px 0; }
+  .status-card > div { display: none; }
+  /* 시계는 상단바 왼쪽에 한 줄로 (app.js 가 옮긴다) */
+  .topbar .nowbar-compact { flex: 0 1 260px; min-width: 0; }
+  .search-wrap { min-width: 0; flex: 1 1 200px; }
+  .search-kbd { display: none; }
+  .tf-name { display: none; }
+  .workspace { padding-left: 18px; padding-right: 18px; }
+  .app-shell.mail-focus .brand { display: none; }
+}
+
+/* 시계(나우바) 한 줄형: 상단바로 옮겨졌을 때 */
+.topbar .nowbar-compact {
+  padding: 6px 12px;
+  border-radius: 14px;
+}
+.nowbar-compact .nowbar-face {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+}
+.nowbar-compact .nowbar-clock { flex-direction: row; align-items: baseline; gap: 6px; }
+.nowbar-compact .nowbar-time { font-size: 18px; }
+.nowbar-compact .nowbar-sec { display: none; }
+.nowbar-compact .nowbar-live { display: flex; align-items: center; gap: 6px; }
+.nowbar-compact .nowbar-text { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+.nowbar-compact .nowbar-text strong,
+.nowbar-compact .nowbar-text span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 12.5px;
+}
+.nowbar-compact .nowbar-text span { color: var(--text-faint); font-size: 11.5px; }
+
+/* ---------- ~760px: 휴대폰 ---------- */
+@media (max-width: 760px) {
+  :root { --tabbar-h: 60px; }
+
+  /* 위: 한 줄 앱바(시계 · 동기화 · 테마) + 검색 */
+  .topbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "now actions" "search search";
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px 10px;
+  }
+  .topbar .nowbar-compact { grid-area: now; flex: none; }
+  .topbar .nav-arrows { display: none; }
+  .topbar .search-wrap { grid-area: search; flex: none; }
+  .topbar .search-kbd { display: none; }
+  .topbar-actions {
+    grid-area: actions;
+    flex: none;
+    overflow: visible;
+    gap: 6px;
+  }
+  .topbar .last-sync { display: none; }
+  .sync-pill { padding: 0; gap: 0; border: none; background: none; }
+  .sync-button { padding: 0; width: 40px; height: 40px; justify-content: center; font-size: 0; gap: 0; }
+  .sync-button .icon { width: 18px; height: 18px; }
+  .theme-flip { padding: 0; width: 40px; height: 40px; justify-content: center; }
+  .tf-name { display: none; }
+  .top-progress {
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    top: auto;
+    bottom: calc(var(--tabbar-h) + 14px);
+    max-width: none;
+    min-width: 0;
+    z-index: 61;
+  }
+  .nowbar-compact .nowbar-date { display: none; }
+  /* 메일함에서도 위 막대는 한 줄(검색은 메일함 자체 검색을 쓴다) */
+  .app-shell.mail-focus .topbar { grid-template-areas: "now actions"; padding-bottom: 8px; }
+
+  /* 실행 로그 손잡이가 본문 오른쪽 50px 를 늘 차지했다. 진행은 아래 진행 막대로 보인다. */
+  .right-rail { display: none !important; }
+  .workspace,
+  .workspace.rail-collapsed { grid-template-columns: minmax(0, 1fr); padding: 14px 12px calc(var(--tabbar-h) + 24px); }
+  .main { padding-bottom: 0; }
+
+  /* 아래: 탭 다섯 + 더보기. 고르게 나눠 옆으로 밀리지 않게 */
+  .sidebar { overflow: visible; padding: 4px 4px calc(4px + env(safe-area-inset-bottom, 0px)); }
+  .nav-list { min-width: 0; width: 100%; gap: 0; }
+  .nav-item[data-more] { display: none; }
+  .nav-item { flex: 1 1 0; min-width: 0; padding: 6px 2px 4px; font-size: 10.5px; }
+  .nav-item .nav-badge { right: calc(50% - 22px); }
+  .whats-new,
+  .update-ready { display: none !important; }
+
+  /* 화면 머리 */
+  .dash-edit-toggle { position: static; }
+  .hero-panel .hero-sub { margin-left: 0; }
+
+  /* 과제 마감: 한 줄에 다 넣으면 오른쪽이 잘렸다 → 두 줄 */
+  .deadline-row {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas: "badge main" "badge meta" "submit submit";
+    column-gap: 10px;
+    row-gap: 6px;
+    align-items: start;
+  }
+  .deadline-row .dday-badge { grid-area: badge; min-width: 48px; padding: 4px 8px; font-size: 11.5px; }
+  .deadline-row .deadline-main { grid-area: main; min-width: 0; }
+  .deadline-row .deadline-meta {
+    grid-area: meta;
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    text-align: left;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+  .deadline-row .deadline-submit { grid-area: submit; justify-self: stretch; text-align: center; }
+
+  /* 캘린더: 칸에는 점만, 날짜를 누르면 아래에서 시트가 올라온다 */
+  .calendar-grid { gap: 2px; padding: 8px 6px; }
+  .cal-cell { min-height: 52px; padding: 4px 3px; gap: 3px; align-items: center; border-radius: 8px; }
+  .cal-daynum { font-size: 12px; }
+  .cal-holiday { font-size: 8.5px; max-width: 100%; text-align: center; }
+  .cal-chips { flex-direction: row; flex-wrap: wrap; justify-content: center; gap: 2px; }
+  .cal-chip {
+    width: 6px;
+    height: 6px;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    font-size: 0;
+    color: transparent;
+  }
+  .cal-chip.cal-deadline { background: var(--red); }
+  .cal-chip.cal-event { background: var(--violet); }
+  .cal-chip.cal-school { background: var(--amber); }
+  .cal-chip.cal-done { background: var(--green); }
+  .cal-chip.cal-mine { background: var(--blue); }
+  .cal-chip.cal-academic { background: var(--text-faint); }
+  .calendar-legend { gap: 6px 12px; font-size: 11.5px; }
+  .calendar-stage.detail-open .day-detail,
+  .day-detail {
+    position: fixed;
+    left: 0;
+    right: 0;
+    top: auto;
+    bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom, 0px) + 8px);
+    z-index: 65;
+    max-height: 62vh;
+    max-height: 62dvh;
+    border-radius: 18px 18px 0 0;
+    transform: translateY(16px);
+    box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.28);
+  }
+  .calendar-stage.detail-open .day-detail { transform: none; }
+
+  /* 강의 카드: 한 줄에 하나 */
+  .course-grid { grid-template-columns: minmax(0, 1fr); }
+  .course-tabs { overflow-x: auto; }
+
+  /* 설정: 아래 탭바에 가리지 않게 */
+  .settings-view { padding-bottom: calc(var(--tabbar-h) + 28px); }
+}
+
+/* 더보기 시트 (휴대폰) */
+.more-sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  background: rgba(20, 18, 16, 0.4);
+  animation: tour-fade 0.18s ease-out;
+}
+.more-sheet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 71;
+  padding: 8px 16px calc(18px + env(safe-area-inset-bottom, 0px));
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  border-radius: 20px 20px 0 0;
+  box-shadow: 0 -16px 40px rgba(0, 0, 0, 0.25);
+  animation: editor-sheet 0.26s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.more-sheet-grip { width: 38px; height: 4px; border-radius: 99px; background: var(--border-strong); margin: 4px auto 14px; }
+.more-sheet-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.more-sheet-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 14px 4px 12px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface-soft);
+  color: var(--text);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.more-sheet-item .icon { width: 22px; height: 22px; color: var(--text-soft); }
+.more-sheet-item.on { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-strong); }
+.more-sheet-item.on .icon { color: var(--accent-strong); }
+.more-sheet-list { display: grid; margin-top: 12px; border-top: 1px solid var(--bg-deep); padding-top: 6px; }
+.more-sheet-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 6px;
+  border: none;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 13.5px;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 10px;
+}
+.more-sheet-row:hover { background: var(--surface-soft); }
+.more-sheet-row .icon { width: 18px; height: 18px; color: var(--text-soft); }
+/* 더보기 탭은 휴대폰에서만 */
+.nav-more { display: none; }
+@media (max-width: 760px) {
+  .nav-more { display: flex; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .more-sheet, .more-sheet-backdrop { animation: none; }
+}
+
+/* 메일함 집중 모드의 '접힌 시계' 규칙(사이드바 72px 용)이 상단바로 옮긴 한 줄 시계까지 접어 버렸다 */
+.app-shell.mail-focus .topbar .nowbar-compact { padding: 6px 12px; border-radius: 14px; text-align: left; }
+.app-shell.mail-focus .topbar .nowbar-compact .nowbar-face { text-align: left; cursor: pointer; }
+.app-shell.mail-focus .topbar .nowbar-compact .nowbar-clock { flex-direction: row; align-items: baseline; }
+.app-shell.mail-focus .topbar .nowbar-compact .nowbar-time { font-size: 18px; }
+.app-shell.mail-focus .topbar .nowbar-compact .nowbar-text { display: flex; }
+.app-shell.mail-focus .topbar .nowbar-compact .nowbar-live { justify-content: flex-start; margin-top: 0; }
+
+/* 설정은 본문 위에 덮는 화면(position: fixed)이라 사이드바 폭을 따로 맞춰야 한다 */
+@media (min-width: 761px) and (max-width: 1100px) {
+  .settings-view { inset: 0 0 0 76px; padding: 24px 24px 60px; }
+}
+@media (max-width: 760px) {
+  /* 위 막대가 설정 제목을 가렸다(375px 실측). 설정은 위 막대까지 덮는 한 장짜리 화면으로 */
+  .settings-view { z-index: 55; padding-top: 18px; }
+}
+
+@media (min-width: 761px) and (max-width: 1100px) {
+  /* 위 막대를 한 줄에: 마지막 확인 글자는 빼고 새로고침 단추만 (언제 가져왔는지는 상태판·툴팁에 있다) */
+  .topbar { flex-wrap: nowrap; }
+  .topbar .last-sync { display: none; }
+  .sync-button { font-size: 0; gap: 0; padding: 0 10px; }
+  .sync-button .icon { width: 17px; height: 17px; }
+  /* 날짜 상세: 달력 아래로 밀어 내리지 않고 오른쪽에서 덮는 서랍 */
+  .calendar-stage,
+  .calendar-stage.detail-open,
+  .calendar-stage.detail-open.reading { grid-template-columns: minmax(0, 1fr); }
+  .calendar-stage.detail-open .day-detail,
+  .day-detail {
+    position: fixed;
+    top: 72px;
+    right: 12px;
+    bottom: 12px;
+    width: min(400px, 46vw);
+    max-height: none;
+    z-index: 65;
+    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.3);
+    transform: translateX(24px);
+  }
+  .calendar-stage.detail-open .day-detail { transform: none; }
+}
+
+
+/* ===== 좁은 메일함: 폴더 칸을 한 줄 띠로 (2026-10-09) =====
+   예전에는 폴더 칸을 위로 눕히되 '쓰기 두 개 / 안읽음·중요·첨부 / 폴더·분류'를 여러 줄로 펼쳐서,
+   메일 영역 834px 에서 폴더 칸만 381px(창 높이의 절반)를 먹고 칸 사이가 휑했다(사용자: '쓸데없는 여백').
+   이제 모든 단추를 한 줄(약 50px)에 이어 놓고 옆으로 넘겨 본다. 스크롤바는 숨기고 오른쪽 끝을 흐리게 해
+   더 있다는 걸 보여 준다. 마우스 휠로도 옆으로 넘어간다(app.js bindMailStripWheel). */
+@container mailapp (max-width: 860px) {
+  #view-emails .mail-rail,
+  #view-emails .mail-app.rail-folded .mail-rail {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+    mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+  }
+  #view-emails .mail-rail::-webkit-scrollbar { display: none; }
+  /* 묶음 상자는 풀어서 단추들이 한 줄에 서게 */
+  #view-emails .mail-write-row,
+  #view-emails .mail-quick,
+  #view-emails .mail-folders,
+  #view-emails .mail-folder-row,
+  #view-emails .mail-subfolders,
+  #view-emails .mail-subfolders-inner { display: contents; }
+  #view-emails .mail-rail-foot,
+  #view-emails .mail-folder-caret.empty,
+  #view-emails .mail-subfolders.closed .mail-cat,
+  #mailRailToggle { display: none; }
+
+  /* 순서: 쓰기 → 폴더(분류 포함) → 안읽음·중요·첨부 */
+  #view-emails .mail-write-row > * { order: 0; }
+  #view-emails .mail-folders * { order: 1; }
+  #view-emails .mail-quick > * { order: 2; }
+
+  /* 모든 단추를 같은 높이의 알약으로 */
+  #view-emails .mail-rail .button,
+  #view-emails .mail-folder,
+  #view-emails .mail-quick-item {
+    flex: none;
+    height: 32px;
+    min-height: 0;
+    padding: 0 11px;
+    border-radius: 999px;
+    font-size: 12.5px;
+    gap: 5px;
+    white-space: nowrap;
+    width: auto;
+  }
+  #view-emails .mail-compose-btn { padding: 0 14px; }
+  #view-emails .mail-folder .icon,
+  #view-emails .mail-quick-item .icon { width: 14px; height: 14px; }
+  #view-emails .mail-folder .mf-label { overflow: visible; }
+  #view-emails .mail-folder.active { box-shadow: inset 0 0 0 1px var(--accent); }
+  #view-emails .mail-cat {
+    padding: 0 9px;
+    height: 28px;
+    font-size: 11.5px;
+    color: var(--text-soft);
+    background: var(--surface-soft);
+  }
+  #view-emails .mail-folder-caret {
+    flex: none;
+    width: 24px;
+    height: 32px;
+    margin-right: -4px;
+  }
+  /* 빠른 필터는 숫자 + 아이콘 + 이름을 가로로, 앞에 칸막이 */
+  #view-emails .mail-quick-item {
+    flex-direction: row;
+    align-items: center;
+    border: 1px solid var(--border);
+    background: transparent;
+  }
+  #view-emails .mail-quick-item strong { font-size: 12.5px; order: 2; }
+  #view-emails .mail-quick-item:first-child { margin-left: 8px; position: relative; }
+  #view-emails .mail-quick-item:first-child::before {
+    content: "";
+    position: absolute;
+    left: -9px;
+    top: 7px;
+    bottom: 7px;
+    width: 1px;
+    background: var(--border);
+  }
+  /* 마지막 단추가 흐린 끝에 가리지 않게 */
+  #view-emails .mail-rail::after { content: ""; flex: none; width: 20px; order: 3; }
+}
+@container mailapp (max-width: 860px) {
+  /* 분류(답신·세미나…)가 받은 편지함 바로 뒤에 오면 자주 쓰는 폴더(보낸·임시…)가 화면 밖으로 밀렸다 → 분류는 폴더 뒤로 */
+  #view-emails .mail-folders .mail-cat { order: 2; }
+  #view-emails .mail-quick > * { order: 3; }
+  #view-emails .mail-rail::after { order: 4; }
+  #view-emails .mail-folder-caret { display: none; }
+  #view-emails .mail-subfolders.closed .mail-cat { display: flex; }
+  /* 어느 폴더인지는 띠에서 보이므로, 41px 로 잘려 '받…' 만 보이던 제목은 뺀다 */
+  #mailFolderTitle { display: none; }
+}
+@media (max-width: 760px) {
+  /* 휴대폰에서도 폴더는 서랍(☰ 눌러야 보임) 대신 위의 한 줄 띠로. 띠에서 ☰ 단추를 숨겼더니 서랍을 열 길이 없었다. */
+  #view-emails .mail-app { grid-template-rows: auto minmax(0, 1fr); }
+  #view-emails .mail-rail,
+  #view-emails .mail-app.rail-folded .mail-rail {
+    position: static;
+    inset: auto;
+    width: auto;
+    transform: none;
+    transition: none;
+    background: transparent;
+    box-shadow: none;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    z-index: auto;
+  }
+  #view-emails .mail-scrim { display: none; }
+}
+@media (max-width: 760px) {
+  /* 휴대폰 폭에서는 도구줄 오른쪽 끝(목록/카드 전환)이 잘려 반만 보였다. 휴대폰은 목록 보기만 쓴다. */
+  #view-emails .mail-topbar .view-toggle { display: none; }
+  #view-emails .mail-topbar { flex-wrap: nowrap; }
+  #view-emails .mail-topbar .email-search { flex: 1 1 auto; min-width: 0; }
+}
+
+/* ===== 좁은 메일 쓰기 (2026-10-09) =====
+   두 칸 규칙에서 '개별'·'중요' 같은 옵션이 둘째 칸을 먼저 차지해, 입력칸이 다음 줄 첫째 칸(58px)으로
+   밀려 '[Remi' 처럼 잘리고 참조 입력이 주소찾기 단추와 겹쳤다(615px 창 실측). 자리를 이름으로 못 박는다. */
+@container mailmain (max-width: 620px) {
+  .cfield {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas: "label opt find" "body body body";
+    column-gap: 8px;
+    row-gap: 6px;
+    padding: 8px 12px;
+  }
+  .cfield > .cfield-label { grid-area: label; }
+  .cfield > .cfield-opt,
+  .cfield > .cfield-plus { grid-area: opt; justify-self: start; }
+  .cfield > .cfield-find { grid-area: find; justify-self: end; padding: 4px 9px; }
+  .cfield > .cfield-body { grid-area: body; }
+  /* 파일첨부 줄은 라벨 위, 단추·상자 아래로 (위 규칙보다 구체적으로 적어야 이긴다) */
+  .cfield.cfield-attach { grid-template-columns: minmax(0, 1fr); grid-template-areas: "label" "body"; }
+  .cfield.cfield-attach > .cfield-label { padding-top: 0; }
+  /* 첨부가 없을 때는 머리줄·큰 빈 상자를 접어 한 줄 안내만 */
+  .attach-table:has(.attach-rows:empty) { min-height: 0; }
+  .attach-table:has(.attach-rows:empty) .attach-head { display: none; }
+  .attach-table:has(.attach-rows:empty) .dropzone-hint { padding: 7px 10px; }
+}
+/* 쓰는 동안 좁은 화면의 폴더 띠는 빼서 본문 자리를 준다 (넓은 화면은 원래 폴더 칸을 접는다) */
+@container mailapp (max-width: 860px) {
+  #view-emails .mail-app.composing .mail-rail { display: none; }
+}
+
+/* 보낸 사람 옆 '일반물리Ⅱ 3분반 교수' 꼬리표. 내 수업이면 강조색, 아니면 흐리게 */
+.person-course {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  max-width: 46%;
+  margin-left: 6px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1.5;
+  color: var(--text-soft);
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+}
+.person-course.mine { color: var(--accent-strong); background: var(--accent-soft); border-color: transparent; }
+.person-course em { font-style: normal; font-weight: 500; opacity: 0.75; }
+#readAddress .person-course { max-width: none; }
+.course-staff-term { font-size: 11px; color: var(--text-faint); align-self: center; }
+/* 메일함 집중 모드(사이드바 72px)에서 '문의 · 제보' 글자가 세로로 한 글자씩 쌓였다 → 아이콘만 */
+.app-shell.mail-focus .whats-new { font-size: 0; justify-content: center; padding: 9px 0; }
+.app-shell.mail-focus .whats-new .icon { width: 18px; height: 18px; }

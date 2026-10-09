@@ -64,3 +64,6 @@ packaging/MicrosoftEdgeWebview2Setup.exe
 # 메일 본문 그림 캐시
 mail_images/
 scripts/i18n_missing.json
+
+# 공공데이터포털 기본 인증키 (설치 파일에만 넣는다. 공개 저장소에는 올리지 않음)
+public_data_key.txt

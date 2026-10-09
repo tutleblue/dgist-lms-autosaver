@@ -11,6 +11,11 @@
 
 인증키는 공공데이터포털에서 발급받아 config.py 의 DGIST_API_KEY 에 넣거나
 환경변수 AUTOSAVER_DGIST_API_KEY 로 준다.
+아무것도 없으면 설치 파일에 같이 넣은 기본 키(public_data_key.txt)를 쓴다.
+  - 공공데이터포털 오픈API 라 앱에 넣어 나눠도 된다고 사용자가 정했다(2026-10-09).
+  - 다만 공개 저장소에는 올리지 않는다(.gitignore). 빌드할 때만 묶고, CI 는 secrets.DGIST_API_KEY 로 만든다.
+  - 모두가 한 키를 나눠 쓰므로 하루 호출 한도(개발계정 10,000)를 아낀다: 학사일정·개설강좌는
+    학기 단위로 받아 두고, 행사는 하루 캐시(web_ui)로 부른다.
 """
 from __future__ import annotations
 
@@ -22,6 +27,7 @@ import urllib.request
 import xml.etree.ElementTree as ET
 import zlib
 from datetime import date, datetime
+from pathlib import Path
 from typing import Any
 
 BASE = "https://apis.data.go.kr/B552467"
@@ -56,8 +62,19 @@ class DgistApiError(RuntimeError):
 
 # ===== 인증키 =====
 
+# 설치 파일에 묶는 기본 키. EXE 에서는 _internal 폴더(이 모듈 옆)에 풀린다.
+BUNDLED_KEY_FILE = Path(__file__).resolve().parent / "public_data_key.txt"
+
+
+def bundled_key() -> str:
+    try:
+        return BUNDLED_KEY_FILE.read_text(encoding="utf-8").strip()
+    except OSError:
+        return ""
+
+
 def service_key() -> str:
-    """설정에서 인증키를 읽는다. 없으면 빈 문자열.
+    """인증키: 환경변수 → 설정 화면(config.json) → config.py → 설치 파일 기본 키. 없으면 빈 문자열.
 
     앱 설정 화면에서 넣은 값은 config.json 에 들어가고 runtime_config 가 읽는다.
     (예전에는 config.py 만 봐서, 화면에서 넣어도 안 먹었다)
@@ -75,9 +92,12 @@ def service_key() -> str:
     try:
         import config  # type: ignore
 
-        return (getattr(config, "DGIST_API_KEY", "") or "").strip()
+        key = (getattr(config, "DGIST_API_KEY", "") or "").strip()
+        if key:
+            return key
     except Exception:
-        return ""
+        pass
+    return bundled_key()
 
 
 def has_key() -> bool:
@@ -148,8 +168,10 @@ def _raise_for_error(root: ET.Element) -> None:
         raise DgistApiError(_ERROR_HINTS.get(code, msg or f"오류코드 {code}"))
 
     code = _text(root.find(".//header"), "resultCode") or _text(root, ".//resultCode")
-    if code and code not in ("0", "00", "000"):
-        msg = _text(root.find(".//header"), "resultMsg") or _text(root, ".//resultMsg")
+    msg = _text(root.find(".//header"), "resultMsg") or _text(root, ".//resultMsg")
+    # 행사/세미나 서비스는 성공을 '100 / Success' 로 준다(2026-10-09 실측). 예전엔 이걸 오류로 보고
+    # 'Success' 라는 오류를 냈다.
+    if code and code not in ("0", "00", "000", "100") and msg.lower() != "success":
         raise DgistApiError(_ERROR_HINTS.get(code, msg or f"오류코드 {code}"))
 
 
@@ -354,8 +376,32 @@ def _plain(html_text: str, limit: int = 400) -> str:
     return text[:limit]
 
 
+def _event_range(raw: str) -> tuple[str, str]:
+    """'2026-09-17~2026-09-18' → ('2026-09-17', '2026-09-18'). 하루짜리는 둘이 같다."""
+    parts = [p.strip() for p in (raw or "").split("~") if p.strip()]
+    start = _iso(parts[0]) if parts else ""
+    end = _iso(parts[-1]) if len(parts) > 1 else start
+    return start, end or start
+
+
+def _event_time(raw: str) -> str:
+    """'10:00~16:30(11:30~13:00제외)' → '10:00'. 시각이 없으면 빈 문자열(종일)."""
+    import re
+
+    m = re.search(r"([01]?\d|2[0-3])[:시]\s*([0-5]\d)?", raw or "")
+    if not m:
+        return ""
+    return f"{int(m.group(1)):02d}:{m.group(2) or '00'}"
+
+
 def fetch_notices(rows: int = 30, site_code: str = "") -> dict[str, Any]:
-    """세미나·행사 공지. 매주 새로 올라오므로 목록 앞쪽만 본다."""
+    """학교 홈페이지 '행사/세미나' 게시판(DGIST 공식). 매주 새로 올라오므로 목록 앞쪽만 본다.
+
+    실제 응답(2026-10-09): <item><seq>119</seq><title>2026 DGIST 제11회 달빛제</title>
+    <sdate>2026-09-17~2026-09-18</sdate><stime></stime><place>…</place><tel>학생팀</tel>
+    <link>https://www.dgist.ac.kr/…/view.do?evntNdSeminaNo=119</link><photo>…</photo></item>
+    예전 코드는 게시판 글(regDate·content)을 가정해 날짜가 비었다.
+    """
     params: dict[str, Any] = {"numOfRows": rows, "pageNo": 1}
     if site_code:
         params["siteCode"] = site_code
@@ -366,20 +412,29 @@ def fetch_notices(rows: int = 30, site_code: str = "") -> dict[str, Any]:
         title = _text(node, "title") or _text(node, "ntcTitle") or _text(node, "evtNm")
         if not title:
             continue
-        posted = _iso(_text(node, "regDate") or _text(node, "registDate") or _text(node, "regdate"))
+        start, end = _event_range(_text(node, "sdate"))
+        seq = _text(node, "seq")
+        stime = _text(node, "stime")
         items.append(
             {
-                "id": f"evt-{zlib.crc32(title.encode('utf-8')) % 1000000:06d}",
+                "id": f"evt-{seq}" if seq else f"evt-{zlib.crc32(title.encode('utf-8')) % 1000000:06d}",
                 "title": title,
-                "body": _plain(_text(node, "content") or _text(node, "ntcCn") or _text(node, "evtCn")),
-                "author": _text(node, "writer") or _text(node, "author") or _text(node, "regUser"),
-                "views": _text(node, "readCount") or _text(node, "viewCount") or _text(node, "inqCnt"),
-                "date": posted,
+                "start": start,
+                "end": end,
+                "time": _event_time(stime),
+                "timeText": stime,
+                "place": _text(node, "place"),
+                "host": _text(node, "tel"),
+                "link": _text(node, "link"),
+                "photo": _text(node, "photo"),
+                # 예전 화면 호환: date 는 시작일
+                "date": start,
+                "body": _plain(_text(node, "content") or _text(node, "ntcCn") or ""),
                 "source": "세미나·행사",
             }
         )
 
-    items.sort(key=lambda e: e["date"], reverse=True)
+    items.sort(key=lambda e: e["start"], reverse=True)
     return {"ok": True, "source": "openapi", "count": len(items), "items": items}
 
 

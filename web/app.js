@@ -612,10 +612,16 @@ function applyView(view) {
     openCompose();
     restoreDraftIfAny();
   }
-  document.querySelectorAll(".nav-item").forEach((item) => {
+  document.querySelectorAll(".nav-item[data-view]").forEach((item) => {
     // 메일 쓰기는 메일함 셸을 쓰므로 메일함 메뉴를 켠 채로 둔다
     item.classList.toggle("active", item.dataset.view === shellView);
   });
+  // 휴대폰 탭바에서는 강의·창고·설정이 '더보기' 안에 있다. 그 화면이면 '더보기'를 켠다.
+  $("#navMore")?.classList.toggle(
+    "active",
+    Boolean(document.querySelector(`.nav-item[data-more][data-view="${shellView}"]`)),
+  );
+  closeMoreSheet();
   // 메일함은 Gmail식 집중 모드: 사이드바 축소 + 우측 로그 레일 숨김
   document.querySelector(".app-shell").classList.toggle("mail-focus", shellView === "emails");
   // 사이드바 폭이 바뀐 뒤에 재야 알약이 엉뚱한 크기로 남지 않는다.
@@ -1161,6 +1167,12 @@ function openEmailDetail(mail) {
   $("#readSender").textContent = sender;
   // 이름이 곧 주소면 두 번 쓰지 않는다
   $("#readAddress").textContent = sender === mail.fromEmail ? "" : mail.fromEmail || "";
+  // 이번 학기에 무슨 과목 몇 분반을 맡은 분인지 (개설강좌 담당교수 + 내 과목 조교)
+  {
+    const box = $("#readAddress");
+    const tag = mail.folder === "sent" ? "" : coursePersonTagHtml(mail.fromEmail);
+    if (tag) box.insertAdjacentHTML("beforeend", tag);
+  }
   $("#readDate").textContent = date;
   const avatar = $("#readAvatar");
   avatar.textContent = (sender.trim()[0] || "?").toUpperCase();
@@ -2913,6 +2925,7 @@ function emailListRow(mail) {
         <div class="list-head">
           <span class="list-folder-tag">${escapeHtml(MAIL_FOLDER_TAG[mail.folder] || "메일")}</span>
           <span class="list-from">${escapeHtml(shortText(mail.fromName || mail.fromEmail, 24))}</span>
+          ${mail.folder === "sent" || mail.folder === "draft" ? "" : coursePersonTagHtml(mail.fromEmail)}
           <span class="list-when">
             ${hasFiles ? iconHtml("paperclip", "list-clip") : ""}
             <time class="list-date" datetime="${escapeHtml(mail.date || "")}"
@@ -4180,7 +4193,7 @@ const RENDER_PARTS = [
   { key: "emails", views: ["emails", "compose"], render: renderEmails,
     of: (s) => sig(s.emails?.updatedAt, (s.emails?.emails || []).length, s.emailView, s.emailFolder, s.emailSort, s.search) },
   { key: "calendar", views: ["calendar"], render: renderCalendar,
-    of: (s) => sig(s.deadlines?.updatedAt, (s.myEvents || []).length, (s.academic || []).length,
+    of: (s) => sig(s.deadlines?.updatedAt, (s.myEvents || []).length, (s.academic || []).length, (s.schoolEvents || []).length,
       s.academicUnderOnly, s.calMonth, s.showHolidays, s.emails?.updatedAt,
       (s.emails?.emails || []).filter((m) => m.calendar).length) },
   { key: "courses", views: ["courses"], render: renderCourses,
@@ -4380,6 +4393,24 @@ function calendarItems() {
       mailId: m.id,
       allDay: !String(m.eventDate).includes("T"),
     });
+  });
+  // 학교 공식 행사(공공데이터 API). 여러 날이면 날마다 하나씩.
+  (state.schoolEvents || []).forEach((ev) => {
+    if (!ev.start) return;
+    const start = new Date(`${ev.start}T00:00`);
+    const end = new Date(`${ev.end || ev.start}T00:00`);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return;
+    for (let d = new Date(start), n = 0; d <= end && n < 14; d.setDate(d.getDate() + 1), n += 1) {
+      const day = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+      items.push({
+        date: new Date(`${day}T${ev.time || "00:00"}`),
+        title: ev.title,
+        full: ev.title,
+        sub: [ev.place, ev.host].filter(Boolean).join(" · "),
+        kind: "school",
+        allDay: !ev.time,
+      });
+    }
   });
   // 내가 직접 추가한 일정. 반복·여러 날이면 걸치는 날마다 하나씩 놓는다.
   (state.myEvents || []).forEach((e) => {
@@ -4849,15 +4880,43 @@ function openEventEditor(event = null) {
     if (ti) ti.placeholder = event?.id ? "일정 제목" : "새 일정";
   }
   $("#eventDeleteButton").hidden = !event?.id;
+  // 편집 칸은 창 가운데 대화 상자(좁은 창에서는 아래에서 올라오는 시트)로 연다.
+  //   예전에는 날짜 상세 패널 아래에 붙어 있어서, 창이 화면보다 길거나(작업표시줄 뒤) 그날 일정이 많으면
+  //   '저장' 버튼이 화면 밖에 있었다 → 사용자 눈에는 '일정 추가가 안 된다'(2026-10-09 설치본 실측).
+  //   상세 패널은 transform 이 걸려 있어 fixed 가 창 기준이 안 되므로 body 로 옮긴다.
+  if (panel.parentElement !== document.body) {
+    document.body.appendChild(panel);
+    panel.classList.add("as-dialog");
+    panel.setAttribute("role", "dialog");
+    panel.setAttribute("aria-modal", "true");
+  }
+  let backdrop = $("#eventEditorBackdrop");
+  if (!backdrop) {
+    backdrop = document.createElement("div");
+    backdrop.id = "eventEditorBackdrop";
+    backdrop.className = "event-editor-backdrop";
+    backdrop.addEventListener("click", closeEventEditor);
+    document.body.appendChild(backdrop);
+    document.addEventListener("keydown", (ev) => {
+      if (ev.key === "Escape" && !$("#eventEditor")?.hidden) {
+        ev.preventDefault();
+        closeEventEditor();
+      }
+    });
+  }
+  backdrop.hidden = false;
   panel.hidden = false;
+  panel.scrollTop = 0;
   panel.classList.remove("opening");
   void panel.offsetWidth;
   panel.classList.add("opening");
-  form.elements.title.focus();
+  form.elements.title.focus({ preventScroll: true });
 }
 
 function closeEventEditor() {
   const panel = $("#eventEditor");
+  const backdrop = $("#eventEditorBackdrop");
+  if (backdrop) backdrop.hidden = true;
   if (panel) {
     panel.hidden = true;
     panel.classList.remove("opening");
@@ -4931,7 +4990,7 @@ async function refreshAll() {
     renderMailRefreshAgo();
     state.myEvents = myEvents.events || [];
     state.courseState = courseState || { current: [] };
-    setCourseStaff(courseStaff?.courses || {});
+    setCourseStaff(courseStaff?.courses || {}, courseStaff?.past || {}, courseStaff?.people || {});
     // 학사일정은 하루 한 번만 받아오면 되므로 첫 로드 때만 요청한다
     loadAcademic();
     state.timetable = timetable.entries || [];
@@ -6323,9 +6382,10 @@ function bindEvents() {
     }
   });
 
-  document.querySelectorAll(".nav-item").forEach((button) => {
+  document.querySelectorAll(".nav-item[data-view]").forEach((button) => {
     button.addEventListener("click", () => switchView(button.dataset.view));
   });
+  bindMoreSheet();
 
   document.querySelectorAll("[data-goto]").forEach((node) => {
     node.addEventListener("click", () => switchView(node.dataset.goto));
@@ -7910,7 +7970,8 @@ function nowStatus(at, entries, semester) {
 
 /* 휴대폰에서는 사이드바가 아래쪽 탭바로 바뀌고 로고 자리가 사라진다.
    나우바는 계속 보여야 하므로 상단바로 옮겨 준다. */
-const NOW_MOBILE = window.matchMedia("(max-width: 760px)");
+// 1100px 이하에서는 사이드바가 아이콘 레일(76px)로 접혀 시계가 들어갈 자리가 없다 (styles.css 끝 '좁은 창' 절)
+const NOW_MOBILE = window.matchMedia("(max-width: 1100px)");
 
 function placeNowBar() {
   const bar = $("#nowBar");
@@ -7966,11 +8027,92 @@ function nowDetailRow(label, entry, when, tone) {
     </div>`;
 }
 
+/* ===== 휴대폰 '더보기' 시트 =====
+   아래 탭바에 여덟 개를 다 넣으면 글자가 잘리고 옆으로 밀려 마지막 메뉴가 화면 밖에 있었다(375px 실측).
+   자주 쓰는 다섯 개만 탭으로 두고, data-more 메뉴와 문의·업데이트는 아래에서 올라오는 시트에 모은다.
+   안드로이드판을 만들 때도 같은 구조를 쓴다. */
+function bindMoreSheet() {
+  const button = $("#navMore");
+  if (!button || button.dataset.bound) return;
+  button.dataset.bound = "1";
+  button.addEventListener("click", () => {
+    if ($("#moreSheet") && !$("#moreSheet").hidden) closeMoreSheet();
+    else openMoreSheet();
+  });
+}
+
+function openMoreSheet() {
+  let sheet = $("#moreSheet");
+  if (!sheet) {
+    sheet = document.createElement("div");
+    sheet.id = "moreSheet";
+    sheet.className = "more-sheet";
+    sheet.setAttribute("role", "dialog");
+    sheet.setAttribute("aria-label", "더보기");
+    document.body.appendChild(sheet);
+    const backdrop = document.createElement("div");
+    backdrop.id = "moreSheetBackdrop";
+    backdrop.className = "more-sheet-backdrop";
+    backdrop.addEventListener("click", closeMoreSheet);
+    document.body.appendChild(backdrop);
+    sheet.addEventListener("click", (event) => {
+      const item = event.target.closest("[data-sheet-view], [data-sheet-click]");
+      if (!item) return;
+      closeMoreSheet();
+      if (item.dataset.sheetView) switchView(item.dataset.sheetView);
+      else $(`#${item.dataset.sheetClick}`)?.click();
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && !$("#moreSheet")?.hidden) closeMoreSheet();
+    });
+  }
+  const views = [...document.querySelectorAll(".nav-item[data-more][data-view]")].map((item) => ({
+    view: item.dataset.view,
+    icon: item.querySelector(".icon")?.dataset.icon || "grid",
+    label: item.textContent.trim(),
+    on: item.classList.contains("active"),
+  }));
+  const extras = [
+    { id: "feedbackButton", icon: "mail", label: "문의 · 제보" },
+    { id: "whatsNewButton", icon: "sparkle", label: "업데이트 내용" },
+  ].filter((x) => $(`#${x.id}`));
+  sheet.innerHTML = `
+    <div class="more-sheet-grip" aria-hidden="true"></div>
+    <div class="more-sheet-grid">
+      ${views
+        .map(
+          (v) => `<button type="button" class="more-sheet-item${v.on ? " on" : ""}" data-sheet-view="${v.view}">
+            ${iconHtml(v.icon)}<span>${escapeHtml(v.label)}</span></button>`,
+        )
+        .join("")}
+    </div>
+    <div class="more-sheet-list">
+      ${extras
+        .map(
+          (x) => `<button type="button" class="more-sheet-row" data-sheet-click="${x.id}">
+            ${iconHtml(x.icon)}<span>${escapeHtml(x.label)}</span></button>`,
+        )
+        .join("")}
+    </div>`;
+  sheet.hidden = false;
+  $("#moreSheetBackdrop").hidden = false;
+  $("#navMore")?.setAttribute("aria-expanded", "true");
+}
+
+function closeMoreSheet() {
+  const sheet = $("#moreSheet");
+  if (!sheet || sheet.hidden) return;
+  sheet.hidden = true;
+  $("#moreSheetBackdrop").hidden = true;
+  $("#navMore")?.setAttribute("aria-expanded", "false");
+}
+
 /* 메뉴 활성 표시를 항목마다 새로 그리지 않고, 알약 하나를 옮긴다.
    그래야 메뉴 사이 이동이 끊기지 않고 이어져 보인다. */
 function moveNavPill() {
   const pill = $("#navPill");
-  const active = document.querySelector(".nav-item.active");
+  // 휴대폰에서는 '더보기' 안의 메뉴가 숨어 있으므로 보이는 것 중에서 고른다
+  const active = [...document.querySelectorAll(".nav-item.active")].find((el) => el.offsetParent !== null);
   if (!pill) return;
   if (!active) {
     pill.style.opacity = "0";
@@ -8644,6 +8786,19 @@ function bindDashDrag(view) {
 }
 
 
+/* 학교 행사/세미나 게시판(공공데이터 API, 서버가 6시간 캐시). 달빛제·헌혈캠페인·학위수여식처럼
+   학교가 공식으로 올린 행사라 메일에서 날짜를 짐작한 것보다 정확하다. 같은 행사 메일은 서버가 캘린더에서 뺀다. */
+function loadSchoolEvents(force = false) {
+  api(`/api/school-events${force ? "?force=1" : ""}`)
+    .then((res) => {
+      const items = Array.isArray(res.items) ? res.items : [];
+      if (!items.length && (state.schoolEvents || []).length) return;
+      state.schoolEvents = items;
+      if (state.view === "calendar") renderCalendar();
+    })
+    .catch(() => {});
+}
+
 function loadAcademic(force = false) {
   if (force) {
     // 상단 '일정 새로고침'이 부르는 경우: 캐시 판단을 건너뛴다
@@ -8657,6 +8812,7 @@ function loadAcademic(force = false) {
 
   loadNotices(force);
   loadShuttle(force);
+  loadSchoolEvents(force);
   api(`/api/academic-calendar${force ? "?refresh=1" : ""}`)
     .then((res) => {
       // 서버가 200으로 {ok:false}를 줄 수 있다. 이때 성공으로 치면 안 된다.
@@ -9938,106 +10094,310 @@ function bindMailDrag() {
 
 bindMailDrag();
 
+/* 좁은 메일함에서 폴더 칸은 한 줄 띠(styles.css '좁은 메일함')라 옆으로 넘겨 본다.
+   마우스 휠은 위아래로만 굴러서, 띠가 실제로 옆으로 넘칠 때만 휠을 옆 스크롤로 바꿔 준다. */
+function bindMailStripWheel() {
+  const rail = document.querySelector(".mail-rail");
+  if (!rail) return;
+  rail.addEventListener(
+    "wheel",
+    (event) => {
+      const strip = getComputedStyle(rail).flexDirection === "row" && rail.scrollWidth > rail.clientWidth + 2;
+      if (!strip || Math.abs(event.deltaX) > Math.abs(event.deltaY)) return;
+      event.preventDefault();
+      rail.scrollLeft += event.deltaY;
+    },
+    { passive: false },
+  );
+}
+bindMailStripWheel();
+
 
 /* ===== 첫 실행 소개 (달구 튜토리얼) =====
    처음 켠 사람에게 달구가 메뉴를 하나씩 비춰 주며 무엇을 하는지 알려 준다.
    '건너뛰기' 로 언제든 끝낼 수 있고, 설정의 '앱 소개 다시 보기' 로 다시 볼 수 있다.
    본 기록은 데이터 폴더(tutorial.json)에 적는다 — 앱 창은 브라우저 저장소가 매번 지워진다.
 
-   단계마다: 보여 줄 화면(view), 비출 곳(targets), 달구 포즈(pose), 제목, 설명.
-   비출 곳을 못 찾으면(숨겨졌거나 좁은 화면) 가운데에 카드만 띄운다. */
+   단계마다: 묶음 이름(chapter), 보여 줄 화면(view), 비출 곳(targets), 달구 포즈(pose), 제목, 설명,
+   짧은 기능 목록(tips, 시작 화면은 chips 로 알약 모양), 아래 작은 글(note).
+   비출 곳을 못 찾으면 fallback(보통 그 메뉴)을, 그것도 없으면(좁은 화면) 가운데에 카드만 띄운다.
+   when 이 있으면 시작할 때 물어서 거짓이면 그 단계를 뺀다(예: 학사일정이 없어 D-day 띠가 숨은 경우).
+   처음 12단계는 메뉴 이름만 짚고 지나가서, 메뉴 안의 기능(시간표·공지·보기 방식·저장 위치…)을 몰랐다는
+   말을 듣고 화면 안 요소까지 비추도록 늘렸다(2026-10-02). */
 const TOUR_STEPS = [
   {
+    chapter: "시작",
     pose: "yay",
     title: "안녕! 나는 달구야",
-    text: "붕어빵은 LMS 강의자료, 과제 마감, 학교 메일, 학사일정을 알아서 모아 한곳에 보여 주는 앱이야. 1분이면 다 둘러볼 수 있어.",
+    text: "붕어빵은 학교생활에 흩어진 것들을 알아서 모아 한 화면에 보여 주는 앱이야. 어떤 걸 할 수 있는지 하나씩 보여 줄게.",
+    tips: ["LMS 강의자료", "과제 마감", "학교 메일", "학사일정", "과목 공지", "셔틀버스"],
+    chips: true,
+    note: "← → 키로 넘기고, Esc 로 언제든 그만둘 수 있어.",
   },
   {
+    chapter: "시작",
     view: "settings",
-    targets: ['.nav-item[data-view="settings"]'],
+    targets: ["#stAccounts .st-head"],
+    fallback: ['.nav-item[data-view="settings"]'],
     pose: "point",
     title: "먼저 계정부터 넣어 줘",
-    text: "설정에서 LMS 아이디·비밀번호와 학교 메일을 넣으면 시작돼. 비밀번호는 이 컴퓨터 안에서만 암호화해서 저장해.",
+    text: "여기에 넣은 계정으로 내가 대신 가져다줄게. 비밀번호는 이 컴퓨터 안에서만 암호화해서 저장해.",
+    tips: [
+      "LMS 계정 → 강의자료·과제 마감·과목 공지",
+      "학교 메일 → 메일함, 메일로 온 행사 일정",
+      "Google 연결(선택) → Drive·구글 캘린더로 보내기",
+    ],
   },
   {
+    chapter: "매일 보는 곳",
     view: "dashboard",
     targets: ['.nav-item[data-view="dashboard"]'],
     pose: "skip",
     title: "대시보드",
-    text: "오늘 시간표, 다가오는 마감, 새 메일을 한눈에 봐. '화면 편집'을 누르면 블록을 끌어서 순서를 바꿀 수 있어.",
+    text: "아침에 여기만 보면 오늘 하루가 정리돼.",
+    tips: [
+      "오늘 남은 수업 · 7일 안 마감 · 안 읽은 메일",
+      "다가오는 마감과 일정, 학교 공지",
+      "'화면 편집'으로 블록을 끌어 순서 바꾸기",
+    ],
   },
   {
+    chapter: "매일 보는 곳",
+    view: "dashboard",
+    when: () => !$("#ddayBanner")?.hidden,
+    targets: ["#ddayBanner"],
+    pose: "cheer",
+    title: "시험·수강신청 D-day",
+    text: "학사일정에서 놓치면 큰 일정(시험, 수강신청, 성적 확인)을 골라 며칠 남았는지 세어 줘. 그다음 일정 두 개도 아래에 적어 둬.",
+  },
+  {
+    chapter: "매일 보는 곳",
+    view: "dashboard",
+    targets: [".timetable-panel .panel-header"],
+    fallback: ['.nav-item[data-view="dashboard"]'],
+    pose: "study",
+    title: "주간 시간표",
+    text: "시간표를 한 번 넣어 두면 대시보드·시계·알림이 모두 이걸 기준으로 움직여.",
+    tips: [
+      "에브리타임 캡처로 한 번에 가져오기 (Gemini 키 필요)",
+      "'시간표 편집'에서 개설과목을 찾아 넣기",
+      "수업을 누르면 시간·장소를 고칠 수 있어",
+      "과목마다 다른 색으로 칠해 줘",
+    ],
+  },
+  {
+    chapter: "매일 보는 곳",
+    view: "dashboard",
+    targets: ["#nowBar"],
+    pose: "wink",
+    title: "지금 무슨 수업이지?",
+    text: "왼쪽 위 시계는 시간표를 보고 지금 수업과 남은 시간, 다음 수업을 알려 줘. 누르면 자세히 펼쳐져.",
+  },
+  {
+    chapter: "매일 보는 곳",
+    view: "dashboard",
+    targets: ["#statusCard"],
+    pose: "thumbs",
+    title: "잘 돌아가는지는 여기서",
+    text: "LMS·메일·Drive 연결 불빛과 다음에 가져올 때를 보여 줘. 문제가 생기면 빨간불이 켜지고, 누르면 고칠 곳으로 데려가.",
+  },
+  {
+    chapter: "공부",
     view: "deadlines",
     targets: ['.nav-item[data-view="deadlines"]'],
     pose: "search",
     title: "과제 마감",
-    text: "LMS에 올라온 과제 마감을 다 모아 둬. 아직 안 낸 과제는 눌러서 바로 제출 페이지로 갈 수 있어.",
+    text: "LMS에 올라온 과제를 마감 순서대로 모아 둬.",
+    tips: [
+      "아직 안 낸 과제는 눌러서 바로 제출 페이지로",
+      "마감 하루·3시간·1시간 전에 윈도우 알림",
+      "과목·제출 상태로 거르고, 끝난 건 숨기기",
+      "캘린더 파일(.ics)로 내보내기",
+    ],
   },
   {
+    chapter: "공부",
     view: "calendar",
     targets: ['.nav-item[data-view="calendar"]'],
-    pose: "wink",
+    pose: "read",
     title: "캘린더",
-    text: "학사일정, 과제 마감, 내 일정을 달력 하나에 모았어. 구글 캘린더로 보내기도 돼.",
+    text: "흩어진 날짜를 달력 하나에 모았어. 색만 봐도 무슨 일정인지 알 수 있어.",
+    tips: [
+      "과제 마감 · 학사일정 · 공휴일 · 내 일정",
+      "메일로 온 학교 행사·관심 세미나도 날짜를 찾아 표시",
+      "날짜를 누르고 '이 날에 추가'로 내 일정 넣기",
+      "구글 캘린더로 보내기",
+    ],
   },
   {
+    chapter: "공부",
     view: "courses",
     targets: ['.nav-item[data-view="courses"]'],
     pose: "book",
     title: "강의",
-    text: "이번 학기 과목과 학점, 강의계획서를 카드로 정리해 뒀어.",
+    text: "이번 학기 과목을 카드로 정리해 뒀어.",
+    tips: [
+      "과목마다 학점과 강의계획서 바로가기",
+      "교수·조교 이름을 누르면 바로 메일 쓰기",
+      "'편집'으로 안 보는 과목 숨기기",
+    ],
   },
   {
+    chapter: "공부",
+    view: "courses",
+    targets: ['.course-tab[data-ctab="ann"]'],
+    fallback: ['.nav-item[data-view="courses"]'],
+    pose: "reach",
+    title: "과목 공지사항",
+    text: "과목마다 흩어진 LMS 공지를 게시판처럼 모아 봐. 최근 7일 공지는 맨 위에 따로 모이고, 새 공지가 올라오면 알려 줘.",
+  },
+  {
+    chapter: "공부",
     view: "files",
     targets: ['.nav-item[data-view="files"]'],
     pose: "munch",
     title: "자료",
-    text: "LMS 강의자료를 받아서 LMS와 같은 폴더(1주차 › 파일) 그대로 보여 줘. 폴더째 골라 내 컴퓨터·Drive·삼성 노트로 보낼 수 있어.",
+    text: "LMS 강의자료를 받아 두고, 새 자료가 올라오면 알려 줘. 여러 개를 골라 한 번에 보낼 수 있어.",
+    tips: [
+      "내 컴퓨터 문서 폴더에 저장",
+      "Google Drive 과목 폴더에 올리기",
+      "삼성 노트로 바로 넣기 (필기용)",
+    ],
   },
   {
+    chapter: "공부",
+    view: "files",
+    targets: [".file-mode-tabs"],
+    fallback: ['.nav-item[data-view="files"]'],
+    pose: "offer",
+    title: "보는 방법은 세 가지",
+    text: "자료가 많아도 원하는 방식으로 찾을 수 있어.",
+    tips: [
+      "과목 폴더: LMS와 똑같이 1주차 › 파일",
+      "내 폴더: 시험 범위처럼 직접 만든 폴더에 끌어 담기",
+      "전체 목록: Shift·Ctrl 로 여러 개 고르기",
+    ],
+  },
+  {
+    chapter: "메일",
     view: "emails",
     targets: ['.nav-item[data-view="emails"]'],
     pose: "stretch",
     title: "메일함",
-    text: "학교 메일을 오늘·어제로 묶어 보여 줘. 메일을 왼쪽 폴더로 끌어다 놓으면 옮겨지고, 휴지통에 놓으면 지워져.",
+    text: "학교 메일을 앱 안에서 바로 읽고 정리해.",
+    tips: [
+      "오늘·어제로 묶어 보고, 안읽음·중요·첨부로 거르기",
+      "메일을 왼쪽 폴더로 끌어 옮기거나 휴지통으로",
+      "⋮ 메뉴: 일정에 추가, 다시 알림, 인쇄",
+      "답장 안 온 보낸 메일을 찾아 리마인드",
+    ],
   },
   {
+    chapter: "메일",
+    view: "emails",
+    targets: ["#composeButton"],
+    fallback: ['.nav-item[data-view="emails"]'],
+    pose: "give",
+    title: "메일 쓰기",
+    text: "웹메일을 따로 열 필요 없이 여기서 보내.",
+    tips: [
+      "이름만 쳐도 주고받은 사람·과목 교수·조교 주소를 찾아 줘",
+      "내 PC나 Drive 파일을 첨부",
+      "쓰다 멈추면 알아서 임시저장",
+    ],
+  },
+  {
+    chapter: "편하게 쓰기",
     view: "storage",
     targets: ['.nav-item[data-view="storage"]'],
     pose: "back",
     title: "창고",
-    text: "셔틀버스 시간표와 FGLP 파견 대학 지도가 여기 있어. 셔틀은 학교 홈페이지 기준으로 매일 확인해.",
+    text: "가끔 꼭 필요한 것들을 넣어 뒀어.",
+    tips: [
+      "셔틀버스 시간표 (출퇴근·원내외 순환·주말)",
+      "FGLP 파견 대학 세계지도와 학교별 정보",
+    ],
   },
   {
+    chapter: "편하게 쓰기",
     view: "dashboard",
-    targets: [".search-wrap"],
+    targets: [".nav-arrows", ".search-wrap"],
     pose: "reachup",
     title: "뭐든 여기서 찾아",
-    text: "과목·자료·과제·메일·일정·설정을 한 번에 찾아. Ctrl+K 로 바로 오고, 초성(ㅇㅂㅁㄹ)으로도 돼. 고르면 그곳으로 데려다줄게.",
+    text: "과목·자료·과제·메일·일정·설정을 한 번에 찾고, 고르면 그곳으로 데려다줘.",
+    tips: [
+      "Ctrl+K 로 바로 검색, 초성(ㅇㅂㅁㄹ)으로도 돼",
+      "← → 단추나 Alt+←/→ 로 보던 화면을 오가기",
+    ],
   },
   {
+    chapter: "편하게 쓰기",
     view: "dashboard",
     targets: ["#lastSync", "#refreshAllButton"],
     pose: "nap",
     title: "나머지는 내가 알아서",
-    text: "메일은 5분, 마감은 1시간, 자료는 3시간마다 알아서 가져와. 언제 가져왔는지는 여기 적혀 있고, 지금 바로 받고 싶으면 새로고침을 눌러.",
+    text: "앱을 켜 두기만 하면 알아서 가져와. 언제 가져왔는지는 여기 적혀 있고, 지금 바로 받고 싶으면 새로고침을 눌러.",
+    tips: ["메일 5분 · 과제 마감 1시간 · 강의자료 3시간마다"],
   },
   {
+    chapter: "편하게 쓰기",
     view: "dashboard",
-    targets: ["#whatsNewButton"],
-    pose: "give",
-    title: "새 소식은 여기서",
-    text: "새 버전이 나오면 왼쪽 아래에 '새 업데이트'가 떠. 한 번 보면 사라지고, 지난 내용과 이 소개는 설정에서 다시 볼 수 있어.",
+    targets: ["#themeFlip"],
+    pose: "shy",
+    title: "옷 갈아입기",
+    text: "누를 때마다 다음 테마로 넘어가. 기본·화이트·남색·다크가 있고, '자동'은 윈도우의 밝은·어두운 모드를 따라가.",
   },
   {
+    chapter: "설정",
+    view: "settings",
+    targets: ["#stStorage .st-head"],
+    fallback: ['.nav-item[data-view="settings"]'],
+    pose: "sprout",
+    title: "자료를 어디에 둘까",
+    text: "켜 두면 새 강의자료가 올라올 때마다 원하는 곳에 저절로 들어가.",
+    tips: [
+      "Google Drive에 과목 폴더째 올리기",
+      "내 컴퓨터 문서 폴더에 저장",
+      "OneDrive·Dropbox·iCloud·네이버 MYBOX 폴더에도",
+      "자료가 차지하는 공간을 보고 학기별로 정리",
+    ],
+  },
+  {
+    chapter: "설정",
+    view: "settings",
+    targets: ["#stAuto .st-head"],
+    fallback: ['.nav-item[data-view="settings"]'],
+    pose: "lounge",
+    title: "얼마나 자주 가져올까",
+    text: "메일·마감·자료를 가져오는 주기와 하루 한 번 전체 확인 시각을 정해. 마감 알림과 새 자료 알림도 여기서 켜고 꺼.",
+  },
+  {
+    chapter: "설정",
+    view: "settings",
+    targets: ["#langRow"],
+    fallback: ['.nav-item[data-view="settings"]'],
+    pose: "hello",
+    title: "English도 돼",
+    text: "화면을 영어로 바꿀 수 있어. 유학생 친구에게도 알려 줘. 메일·과목 이름 같은 자료는 원래 글자 그대로 둬.",
+  },
+  {
+    chapter: "설정",
+    view: "settings",
+    targets: ["#feedbackButton", "#whatsNewButton"],
+    pose: "bow",
+    title: "궁금하거나 고장 나면",
+    text: "'문의 · 제보'를 누르면 받는 사람과 서식이 채워진 메일이 열려. 새 버전이 나오면 이 근처에 '새 업데이트'가 떠.",
+  },
+  {
+    chapter: "끝",
     pose: "laugh",
     title: "준비 끝!",
-    text: "궁금한 게 생기면 언제든 설정의 '앱 소개 다시 보기'를 눌러 줘. 이제 붕어빵 구우러 가자!",
+    text: "이 소개는 설정 맨 아래 '앱 소개 다시 보기'로 언제든 다시 볼 수 있어. 이제 붕어빵 구우러 가자!",
     last: true,
   },
 ];
 
-const tour = { index: 0, active: false, returnView: null, buddy: null, walkTimer: 0 };
+const tour = { index: 0, active: false, returnView: null, buddy: null, walkTimer: 0, steps: TOUR_STEPS };
 
 async function maybeStartTour() {
   try {
@@ -10059,7 +10419,20 @@ function startTour() {
     img.src = `/img/dalgu/${pose}.png`;
   });
   tour.buddy = null; // 첫 단계에서는 화면 왼쪽 밖에서 뛰어 들어온다
-  $("#tourDots").innerHTML = TOUR_STEPS.map(() => "<span></span>").join("");
+  tour.steps = TOUR_STEPS.filter((s) => {
+    try {
+      return !s.when || s.when();
+    } catch (error) {
+      return false;
+    }
+  });
+  // 점은 묶음(chapter)마다 띄어 놓고, 누르면 그 단계로 간다
+  $("#tourDots").innerHTML = tour.steps
+    .map((s, i) => {
+      const gap = i > 0 && s.chapter !== tour.steps[i - 1].chapter ? " gap" : "";
+      return `<span class="tour-dot${gap}" data-step="${i}" title="${escapeHtml(s.title)}"></span>`;
+    })
+    .join("");
   tour.active = true;
   tour.index = 0;
   tour.returnView = state.view;
@@ -10096,7 +10469,8 @@ function tourTargetRect(selectors) {
     .map((sel) => document.querySelector(sel))
     .filter((el) => el && !el.hidden && el.offsetParent !== null)
     .map((el) => el.getBoundingClientRect())
-    .filter((r) => r.width > 0 && r.height > 0);
+    // 좁은 창에서는 메일함 폴더 칸이 화면 왼쪽 밖으로 밀려 있다. 안 보이는 곳을 비추면 카드도 밖으로 나간다.
+    .filter((r) => r.width > 0 && r.height > 0 && r.right > 0 && r.left < window.innerWidth && r.bottom > 0 && r.top < window.innerHeight);
   if (!rects.length) return null;
   const pad = 6;
   const left = Math.min(...rects.map((r) => r.left)) - pad;
@@ -10104,6 +10478,23 @@ function tourTargetRect(selectors) {
   const right = Math.max(...rects.map((r) => r.right)) + pad;
   const bottom = Math.max(...rects.map((r) => r.bottom)) + pad;
   return { left, top, width: right - left, height: bottom - top, right, bottom };
+}
+
+/** 단계가 비출 곳: targets 가 안 보이면 fallback */
+function tourStepRect(step) {
+  if (!step) return null;
+  return tourTargetRect(step.targets) || tourTargetRect(step.fallback);
+}
+
+/* 화면 아래쪽에 있는 것(시간표, 설정의 언어 줄)은 비추기 전에 보이는 곳으로 끌어온다.
+   부드럽게 굴리면 재는 순간 자리가 아직 움직이는 중이라 바로 옮긴다. */
+function tourBringIntoView(step) {
+  const el = (step?.targets || [])
+    .map((sel) => document.querySelector(sel))
+    .find((node) => node && !node.hidden && node.offsetParent !== null);
+  if (!el) return;
+  const r = el.getBoundingClientRect();
+  if (r.top < 60 || r.bottom > window.innerHeight - 40) el.scrollIntoView({ block: "center", behavior: "instant" });
 }
 
 /* 비추는 곳 둘레를 네 장(위·아래·왼쪽·오른쪽)으로 덮는다.
@@ -10154,7 +10545,7 @@ function buddySpot(rect, card, B = BUDDY_SIZE) {
       [card.left + (card.right - card.left) / 2 - B / 2, card.top - B + 10],
     ];
     const ok = options.find(([x, y]) => inside(x, y));
-    return ok || options[2];
+    return ok || [options[2][0], Math.max(m, options[2][1])];
   }
   const cx = rect.left + rect.width / 2 - B / 2;
   const cy = rect.top + rect.height / 2 - B / 2;
@@ -10289,34 +10680,61 @@ function placeTourCard(rect) {
 }
 
 function showTourStep(index) {
-  const step = TOUR_STEPS[index];
+  const steps = tour.steps;
+  const step = steps[index];
   if (!step) return;
   tour.index = index;
   if (step.view && state.view !== step.view) applyView(step.view);
 
   tour.pose = step.pose;
   // 비출 곳이 없는 첫·마지막 단계는 카드를 크게 가운데에 (시작 화면)
-  $("#tourCard").classList.toggle("hero", !step.targets);
-  $("#tourCount").textContent = `${index + 1} / ${TOUR_STEPS.length}`;
+  const card = $("#tourCard");
+  card.classList.toggle("hero", !step.targets);
+  $("#tourChapter").textContent = step.chapter || "";
+  $("#tourCount").textContent = `${index + 1} / ${steps.length}`;
   $("#tourTitle").textContent = step.title;
   $("#tourText").textContent = step.text;
+  const tips = $("#tourTips");
+  tips.hidden = !step.tips?.length;
+  tips.classList.toggle("chips", Boolean(step.chips));
+  tips.replaceChildren(
+    ...(step.tips || []).map((tip) => {
+      const li = document.createElement("li");
+      li.textContent = tip;
+      return li;
+    }),
+  );
+  $("#tourNote").hidden = !step.note;
+  $("#tourNote").textContent = step.note || "";
   $("#tourPrev").hidden = index === 0;
   $("#tourNext").textContent =
     index === 0 ? "둘러보기" : step.last ? (state.status?.requiredConfig?.lms ? "시작하기" : "계정 넣으러 가기") : "다음";
   $("#tourSkip").hidden = Boolean(step.last);
-  document.querySelectorAll("#tourDots span").forEach((dot, i) => {
+  document.querySelectorAll("#tourDots .tour-dot").forEach((dot, i) => {
     dot.classList.toggle("on", i === index);
     dot.classList.toggle("past", i < index);
   });
+  // 글이 바뀌면 살짝 떠오르게 (카드 자리는 transition 으로 따로 움직인다)
+  const bubble = card.querySelector(".tour-bubble");
+  bubble.classList.remove("swap");
+  void bubble.offsetWidth;
+  bubble.classList.add("swap");
   // 화면을 바꾼 뒤 자리가 잡히고 나서 비출 곳을 잰다
-  window.requestAnimationFrame(() => placeTourCard(tourTargetRect(step.targets)));
-  window.setTimeout(() => placeTourCard(tourTargetRect(step.targets)), 260);
+  window.requestAnimationFrame(() => {
+    tourBringIntoView(step);
+    placeTourCard(tourStepRect(step));
+  });
+  window.setTimeout(() => {
+    if (tour.steps[tour.index] !== step) return;
+    tourBringIntoView(step);
+    placeTourCard(tourStepRect(step));
+  }, 260);
 }
 
 function stepTour(delta) {
   const next = tour.index + delta;
   if (next < 0) return;
-  if (next >= TOUR_STEPS.length) {
+  if (next >= tour.steps.length) {
     finishTour(false);
     return;
   }
@@ -10327,6 +10745,10 @@ $("#tourNext")?.addEventListener("click", () => stepTour(1));
 $("#tourPrev")?.addEventListener("click", () => stepTour(-1));
 $("#tourSkip")?.addEventListener("click", () => finishTour(true));
 $("#replayTourButton")?.addEventListener("click", () => startTour());
+$("#tourDots")?.addEventListener("click", (event) => {
+  const dot = event.target.closest(".tour-dot");
+  if (dot && tour.active) showTourStep(Number(dot.dataset.step));
+});
 document.addEventListener("keydown", (event) => {
   if (!tour.active) return;
   if (event.key === "Escape") {
@@ -10341,7 +10763,7 @@ document.addEventListener("keydown", (event) => {
   }
 });
 window.addEventListener("resize", () => {
-  if (tour.active) placeTourCard(tourTargetRect(TOUR_STEPS[tour.index]?.targets));
+  if (tour.active) placeTourCard(tourStepRect(tour.steps[tour.index]));
 });
 
 /* ===== 통합 검색 (상단 검색창) =====
@@ -11193,6 +11615,10 @@ function setCourseTab(tab) {
 }
 
 /* 읽기 창 */
+/** 공지 본문: 수집 때 취소선을 ~~글~~ 로 남겨 둔다(lms_crawler._announcement_html). 시험 범위에서 뺀 단원 같은 것. */
+function annTextHtml(text) {
+  return linkifyText(text).replace(/~~([^~\n]+?)~~/g, "<del>$1</del>");
+}
 let annReading = null; // { course, index }
 function openAnn(course, id) {
   const c = (state.courseAnn?.courses || []).find((x) => x.course === course);
@@ -11210,7 +11636,7 @@ function paintAnnDialog() {
   $("#annDialogCourse").textContent = annReading.label;
   $("#annDialogTitle").textContent = a.title;
   $("#annDialogDate").textContent = annDate(a.created, true);
-  $("#annDialogBody").innerHTML = a.text ? `<div class="ann-text">${linkifyText(a.text)}</div>` : '<p class="ann-empty">본문이 없는 공지예요.</p>';
+  $("#annDialogBody").innerHTML = a.text ? `<div class="ann-text">${annTextHtml(a.text)}</div>` : '<p class="ann-empty">본문이 없는 공지예요.</p>';
   $("#annDialogBody").scrollTop = 0;
   $("#annDialogPos").textContent = `${annReading.index + 1} / ${annReading.items.length}`;
   // 목록이 최신순이라 '이전 공지' 는 더 오래된 것(아래쪽)
@@ -11247,18 +11673,122 @@ $("#annDialog")?.addEventListener("click", (event) => {
       .catch((error) => showToast(humanError(error)));
   }
 });
-$("#annPrev")?.addEventListener("click", () => {
-  if (annReading && annReading.index < annReading.items.length - 1) {
-    annReading.index += 1;
-    paintAnnDialog();
+/* 옆으로 넘기기. '다음 공지'(오른쪽 단추, 더 최근 것)는 왼쪽으로 밀어서, '이전 공지'는 오른쪽으로 밀어서.
+   손가락·펜·마우스 끌기, 트랙패드 가로 쓸기, ←/→ 키가 모두 같은 goAnn 으로 간다. */
+const ANN_SLIDE_PX = 56;
+function annSlideParts() {
+  return [document.querySelector("#annDialog .ann-dialog-titles"), $("#annDialogBody")].filter(Boolean);
+}
+function annCanGo(step) {
+  if (!annReading) return false;
+  const next = annReading.index - step; // 목록이 최신순이라 '다음'(step +1)은 index 를 줄인다
+  return next >= 0 && next < annReading.items.length;
+}
+let annSliding = false;
+async function goAnn(step, fromDrag = 0) {
+  const parts = annSlideParts();
+  const calm = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  if (!annCanGo(step)) {
+    // 끝이면 살짝 튕겨서 더 없다는 걸 보여 준다
+    if (!calm) parts.forEach((el) => el.animate(
+      [{ transform: `translateX(${fromDrag}px)` }, { transform: `translateX(${-step * 14}px)` }, { transform: "translateX(0)" }],
+      { duration: 260, easing: "cubic-bezier(.22,1,.36,1)" },
+    ));
+    return;
   }
-});
-$("#annNext")?.addEventListener("click", () => {
-  if (annReading && annReading.index > 0) {
-    annReading.index -= 1;
+  if (annSliding) return;
+  annSliding = true;
+  const out = -step * ANN_SLIDE_PX;
+  try {
+    if (!calm) {
+      const leaving = parts.map((el) => el.animate(
+        [{ transform: `translateX(${fromDrag}px)`, opacity: 1 }, { transform: `translateX(${out}px)`, opacity: 0 }],
+        { duration: 140, easing: "ease-in", fill: "forwards" },
+      ).finished.catch(() => {}));
+      // 창이 가려져 애니메이션이 멈춰도 넘기기가 막히지 않게 오래 기다리지 않는다
+      await Promise.race([Promise.all(leaving), new Promise((resolve) => window.setTimeout(resolve, 180))]);
+    }
+    annReading.index -= step;
     paintAnnDialog();
+    if (!calm) {
+      parts.forEach((el) => {
+        el.getAnimations().forEach((an) => an.cancel());
+        el.animate(
+          [{ transform: `translateX(${-out}px)`, opacity: 0 }, { transform: "translateX(0)", opacity: 1 }],
+          { duration: 220, easing: "cubic-bezier(.22,1,.36,1)" },
+        );
+      });
+    }
+  } finally {
+    annSliding = false;
   }
+}
+$("#annPrev")?.addEventListener("click", () => goAnn(-1));
+$("#annNext")?.addEventListener("click", () => goAnn(1));
+$("#annDialog")?.addEventListener("keydown", (event) => {
+  if (event.target.closest?.("input, textarea, select")) return;
+  if (event.key === "ArrowRight") goAnn(1);
+  else if (event.key === "ArrowLeft") goAnn(-1);
+  else return;
+  event.preventDefault();
 });
+// 트랙패드 가로 쓸기: 한 번 쓸면 한 장만 넘어가게 모았다가 넘기고 잠깐 쉰다
+{
+  let acc = 0;
+  let restUntil = 0;
+  $("#annDialogBody")?.addEventListener("wheel", (event) => {
+    if (Math.abs(event.deltaX) <= Math.abs(event.deltaY)) return;
+    event.preventDefault();
+    if (Date.now() < restUntil) return;
+    acc += event.deltaX;
+    if (Math.abs(acc) > 60) {
+      goAnn(acc > 0 ? 1 : -1);
+      acc = 0;
+      restUntil = Date.now() + 450;
+    }
+  }, { passive: false });
+}
+// 끌어서 넘기기: 가로로 더 많이 움직였을 때만 끌기로 보고, 글을 고르는 중이면 끼어들지 않는다
+{
+  const body = $("#annDialogBody");
+  let drag = null;
+  body?.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0 || event.target.closest("a, button")) return;
+    drag = { x: event.clientX, y: event.clientY, id: event.pointerId, on: false };
+  });
+  body?.addEventListener("pointermove", (event) => {
+    if (!drag || event.pointerId !== drag.id) return;
+    const dx = event.clientX - drag.x;
+    const dy = event.clientY - drag.y;
+    if (!drag.on) {
+      if (Math.abs(dy) > 10 && Math.abs(dy) > Math.abs(dx)) { drag = null; return; } // 세로 = 스크롤
+      if (Math.abs(dx) < 12 || String(window.getSelection?.() || "").length > 0 && event.pointerType === "mouse") return;
+      drag.on = true;
+      window.getSelection?.()?.removeAllRanges();
+      body.setPointerCapture(event.pointerId);
+      body.classList.add("ann-dragging");
+    }
+    // 끝 쪽으로는 덜 따라오게(고무줄)
+    const step = dx < 0 ? 1 : -1;
+    drag.dx = annCanGo(step) ? dx : dx / 3;
+    annSlideParts().forEach((el) => { el.style.transform = `translateX(${drag.dx}px)`; });
+  });
+  const end = (event) => {
+    if (!drag || event.pointerId !== drag.id) return;
+    const { on, dx = 0 } = drag;
+    drag = null;
+    body.classList.remove("ann-dragging");
+    if (!on) return;
+    annSlideParts().forEach((el) => { el.style.transform = ""; });
+    if (Math.abs(dx) > 70) goAnn(dx < 0 ? 1 : -1, dx);
+    else annSlideParts().forEach((el) => el.animate(
+      [{ transform: `translateX(${dx}px)` }, { transform: "translateX(0)" }],
+      { duration: 200, easing: "cubic-bezier(.22,1,.36,1)" },
+    ));
+  };
+  body?.addEventListener("pointerup", end);
+  body?.addEventListener("pointercancel", end);
+}
 
 /* ===== 뒤로·앞으로 (크롬처럼) =====
    '누른 화면으로 돌아가는 기능이 없다' 는 말을 듣고 넣었다. 브라우저의 기록(History API)에 화면·연 메일·강의 탭을
@@ -11798,17 +12328,62 @@ function staffKey(label) {
   return String(label || "").replace(/\s+/g, "").toLowerCase();
 }
 
-function setCourseStaff(courses) {
+/* 교수·조교는 그 학기 그 분반에만 맞다(2026-10-09). 서버가 이번 학기 것(courses)과 지난 학기 것(past)을 나눠 주고,
+   메일 꼬리표(people.byEmail)는 이번 학기 개설강좌의 담당교수 + 내 과목 조교로만 만든다.
+   안 듣는 과목의 조교는 LMS 가 사람 목록을 막아(403) 모은다. */
+function setCourseStaff(courses, past = {}, people = {}) {
   const map = new Map();
   Object.entries(courses || {}).forEach(([label, rows]) => map.set(staffKey(label), { label, rows: rows || [] }));
+  const pastMap = new Map();
+  Object.entries(past || {}).forEach(([label, item]) => pastMap.set(staffKey(label), { label, ...item }));
   state.courseStaff = map;
-  state.courseStaffSig = String(Object.keys(courses || {}).length) + ":" + JSON.stringify(courses || {}).length;
-  renderedViews?.delete?.("courses");
+  state.courseStaffPast = pastMap;
+  state.coursePeople = people?.byEmail || {};
+  const sig = JSON.stringify([courses, past, people?.byEmail || {}]).length;
+  if (state.courseStaffSig !== `${map.size}:${sig}`) {
+    state.courseStaffSig = `${map.size}:${sig}`;
+    renderedViews?.delete?.("courses");
+    renderedViews?.delete?.("emails");
+  }
 }
 
-/** 강의 카드 이름 → 그 과목의 교수·조교 */
+/** 강의 카드 이름 → 그 과목의 교수·조교 (이번 학기에 없으면 지난 학기 것을 학기 표시와 함께) */
 function staffForCourse(label) {
-  return state.courseStaff?.get(staffKey(label))?.rows || [];
+  return state.courseStaff?.get(staffKey(label))?.rows || state.courseStaffPast?.get(staffKey(label))?.rows || [];
+}
+
+function staffTermNote(label) {
+  if (state.courseStaff?.get(staffKey(label))) return "";
+  return state.courseStaffPast?.get(staffKey(label))?.termLabel || "";
+}
+
+/** '03' → '3분반' */
+function sectionText(section) {
+  const n = String(section || "").replace(/^0+(?=\d)/, "");
+  return n ? `${n}분반` : "";
+}
+
+/** 메일 보낸 사람 주소 → '일반물리Ⅱ 3분반 교수 · 외 2분반' (이번 학기만). mine: 내가 듣는 과목·분반인지 */
+function coursePersonTag(email) {
+  const hits = (state.coursePeople || {})[String(email || "").toLowerCase()] || [];
+  if (!hits.length) return null;
+  const first = hits[0];
+  const same = hits.filter((h) => h.title === first.title && h.role === first.role && h !== first);
+  const others = hits.filter((h) => h.title !== first.title || h.role !== first.role);
+  let text = `${first.title} ${sectionText(first.section)} ${first.role}`.replace(/\s+/g, " ").trim();
+  const extra = [];
+  if (same.length) extra.push(`외 ${same.length}개 분반`);
+  if (others.length) extra.push(`${others.length}과목 더`);
+  const full = hits.map((h) => `${h.title} ${sectionText(h.section)} ${h.role}${h.mine ? " (내 수업)" : ""}`).join("\n");
+  return { text, extra: extra.join(" · "), mine: Boolean(first.mine), full };
+}
+
+function coursePersonTagHtml(email) {
+  const tag = coursePersonTag(email);
+  if (!tag) return "";
+  return `<span class="person-course${tag.mine ? " mine" : ""}" title="${escapeHtml(tag.full)}">${escapeHtml(tag.text)}${
+    tag.extra ? `<em>${escapeHtml(tag.extra)}</em>` : ""
+  }</span>`;
 }
 
 /** 메일 자동완성에 넣을 교수·조교 (이메일을 아는 사람만) */
@@ -11817,7 +12392,7 @@ function staffContacts() {
   (state.courseStaff || new Map()).forEach(({ label, rows }) => {
     const course = courseShortName(label);
     rows.forEach((s) => {
-      if (s.email) out.push({ name: s.name, email: s.email, tag: `${course} ${s.role}` });
+      if (s.email) out.push({ name: s.name, email: s.email, tag: `${course} ${sectionText(s.section)} ${s.role}`.replace(/\s+/g, " ") });
     });
   });
   return out;
@@ -11846,9 +12421,12 @@ function courseStaffLine(course) {
     return `<button type="button" class="course-staff-person${s.email ? "" : " unsure"}" data-staff="${escapeHtml(course.label)}"
         data-i="${i}" ${can ? "" : "disabled"}
         title="${escapeHtml(s.email ? `${s.name} <${s.email}> 에게 메일 쓰기` : (s.candidates || []).length ? `동명이인 ${s.candidates.length}명 — 눌러서 고르기` : "조직도에서 이메일을 못 찾았어요")}">
-        <em>${escapeHtml(s.role)}</em>${escapeHtml(s.name)}${can ? iconHtml("mail") : ""}</button>`;
+        <em>${escapeHtml(s.role)}${s.section ? ` · ${escapeHtml(sectionText(s.section))}` : ""}</em>${escapeHtml(s.name)}${can ? iconHtml("mail") : ""}</button>`;
   };
-  return `<div class="course-staff">${rows.map(person).join("")}</div>`;
+  const note = staffTermNote(course.label);
+  return `<div class="course-staff">${rows.map(person).join("")}${
+    note ? `<span class="course-staff-term" title="교수·조교는 그 학기에만 맞아요">${escapeHtml(note)} 기준</span>` : ""
+  }</div>`;
 }
 
 /** 강의 카드에서 교수·조교 이름을 누르면 그 사람에게 메일 쓰기 */
@@ -11873,9 +12451,11 @@ async function mailCourseStaff(label, index) {
     for (let i = 0; i < 20 && state.view !== "emails"; i += 1) await new Promise((r) => setTimeout(r, 25));
     await new Promise((r) => setTimeout(r, 30));
   }
+  const sec = sectionText(s.section);
   openCompose({
-    to: formatRecipient({ name: `${s.name}/${course} ${s.role}`, email }),
-    subject: `[${course}] `,
+    to: formatRecipient({ name: `${s.name}/${course} ${sec} ${s.role}`.replace(/\s+/g, " "), email }),
+    // 분반까지 적어야 다른 분반 조교·교수와 헷갈리지 않는다 (사용자가 직접 쓰던 제목 꼴: [일반화학II 02분반])
+    subject: `[${course}${s.section ? ` ${s.section}분반` : ""}] `,
   });
   const subject = $("#composeForm [name=subject]");
   if (subject) {

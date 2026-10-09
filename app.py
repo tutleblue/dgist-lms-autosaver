@@ -603,6 +603,41 @@ def run_worker(job: str) -> int:
     return 0
 
 
+def initial_window_size() -> tuple[int, int, int | None, int | None]:
+    """첫 창 크기와 자리: 1320×880 을 바라되 작업 영역(작업표시줄 뺀 화면)을 넘지 않게, 가운데에.
+
+    2026-10-09 실측: 화면이 1389×868(배율 적용 후)인 노트북에서 880px 창이 작업표시줄 뒤로 내려가,
+    캘린더 일정 편집 칸의 '저장' 버튼이 화면 밖에 있어 '일정 추가가 안 된다'고 보였다.
+    pywebview 의 width/height 는 배율 전 값이라 작업 영역도 같은 단위(96dpi 기준)로 바꿔 잰다.
+    크기만 줄였더니 윈도우가 정한 자리(y=172)에 떠서 아래가 여전히 984 > 852 로 넘쳤다(실측) → 자리도 가운데로.
+    """
+    want_w, want_h = 1320, 880
+    if os.name != "nt":
+        return want_w, want_h, None, None
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        rect = wintypes.RECT()
+        ctypes.windll.user32.SystemParametersInfoW(0x0030, 0, ctypes.byref(rect), 0)  # SPI_GETWORKAREA
+        try:
+            dpi = ctypes.windll.user32.GetDpiForSystem() or 96
+        except Exception:
+            dpi = 96
+        scale = dpi / 96
+        area_w = (rect.right - rect.left) / scale
+        area_h = (rect.bottom - rect.top) / scale
+        if area_w < 400 or area_h < 400:
+            return want_w, want_h, None, None
+        width = int(min(want_w, area_w - 40))
+        height = int(min(want_h, area_h - 40))
+        x = int(rect.left / scale + (area_w - width) / 2)
+        y = int(rect.top / scale + (area_h - height) / 2)
+        return width, height, x, y
+    except Exception:
+        return want_w, want_h, None, None
+
+
 def main() -> None:
     set_app_user_model_id()  # 창을 만들기 전에 (작업표시줄 아이콘 반영의 핵심)
     import webview
@@ -630,12 +665,16 @@ def main() -> None:
         # 켤 때마다 띄우던 '48시간 마감 요약' 은 없앴다. 마감 알림(하루·3시간·1시간 전)이 대신한다.
 
     url = f"http://{HOST}:{PORT}"
+    width, height, x, y = initial_window_size()
     webview.create_window(
         WINDOW_TITLE,
         url,
-        width=1320,
-        height=880,
-        min_size=(900, 640),
+        width=width,
+        height=height,
+        x=x,
+        y=y,
+        # 휴대폰 비율로 줄여도 쓸 수 있게 화면을 다시 짰다(좁으면 아래 탭 막대). 예전 900×640 은 정사각형·세로 창을 막았다.
+        min_size=(360, 560),
     )
     # 창이 뜬 뒤 아이콘을 입힌다 (pywebview는 Windows에서 아이콘 인자를 지원하지 않음)
     threading.Thread(target=apply_window_icon, daemon=True).start()

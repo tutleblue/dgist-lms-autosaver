@@ -595,7 +595,9 @@ def clean_html_to_text(text: str, limit: int = 4000) -> str:
             text,
         )
         text = re.sub(r"\{[^{}]*\}", " ", text)                 # 남은 중괄호 블록
-    text = re.sub(r"[a-zA-Z\-]+\s*:\s*[^;{}\n]+;", " ", text)   # 낱개 선언
+    # 값에 '&' 를 넣지 않는다. 엔티티는 아직 풀기 전이라 'Place: E1 101 (컨벤션홀 A&amp;B)' 의
+    # '&amp;' 끝 ';' 을 선언 끝으로 읽어 'Place: …A&amp;' 를 통째로 지웠다(LMS 공지에서 실측). CSS 값에 & 는 없다.
+    text = re.sub(r"[a-zA-Z\-]+\s*:\s*[^;{}\n&]+;", " ", text)   # 낱개 선언
     text = re.sub(r"#[A-Za-z][\w\-]*", " ", text)               # id 셀렉터 잔재
     # 5) HTML 엔티티 복원
     text = _html.unescape(text)

@@ -10,6 +10,7 @@
 # 필요한 저장소 설정 (Settings → Secrets and variables → Actions):
 #  secrets.SIGNPATH_API_TOKEN     SignPath CI 사용자 API 토큰
 #  secrets.GOOGLE_CLIENT_JSON     google_client.json 내용 (데스크톱 OAuth 클라이언트. 없으면 빼고 빌드)
+#  secrets.DGIST_API_KEY          공공데이터포털 인증키 → public_data_key.txt (없으면 빼고 빌드)
 #  vars.SIGNPATH_ORGANIZATION_ID  SignPath 조직 ID
 #  vars.SIGNPATH_PROJECT_SLUG     (기본 dgist-lms-autosaver)
 #  vars.SIGNPATH_POLICY_SLUG      (기본 release-signing)
@@ -56,7 +57,11 @@ jobs:
         shell: pwsh
         env:
           GOOGLE_CLIENT_JSON: ${{ secrets.GOOGLE_CLIENT_JSON }}
+          DGIST_API_KEY: ${{ secrets.DGIST_API_KEY }}
         run: |
+          if ($env:DGIST_API_KEY) {
+            [IO.File]::WriteAllText("$PWD\public_data_key.txt", $env:DGIST_API_KEY.Trim(), (New-Object Text.UTF8Encoding $false))
+          } else { "DGIST_API_KEY 없음 — 공공데이터 기본 키 없이 빌드" }
           if ($env:GOOGLE_CLIENT_JSON) {
             [IO.File]::WriteAllText("$PWD\google_client.json", $env:GOOGLE_CLIENT_JSON, (New-Object Text.UTF8Encoding $false))
           } else { "GOOGLE_CLIENT_JSON 없음 — 로그인 준비물 없이 빌드" }

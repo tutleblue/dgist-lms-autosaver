@@ -66,7 +66,7 @@ DGIST 학생용 데스크톱 앱 "붕어빵"(저장소 이름 dgist-lms-autosave
 | 시계·지금 수업 | 사이드바 위 시계, 시간표 기준 현재 수업 | `renderNowBar` (1초마다, 값이 같으면 DOM 안 건드림) |
 | 동기화 경고 배너 | 연속 실패 또는 3일 이상 동기화 안 됨 | `renderHealth` |
 | 화면 자동 갱신 | 작업 중 2초, 평소 12초, 창이 가려지면 쉼 | `refreshAll` 타이머 |
-| 첫 실행 소개 | 처음 켜면 마스코트 달구가 메뉴를 하나씩 비추며 기능을 알려 줌(12단계, 건너뛰기·이전·다음, 키보드 ←→ Esc). 본 기록은 데이터 폴더 `tutorial.json`. 설정의 '앱 소개 다시 보기'로 다시 봄. 마치면 처음 쓰는 사람의 '새 업데이트' 점은 끔 | `TOUR_STEPS`, `startTour`, `/api/tutorial`, `/api/tutorial/done`, `web/img/dalgu/` |
+| 첫 실행 소개 | 처음 켜면 마스코트 달구가 메뉴와 화면 안 요소(시간표·D-day·공지 탭·자료 보기 방식·메일 쓰기·저장 위치·언어…)를 비추며 기능을 알려 줌(24단계, 묶음 시작·매일 보는 곳·공부·메일·편하게 쓰기·설정, 단계마다 짧은 기능 목록 tips. 건너뛰기·이전·다음, 점을 눌러 건너뛰기, 키보드 ←→ Esc). 아래쪽 요소는 비추기 전에 스크롤해 오고, 못 찾으면 fallback(그 메뉴), 학사일정이 없으면 D-day 단계는 뺌(when). 본 기록은 데이터 폴더 `tutorial.json`. 설정의 '앱 소개 다시 보기'로 다시 봄. 마치면 처음 쓰는 사람의 '새 업데이트' 점은 끔 | `TOUR_STEPS`, `startTour`, `/api/tutorial`, `/api/tutorial/done`, `web/img/dalgu/` |
 | 업데이트 소식 | 새 버전일 때만 사이드바 아래 상태 카드 바로 위에 '새 업데이트' 카드가 붙음. 누르면 바뀐 내용 창, 한 번 보면 사라짐(지난 내용은 설정의 '업데이트 내용'). 본 기록은 데이터 폴더 `whats_new.json` | `loadWhatsNew`, `openWhatsNew`, `/api/whats-new`, `data/changelog.json` |
 
 ### 3.2 대시보드 (`dashboard`)
@@ -560,6 +560,8 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 ## 강의 › 공지사항 (2026-09-28)
 - `lms_crawler.crawl_announcements` 가 공지 글(제목·본문 평문·작성/수정 시각)을 모아 `save_announcements` 로 `course_announcements.json` 에 둔다. 이번에 읽은 과목만 바꿔 끼우고(403 과목은 예전 것 유지), 과목마다 60건까지.
 - API `GET /api/course-announcements` (`web_ui.get_course_announcements`). 화면: 강의 view 의 '과목 | 공지사항' 탭(`setCourseTab`). 공지 탭은 최근 7일 줄(`#annRecent`) + 이번 학기 과목 카드 게시판(`annCardHtml`, 최근 4건, '전체 N개 보기') + 지난 학기 접기(`#annPastWrap`, 학기는 과목명의 `YYYY_N학기`). 제목 → 읽기 창 `#annDialog`(이전·다음). 처음의 한 줄 나열식은 '정돈 안 됨' 이라는 말을 듣고 바꿨다.
+- 본문: 평문으로 바꾸기 전에 `<del>/<s>/<strike>`·line-through 를 `~~글~~` 로, `<li>` 를 `• ` 로 바꿔 둔다(`lms_crawler._announcement_html`). 화면은 `annTextHtml` 이 `<del>` 로 그린다. 시험 범위에서 뺀 단원이 취소선 없이 범위처럼 보였던 실제 공지 때문(2026-10-09).
+- 읽기 창 넘기기: 끌기(가로로 12px 넘게, 70px 넘으면 넘김)·트랙패드 가로 쓸기·←/→ 키 → `goAnn`. 왼쪽으로 밀면 '다음 공지'(더 최근). 끝이면 살짝 튕김.
 - 새 공지 알림 `app.check_announcement_alerts` (스위치 `NOTIFY_NEW_FILES` 를 함께 씀, `alerts.json` 의 `ann`, 처음엔 기억만).
 - LMS '메시지'는 못 가져온다: 2026-09-28 실측 `/learn/api/public/v1/courses/{id}/messages` → 400, `/learn/api/v1/courses/{id}/messages` → 404. 확인용 `probe_messages` 는 상태 코드만 로그에 남긴다.
 - 첫 수집: 과목 15개, 공지 162건.
@@ -617,3 +619,29 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 - `.mail-app` 열 너비는 `--mail-rail-w`(폴더, 160~360), 두 칸일 때 `.mail-main` 은 `--mail-list-w`(목록, 280~720). 손잡이 `.mail-split[data-split=rail|list]` 를 끌면 바뀌고, 두 번 누르면 기본(232/380). 폴더 손잡이를 120px 아래로 끌면 접힘(`.rail-folded`), ☰(`#mailRailToggle`)로 다시 펼침.
 - 쓰는 중(`showMailPane('compose')`)에는 `.mail-app.composing` 으로 폴더·목록 칸을 접는다.
 - 너비·접힘은 `ui_prefs.json` 의 `mailLayout`(`/api/ui-prefs`). 메일 영역 860px 이하(폴더가 위쪽 띠)에서는 손잡이·접기를 쓰지 않는다 — 너비 변수 규칙이 파일 뒤쪽에 있어 좁은 화면 규칙에서 다시 한 칸으로 적었다.
+
+## 좁은 창·정사각형·휴대폰 화면 (2026-10-09)
+- `styles.css` 끝 '좁은 창·정사각형 창·휴대폰' 절이 예전 규칙을 덮는다.
+  - 761~1100px: 사이드바 76px 아이콘 레일(글자는 아이콘 밑 작게), 시계는 상단바 한 줄형(`app.js NOW_MOBILE` 1100px), 마지막 확인 글자 숨김, 캘린더 날짜 상세는 오른쪽 서랍, 설정은 `inset-left 76px`.
+  - ~760px: 상단은 `시계 | 새로고침·테마` 한 줄 + 검색. 아래 탭은 대시보드·과제 마감·캘린더·자료·메일함 + '더보기'(`#navMore`, `openMoreSheet`). `data-more` 메뉴(강의·창고·설정)와 문의·업데이트 내용은 더보기 시트에. 실행 로그 손잡이 숨김(진행은 아래 진행 막대). 과제 마감 줄은 두 줄 격자, 캘린더 칸은 색 점만 + 날짜 상세는 아래 시트, 설정은 위 막대까지 덮음.
+  - 실측: 375×812 에서 상단이 278px → 약 120px.
+- 일정 편집(`#eventEditor`)은 열 때 `body` 로 옮겨 가운데 대화 상자(600px 이하 아래 시트)로 연다. 상세 패널에 `transform` 이 있어 그 안에서는 `fixed` 가 창 기준이 안 된다. Esc·바깥 누르기로 닫힘.
+  - 원인(설치본 실측): 창 높이 880 > 작업 영역 852(1440×852, 200% 배율)라 창 아래가 작업표시줄 뒤로 들어가 '저장' 버튼이 화면 밖에 있었다. 저장 자체는 됐다.
+- 첫 창 크기 `app.initial_window_size`: 1320×880 을 바라되 작업 영역 −40 을 넘지 않게. 최소 크기 360×560(휴대폰 비율로 줄여 보기 가능).
+
+## 학교 행사/세미나 + 기본 공공데이터 키 (2026-10-09)
+- `dgist_api.service_key`: 환경변수 → 설정(config.json) → config.py → `public_data_key.txt`(설치 파일에 묶은 기본 키). 키 파일은 `.gitignore`, `bungeoppang.spec` 이 있으면 묶고, CI 는 `secrets.DGIST_API_KEY` 로 만든다.
+- 행사/세미나 서비스(`EvtntcListService01/getNtcList01`)는 성공을 `resultCode 100 / Success` 로 준다. 예전 `_raise_for_error` 는 이를 오류로 봤다. 항목: `seq, title, sdate(시작~끝), stime, place, tel, link, photo`. `fetch_notices` 가 `start/end/time/place/host/link` 로 바꾼다.
+- `web_ui.get_school_events`: `school_events.json` 6시간 캐시(모두가 한 키를 나눠 쓰므로). `GET /api/school-events[?force=1]`. 화면은 `loadSchoolEvents` → 캘린더 '학교 행사'(노랑).
+- 메일 행사 중복(`_mark_events`): 같은 날짜에서 앞 28자가 같거나, 괄호 꼬리표(`[(D-6!)…]`)·흔한 낱말을 뺀 낱말이 60% 이상 겹치면 하나만 남긴다(`_event_tokens`, `_same_event`). 학교 공식 행사와 같은 날 같은 행사면 메일 쪽을 빼고 `schoolEventId` 를 붙인다.
+  - 실측: '제15차 연례 비즈니스 모델 개발 세미나(개방형 혁신)' 메일 4통 → 1개. 같은 날 다른 학과 세미나(10/6 생명과학·화학물리)는 따로 남음. 캘린더 메일 행사 15 → 12.
+- 키로 받는 것: 개설강좌 569건, 학사일정 56건, 행사 15건(2026-10-09).
+- 좁은 메일함(메일 영역 860px 이하·휴대폰): 폴더 칸을 한 줄 띠로. 묶음 상자(`.mail-write-row`·`.mail-quick`·`.mail-folders`…)를 `display: contents` 로 풀어 단추를 한 줄에 세우고 옆으로 넘긴다(스크롤바 숨김, 오른쪽 끝 흐림, 휠 → 옆 스크롤 `bindMailStripWheel`). 순서: 쓰기 → 폴더 → 분류 → 안읽음·중요·첨부. 예전에는 여러 줄로 펼쳐 메일 영역 834px 에서 폴더 칸만 381px(실측)였고 지금은 58px. 휴대폰의 서랍(☰)도 이 띠로 바꿨다. 잘리던 폴더 제목(`#mailFolderTitle`)과 휴대폰의 목록/카드 전환은 숨김.
+
+## 교수·조교: 분반·학기, 메일 꼬리표 (2026-10-09)
+- `web_ui.course_meta`: LMS 과목 이름 '일반물리Ⅱ (General PhysicsⅡ )_03[ 2026_2학기 ]' → 과목명·분반(03)·학기(2026_2). `current_term_key()` 는 `timetable_import.current_term_value()` 를 같은 꼴로.
+- `get_course_staff` 응답: `courses`(이번 학기만, 줄마다 title·section·term), `past`(지난 학기, 과목마다 가장 최근 학기와 `termLabel`), `people.byEmail`. 교수·조교는 그 학기 그 분반에만 맞아서 메일 꼬리표·자동완성은 이번 학기 것만 쓴다. 과목 카드는 이번 학기에 없으면 지난 학기 것을 'YYYY-N학기 기준' 과 함께.
+- `course_people_index`: 이번 학기 개설강좌(공공데이터, 학부 569 + 대학원 969)의 담당교수 + 내 과목 LMS 교수·조교를 이름으로 모으고, 메일 보낸 사람(조직도 이름 → 없으면 보낸 이름)과 맞춘다. 학위논문·개별연구 과목은 뺀다(`_RESEARCH_COURSE_RE`). 조직도에 학생으로 나온 주소에는 교수 꼬리표를 달지 않는다. 파일 도장으로 캐시(처음 0.2초, 이후 0.04초). 실측 12명.
+- 화면: 메일 목록 보낸 사람 옆·읽기 화면 주소 옆 `.person-course`('일반물리Ⅱ 3분반 교수 · 외 2개 분반', 내 수업이면 강조색, 마우스를 올리면 전체). 강의 카드 교수·조교에 분반, 메일 쓰기 제목 `[과목 NN분반] `.
+- 안 듣는 과목의 조교 (2026-10-09 실측, 읽기만): `public/v3/courses?name=` 로 다른 분반 과목은 찾을 수 있지만 `public/v1/courses/{id}/users` 403, `v1/courses/{id}/memberships` 403, `v1/courses/{id}?expand=instructorsMembership` 은 200 이나 대표 교수(role P) 한 명만(내 과목에서도 조교는 안 나옴). 저장된 메일 81통 중 조교 언급 7통(대부분 내가 보낸 것). → 다른 과목 조교는 모을 길이 없어 넣지 않았다.
+- 좁은 메일 쓰기(`@container mailmain ≤620px`): `.cfield` 를 이름 붙인 칸('label opt find' / 'body body body')으로. 예전 두 칸 규칙은 옵션(개별·중요)이 둘째 칸을 먼저 차지해 입력칸이 58px 첫째 칸으로 밀렸다(615px 창). 첨부가 없으면 빈 표 머리줄을 접고, 쓰는 동안 폴더 띠는 숨긴다.

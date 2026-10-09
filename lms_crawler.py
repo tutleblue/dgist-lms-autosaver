@@ -821,10 +821,27 @@ _announcements = {}
 _message_probe = {}
 
 
+# 공지 HTML 을 평문으로 바꾸면 취소선이 사라져 '시험 범위에서 뺀 단원' 이 그대로 범위처럼 보였다(실제 공지).
+# 취소선은 ~~글~~ 로 남기고(화면이 <del> 로 그림), 목록 줄 앞에는 • 를 붙인다.
+_STRIKE_TAG = re.compile(r"<(del|s|strike)\b[^>]*>([\s\S]*?)</\1\s*>", re.IGNORECASE)
+_STRIKE_SPAN = re.compile(r"<span\b[^>]*line-through[^>]*>([^<]*)</span\s*>", re.IGNORECASE)
+
+
+def _mark_strike(inner):
+    text = re.sub(r"<[^>]+>", "", inner).strip()
+    return f"~~{text}~~" if text else ""
+
+
+def _announcement_html(body):
+    body = _STRIKE_TAG.sub(lambda m: _mark_strike(m.group(2)), body)
+    body = _STRIKE_SPAN.sub(lambda m: _mark_strike(m.group(1)), body)
+    return re.sub(r"<li\b[^>]*>", "<li>• ", body, flags=re.IGNORECASE)
+
+
 def _announcement_record(course_id, course_name, ann):
     from email_reader import clean_html_to_text
 
-    body = ann.get('body') or ''
+    body = _announcement_html(ann.get('body') or '')
     return {
         'id': str(ann.get('id', '')),
         'courseId': course_id,

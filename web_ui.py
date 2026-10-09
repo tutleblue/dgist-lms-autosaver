@@ -1360,7 +1360,80 @@ def _interest_words(config: dict[str, Any]) -> list[str]:
     return sorted({w.lower() for w in words if w})
 
 
-def _mark_events(emails: list[dict[str, Any]], config: dict[str, Any]) -> None:
+# ===== 학교 행사/세미나 (공공데이터 API) =====
+# 모두가 설치 파일의 기본 키 하나를 나눠 쓰므로 하루 호출 한도를 아낀다: 6시간에 한 번만 부르고
+# 나머지는 파일에서 읽는다. 받지 못하면 예전 목록을 그대로 쓴다.
+SCHOOL_EVENTS_TTL = 6 * 3600
+_school_events_lock = threading.Lock()
+
+
+def _school_events_path(workspace: UserWorkspace) -> Path:
+    return workspace.root / "school_events.json"
+
+
+def read_school_events(workspace: UserWorkspace) -> list[dict[str, Any]]:
+    data = read_json(_school_events_path(workspace), {}) or {}
+    items = data.get("items") if isinstance(data, dict) else None
+    return items if isinstance(items, list) else []
+
+
+def get_school_events(workspace: UserWorkspace, force: bool = False) -> dict[str, Any]:
+    path = _school_events_path(workspace)
+    data = read_json(path, {}) or {}
+    fetched = str(data.get("fetchedAt", "")) if isinstance(data, dict) else ""
+    fresh = False
+    if fetched:
+        try:
+            fresh = (datetime.now() - datetime.fromisoformat(fetched)).total_seconds() < SCHOOL_EVENTS_TTL
+        except ValueError:
+            fresh = False
+    if fresh and not force:
+        return {"ok": True, "items": data.get("items", []), "fetchedAt": fetched, "cached": True}
+    with _school_events_lock:
+        try:
+            import dgist_api
+
+            if not dgist_api.has_key():
+                return {"ok": False, "items": data.get("items", []) if isinstance(data, dict) else [], "needsKey": True}
+            result = dgist_api.fetch_notices(rows=40)
+            payload = {"fetchedAt": now_iso(), "items": result.get("items", [])}
+            workspace.root.mkdir(parents=True, exist_ok=True)
+            atomic_write_text(path, json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+            return {"ok": True, **payload}
+        except Exception as exc:
+            return {
+                "ok": False,
+                "items": data.get("items", []) if isinstance(data, dict) else [],
+                "message": str(exc),
+            }
+
+
+# 같은 행사인지 볼 때 빼는 말: 제목 앞 꼬리표·시기·흔한 낱말은 행사마다 다 들어 있어 구분에 쓸모가 없다
+_EVENT_STOP_WORDS = {
+    "세미나", "seminar", "안내", "개최", "신청", "마감", "접수", "참가", "참여", "모집", "공지", "알림",
+    "fall", "spring", "summer", "winter", "semester", "가을학기", "봄학기", "학기", "prof", "교수", "박사",
+    "dept", "department", "of", "the", "and", "for", "in", "on", "at", "to", "with",
+    "jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "sept", "oct", "nov", "dec",
+    "mon", "tue", "wed", "thu", "fri", "sat", "sun", "today", "reminder", "re", "fw", "fwd",
+}
+
+
+def _event_tokens(subject: str) -> set[str]:
+    """제목에서 행사를 가려 주는 낱말만. '[(D-6!)마감 전 빨리 신청하세요…]' 같은 괄호 꼬리표는 통째로 뺀다."""
+    text = str(subject or "").lower()
+    text = re.sub(r"^\s*(re|fw|fwd)\s*:\s*", "", text)
+    text = re.sub(r"\[[^\]]*\]|\([^)]*\)|<[^>]*>|＜[^＞]*＞|【[^】]*】", " ", text)
+    words = re.findall(r"[0-9a-z가-힣]+", text)
+    return {w for w in words if len(w) >= 2 and not w.isdigit() and w not in _EVENT_STOP_WORDS}
+
+
+def _same_event(a: set[str], b: set[str]) -> bool:
+    if len(a) < 2 or len(b) < 2:
+        return False
+    return len(a & b) / min(len(a), len(b)) >= 0.6
+
+
+def _mark_events(emails: list[dict[str, Any]], config: dict[str, Any], school_events: list[dict[str, Any]] | None = None) -> None:
     """메일마다 행사 날짜를 채우고, 캘린더에 올릴 만한지(calendar) 표시한다."""
     import email_reader
 
@@ -1402,22 +1475,46 @@ def _mark_events(emails: list[dict[str, Any]], config: dict[str, Any]) -> None:
             return a_time
         return str(a.get("date", "")) > str(b.get("date", ""))
 
-    newest: dict[tuple[str, str], dict[str, Any]] = {}
+    # 2026-10-09: 같은 세미나를 '[(D-12!)…]', '[(D-7!)…]', '[(D-6!)…]', '[마감 전…]' 처럼 앞 꼬리표만 바꿔
+    # 네 번 보내서 캘린더에 네 개가 찍혔다(앞 28자가 달라서). 괄호 꼬리표를 뺀 낱말이 60% 이상 겹치면 같은 행사로 본다.
+    groups: list[dict[str, Any]] = []  # {date, key, tokens, mail}
     for mail in emails:
         if not isinstance(mail, dict) or not mail.get("calendar"):
             continue
         key = event_key(mail)
-        kept = newest.get(key)
-        if kept is None or better(mail, kept):
-            if kept is not None:
-                kept["calendar"] = False
-            newest[key] = mail
+        tokens = _event_tokens(str(mail.get("subject", "")))
+        found = next(
+            (g for g in groups if g["date"] == key[0] and (g["key"] == key or _same_event(g["tokens"], tokens))),
+            None,
+        )
+        if found is None:
+            groups.append({"date": key[0], "key": key, "tokens": tokens, "mail": mail})
+        elif better(mail, found["mail"]):
+            found["mail"]["calendar"] = False
+            found.update(key=key, tokens=tokens | found["tokens"], mail=mail)
         else:
             mail["calendar"] = False
+            found["tokens"] |= tokens
+
+    # 학교 공식 행사(공공데이터 API)와 같은 날 같은 행사면 메일 쪽은 빼고 공식 것을 남긴다
+    for ev in school_events or []:
+        start, end = str(ev.get("start", "")), str(ev.get("end", "") or ev.get("start", ""))
+        tokens = _event_tokens(str(ev.get("title", "")))
+        if not start:
+            continue
+        for g in groups:
+            if start <= g["date"] <= end and _same_event(tokens, g["tokens"]):
+                g["mail"]["calendar"] = False
+                g["mail"]["schoolEventId"] = ev.get("id")
 
 
 def get_emails(workspace: UserWorkspace) -> dict[str, Any]:
-    stamp = (str(workspace.emails_log), _file_stamp(workspace.emails_log), _file_stamp(workspace.config_path))
+    stamp = (
+        str(workspace.emails_log),
+        _file_stamp(workspace.emails_log),
+        _file_stamp(workspace.config_path),
+        _file_stamp(_school_events_path(workspace)),  # 학교 행사가 새로 오면 메일 행사 중복도 다시 본다
+    )
     if _emails_cache.get("key") == stamp and _emails_cache.get("data") is not None:
         return _emails_cache["data"]
 
@@ -1429,7 +1526,7 @@ def get_emails(workspace: UserWorkspace) -> dict[str, Any]:
         data = {}
     emails = data.get("emails", []) if isinstance(data.get("emails"), list) else []
     try:
-        _mark_events(emails, read_config(workspace))
+        _mark_events(emails, read_config(workspace), read_school_events(workspace))
     except Exception as exc:
         print(f"[메일] 행사 날짜를 고르지 못했습니다: {exc}")
     listed = [
@@ -3040,6 +3137,142 @@ def search_directory_api(workspace: UserWorkspace, query: str, limit: int = 8) -
     return {"ok": True, "total": len(people), "results": hits}
 
 
+_COURSE_META_RE = re.compile(r"^(.*?)\s*\((.*)\)\s*_([0-9A-Za-z]+)\s*\[\s*(\d{4})_([^\]]+?)\s*\]")
+
+
+def course_meta(text: str) -> dict[str, str]:
+    """'일반물리Ⅱ (General PhysicsⅡ )_03[ 2026_2학기 ]' → 과목명·분반·학기.
+
+    교수·조교는 그 학기 그 분반에만 맞는 정보라(2026-10-09 사용자), 분반과 학기를 같이 들고 다닌다.
+    """
+    m = _COURSE_META_RE.match(str(text or "").strip())
+    if not m:
+        return {"title": str(text or "").split("[", 1)[0].strip(), "section": "", "term": "", "termLabel": ""}
+    title, _en, section, year, term = m.groups()
+    term = term.replace("학기", "").strip()
+    return {
+        "title": title.strip(),
+        "section": section,
+        "term": f"{year}_{term}",
+        "termLabel": f"{year}-{term}학기" if term.isdigit() else f"{year} {term}학기",
+    }
+
+
+_TERM_CODE_NAMES = {"10": "1", "20": "2", "11": "여름", "21": "겨울"}
+
+
+def current_term_key() -> str:
+    """이번 정규학기를 과목 이름의 꼴('2026_2')로."""
+    import timetable_import
+
+    value = timetable_import.current_term_value()  # 예: 2026CMN17.20
+    code = value[-2:]
+    return f"{value[:4]}_{_TERM_CODE_NAMES.get(code, code)}"
+
+
+_people_cache: dict[str, Any] = {}
+_RESEARCH_COURSE_RE = re.compile(r"thesis|dissertation|논문연구|학위논문|개별연구|연구실\s*인턴|URP|research\s*(project|internship)", re.I)
+
+
+def _norm_person(name: str) -> str:
+    """'김호정 교수' · 'Kim, Hojung' 같은 꼴을 비교용으로."""
+    text = re.sub(r"\(.*?\)|<.*?>", " ", str(name or ""))
+    text = re.sub(r"(교수|조교|박사|님|선생)\s*$", "", text.strip())
+    return re.sub(r"[\s,.\-]+", "", text).lower()
+
+
+def course_people_index(workspace: UserWorkspace, staff_rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """메일 보낸 사람 → 이번 학기에 무슨 과목 몇 분반을 맡았는지.
+
+    - 교수: 공공데이터 개설강좌(학부+대학원, 이번 학기)의 담당교수. 내가 안 듣는 과목도 나온다.
+    - 조교: LMS 가 내 과목만 알려 준다. 안 듣는 과목은 LMS 가 사람 목록을 403 으로 막고,
+      과목 정보(instructorsMembership)에는 대표 교수 한 명만 들어 있다(2026-10-09 실측) → 내 과목 조교만.
+    이름으로 맞추므로 메일 주소는 조직도(이름)·보낸 사람 이름 둘 다로 찾는다.
+    """
+    import directory
+    import timetable_import
+
+    term_value = timetable_import.current_term_value()
+    stamp = (
+        term_value,
+        _file_stamp(workspace.catalog_path),
+        _file_stamp(workspace.emails_log),
+        _file_stamp(workspace.directory_path),
+        _file_stamp(workspace.root / "course_staff.json"),
+    )
+    if _people_cache.get("stamp") == stamp:
+        return _people_cache["data"]
+
+    by_name: dict[str, list[dict[str, Any]]] = {}
+
+    def add(name: str, entry: dict[str, Any]) -> None:
+        key = _norm_person(name)
+        if len(key) < 2:
+            return
+        bucket = by_name.setdefault(key, [])
+        same = [e for e in bucket if e["title"] == entry["title"] and e["section"] == entry["section"] and e["role"] == entry["role"]]
+        if same:
+            same[0]["mine"] = same[0]["mine"] or entry["mine"]
+        else:
+            bucket.append(dict(entry))
+
+    mine_keys = {(row["title"].replace(" ", ""), row["section"]) for row in staff_rows}
+    for undergraduate in (True, False):
+        try:
+            catalog = get_course_catalog(workspace, term_value, undergraduate)
+        except Exception:
+            catalog = {}
+        for c in catalog.get("courses") or []:
+            title = str(c.get("title") or "")
+            section = str(c.get("section") or "")
+            # 학위논문·개별연구는 교수마다 분반이 하나씩 열려 있어 꼬리표를 덮어 버린다(실측: Thesis(M.S.) 19분반)
+            if _RESEARCH_COURSE_RE.search(title):
+                continue
+            for prof in re.split(r"[,/·]", str(c.get("professor") or "")):
+                if prof.strip():
+                    add(prof, {
+                        "role": "교수",
+                        "title": title,
+                        "section": section,
+                        "mine": (title.replace(" ", ""), section) in mine_keys,
+                    })
+    for row in staff_rows:
+        add(row["name"], {"role": row["role"], "title": row["title"], "section": row["section"], "mine": True})
+
+    people = directory.load_directory(workspace.directory_path)
+    dir_name = {str(p.get("email", "")).lower(): str(p.get("name", "")) for p in people if p.get("email")}
+    # 조직도에서 학생으로 나온 주소에는 '교수' 꼬리표를 달지 않는다 (이름만 같은 학생이 교수로 보이지 않게)
+    students = {
+        str(p.get("email", "")).lower()
+        for p in people
+        if p.get("email") and re.search(r"학생|학부생|대학원생|student", str(p.get("role", "")) + str(p.get("dept", "")), re.I)
+    }
+    mail = read_json(workspace.emails_log, {}) or {}
+    senders: dict[str, str] = {}
+    if isinstance(mail, dict):
+        for m in mail.get("emails") or []:
+            if isinstance(m, dict) and m.get("fromEmail"):
+                senders.setdefault(str(m["fromEmail"]).lower(), str(m.get("fromName") or ""))
+        for c in mail.get("contacts") or []:
+            if isinstance(c, dict) and c.get("email"):
+                senders.setdefault(str(c["email"]).lower(), str(c.get("name") or ""))
+    for row in staff_rows:
+        if row.get("email"):
+            senders.setdefault(str(row["email"]).lower(), row["name"])
+    by_email: dict[str, list[dict[str, Any]]] = {}
+    for email, from_name in senders.items():
+        hits = by_name.get(_norm_person(dir_name.get(email, ""))) or by_name.get(_norm_person(from_name))
+        if hits and email in students:
+            hits = [h for h in hits if h["role"] != "교수"]
+        if hits:
+            # 내 과목 먼저, 그다음 교수, 과목명·분반 순
+            by_email[email] = sorted(hits, key=lambda e: (not e["mine"], e["role"] != "교수", e["title"], e["section"]))[:6]
+    term_key = current_term_key()
+    data = {"term": term_key, "termLabel": term_key.replace("_", "-") + "학기", "byEmail": by_email}
+    _people_cache.update(stamp=stamp, data=data)
+    return data
+
+
 def get_course_staff(workspace: UserWorkspace) -> dict[str, Any]:
     """과목별 교수·조교 + 조직도에서 찾은 이메일.
 
@@ -3094,10 +3327,14 @@ def get_course_staff(workspace: UserWorkspace) -> dict[str, Any]:
         return None, cands[:5]
 
     out: dict[str, list[dict[str, Any]]] = {}
+    past: dict[str, dict[str, Any]] = {}
+    now_term = current_term_key()
+    current_rows: list[dict[str, Any]] = []
     for item in raw.values():
         if not isinstance(item, dict):
             continue
         label = str(item.get("label") or extract_course_label(str(item.get("course", ""))))
+        meta = course_meta(str(item.get("course", "")))
         rows = []
         for s in item.get("staff") or []:
             name = str(s.get("name") or "").strip()
@@ -3108,6 +3345,9 @@ def get_course_staff(workspace: UserWorkspace) -> dict[str, Any]:
             rows.append({
                 "role": role,
                 "name": name,
+                "title": meta["title"],
+                "section": meta["section"],
+                "term": meta["term"],
                 "email": str(hit.get("email", "")) if hit else "",
                 "dept": str(hit.get("dept", "")) if hit else "",
                 # 동명이인이라 못 고른 경우: 화면에서 직접 고르게 후보를 준다
@@ -3116,8 +3356,18 @@ def get_course_staff(workspace: UserWorkspace) -> dict[str, Any]:
         if rows:
             # 교수 먼저, 그다음 조교
             rows.sort(key=lambda r: (r["role"] != "교수", r["name"]))
-            out[label] = rows
-    return {"ok": True, "courses": out}
+            if not meta["term"] or meta["term"] == now_term:
+                out[label] = rows
+                current_rows.extend(rows)
+            elif meta["term"] > str((past.get(label) or {}).get("term", "")):
+                # 지난 학기 교수·조교는 그 학기에만 맞다. 메일 꼬리표에는 쓰지 않고 과목 카드에서 학기와 함께만 보인다.
+                past[label] = {"term": meta["term"], "termLabel": meta["termLabel"], "rows": rows}
+    try:
+        people = course_people_index(workspace, current_rows)
+    except Exception as exc:
+        print(f"[교수·조교] 메일 꼬리표를 만들지 못했습니다: {exc}")
+        people = {"byEmail": {}}
+    return {"ok": True, "term": now_term, "courses": out, "past": past, "people": people}
 
 
 def import_directory(workspace: UserWorkspace, people: list[dict[str, Any]]) -> dict[str, Any]:
@@ -4071,6 +4321,10 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 self.send_json(dgist_api.fetch_notices(rows=int(rows or 30)))
             except Exception as exc:
                 self.send_json({"ok": False, "items": [], "message": str(exc)})
+            return
+        if route == "/api/school-events":
+            # 학교 행사/세미나 게시판(공식). 6시간 파일 캐시라 화면이 자주 불러도 API 는 하루 몇 번만 부른다.
+            self.send_json(get_school_events(workspace, force=params.get("force", [""])[0] == "1"))
             return
         if route == "/api/dgist-api/status":
             try:

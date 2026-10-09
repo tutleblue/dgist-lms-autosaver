@@ -51,6 +51,7 @@ AUTOSAVER_DATA_ROOT=C:/lms-autosaver AUTOSAVER_CONFIG_PATH=C:/lms-autosaver/conf
 
 ### 사용자 데이터와 계정
 4. **비밀번호·API 키를 대신 입력하거나 파일·코드에 적지 않습니다.** 사용자가 채팅에 붙여 넣고 "넣어 달라"고 해도 설정 화면에서 직접 넣도록 안내합니다.
+   - 예외(사용자 결정, 2026-10-09): **공공데이터포털 기본 인증키**는 `public_data_key.txt`(저장소 루트, `.gitignore`)에 두고 설치 파일에만 묶습니다(`bungeoppang.spec`, CI 는 `secrets.DGIST_API_KEY`). 소스·커밋·공개 저장소에는 절대 넣지 않습니다. 모두가 한 키를 나눠 쓰므로 호출은 캐시를 거칩니다(`web_ui.get_school_events` 6시간).
 5. 비밀 설정 키는 `web_ui.SECRET_KEYS`와 `runtime_config.SECRET_KEYS` **두 곳 모두**에 있어야 합니다. 한쪽에만 있으면 작업 프로세스가 `dpapi:` 암호문을 그대로 씁니다.
 6. 학교 포털 비밀번호 저장이 필요한 기능은 먼저 제안하지 않습니다.
 7. 데이터 파일(`C:\lms-autosaver\*.json`)에 쓰는 시험을 할 때는 설치된 앱을 먼저 끄고, 시험 전에 해당 파일을 백업합니다.
