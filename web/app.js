@@ -912,7 +912,9 @@ function renderDeadlines() {
 }
 
 /* ===== 이메일 뷰 (신문식 레이아웃) ===== */
-const CATEGORY_ORDER = ["답신", "교수님", "세미나·행사", "취업·진로", "학생회", "행정·학생팀", "동아리·문화", "기타"];
+const CATEGORY_ORDER = [
+  "답신", "교수님", "수업·LMS", "세미나·행사", "취업·진로", "학생회", "행정·학생팀", "동아리·문화", "계정·알림", "기타",
+];
 
 const CATEGORY_COLORS = {
   "답신": "blue",
@@ -922,6 +924,8 @@ const CATEGORY_COLORS = {
   "세미나·행사": "green",
   "취업·진로": "coral",
   "동아리·문화": "blue",
+  "수업·LMS": "amber",
+  "계정·알림": "neutral",
   "기타": "neutral",
 };
 
@@ -1865,7 +1869,7 @@ function setupAutocomplete() {
         const local = contactMatches(text).filter((c) => !(c.guess && dirEmails.has(c.email)));
         const dirByEmail = new Map(people.map((p) => [p.email, p]));
         // 조직도에 있는 사람이면 이름·소속은 늘 조직도 것을 쓴다.
-        // (이름으로 찾든 주소로 찾든 '김유준/기초학부(학생)' 처럼 같은 모양으로 나오게)
+        // (이름으로 찾든 주소로 찾든 '홍길동/기초학부(학생)' 처럼 같은 모양으로 나오게)
         local.forEach((c) => {
           const p = dirByEmail.get(c.email);
           if (p) Object.assign(c, { name: p.name || c.name, org: directoryOrg(p), guess: false });
@@ -2613,6 +2617,7 @@ function mailInFolder(mail, folder) {
    받은 편지함을 기본 / 관심 메일 / LMS·공지로 가른다.
    Gmail 탭처럼 각 탭에 몇 통인지와 최근 제목을 같이 보여 준다. */
 function isLmsMail(mail) {
+  if (mail.category === "수업·LMS") return true;
   return /lms|blackboard|공지|학사|academic/i.test(
     `${mail.fromEmail} ${mail.fromName} ${mail.subject}`,
   );
@@ -11718,8 +11723,9 @@ async function checkForUpdate(manual = false) {
   }
   if (apply) {
     apply.hidden = !ready;
-    apply.disabled = ready && !d.canInstall;
-    apply.title = ready && !d.canInstall ? "설치형 앱에서만 자동으로 업데이트해요" : "";
+    // 맥(manualUrl): 스스로 설치하지 않고 새 DMG 를 받을 곳을 연다. 그래서 눌리게 둔다 (updater.check_update)
+    apply.disabled = ready && !d.canInstall && !d.manualUrl;
+    apply.title = ready && !d.canInstall ? d.manualNote || "설치형 앱에서만 자동으로 업데이트해요" : "";
   }
   const pill = $("#updateReadyButton");
   if (pill) {
@@ -11758,6 +11764,17 @@ function setUpdateStep(stage, { percent = null, failed = false, note = "" } = {}
 async function startAppUpdate() {
   const d = state.update;
   if (!d?.updateAvailable) return;
+  if (d.manualUrl) {
+    // 맥: ad-hoc 서명이라 앱이 스스로 덮어쓰지 않는다. 받은 DMG 에서 Daling 을 끌어다 놓는 것은 사람이 한다
+    try {
+      // ok:false 여도 message 는 서버가 만든 사람 말이라 그대로 보여 준다
+      const res = await api("/api/update/open-download", { method: "POST", body: "{}" });
+      showToast(res.message || d.manualNote);
+    } catch (error) {
+      showToast(humanError(error));
+    }
+    return;
+  }
   if (!(await uiConfirm(`v${d.latest}(으)로 업데이트할까요?\n설치하는 동안 앱이 잠깐 꺼졌다가 다시 켜져요.`, { title: "새 버전", icon: "download", ok: "업데이트" }))) return;
   const dialog = $("#updateDialog");
   const apply = $("#applyUpdateButton");

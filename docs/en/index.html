@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en" class="no-js">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Daling — LMS, mail and the academic calendar in one place, for DGIST students</title>
+<meta name="description" content="Daling is a free desktop app for Windows and macOS that gathers DGIST LMS course materials, assignment deadlines, school e-mail, the academic calendar and notices into one dashboard, and organizes them into your own Google Drive and Google Calendar.">
+<meta name="theme-color" content="#faf9f5">
+<meta property="og:title" content="Daling — LMS, mail and the academic calendar in one place">
+<meta property="og:description" content="A desktop app for DGIST students that gathers course materials, deadlines, school mail and the academic calendar automatically.">
+<meta property="og:image" content="https://daling-app.pages.dev/img/en/app-dashboard.webp">
+<meta property="og:type" content="website">
+<link rel="icon" type="image/png" href="../logo-120.png">
+<link rel="alternate" hreflang="ko" href="https://daling-app.pages.dev/">
+<link rel="alternate" hreflang="en" href="https://daling-app.pages.dev/en/">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Lora:wght@600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../style.css">
+<style>
+  /* 영어 페이지는 제목도 Lora, 본문은 Inter */
+  :root { --font-serif: "Lora", Georgia, serif; --font-sans: "Inter", "Segoe UI", system-ui, sans-serif; }
+  body { word-break: normal; }
+</style>
+</head>
+<body>
+
+<header class="nav" id="top">
+  <div class="container">
+    <a class="brand" href="./"><img src="../logo-120.png" alt="" width="34" height="34"><b>Daling</b></a>
+    <nav aria-label="Main">
+      <a href="#why">About</a>
+      <a href="#features">Features</a>
+      <a href="#tips">Tips</a>
+      <a href="#how">Get started</a>
+      <a href="#faq">FAQ</a>
+    </nav>
+    <a class="lang" href="../" hreflang="ko" lang="ko" title="한국어">한국어</a>
+    <a class="btn primary" href="#download">Download</a>
+  </div>
+</header>
+
+<main>
+
+<section class="hero">
+  <div class="container">
+    <div class="hero-copy">
+      <p class="eyebrow">A desktop app for DGIST students · Windows · macOS</p>
+      <h1>LMS, mail, academic calendar.<br><em>Now on one screen.</em></h1>
+      <p class="lede"><strong>Daling</strong> gathers your course materials, assignment deadlines, school e-mail, the academic calendar and campus notices automatically. Files go into course and week folders in your own Google Drive; deadlines and events go into Google Calendar.</p>
+      <div class="cta">
+        <a class="btn primary" href="#download" data-hero-dl data-win="Download for Windows" data-mac="Download for Mac">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
+          <span data-hero-label>Download for free</span>
+        </a>
+        <a class="btn ghost" href="#download">Other platforms</a>
+      </div>
+      <p class="fine"><span>Free</span> · <span>Open source</span> · <span>No developer server</span> · <span>Your files and passwords stay on your computer</span></p>
+    </div>
+    <div class="hero-stage reveal">
+      <img class="dalgu" src="../img/dalgu/hello.png" alt="Dalgu the mascot waving" width="112" height="111">
+      <figure class="window">
+        <div class="bar" aria-hidden="true"><i></i><i></i><i></i><span>Daling — Dashboard</span></div>
+        <img src="../img/en/app-dashboard.webp" width="1440" height="900" alt="Daling dashboard: today's date, the academic event in progress, 4 assignments due soon, 26 files, 6 courses, 3 unread mails and the weekly timetable">
+      </figure>
+    </div>
+  </div>
+</section>
+
+<section class="section tint" id="why">
+  <div class="container">
+    <div class="center reveal">
+      <p class="kicker">Why Daling</p>
+      <h2>How many windows did you open today?</h2>
+      <p class="sub">Course files and assignments live on the LMS, events and admin notices arrive by webmail, exam and registration dates sit in the academic calendar, and scholarship and job news is on the school notice board. Separate logins, separate checks, and it's easy to miss a deadline.</p>
+    </div>
+    <div class="sources reveal">
+      <figure class="source">
+        <div class="shot"><img src="../img/school-lms.webp" width="960" height="600" loading="lazy" alt="DGIST LMS sign-in page"></div>
+        <figcaption><b>LMS</b>Course files · assignments · deadlines</figcaption>
+      </figure>
+      <figure class="source">
+        <div class="shot"><img src="../img/school-mail.webp" width="960" height="600" loading="lazy" alt="DGIST webmail sign-in page"></div>
+        <figcaption><b>School mail</b>Events · seminars · admin notices</figcaption>
+      </figure>
+      <figure class="source">
+        <div class="shot"><img src="../img/school-calendar.webp" width="960" height="600" loading="lazy" alt="Academic calendar on the DGIST website"></div>
+        <figcaption><b>Academic calendar</b>Exams · registration · holidays</figcaption>
+      </figure>
+      <figure class="source">
+        <div class="shot"><img src="../img/school-notice.webp" width="960" height="600" loading="lazy" alt="Notice board on the DGIST website"></div>
+        <figcaption><b>School notices</b>Scholarships · jobs · campus news</figcaption>
+      </figure>
+    </div>
+    <div class="merge reveal" aria-hidden="true">
+      <svg viewBox="0 0 900 86" preserveAspectRatio="none" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="5 6">
+        <path d="M112 2 C112 50, 450 30, 450 84"/><path d="M337 2 C337 50, 450 40, 450 84"/>
+        <path d="M562 2 C562 50, 450 40, 450 84"/><path d="M787 2 C787 50, 450 30, 450 84"/>
+      </svg>
+    </div>
+    <div class="merge reveal">
+      <div class="badge"><img src="../logo-120.png" alt="" width="38" height="38">Daling brings it all into one screen</div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="features">
+  <div class="container">
+    <div class="center reveal">
+      <p class="kicker">Features</p>
+      <h2>Leave it running. It collects for you.</h2>
+      <p class="sub">Sign in once and Daling checks the LMS and your school mail on a schedule, fetching only what's new.</p>
+    </div>
+
+    <article class="feature reveal">
+      <div class="copy">
+        <p class="tag" style="--c: var(--accent-ink)">Dashboard · Deadlines</p>
+        <h3>Today's to-dos and deadlines come first</h3>
+        <p>The first screen shows your remaining classes, assignments due within 7 days and unread mail in one line. Every assignment from every course is listed by D-day.</p>
+        <ul class="checks">
+          <li>"Go submit" opens the LMS submission page for any unsubmitted assignment</li>
+          <li>D-day for exams and registration, plus a weekly timetable</li>
+          <li>Import your timetable from an Everytime link or a screenshot</li>
+        </ul>
+      </div>
+      <figure class="window">
+        <div class="bar" aria-hidden="true"><i></i><i></i><i></i><span>Deadlines</span></div>
+        <img src="../img/en/app-deadlines.webp" width="1440" height="900" loading="lazy" alt="Deadlines screen: assignments from each course sorted by D-day with a 'Go submit' button">
+      </figure>
+    </article>
+
+    <article class="feature flip reveal">
+      <div class="copy">
+        <p class="tag" style="--c: var(--amber)">Course files</p>
+        <h3>The LMS folder structure, kept up to date</h3>
+        <p>New lecture files are found and downloaded automatically, organized exactly like the week and lecture folders on the LMS.</p>
+        <ul class="checks">
+          <li>Uploaded to your Google Drive by course and week</li>
+          <li>Also copied to a folder on your computer or to OneDrive, iCloud Drive and more</li>
+          <li>Open, save or upload many files at once <small>(on Windows, send to Samsung Notes too)</small></li>
+        </ul>
+      </div>
+      <figure class="window">
+        <div class="bar" aria-hidden="true"><i></i><i></i><i></i><span>Files</span></div>
+        <img src="../img/en/app-files.webp" width="1440" height="900" loading="lazy" alt="Files screen: a course folder expanded into Announcements, Assignments and Course Materials with Week 5, 6 and 7 folders, matching the LMS">
+      </figure>
+    </article>
+
+    <article class="feature reveal">
+      <div class="copy">
+        <p class="tag" style="--c: var(--blue)">School mail</p>
+        <h3>Read and write school mail inside the app</h3>
+        <p>No separate webmail login: read, reply and attach right in Daling. Mail is sorted into categories automatically.</p>
+        <ul class="checks">
+          <li>Seminars & events, admin & student teams, careers and more</li>
+          <li>Recipient autocomplete from the directory and past mail, attachments, drafts</li>
+          <li>Translate or summarize mail <small>(optional, with your own Gemini key)</small></li>
+        </ul>
+      </div>
+      <figure class="window">
+        <div class="bar" aria-hidden="true"><i></i><i></i><i></i><span>Mailbox</span></div>
+        <img src="../img/en/app-emails.webp" width="1440" height="900" loading="lazy" alt="Mailbox: categories on the left, messages grouped by date in the middle and the selected message on the right">
+      </figure>
+    </article>
+
+    <article class="feature flip reveal">
+      <div class="copy">
+        <p class="tag" style="--c: var(--violet)">Calendar</p>
+        <h3>Even event dates inside e-mails land on your calendar</h3>
+        <p>Assignment deadlines, the academic calendar, holidays and your own plans in one month view. Daling also reads event and seminar dates from your mail.</p>
+        <ul class="checks">
+          <li>Deadlines in red, school events in yellow, your plans in blue</li>
+          <li>Synced automatically to a dedicated Google Calendar</li>
+          <li>Export deadlines as a calendar file (.ics)</li>
+        </ul>
+      </div>
+      <figure class="window">
+        <div class="bar" aria-hidden="true"><i></i><i></i><i></i><span>Calendar</span></div>
+        <img src="../img/en/app-calendar.webp" width="1440" height="900" loading="lazy" alt="Calendar: October with midterms, assignment deadlines, the fall festival and study sessions color-coded">
+      </figure>
+    </article>
+  </div>
+</section>
+
+<section class="section tint" id="tips">
+  <div class="container">
+    <div class="center reveal">
+      <p class="kicker">Tips</p>
+      <h2>Small features that save a lot of time</h2>
+      <p class="sub">Things you couldn't do with the LMS and webmail on their own.</p>
+    </div>
+
+    <div class="tip-hero stack reveal">
+      <div class="copy">
+        <p class="tag">Courses · Mail</p>
+        <h3>Find your professors and TAs by course</h3>
+        <p>Daling collects this term's professors and TAs from the LMS and pins them to each course card. Type a course name in the <b>To</b> field and they appear with their section, and clicking the envelope opens a new mail with the subject <b>[Course, Section 01]</b> filled in.</p>
+      </div>
+      <figure class="shot-strip"><img src="../img/en/feat-courses.webp" width="1240" height="284" loading="lazy" alt="Three course cards, each showing the next deadline and the professor and TAs with their section"></figure>
+    </div>
+
+    <div class="tips reveal">
+      <div class="tip"><b>Search mail by course</b><span>Type "General Chemistry", "일반화학" or "일반화학2" — you get that course's mail and your threads with its professors and TAs.</span></div>
+      <div class="tip"><b>Who sent this?</b><span>Senders get a tag such as "General Physics II, Sec 3, Professor".</span></div>
+      <div class="tip"><b>Lecture files to Drive</b><span>Select files and press "Upload to Drive". They go into course and week folders; duplicates are skipped. Also automatic on sync.</span></div>
+      <div class="tip"><b>Attach from Drive</b><span>Open the Drive picker while writing a mail and attach lecture files you uploaded. Google Docs are attached as PDF.</span></div>
+      <div class="tip"><b>Seminar mail → calendar</b><span>Reads the date, speaker, title and venue from seminar mail and adds it to your calendar and Google Calendar.</span></div>
+      <div class="tip"><b>Unanswered mail</b><span>See sent mail that never got a reply and draft a reminder in one click.</span></div>
+      <div class="tip"><b>"Go submit"</b><span>Click an unsubmitted assignment to open its LMS submission page directly.</span></div>
+      <div class="tip"><b>Timetable from a photo</b><span>Fill your weekly timetable from an Everytime link or a screenshot. <small>(photos need a Gemini key)</small></span></div>
+      <div class="tip"><b>Cloud folders too</b><span>Copies files by course into OneDrive, iCloud Drive, Dropbox or Naver MYBOX so they're on your phone as well.</span></div>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="container">
+    <div class="center reveal">
+      <p class="kicker">And more</p>
+      <h2>Little things you'll use every day</h2>
+    </div>
+    <div class="extras reveal">
+      <div class="extra"><b>Unified search</b><span>Courses, files, assignments, mail and events from one search box.</span></div>
+      <div class="extra"><b>Notifications</b><span>Get notified before deadlines and when new files or notices appear.</span></div>
+      <div class="extra"><b>Shuttle bus & notices</b><span>The shuttle timetable and school notices, right in the app.</span></div>
+      <div class="extra"><b>Exchange map</b><span>FGLP and credit-exchange partner universities on a world map.</span></div>
+      <div class="extra"><b>5 themes · English UI</b><span>Light, dark and navy themes, and the whole app in English.</span></div>
+      <div class="extra"><b>Guided tour</b><span>Dalgu the mascot walks you through every screen on first launch.</span></div>
+    </div>
+  </div>
+</section>
+
+<section class="section tint">
+  <div class="container">
+    <div class="center reveal">
+      <p class="kicker">Why it helps</p>
+      <h2>It checks, finds and moves things for you</h2>
+    </div>
+    <div class="values reveal">
+      <div class="value"><p class="num">5<small>min</small></p><h3>Never miss a thing</h3><p>Mail every 5 minutes, deadlines every hour, course files every 3 hours. You can change the intervals in Settings.</p></div>
+      <div class="value"><p class="num">1<small>place</small></p><h3>Stop searching</h3><p>Files are sorted by course and week, mail by category, and one search box finds everything.</p></div>
+      <div class="value"><p class="num">0<small>copy-paste</small></p><h3>Stop moving files</h3><p>Uploading to Drive, adding to your calendar and tidying folders happens on its own.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="how">
+  <div class="container">
+    <div class="center reveal">
+      <p class="kicker">Get started</p>
+      <h2>From install to first sync in minutes</h2>
+    </div>
+    <div class="steps-wrap reveal">
+      <img class="dalgu" src="../img/dalgu/point.png" alt="" width="96" height="93">
+      <div class="steps">
+        <div class="step"><h3>Download & install</h3><p>On Windows, run the installer. On a Mac, open the DMG and drag Daling into Applications.</p></div>
+        <div class="step"><h3>Add your school account</h3><p>Enter your LMS and school mail sign-in in Settings. Passwords are encrypted and stay on this computer.</p></div>
+        <div class="step"><h3>Connect Google <small>(optional)</small></h3><p>Only if you want Drive and Calendar. Daling works fine without it.</p></div>
+        <div class="step"><h3>That's it</h3><p>Dalgu gives you a tour on first launch. After that, just leave it running.</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section tint" id="privacy">
+  <div class="container trust">
+    <div class="reveal">
+      <p class="kicker">Privacy</p>
+      <h2>Runs only on your computer</h2>
+      <p class="sub">There is no developer-operated server. Your files and account details are stored only on your computer and are never sent to the developer.</p>
+      <ul class="checks">
+        <li>Passwords and API keys encrypted with Windows DPAPI or the macOS Keychain</li>
+        <li>No analytics, ads or usage tracking; nothing is ever sold</li>
+        <li>Connecting Google is optional and can be revoked any time</li>
+      </ul>
+      <p style="margin-top:18px"><a href="../privacy#english">Read the full Privacy Policy →</a></p>
+    </div>
+    <div class="perm reveal">
+      <div class="row"><div><b>Google Drive</b><code>drive.file</code></div><p>Uploads course files into course/week folders the app creates and checks for duplicates. The app cannot see Drive files it did not create.</p></div>
+      <div class="row"><div><b>Google Calendar</b><code>calendar</code></div><p>Creates one dedicated calendar and adds or updates deadlines, academic events and dates found in mail there. It never touches events it didn't create.</p></div>
+      <div class="row"><div><b>Other connections</b></div><p>DGIST LMS and mail (with your school account), the school website and public data (public info only), GitHub for update checks. Google data is never used for ads or AI training.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="download">
+  <div class="container">
+    <div class="center reveal">
+      <p class="kicker">Download</p>
+      <h2>Free to use</h2>
+      <p class="sub">Free and open source under the Apache License 2.0.</p>
+    </div>
+    <div class="downloads-wrap reveal">
+      <img class="dalgu" src="../img/dalgu/thumbs.png" alt="" width="92" height="94">
+      <div class="downloads">
+        <div class="dl">
+          <div class="os">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+            <h3>Windows</h3>
+          </div>
+          <p class="req">Windows 10 · 11 (64-bit) · Installer (.exe)</p>
+          <a class="btn primary" href="https://github.com/tutleblue/dgist-lms-autosaver/releases/download/v1.12.0/bungeoppang-1.12.0-win-x64-setup.exe" data-dl="win" download>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
+            Download for Windows
+          </a>
+          <p class="ver" data-ver="win" data-fmt="Version {v} · {mb} MB">Version 1.12.0 · 57 MB</p>
+          <details>
+            <summary>If "Windows protected your PC" appears</summary>
+            <ol><li>Click <b>More info</b>.</li><li>Click <b>Run anyway</b> to continue.</li></ol>
+          </details>
+        </div>
+        <div class="dl">
+          <div class="os">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v9H4z"/><path d="M2 18h20l-1.2 2H3.2z"/></svg>
+            <h3>macOS</h3>
+            <span class="pill">Beta</span>
+          </div>
+          <p class="req">Apple silicon (M1 or later) · macOS 12+ · Disk image (.dmg)</p>
+          <a class="btn primary" href="https://github.com/tutleblue/dgist-lms-autosaver/releases/download/mac-v1.12.21/daling-1.12.21-mac-arm64.dmg" data-dl="mac" download>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
+            Download for Mac
+          </a>
+          <p class="ver" data-ver="mac" data-fmt="Version {v} · {mb} MB">Version 1.12.21 · 77 MB</p>
+          <p class="ver" data-mac-note>Google Drive and Calendar connection isn't available in this beta yet; it arrives in the next build.</p>
+          <details>
+            <summary>If macOS says the developer can't be verified</summary>
+            <ol>
+              <li>Open the DMG and drag Daling into Applications.</li>
+              <li>In Applications, <b>Control-click Daling → Open</b>.</li>
+              <li>If it's still blocked, go to <b>System Settings → Privacy & Security</b> and click <b>Open Anyway</b>.</li>
+            </ol>
+          </details>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section tint" id="faq">
+  <div class="narrow">
+    <div class="center reveal">
+      <p class="kicker">FAQ</p>
+      <h2>Questions</h2>
+    </div>
+    <div class="faq reveal">
+      <details><summary>Is it free?</summary><p>Yes. No ads, no payments, and the source code is public.</p></details>
+      <details><summary>Is this an official DGIST app?</summary><p>No. It's an unofficial app made by a DGIST student and is not made or operated by DGIST. Always double-check important deadlines and notices on the LMS and official channels.</p></details>
+      <details><summary>Can the developer see my password?</summary><p>No. Passwords are encrypted on your computer (Windows DPAPI, macOS Keychain) and never sent anywhere. The app signs in to the school servers (LMS, mail) directly.</p></details>
+      <details><summary>Why does it ask for Google permissions?</summary><p>To upload course files to your Drive (<code>drive.file</code>, limited to files the app creates) and add deadlines and events to your Calendar. It's optional, and you can revoke access any time under <a href="https://myaccount.google.com/connections">Google Account → Third-party connections</a>.</p></details>
+      <details><summary>macOS says the app "is damaged and can't be opened".</summary><p>That's the quarantine flag macOS adds to downloads. Run <code>xattr -dr com.apple.quarantine /Applications/Daling.app</code> in Terminal and open it again.</p></details>
+      <details><summary>Does uninstalling delete my files?</summary><p>No. Files and settings stay in the data folder (Windows <code>C:\lms-autosaver</code>, Mac <code>~/.lms-autosaver</code>). Delete that folder if you no longer need it.</p></details>
+      <details><summary>Where do I send feedback or bug reports?</summary><p>Use the "Feedback" button at the bottom left of the app, or write to <a href="mailto:tutleblue12@gmail.com">tutleblue12@gmail.com</a>.</p></details>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer class="site-footer">
+  <div class="container">
+    <div>Daling · An unofficial app for DGIST students · <a href="mailto:tutleblue12@gmail.com">tutleblue12@gmail.com</a></div>
+    <nav aria-label="Documents">
+      <a href="../privacy#english">Privacy Policy</a>
+      <a href="../terms#english">Terms of Service</a>
+      <a href="https://github.com/tutleblue/dgist-lms-autosaver">Source code</a>
+      <a href="../" hreflang="ko">한국어</a>
+    </nav>
+  </div>
+</footer>
+
+<script>
+  document.documentElement.classList.remove("no-js");
+  const nav = document.querySelector(".nav");
+  const onScroll = () => nav.classList.toggle("scrolled", window.scrollY > 8);
+  window.addEventListener("scroll", onScroll, { passive: true });
+  onScroll();
+  const items = document.querySelectorAll(".reveal");
+  if ("IntersectionObserver" in window) {
+    const io = new IntersectionObserver((entries) => {
+      for (const e of entries) if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); }
+    }, { rootMargin: "0px 0px -8% 0px", threshold: 0.08 });
+    items.forEach((el) => io.observe(el));
+  } else {
+    items.forEach((el) => el.classList.add("in"));
+  }
+
+  const ua = navigator.userAgent;
+  const os = /Windows/i.test(ua) ? "win" : /Macintosh|Mac OS X/i.test(ua) && !/iPhone|iPad|Mobile/i.test(ua) ? "mac" : "";
+  const hero = document.querySelector("[data-hero-dl]");
+  const pointHero = () => {
+    const link = os && document.querySelector(`[data-dl="${os}"]`);
+    if (!hero || !link) return;
+    hero.href = link.href;
+    hero.querySelector("[data-hero-label]").textContent = hero.dataset[os] || link.textContent.trim();
+  };
+  pointHero();
+  fetch("https://api.github.com/repos/tutleblue/dgist-lms-autosaver/releases?per_page=20")
+    .then((r) => (r.ok ? r.json() : []))
+    .then((list) => {
+      const pick = (re, allowPre) => {
+        for (const rel of list) {
+          if (rel.draft || (!allowPre && rel.prerelease)) continue;
+          const asset = (rel.assets || []).find((a) => re.test(a.name));
+          if (asset) return asset;
+        }
+        return null;
+      };
+      const set = (osKey, asset) => {
+        if (!asset) return;
+        const v = (asset.name.match(/(\d+\.\d+\.\d+)/) || [])[1] || "";
+        document.querySelectorAll(`[data-dl="${osKey}"]`).forEach((el) => { el.href = asset.browser_download_url; });
+        document.querySelectorAll(`[data-ver="${osKey}"]`).forEach((el) => {
+          el.textContent = (el.dataset.fmt || "Version {v} · {mb} MB").replace("{v}", v).replace("{mb}", Math.round(asset.size / 1048576));
+        });
+      };
+      set("win", pick(/^(bungeoppang|daling)-[\d.]+-win-x64-setup\.exe$/i, false));
+      set("mac", pick(/^daling-[\d.]+-mac-arm64\.dmg$/i, true));
+      pointHero();
+    })
+    .catch(() => {});
+</script>
+</body>
+</html>

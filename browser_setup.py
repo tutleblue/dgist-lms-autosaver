@@ -7,6 +7,7 @@
 
 받는 위치
     %LOCALAPPDATA%\\ms-playwright — 앱을 지웠다 다시 깔아도 남는다.
+    (맥은 ~/Library/Caches/ms-playwright)
     이미 개발용으로 playwright 를 쓴 적 있으면 그것을 그대로 쓴다.
 """
 from __future__ import annotations
@@ -20,6 +21,9 @@ from pathlib import Path
 def _default_root() -> Path:
     if os.name == "nt":
         return Path(os.environ.get("LOCALAPPDATA", Path.home())) / "ms-playwright"
+    if sys.platform == "darwin":
+        # Playwright 가 맥에서 원래 쓰는 곳. 개발용으로 받아 둔 브라우저가 있으면 그대로 쓴다.
+        return Path.home() / "Library" / "Caches" / "ms-playwright"
     return Path.home() / ".cache" / "ms-playwright"
 
 
@@ -35,6 +39,12 @@ def browsers_root() -> Path:
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", str(_default_root()))
 
 
+# 맥의 크로미움은 .exe 도 'chrome' 도 아니다. 판마다 이름이 달라 아는 것을 모두 본다.
+#   헤드리스 셸: chrome-headless-shell-mac-arm64/chrome-headless-shell (예전 판은 chrome-mac/headless_shell)
+#   일반 크로미움: chrome-mac*/Chromium.app/…/MacOS/Chromium, 새 판은 'Google Chrome for Testing'
+_MAC_BROWSER_FILES = ("chrome-headless-shell", "headless_shell", "Chromium", "Google Chrome for Testing")
+
+
 def browser_ready() -> bool:
     """크로미움(또는 헤드리스 셸)이 이미 있는지."""
     root = browsers_root()
@@ -43,6 +53,10 @@ def browser_ready() -> bool:
     for child in root.iterdir():
         name = child.name.lower()
         if name.startswith(("chromium-", "chromium_headless_shell-")):
+            if sys.platform == "darwin":
+                if any(p.is_file() for n in _MAC_BROWSER_FILES for p in child.rglob(n)):
+                    return True
+                continue
             # 폴더만 남고 알맹이가 없는 경우가 있어 실행 파일까지 본다
             if any(child.rglob("*.exe")) or any(child.rglob("chrome")):
                 return True
@@ -63,6 +77,13 @@ def _driver_command() -> list[str]:
     driver = Path(playwright.__file__).parent / "driver"
     node = driver / ("node.exe" if os.name == "nt" else "node")
     cli = driver / "package" / "cli.js"
+    if sys.platform == "darwin" and node.exists() and not os.access(node, os.X_OK):
+        # Daling.app 에서는 node 가 데이터 파일로 묶여(Contents/Resources) 실행 권한이 빠질 수 있다.
+        # mac.yml 이 묶을 때 chmod 하지만, 그래도 빠졌으면 여기서 한 번 더 붙여 본다.
+        try:
+            node.chmod(0o755)
+        except OSError:
+            pass
     if node.exists() and cli.exists():
         return [str(node), str(cli)]
     raise RuntimeError("브라우저 설치 도구를 찾지 못했습니다.")

@@ -45,7 +45,7 @@
  ": \"조직도에서 이메일을 못 찾았어요\")}\">": ": \"Couldn't find an email in the directory\")}\">",
  "API 및 서비스": "APIs & Services",
  "DGIST 공공데이터 키 — 개설강좌·학사일정·세미나": "DGIST public data key — courses, academic calendar, seminars",
- "DGIST 기초학부 26학번 김유준 제작": "Made by Yujun Kim, DGIST School of Undergraduate Studies ('26)",
+ "DGIST 학생을 위한 비공식 앱": "An unofficial app for DGIST students",
  "DGIST 메일": "DGIST mail",
  "DGIST 메일 일정": "DGIST mail events",
  "DGIST 아카이브": "DGIST Archive",
@@ -1719,5 +1719,14 @@
  "Daling-설정-{0}{1}.json": "Daling-settings-{0}{1}.json",
  "Daling은 학교생활에 흩어진 것들을 알아서 모아 한 화면에 보여 주는 앱이야. 어떤 걸 할 수 있는지 하나씩 보여 줄게.": "Daling gathers everything scattered across school life and shows it on one screen. Let me show you what it can do, one by one.",
  "안녕하세요, Daling을 쓰고 있는 사용자입니다.": "Hi, I'm a Daling user.",
- "이 소개는 설정 맨 아래 '앱 소개 다시 보기'로 언제든 다시 볼 수 있어. 이제 시작해 보자!": "You can watch this again anytime with 'Replay tour' at the bottom of Settings. Let's get started!"
+ "이 소개는 설정 맨 아래 '앱 소개 다시 보기'로 언제든 다시 볼 수 있어. 이제 시작해 보자!": "You can watch this again anytime with 'Replay tour' at the bottom of Settings. Let's get started!",
+ "(서버: {0})": "(server: {0})",
+ "\\(서버: ([^)]{0})\\)": "\\(서버: ([^)]{0})\\)",
+ "{0} 서버가 로그인을 거절했어요{1}. 2시간 뒤 자동으로 다시 해 볼게요.": "The {0} server refused the login{1}. We'll try again automatically in 2 hours.",
+ "비밀번호를 바꿨다면 설정에서 새 비밀번호를 넣어 주세요.": "If you changed your password, enter the new one in Settings.",
+ "{0} 서버가 로그인을 거절했어요{1}. 2시간 뒤 자동으로 다시 해 볼게요. 비밀번호를 바꿨다면 설정에서 새 비밀번호를 넣어 주세요.": "The {0} server refused the login{1}. We'll try again automatically in 2 hours. If you changed your password, enter the new one in Settings.",
+ "계정·알림": "Accounts & alerts",
+ "수업·LMS": "Classes & LMS",
+ "맥에서는 새 DMG 를 내려받아 Daling 을 응용 프로그램 폴더에 다시 끌어다 놓으면 바뀌어요": "On a Mac, download the new DMG and drag Daling into the Applications folder again to update",
+ "맥용 새 버전 파일이 아직 올라오지 않았어요": "The Mac version of this update hasn't been uploaded yet"
 }

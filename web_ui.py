@@ -254,7 +254,7 @@ def read_config(workspace: UserWorkspace) -> dict[str, Any]:
         # (평문으로 저장된 예전 설정도 그대로 통과한다)
         for key in SECRET_KEYS:
             value = data.get(key)
-            if isinstance(value, str) and value.startswith(DPAPI_PREFIX):
+            if isinstance(value, str) and value.startswith(_SECRET_PREFIXES):
                 data[key] = dpapi_unprotect(value)
         return data
     if not MULTI_USER_MODE:
@@ -415,13 +415,21 @@ def write_config(workspace: UserWorkspace, payload: dict[str, Any]) -> dict[str,
 
 
 def save_config_dict(workspace: UserWorkspace, values: dict[str, Any]) -> None:
-    """설정을 저장한다. 비밀 항목은 DPAPI로 암호화해서 넣는다."""
+    """설정을 저장한다. 비밀 항목은 DPAPI로 암호화해서 넣는다 (맥은 키체인에 두고 표시만)."""
     to_write = dict(values)
     for key in SECRET_KEYS:
         raw = str(to_write.get(key, "") or "")
         # 이미 암호문이면 그대로 두고, 평문이면 암호화
-        if raw and not raw.startswith(DPAPI_PREFIX):
-            to_write[key] = dpapi_protect(raw)
+        if raw and not raw.startswith(_SECRET_PREFIXES):
+            to_write[key] = dpapi_protect(raw, key)
+        elif not raw and _use_keychain():
+            # 설정에서 지운 비밀 값은 키체인에서도 뺀다 (config.json 만 비우면 키체인에 남는다)
+            try:
+                import mac_keychain
+
+                mac_keychain.forget(key)
+            except Exception:
+                pass
     workspace.root.mkdir(parents=True, exist_ok=True)
     atomic_write_text(workspace.config_path, 
         json.dumps(to_write, ensure_ascii=False, indent=2),
@@ -2091,13 +2099,33 @@ SECRET_KEYS = (
     "DGIST_API_KEY",
 )
 DPAPI_PREFIX = "dpapi:"
+# macOS 에는 DPAPI 가 없다. 예전에는 그래서 비밀번호가 config.json 에 평문으로 남았다.
+# 맥에서는 값을 로그인 키체인에 두고 config.json 에는 'keychain:<키>' 표시만 적는다 (mac_keychain.py).
+# runtime_config 도 같은 표시를 풀어야 작업 프로세스가 표시 문자열을 비밀번호로 쓰지 않는다.
+KEYCHAIN_PREFIX = "keychain:"
+# Windows 는 예전과 똑같이 'dpapi:' 만 본다
+_SECRET_PREFIXES = (DPAPI_PREFIX, KEYCHAIN_PREFIX) if sys.platform == "darwin" else (DPAPI_PREFIX,)
 
 
-def dpapi_protect(text: str) -> str:
+def _use_keychain() -> bool:
+    # 여러 사람이 쓰는 호스팅 모드는 한 키체인을 나눠 쓸 수 없으니 예전 동작(평문)을 그대로 둔다
+    return sys.platform == "darwin" and not MULTI_USER_MODE
+
+
+def dpapi_protect(text: str, key: str | None = None) -> str:
     """Windows DPAPI로 문자열을 암호화한다 (현재 사용자 계정에서만 복호 가능).
 
     실패하거나 Windows가 아니면 원문을 그대로 돌려준다 — 저장은 되어야 하므로.
+    macOS 는 key(설정 이름)를 받아 키체인에 넣고 'keychain:<key>' 를 돌려준다.
+    키체인이 거절하면(사용자가 '거부') 위와 같은 까닭으로 원문을 남기고, 다음 저장 때 다시 넣어 본다.
     """
+    if text and key and _use_keychain():
+        try:
+            import mac_keychain
+
+            return mac_keychain.protect(key, text)
+        except Exception:
+            return text
     if os.name != "nt" or not text:
         return text
     try:
@@ -2124,7 +2152,14 @@ def dpapi_protect(text: str) -> str:
 
 
 def dpapi_unprotect(text: str) -> str:
-    """dpapi: 로 시작하면 복호화, 아니면 그대로 (평문 호환)."""
+    """dpapi: 로 시작하면 복호화, 아니면 그대로 (평문 호환). 맥의 keychain: 표시는 키체인에서 꺼낸다."""
+    if sys.platform == "darwin" and isinstance(text, str) and text.startswith(KEYCHAIN_PREFIX):
+        try:
+            import mac_keychain
+
+            return mac_keychain.unprotect(text)
+        except Exception:
+            return ""
     if not isinstance(text, str) or not text.startswith(DPAPI_PREFIX):
         return text
     if os.name != "nt":
@@ -2247,7 +2282,14 @@ def get_health(workspace: UserWorkspace) -> dict[str, Any]:
         names = {"emails": "학교 메일", "sync": "LMS", "deadlines": "LMS"}
         who = " · ".join(sorted({names.get(k, k) for k in auth}))
         out["authPaused"] = sorted(auth)
-        out["warning"] = f"{who} 로그인이 거절되어 자동 확인을 멈췄어요. 설정에서 비밀번호를 확인해 주세요."
+        # 학교 서버는 맞는 비밀번호도 몇 시간씩 거절하다 풀릴 때가 있다(9/27, 10/12 13:44~16:02).
+        # 곧장 '비밀번호를 확인하라' 고 하면 멀쩡한 비밀번호를 의심하게 되므로, 2시간 뒤 다시 해 본다는 것을 먼저 알린다.
+        reasons = [str(v.get("reason")) for v in auth.values() if isinstance(v, dict) and v.get("reason")]
+        said = f" (서버: {reasons[0]})" if reasons else ""
+        out["warning"] = (
+            f"{who} 서버가 로그인을 거절했어요{said}. 2시간 뒤 자동으로 다시 해 볼게요. "
+            "비밀번호를 바꿨다면 설정에서 새 비밀번호를 넣어 주세요."
+        )
     elif out["consecutiveFailures"] >= 2:
         kind = out["lastFailure"].get("kind", "작업")
         out["warning"] = f"{kind}이(가) {out['consecutiveFailures']}번 연속 실패했습니다. 설정에서 계정 정보를 확인해 주세요."
@@ -2257,7 +2299,7 @@ def get_health(workspace: UserWorkspace) -> dict[str, Any]:
 
 
 def record_task_result(
-    workspace: UserWorkspace, kind: str, return_code: int, auth_failed: bool = False
+    workspace: UserWorkspace, kind: str, return_code: int, auth_failed: bool = False, auth_reason: str = ""
 ) -> dict[str, Any]:
     """작업 성공/실패를 기록한다. 실패가 쌓이면 사용자에게 알리기 위함.
 
@@ -2285,6 +2327,8 @@ def record_task_result(
         streaks[kind] = int(streaks.get(kind, 0) or 0) + 1
         if auth_failed:
             auth[kind] = {"at": stamp, "configStamp": list(_file_stamp(workspace.config_path))}
+            if auth_reason:
+                auth[kind]["reason"] = auth_reason
     try:
         workspace.root.mkdir(parents=True, exist_ok=True)
         atomic_write_text(workspace.health_path, 
@@ -3873,7 +3917,10 @@ def run_process(workspace: UserWorkspace, kind: str, command: list[str], extra_e
         # 서버가 로그인 자체를 거절했는지 (네트워크 오류와 구분해 자동 재시도를 멈춘다)
         recent = " ".join(str(line) for line in (task_state.get("logs") or [])[-40:])
         auth_failed = return_code != 0 and "로그인에 실패" in recent
-        health = record_task_result(workspace, kind, return_code, auth_failed=auth_failed)
+        reason = re.search(r"\(서버: ([^)]{1,160})\)", recent) if auth_failed else None
+        health = record_task_result(
+            workspace, kind, return_code, auth_failed=auth_failed, auth_reason=reason.group(1) if reason else ""
+        )
         if return_code != 0:
             fails = health.get("consecutiveFailures", 0)
             append_log(
@@ -4792,6 +4839,19 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                     threading.Timer(2.0, lambda: os._exit(0)).start()
 
                 self.send_json(updater.apply_update(on_ready_to_exit=exit_for_installer))
+            except Exception as exc:
+                self.send_json({"ok": False, "message": str(exc)}, HTTPStatus.BAD_REQUEST)
+            return
+        if route == "/api/update/open-download":
+            # 맥: 앱이 스스로 설치하지 않고 새 DMG 를 받을 곳만 브라우저로 연다 (updater.open_manual_download).
+            # 주소는 화면이 보낸 값이 아니라 updater 가 GitHub 릴리스에서 고른 것만 쓴다.
+            if MULTI_USER_MODE:
+                self.send_json({"ok": False, "message": "공유 웹사이트 모드에서는 쓸 수 없습니다."}, HTTPStatus.BAD_REQUEST)
+                return
+            try:
+                import updater
+
+                self.send_json(updater.open_manual_download())
             except Exception as exc:
                 self.send_json({"ok": False, "message": str(exc)}, HTTPStatus.BAD_REQUEST)
             return

@@ -388,6 +388,7 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 | `/api/directory/import` | 조직도 넣기 |
 | `/api/assignment/open`, `/api/open-url` | 외부 페이지 열기 |
 | `/api/update/apply`, `/api/restart` | 업데이트, 재시작 |
+| `/api/update/open-download` | (맥) 새 DMG 받을 곳을 브라우저로 |
 
 ---
 
@@ -455,6 +456,8 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 | EXE | `.venv\Scripts\python.exe -m PyInstaller bungeoppang.spec --noconfirm` → `dist\붕어빵\` |
 | 설치 파일 | `packaging\build_installer.ps1` → `packaging\out\bungeoppang-<버전>-win-x64-setup.exe` (약 54MB) |
 | 이 PC에 설치 | `packaging\build_installer.ps1 -Install` |
+| 맥 앱 (DMG) | GitHub Actions `.github/workflows/mac.yml` → `daling-<버전>-mac-arm64.dmg` 아티팩트 (아래 'macOS 판') |
+| 설치본 점검 | `<실행 파일> --autosaver-smoke` (창 없이, 빈 임시 데이터 폴더로. `smoke_test.py`) |
 
 설치 파일(Inno Setup)은 관리자 권한 없이 사용자 폴더에 설치하고, WebView2가 없으면 부트스트래퍼를 실행하고, .NET 4.7.2 미만이면 안내 후 중단합니다. zip 배포에서 생기던 "인터넷에서 받은 파일" 차단 문제를 피하려고 설치 파일로 바꿨습니다. 서명이 없어서 처음 실행 때 SmartScreen이 뜹니다.
 
@@ -685,3 +688,24 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 - 예전 '붕어빵' 바로가기는 설치 때 `[InstallDelete]` 로 지운다(바탕화면·시작 메뉴·시작 프로그램에 둘이 생기지 않게).
 - 로고: `design/logo/daling-source.webp`(흰 바탕 붓선) → `scripts/make_icons.py` 가 밝기를 불투명도로 바꿔 크림색 둥근 네모(`BG`) 위에 먹색으로 얹어 app.png·app.ico(16~256)·app-logo-120.png·favicon.svg·img/daling-mark.png 를 만든다. 16·24·32px 은 선을 굵게(MaxFilter). 화면의 로고 주소에는 `?v=daling` 을 붙였다(WebView2 캐시에 옛 물고기 그림이 남아 있었다).
 
+## 메일 로그인 거절 (2026-10-12)
+- 10/12 13:44~16:02 학교 메일 서버가 맞는 비밀번호를 거절했다가 저절로 풀렸다(21:5x 에 같은 비밀번호로 `OK LOGIN complete`, 19:00 자동 확인도 성공). 9/27 에도 같은 일이 있었다.
+- 이제 `MiniIMAP.login` 이 서버의 끝맺음 말(`last_reply`)을 오류에 붙이고, `run_process` 가 이를 `health.json` 의 `authFailed.<kind>.reason` 에 적는다. 경고(`get_health`)는 '서버가 거절 (서버: …) · 2시간 뒤 다시 · 비밀번호를 바꿨다면 설정에서' 순서로 말한다.
+
+## 메일 분류 규칙 (2026-10-12)
+- `email_reader.rule_based_category` 순서: 답신 → 계정·알림(인증번호·패스키·계정 생성) → 수업·LMS(Blackboard 발신, 제목의 `[2026_2학기]`, 일일 통지·제출물 수신함·강의성찰) → 학생회 → 교수님(발신자 이름에 교수) → 세미나·행사(한·영 낱말: Seminar·Colloquium·Symposium·Lecture Series·Workshop·Forum·투어·마라톤…) → 취업·진로(창업·공모전·해커톤·트랙…) → 행정·학생팀(보낸 부서) → 동아리·문화 → 기타.
+- 내용(행사·진로)을 보낸 부서(행정)보다 먼저 본다: 창업지원팀 공모전·총무구매팀 마라톤이 행정으로 갔었다.
+- 측정: 받은 편지함 60통 중 기타 44 → 2 (남은 것: DGIST 주간 소식, 내가 보낸 시험 메일). 메일을 새로 받을 때 저장된 메일도 다시 분류된다(`refresh_emails`). Gemini 키가 있으면 Gemini 가 같은 목록(`CATEGORIES`) 중에서 고른다.
+- 'LMS·공지' 탭(`isLmsMail`)은 수업·LMS 분류도 포함한다.
+
+## macOS 판 (2026-10-12)
+- 빌드는 GitHub Actions 에서만(개발 PC 가 Windows): `.github/workflows/mac.yml` — `build/mac` 브랜치 푸시 또는 수동 실행, macos-latest(arm64)·Python 3.13·`requirements-mac.txt` → `packaging/mac/daling-mac.spec` → `dist/Daling.app` → ad-hoc 서명 → `--autosaver-smoke` → 실제 앱 25초 띄워 `/healthz`·스크린샷 → `daling-<버전>-mac-arm64.dmg`(+ `.sha256`). 릴리스는 만들지 않는다.
+- 공증 없음(유료 Apple Developer 계정 필요). 받은 사람은 처음 한 번 '시스템 설정 → 개인정보 보호 및 보안 → 그래도 열기'.
+- 비밀 설정: 맥은 DPAPI 가 없어 예전엔 config.json 에 평문이었다. 이제 로그인 키체인(서비스 `Daling`, 계정 `settings`, {키: 값} JSON 한 항목)에 두고 config.json 에는 `keychain:<키>` 만. `mac_keychain.py`(Security.framework 를 ctypes 로, 비밀번호가 명령줄에 안 실림). `web_ui.dpapi_protect/unprotect` 와 `runtime_config._load_config` 둘 다 푼다. 항목을 하나로 둔 까닭: ad-hoc 서명은 새 버전마다 서명 해시가 바뀌어 키체인 접근을 다시 묻는데, 항목이 다섯이면 다섯 번 묻는다. 키체인이 거절하면 DPAPI 실패와 같이 평문을 남기고 다음 저장 때 다시 넣는다.
+- 알림·오류 상자: `osascript`(`app.notify`, `_osascript`). 글은 스크립트에 끼우지 않고 `on run argv` 인자로 넘긴다. 알림 센터에는 '스크립트 편집기' 로 보여 제목 줄에 Daling 을 넣는다.
+- SSL: 묶은 파이썬의 OpenSSL 은 빌드한 맥의 인증서 경로를 본다 → `app.py` 가 `SSL_CERT_FILE` 을 certifi 로(작업 프로세스도 물려받음). Windows 는 시스템 저장소를 읽어 필요 없다.
+- 경로: 데이터 `~/.lms-autosaver`, LMS 브라우저 `~/Library/Caches/ms-playwright`(`browser_ready` 가 맥 실행 파일 이름도 본다), Playwright `node` 는 `Contents/Resources` 에 데이터로 묶여 실행 권한을 확인한다.
+- 창: 첫 크기는 `NSScreen.visibleFrame`(메뉴 막대·Dock 제외)에 맞추고 자리는 pywebview 가 가운데로. 삼성 노트는 없음(`is_available` False → 버튼 숨김).
+- 업데이트: 릴리스의 `daling-<버전>-mac-arm64.dmg` 만 본다. '지금 업데이트' 는 설치 대신 그 주소를 브라우저로 연다(`/api/update/open-download`, 주소는 updater 가 고른 것만).
+- 아이콘: `packaging/mac/Daling.icns` ← `python scripts/make_icons.py --mac` (애플 격자: 1024 안 824 네모).
+- 점검 `--autosaver-smoke`: 빈 임시 데이터 폴더로 화면 서버(빈 포트)·화면 파일·가벼운 /api·작업 프로세스(`--autosaver-job smoke`)·node·(맥) Cocoa 모듈·인증서, `AUTOSAVER_SMOKE_KEYCHAIN=1` 이면 점검용 계정으로 키체인 왕복. Windows 소스에서도 돈다(13개 통과).

@@ -8,26 +8,32 @@
 <link rel="icon" type="image/png" href="logo-120.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Lora:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Lora:wght@600;700&family=Noto+Serif+KR:wght@600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<div class="wrap">
 
-<header class="top">
-  <a class="brand" href="./"><img src="logo-120.png" alt="" width="40" height="40"><b>Daling</b></a>
-  <nav>
-    <a href="./">홈</a>
-    <a href="./privacy" aria-current="page">개인정보처리방침</a>
-    <a href="./terms">서비스 약관</a>
-    <a href="#english">English</a>
-  </nav>
+<header class="nav scrolled">
+  <div class="container">
+    <a class="brand" href="./"><img src="logo-120.png" alt="" width="34" height="34"><b>Daling</b></a>
+    <nav aria-label="주요 메뉴">
+      <a href="./">홈</a>
+      <a href="./privacy" aria-current="page">개인정보처리방침</a>
+      <a href="./terms">서비스 약관</a>
+      <a href="#english">English</a>
+    </nav>
+    <a class="btn primary" href="./#download">내려받기</a>
+  </div>
 </header>
 
-<h1 class="page">개인정보처리방침</h1>
-<p class="meta">Daling (예전 이름 붕어빵, DGIST LMS AutoSaver) · 시행일 2026년 10월 12일</p>
+<main class="doc">
+<div class="narrow">
 
-<p>Daling(이하 "앱")은 DGIST 학생이 강의자료·과제 마감·학교 메일·학사일정을 한곳에서 보고, 이용자 본인의 Google Drive와 Google Calendar로 정리하도록 돕는 Windows 데스크톱 앱입니다. 이 방침은 앱이 어떤 정보를 다루고, 어디에 보관하며, 어디로 보내는지 설명합니다.</p>
+<h1 class="page">개인정보처리방침</h1>
+<p class="meta">Daling (예전 이름 붕어빵, DGIST LMS AutoSaver) · 시행일 2026년 10월 13일</p>
+
+<p>Daling(이하 "앱")은 DGIST 학생이 강의자료·과제 마감·학교 메일·학사일정을 한곳에서 보고, 이용자 본인의 Google Drive와 Google Calendar로 정리하도록 돕는 Windows·macOS 데스크톱 앱입니다. 이 방침은 앱이 어떤 정보를 다루고, 어디에 보관하며, 어디로 보내는지 설명합니다.</p>
 
 <h2>1. 기본 원칙</h2>
 <ul>
@@ -41,11 +47,11 @@
 <table>
   <thead><tr><th>정보</th><th>쓰는 목적</th><th>보관 위치</th></tr></thead>
   <tbody>
-    <tr><td>DGIST 계정 아이디·비밀번호</td><td>LMS·학교 메일에 로그인해 강의자료·마감·메일을 가져오기</td><td>이용자 PC (<code>C:\lms-autosaver\</code>), Windows DPAPI로 암호화</td></tr>
+    <tr><td>DGIST 계정 아이디·비밀번호</td><td>LMS·학교 메일에 로그인해 강의자료·마감·메일을 가져오기</td><td>이용자 PC의 데이터 폴더, Windows DPAPI 또는 macOS 키체인으로 암호화</td></tr>
     <tr><td>Google OAuth 토큰</td><td>이용자가 연결한 Google Drive·Calendar에 접근</td><td>이용자 PC (<code>token.json</code>)</td></tr>
     <tr><td>강의자료 파일과 목록</td><td>과목·주차별 정리, 중복 확인</td><td>이용자 PC, 이용자 본인의 Google Drive</td></tr>
     <tr><td>학교 메일, 마감·일정</td><td>앱 화면에 보여 주기, 캘린더로 옮기기</td><td>이용자 PC, 이용자 본인의 Google Calendar</td></tr>
-    <tr><td>Gemini API 키 (선택)</td><td>이용자가 켠 경우 자료 요약·번역</td><td>이용자 PC, DPAPI로 암호화</td></tr>
+    <tr><td>Gemini API 키 (선택)</td><td>이용자가 켠 경우 자료 요약·번역</td><td>이용자 PC, Windows DPAPI 또는 macOS 키체인으로 암호화</td></tr>
   </tbody>
 </table>
 </div>
@@ -91,12 +97,12 @@
 <ul>
   <li>모든 자료는 이용자 PC에 있고, 보관 기간은 이용자가 정합니다.</li>
   <li>앱 설정에서 Google 연결을 끊으면 PC의 Google 토큰이 지워집니다. <a href="https://myaccount.google.com/connections">Google 계정의 서드 파티 연결</a>에서 Daling의 접근을 언제든 해제할 수 있습니다.</li>
-  <li>앱을 지워도 <code>C:\lms-autosaver\</code>의 자료는 남습니다. 필요 없으면 이 폴더를 지우면 모든 로컬 자료가 사라집니다.</li>
+  <li>앱을 지워도 데이터 폴더(Windows <code>C:\lms-autosaver\</code>, Mac <code>~/.lms-autosaver/</code>)의 자료는 남습니다. 필요 없으면 이 폴더를 지우면 모든 로컬 자료가 사라집니다. macOS에서는 키체인의 'Daling' 항목도 함께 지우세요.</li>
   <li>Drive에 올린 파일과 캘린더에 넣은 일정은 이용자의 Google 계정에 있으므로, Google Drive·Calendar에서 직접 지울 수 있습니다.</li>
 </ul>
 
 <h2>6. 보안</h2>
-<p>비밀번호와 API 키는 Windows DPAPI로 암호화해 이 PC의 현재 Windows 사용자만 풀 수 있게 저장합니다. Google과의 통신은 모두 HTTPS로 이루어집니다. PC 자체의 계정 보안은 이용자가 관리해야 합니다.</p>
+<p>비밀번호와 API 키는 Windows에서는 DPAPI로, macOS에서는 로그인 키체인에 암호화해 이 컴퓨터의 현재 사용자만 풀 수 있게 저장합니다. Google과의 통신은 모두 HTTPS로 이루어집니다. PC 자체의 계정 보안은 이용자가 관리해야 합니다.</p>
 
 <h2>7. 아동</h2>
 <p>앱은 DGIST 재학생을 위한 것이며, 만 14세 미만 아동을 대상으로 하지 않습니다.</p>
@@ -105,19 +111,19 @@
 <p>방침이 바뀌면 이 페이지에 시행일과 함께 올립니다.</p>
 
 <h2>9. 문의</h2>
-<p>김유준 · <a href="mailto:jykim5215@gmail.com">jykim5215@gmail.com</a></p>
+<p><a href="mailto:tutleblue12@gmail.com">tutleblue12@gmail.com</a></p>
 
 <section class="en" id="english" lang="en">
   <h2>Privacy Policy (English)</h2>
-  <p class="meta">Daling (formerly Bungeoppang / DGIST LMS AutoSaver) · Effective October 12, 2026</p>
-  <p>Daling ("the app") is a Windows desktop app that helps DGIST students see course materials, assignment deadlines, school e-mail and the academic calendar in one place, and organize them into their own Google Drive and Google Calendar. The app runs entirely on the user's PC. There is no developer-operated server; no data is sent to or collected by the developer. The app contains no analytics, advertising or telemetry, and sells no data.</p>
+  <p class="meta">Daling (formerly Bungeoppang / DGIST LMS AutoSaver) · Effective October 13, 2026</p>
+  <p>Daling ("the app") is a desktop app for Windows and macOS that helps DGIST students see course materials, assignment deadlines, school e-mail and the academic calendar in one place, and organize them into their own Google Drive and Google Calendar. The app runs entirely on the user's PC. There is no developer-operated server; no data is sent to or collected by the developer. The app contains no analytics, advertising or telemetry, and sells no data.</p>
 
   <h3>Data the app handles</h3>
   <ul>
-    <li><strong>DGIST account ID and password</strong> — used to sign in to the DGIST LMS and school mail. Stored only on the user's PC, encrypted with Windows DPAPI.</li>
+    <li><strong>DGIST account ID and password</strong> — used to sign in to the DGIST LMS and school mail. Stored only on the user's computer, encrypted with Windows DPAPI or the macOS Keychain.</li>
     <li><strong>Google OAuth token</strong> — used to access the Google Drive and Calendar the user connected. Stored only on the user's PC.</li>
     <li><strong>Course files, deadlines, school e-mail</strong> — stored on the user's PC and, when the user turns it on, in the user's own Google Drive and Google Calendar.</li>
-    <li><strong>Gemini API key (optional)</strong> — used only if the user enables summaries or translation. Stored on the user's PC, encrypted with DPAPI.</li>
+    <li><strong>Gemini API key (optional)</strong> — used only if the user enables summaries or translation. Stored on the user's computer, encrypted with Windows DPAPI or the macOS Keychain.</li>
   </ul>
 
   <h3>Google user data</h3>
@@ -133,24 +139,30 @@
   <p>DGIST LMS, portal and mail (<code>*.dgist.ac.kr</code>); Google Drive and Calendar APIs (when connected); Google Gemini API (only with the user's own key); the Korean public data portal and DGIST website (public information only); OpenStreetMap Nominatim (place names the user searches); GitHub (update checks, no personal data).</p>
 
   <h3>Retention and deletion</h3>
-  <p>All data stays on the user's PC for as long as the user keeps it. Disconnecting Google in the app's settings deletes the local Google token, and access can be revoked at any time at <a href="https://myaccount.google.com/connections">Google Account → Third-party connections</a>. Deleting the folder <code>C:\lms-autosaver\</code> removes all local data. Files uploaded to Drive and events added to Calendar live in the user's Google account and can be deleted there.</p>
+  <p>All data stays on the user's PC for as long as the user keeps it. Disconnecting Google in the app's settings deletes the local Google token, and access can be revoked at any time at <a href="https://myaccount.google.com/connections">Google Account → Third-party connections</a>. Deleting the data folder (Windows <code>C:\lms-autosaver\</code>, macOS <code>~/.lms-autosaver/</code>) removes all local data; on macOS also delete the "Daling" items in Keychain Access. Files uploaded to Drive and events added to Calendar live in the user's Google account and can be deleted there.</p>
 
   <h3>Security</h3>
-  <p>Passwords and API keys are encrypted with Windows DPAPI so only the current Windows user on that PC can decrypt them. All communication with Google uses HTTPS.</p>
+  <p>Passwords and API keys are encrypted with Windows DPAPI or stored in the macOS login Keychain, so only the current user on that computer can read them. All communication with Google uses HTTPS.</p>
 
   <h3>Children</h3>
   <p>The app is intended for DGIST students and is not directed to children under 14.</p>
 
   <h3>Changes and contact</h3>
-  <p>Changes to this policy will be posted on this page with a new effective date. Contact: Yujun Kim · <a href="mailto:jykim5215@gmail.com">jykim5215@gmail.com</a></p>
+  <p>Changes to this policy will be posted on this page with a new effective date. Contact: <a href="mailto:tutleblue12@gmail.com">tutleblue12@gmail.com</a></p>
 </section>
 
-<footer>
-  Daling · © 2026 김유준 (Yujun Kim), DGIST ·
-  <a href="./">홈 Home</a> ·
-  <a href="./terms">약관 Terms</a>
-</footer>
-
 </div>
+</main>
+
+<footer class="site-footer">
+  <div class="container">
+    <div>Daling · DGIST 학생을 위한 비공식 앱 · <a href="mailto:tutleblue12@gmail.com">tutleblue12@gmail.com</a></div>
+    <nav aria-label="문서">
+      <a href="./">홈 Home</a>
+      <a href="./privacy">개인정보처리방침 Privacy</a>
+      <a href="./terms">서비스 약관 Terms</a>
+    </nav>
+  </div>
+</footer>
 </body>
 </html>

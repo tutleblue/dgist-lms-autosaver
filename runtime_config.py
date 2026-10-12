@@ -10,6 +10,7 @@ from __future__ import annotations
 import ast
 import json
 import os
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -139,6 +140,20 @@ def _dpapi_unprotect(text: str) -> str:
         return ""
 
 
+# macOS: 설정 화면(web_ui.dpapi_protect)이 비밀 값을 키체인에 넣고 config.json 에는 이 표시만 남긴다.
+# 여기서 풀지 않으면 작업 프로세스가 'keychain:LMS_PASSWORD' 를 비밀번호로 써서 로그인이 실패한다.
+KEYCHAIN_PREFIX = "keychain:"
+
+
+def _keychain_unprotect(text: str) -> str:
+    try:
+        import mac_keychain
+
+        return mac_keychain.unprotect(text)
+    except Exception:
+        return ""
+
+
 def _load_config() -> dict[str, Any]:
     if CONFIG_JSON_PATH.exists():
         data = _read_json(CONFIG_JSON_PATH)
@@ -152,6 +167,8 @@ def _load_config() -> dict[str, Any]:
         value = data.get(key)
         if isinstance(value, str) and value.startswith(DPAPI_PREFIX):
             data[key] = _dpapi_unprotect(value)
+        elif sys.platform == "darwin" and isinstance(value, str) and value.startswith(KEYCHAIN_PREFIX):
+            data[key] = _keychain_unprotect(value)
     return data
 
 

@@ -38,11 +38,13 @@ EMAILS_LOG = str(AUTOSAVER_DATA_ROOT / "emails.json")
 CATEGORIES = [
     "답신",          # 내 메일에 대한 답장
     "교수님",        # 교수 개인 발신
+    "수업·LMS",      # Blackboard 알림, 과목 공지(제목에 [2026_2학기]), 강의성찰
     "학생회",        # 총학생회/학생회 공지
     "행정·학생팀",   # 학사/행정 부서 공지
     "세미나·행사",   # 세미나, 특강, 행사 안내
-    "취업·진로",     # 채용, 인턴, 진로 프로그램
+    "취업·진로",     # 채용, 인턴, 진로·창업·공모전
     "동아리·문화",   # 동아리, 공연, 음악 등
+    "계정·알림",     # 인증번호, 계정 생성·보안 알림 (외부 서비스)
     "기타",
 ]
 
@@ -98,6 +100,8 @@ class MiniIMAP:
                 raise ConnectionError("서버 연결이 끊겼습니다.")
             if line.startswith(tag.encode() + b" "):
                 status = line.split(b" ", 2)[1].decode("ascii", "replace")
+                # 끝맺음 줄의 말(예: 'NO LOGIN failed')을 남겨 둔다. 로그인 거절 이유를 알 수 있게
+                self.last_reply = line.decode("utf-8", "replace").split(" ", 1)[-1].strip()[:160]
                 return status, lines
             literal = None
             match = re.search(rb"\{(\d+)\}\r?\n$", line)
@@ -110,7 +114,10 @@ class MiniIMAP:
         quoted_pw = '"' + password.replace('\\', '\\\\').replace('"', '\\"') + '"'
         status, _ = self.cmd(f"LOGIN {quoted_user} {quoted_pw}")
         if status != "OK":
-            raise PermissionError("학교 이메일 로그인에 실패했습니다. 설정에서 계정을 확인해 주세요.")
+            # 2026-10-12 13:44~16:02 비밀번호를 안 바꿨는데 거절됐다가 저절로 풀렸다. 이유를 알 수 없었으므로
+            # 서버가 한 말을 함께 남긴다(web_ui 가 health.json authFailed.reason 에 적는다).
+            reply = getattr(self, "last_reply", "") or status
+            raise PermissionError(f"학교 이메일 로그인에 실패했습니다. (서버: {reply})")
 
     def select_inbox(self) -> None:
         status, _ = self.cmd("SELECT INBOX")
@@ -1424,22 +1431,53 @@ def fetch_school_emails(days: int | None = None, max_count: int | None = None) -
     return emails
 
 
+# 2026-10-12 점검: 받은 편지함 60통 중 44통(73%)이 '기타' 였다. 낱말이 한국어뿐이라
+# 'Seminar'·'Colloquium'·'Symposium' 세미나 9통이 빠졌고, Blackboard 알림·과목 공지 16통과
+# 외부 서비스 인증번호 7통은 갈 곳이 없었다. 또 '지원팀' 을 먼저 봐서 창업지원팀 공모전이 행정이 됐다.
+# 그래서 무리를 둘 더하고(수업·LMS, 계정·알림), 내용(행사·진로)을 보낸 부서(행정)보다 먼저 본다.
+_CAT_ACCOUNT = re.compile(
+    r"verification code|인증\s*번호|인증\s*코드|패스키|passkey|계정\s*생성|account (?:created|security)|"
+    r"이메일 주소 인증|verify your|비밀번호 재설정|password reset|새 기기|로그인 알림|security alert|welcome to",
+    re.I,
+)
+_CAT_COURSE = re.compile(
+    r"\[\s*20\d{2}_\d\s*학기\s*\]|일일 통지|제출물 수신함|강의\s*성찰|교수학습센터|강의\s*평가|"
+    r"과제 (?:제출|마감)|퀴즈|course reflection",
+    re.I,
+)
+_CAT_EVENT = re.compile(
+    r"세미나|특강|콜로[퀴키]움|워크[숍샵]|설명회|강연|심포지엄|포럼|학술\s*대회|박람회|마라톤|투어|"
+    r"seminar|colloquium|symposium|lecture series|distinguished lecture|keynote|workshop|forum|webinar|"
+    r"전문가와 함께하는",
+    re.I,
+)
+_CAT_CAREER = re.compile(
+    r"채용|인턴|취업|진로|커리어|모집\s*공고|창업|스타트업|공모전|경진\s*대회|해커톤|트랙|"
+    r"career|internship|recruit|hackathon|startup",
+    re.I,
+)
+
+
 def rule_based_category(mail: dict) -> str:
     subject = mail.get("subject", "")
     sender = f"{mail.get('fromName', '')} {mail.get('fromEmail', '')}"
     text = f"{subject} {sender}"
     if mail.get("isReply") or re.match(r"^\s*(re|답장|회신)\s*:", subject, re.IGNORECASE):
         return "답신"
+    if _CAT_ACCOUNT.search(subject):
+        return "계정·알림"
+    if "blackboard" in sender.lower() or _CAT_COURSE.search(subject):
+        return "수업·LMS"
     if "학생회" in text or "총학" in text:
         return "학생회"
     if "교수" in sender:
         return "교수님"
+    if _CAT_EVENT.search(subject):
+        return "세미나·행사"
+    if _CAT_CAREER.search(subject):
+        return "취업·진로"
     if re.search(r"학생팀|학사|행정|지원팀|총무|등록|장학", text):
         return "행정·학생팀"
-    if re.search(r"세미나|특강|콜로퀴움|워크숍|설명회|강연", text):
-        return "세미나·행사"
-    if re.search(r"채용|인턴|취업|진로|커리어|모집공고", text):
-        return "취업·진로"
     if re.search(r"동아리|공연|음악|밴드|오케스트라|축제", text):
         return "동아리·문화"
     return "기타"

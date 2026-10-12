@@ -14,7 +14,7 @@
 #ifndef AppVersion
   #define AppVersion "1.11.0"
 #endif
-#define AppPublisher "jykim5215"
+#define AppPublisher "Daling"
 #define AppURL "https://github.com/tutleblue/dgist-lms-autosaver"
 #define AppExe "붕어빵.exe"
 

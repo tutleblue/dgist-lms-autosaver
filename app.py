@@ -26,6 +26,27 @@ from pathlib import Path
 # 데스크톱 모드에서는 web_ui가 기본 브라우저를 열지 않도록 고정
 os.environ.setdefault("AUTOSAVER_OPEN_BROWSER", "0")
 
+# 설치본 점검: `<실행 파일> --autosaver-smoke` (창 없이 서버를 띄워 몇 군데 두드려 보고 끝난다, smoke_test.py)
+SMOKE_FLAG = "--autosaver-smoke"
+if len(sys.argv) >= 2 and sys.argv[1] == SMOKE_FLAG:
+    # 사용자 데이터 대신 빈 임시 폴더를 쓴다. web_ui·runtime_config 가 불러오는 순간 경로를 정하므로
+    # 그보다 먼저 바꿔 둔다.
+    import smoke_test
+
+    smoke_test.prepare_env()
+
+if sys.platform == "darwin" and not os.environ.get("SSL_CERT_FILE"):
+    # 맥으로 묶은 파이썬은 빌드한 컴퓨터의 OpenSSL 인증서 경로를 가리켜서, 받은 사람 맥에서는
+    # 학교 메일(IMAP)·GitHub 업데이트 확인 같은 표준 라이브러리 SSL 연결이 '인증서 확인 실패' 가 난다.
+    # (Windows 는 시스템 인증서 저장소를 읽어서 이 문제가 없다) requests 가 쓰는 certifi 묶음을 같이 쓴다.
+    # 작업 프로세스도 이 환경 변수를 물려받는다.
+    try:
+        import certifi
+
+        os.environ["SSL_CERT_FILE"] = certifi.where()
+    except Exception:
+        pass
+
 from http.server import ThreadingHTTPServer
 
 import web_ui
@@ -100,8 +121,35 @@ def apply_window_icon(timeout: float = 15.0) -> bool:
         return False
 
 
+def _osascript(lines: list[str], args: list[str], timeout: float) -> None:
+    """맥에서 AppleScript 한 토막을 돌린다.
+
+    글을 스크립트 안에 끼워 넣지 않고 `on run argv` 의 인자로 넘긴다. 과목·과제 이름에 따옴표나
+    역슬래시가 들어 있어도 스크립트가 깨지거나 다른 명령이 끼어들 수 없다.
+    """
+    import subprocess
+
+    command = ["/usr/bin/osascript", "-e", "on run argv"]
+    for line in lines:
+        command += ["-e", line]
+    command += ["-e", "end run", *args]
+    subprocess.run(command, capture_output=True, timeout=timeout)
+
+
 def notify(title: str, message: str) -> None:
-    """Windows 토스트 알림 (winotify 미설치/실패 시 조용히 무시)."""
+    """Windows 토스트 알림 (winotify 미설치/실패 시 조용히 무시). 맥은 알림 센터."""
+    if sys.platform == "darwin":
+        # ad-hoc 서명 앱은 알림 권한(UNUserNotificationCenter)을 제대로 받을 수 없어 osascript 로 띄운다.
+        # 알림 센터에는 '스크립트 편집기' 이름으로 보이므로 제목 줄에 앱 이름을 넣고 원래 제목은 부제로.
+        try:
+            _osascript(
+                ["display notification (item 3 of argv) with title (item 1 of argv) subtitle (item 2 of argv)"],
+                [WINDOW_TITLE, title, message[:200]],
+                timeout=15,
+            )
+        except Exception:
+            pass
+        return
     try:
         from winotify import Notification
 
@@ -490,9 +538,22 @@ class ExclusiveHTTPServer(ThreadingHTTPServer):
     allow_reuse_address = False
 
     def server_bind(self) -> None:
+        # 맥·리눅스에는 SO_EXCLUSIVEADDRUSE 가 없다(None). 거기서는 SO_REUSEADDR 를 끈 것만으로
+        # 남이 듣고 있는 포트를 겹쳐 잡지 못한다 (bind 가 EADDRINUSE → start_server 가 다음 포트로).
         exclusive = getattr(socket, "SO_EXCLUSIVEADDRUSE", None)
         if exclusive is not None:
             self.socket.setsockopt(socket.SOL_SOCKET, exclusive, 1)
+        if sys.platform == "darwin":
+            # 기본 HTTPServer.server_bind 는 socket.getfqdn(주소) 로 역방향 이름 조회를 한다.
+            # 맥에서는 이 조회가 mDNS 로 나갈 수 있어 '로컬 네트워크의 기기 찾기 허용?' 창의 후보다
+            # (2026-10-12 CI 첫 실행에서 그 창이 떴다). server_name 은 CGI 용 이름표라 주소 그대로 둔다.
+            import socketserver
+
+            socketserver.TCPServer.server_bind(self)
+            host, port = self.server_address[:2]
+            self.server_name = str(host)
+            self.server_port = port
+            return
         super().server_bind()
 
 
@@ -596,6 +657,12 @@ def run_worker(job: str) -> int:
             from drive_uploader import authorize_drive
 
             authorize_drive(force=True)
+        elif job == "smoke":
+            # 설치본 점검(smoke_test.py)이 '작업 프로세스가 창 없이 뜨고, 출력이 파이프로 오고,
+            # 데이터 경로를 물려받는지' 만 본다. 화면(start_task)에서는 부를 수 없는 이름이다.
+            import runtime_config
+
+            print(f"smoke-worker ok data={runtime_config.AUTOSAVER_DATA_ROOT}")
         else:
             print(f"알 수 없는 작업입니다: {job}")
             return 1
@@ -618,6 +685,20 @@ def initial_window_size() -> tuple[int, int, int | None, int | None]:
     크기만 줄였더니 윈도우가 정한 자리(y=172)에 떠서 아래가 여전히 984 > 852 로 넘쳤다(실측) → 자리도 가운데로.
     """
     want_w, want_h = 1320, 880
+    if sys.platform == "darwin":
+        # 맥: 메뉴 막대·Dock 을 뺀 화면(visibleFrame)에 맞춘다. 단위가 포인트(Retina 배율 적용 후)라
+        # pywebview 의 width/height 와 같다. 자리는 비워 두면 pywebview(cocoa)가 가운데에 놓는다.
+        # 13인치 맥북(1440×900 안팎)에서는 880px 창이 Dock 뒤로 내려간다 — 위 Windows 실측과 같은 문제.
+        try:
+            import AppKit
+
+            frame = AppKit.NSScreen.mainScreen().visibleFrame()
+            area_w, area_h = float(frame.size.width), float(frame.size.height)
+            if area_w >= 400 and area_h >= 400:
+                return int(min(want_w, area_w - 40)), int(min(want_h, area_h - 40)), None, None
+        except Exception:
+            pass
+        return want_w, want_h, None, None
     if os.name != "nt":
         return want_w, want_h, None, None
     try:
@@ -657,6 +738,16 @@ def main() -> None:
             ctypes.windll.user32.MessageBoxW(0, str(exc), WINDOW_TITLE, 0x10)
         else:
             print(f"{WINDOW_TITLE}: {exc}", file=sys.stderr)
+            if sys.platform == "darwin":
+                # Finder 에서 켠 앱은 stderr 를 아무도 안 본다. 창이 안 뜬 까닭을 알림 상자로 보여 준다.
+                try:
+                    _osascript(
+                        ["display alert (item 1 of argv) message (item 2 of argv) as critical"],
+                        [WINDOW_TITLE, str(exc)],
+                        timeout=600,
+                    )
+                except Exception:
+                    pass
         return
 
     try:
@@ -699,4 +790,8 @@ if __name__ == "__main__":
 
     if len(sys.argv) >= 3 and sys.argv[1] == WORKER_FLAG:
         sys.exit(run_worker(sys.argv[2]))
+    if len(sys.argv) >= 2 and sys.argv[1] == SMOKE_FLAG:
+        import smoke_test
+
+        sys.exit(smoke_test.run(sys.modules[__name__]))
     main()

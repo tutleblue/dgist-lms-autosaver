@@ -109,11 +109,11 @@ _version_file.write_text(f"""VSVersionInfo(
   ffi=FixedFileInfo(filevers={tuple(_nums)}, prodvers={tuple(_nums)}, mask=0x3f, flags=0x0, OS=0x40004, fileType=0x1, subtype=0x0, date=(0, 0)),
   kids=[
     StringFileInfo([StringTable('041204B0', [
-      StringStruct('CompanyName', 'jykim5215'),
+      StringStruct('CompanyName', 'Daling'),
       StringStruct('FileDescription', 'Daling - DGIST LMS AutoSaver'),
       StringStruct('FileVersion', '{_ver}'),
       StringStruct('InternalName', 'bungeoppang'),
-      StringStruct('LegalCopyright', 'jykim5215'),
+      StringStruct('LegalCopyright', 'Copyright 2026 Daling. Apache License 2.0'),
       StringStruct('OriginalFilename', '붕어빵.exe'),
       StringStruct('ProductName', 'Daling'),
       StringStruct('ProductVersion', '{_ver}')])]),

@@ -6,6 +6,11 @@
 로고를 바꿀 때는 원본 그림만 바꾸고 다시 실행하면 된다. (2026-10-11 붕어빵 물고기 → Daling)
 
     python scripts/make_icons.py      (시스템 파이썬의 Pillow. 앱에는 필요 없다)
+    python scripts/make_icons.py --mac   맥 앱 아이콘(packaging/mac/Daling.icns)만 다시 만든다
+
+- 맥 아이콘(.icns)은 Windows 처럼 타일을 꽉 채우면 Dock 에서 다른 앱보다 한 치수 크게 보인다.
+  애플 격자(1024 안에 824 네모, 둘레 100 여백)대로 여백을 두고 같은 타일을 얹는다.
+  CI(.github/workflows/mac.yml)에는 원본 그림이 없을 수 있어 만든 파일을 저장소에 둔다.
 
 - 흰 바탕을 투명하게 하고 붓선만 남겨(밝기 → 불투명도) 크림색 둥근 네모 위에 올린다.
   검은 선만 두면 작업표시줄이 어두울 때 안 보이므로 바탕 타일을 깐다(예전 물고기 아이콘과 같은 톤).
@@ -95,8 +100,39 @@ def tile(size: int, mask: Image.Image) -> Image.Image:
     return out.resize((size, size), Image.LANCZOS)
 
 
+MAC_ICNS = ROOT / "packaging" / "mac" / "Daling.icns"
+MAC_INNER = 824 / 1024  # 애플 macOS 아이콘 격자: 1024px 캔버스 안의 824px 둥근 네모
+
+
+def mac_frame(size: int, mask: Image.Image) -> Image.Image:
+    """맥 아이콘 한 장: 투명 캔버스 가운데에 여백을 두고 타일을 얹는다."""
+    inner = round(size * MAC_INNER)
+    if inner <= 48:
+        # 작은 크기는 tile() 이 획을 다시 그리는 표(16·24·32)가 있는 크기로 맞춘다 (32px 아이콘 → 24px 타일)
+        inner = min((16, 24, 32, 48), key=lambda k: abs(k - inner))
+    canvas = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    off = (size - inner) // 2
+    canvas.alpha_composite(tile(inner, mask), (off, off))
+    return canvas
+
+
+def save_mac_icns(mask: Image.Image) -> None:
+    # Pillow 의 ICNS 쓰기는 32·64·128·256·512·1024 를 담는다(16 은 macOS 가 32 에서 줄인다).
+    # 크기마다 따로 그린 것을 넘겨야 작은 크기 획이 뭉개지지 않는다.
+    MAC_ICNS.parent.mkdir(parents=True, exist_ok=True)
+    sizes = [32, 64, 128, 256, 512, 1024]
+    frames = [mac_frame(s, mask) for s in sizes]
+    frames[-1].save(MAC_ICNS, format="ICNS", append_images=frames[:-1])
+
+
 def main() -> None:
+    import sys
+
     mask = load_mask()
+    if "--mac" in sys.argv[1:]:
+        save_mac_icns(mask)
+        print(f"{MAC_ICNS.relative_to(ROOT)} 를 만들었습니다.")
+        return
 
     tile(256, mask).save(WEB / "app.png")
     tile(120, mask).save(WEB / "app-logo-120.png")
@@ -123,7 +159,8 @@ def main() -> None:
     mark = Image.new("RGBA", mask.size, INK)
     mark.putalpha(mask)
     mark.resize((240, 240), Image.LANCZOS).save(WEB / "img" / "daling-mark.png")
-    print("app.png, app.ico, app-logo-120.png, favicon.svg, img/daling-mark.png 를 만들었습니다.")
+    save_mac_icns(mask)
+    print("app.png, app.ico, app-logo-120.png, favicon.svg, img/daling-mark.png, packaging/mac/Daling.icns 를 만들었습니다.")
 
 
 if __name__ == "__main__":

@@ -1,98 +1,472 @@
 <!DOCTYPE html>
-<html lang="ko">
+<html lang="ko" class="no-js">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Daling — DGIST 학생을 위한 강의자료·마감·메일 정리 앱</title>
-<meta name="description" content="Daling은 DGIST LMS 강의자료, 과제 마감, 학교 메일, 학사일정을 한 화면에 모아 이용자 본인의 Google Drive와 Google Calendar로 정리해 주는 Windows 데스크톱 앱입니다.">
-<meta property="og:title" content="Daling">
-<meta property="og:description" content="DGIST 강의자료·마감·메일을 한 화면에 모아 내 Google Drive·Calendar로 정리하는 Windows 앱">
-<meta property="og:image" content="logo-512.png">
+<title>Daling — LMS·메일·학사일정을 한 화면에, DGIST 학생을 위한 앱</title>
+<meta name="description" content="Daling은 DGIST LMS 강의자료, 과제 마감, 학교 메일, 학사일정과 공지를 자동으로 모아 한 화면에 보여 주고, 내 Google Drive와 Google Calendar로 정리해 주는 Windows·Mac 데스크톱 앱입니다.">
+<meta name="theme-color" content="#faf9f5">
+<meta property="og:title" content="Daling — LMS·메일·학사일정을 한 화면에">
+<meta property="og:description" content="강의자료·과제 마감·학교 메일·학사일정을 알아서 모아 정리해 주는 DGIST 학생용 데스크톱 앱">
+<meta property="og:image" content="https://daling-app.pages.dev/img/app-dashboard.webp">
+<meta property="og:type" content="website">
 <link rel="icon" type="image/png" href="logo-120.png">
+<link rel="alternate" hreflang="ko" href="https://daling-app.pages.dev/">
+<link rel="alternate" hreflang="en" href="https://daling-app.pages.dev/en/">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Lora:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Lora:wght@600;700&family=Noto+Serif+KR:wght@600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<div class="wrap">
 
-<header class="top">
-  <a class="brand" href="./"><img src="logo-120.png" alt="" width="40" height="40"><b>Daling</b></a>
-  <nav>
-    <a href="./" aria-current="page">홈</a>
-    <a href="./privacy">개인정보처리방침</a>
-    <a href="./terms">서비스 약관</a>
-    <a href="#english">English</a>
-  </nav>
+<header class="nav" id="top">
+  <div class="container">
+    <a class="brand" href="./"><img src="logo-120.png" alt="" width="34" height="34"><b>Daling</b></a>
+    <nav aria-label="주요 메뉴">
+      <a href="#why">소개</a>
+      <a href="#features">기능</a>
+      <a href="#tips">꿀기능</a>
+      <a href="#how">시작하기</a>
+      <a href="#faq">자주 묻는 질문</a>
+    </nav>
+    <a class="lang" href="./en/" hreflang="en" lang="en" title="English">EN</a>
+    <a class="btn primary" href="#download">내려받기</a>
+  </div>
 </header>
 
+<main>
+
+<!-- 첫 화면 -->
 <section class="hero">
-  <img src="logo-512.png" alt="Daling 로고" width="104" height="104">
-  <div>
-    <h1>Daling</h1>
-    <p>DGIST 학생을 위한 강의자료·마감·메일 정리 앱</p>
+  <div class="container">
+    <div class="hero-copy">
+      <p class="eyebrow">DGIST 학생을 위한 데스크톱 앱 · Windows · macOS</p>
+      <h1>LMS, 메일, 학사일정.<br><em>이제 한 화면</em>에서.</h1>
+      <p class="lede"><strong>Daling</strong>은 강의자료와 과제 마감, 학교 메일, 학사일정과 공지를 알아서 모아 정리해 주는 앱입니다. 자료는 과목·주차별로 내 Google Drive에, 마감과 행사는 Google Calendar에 들어갑니다.</p>
+      <div class="cta">
+        <a class="btn primary" href="#download" data-hero-dl data-win="Windows용 내려받기" data-mac="Mac용 내려받기">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
+          <span data-hero-label>무료로 내려받기</span>
+        </a>
+        <a class="btn ghost" href="#download">다른 운영체제</a>
+      </div>
+      <p class="fine"><span>무료</span> · <span>오픈 소스</span> · <span>개발자 서버 없음</span> · <span>자료와 비밀번호는 내 컴퓨터에만</span></p>
+    </div>
+    <div class="hero-stage reveal">
+      <img class="dalgu" src="img/dalgu/hello.png" alt="손을 흔드는 마스코트 달구" width="112" height="111">
+      <figure class="window">
+        <div class="bar" aria-hidden="true"><i></i><i></i><i></i><span>Daling — 대시보드</span></div>
+        <img src="img/app-dashboard.webp" width="1440" height="900" alt="Daling 대시보드: 오늘 날짜와 진행 중인 학사일정, 임박한 마감 4개, 전체 자료 26개, 강의 6개, 새 메일 3통, 주간 시간표">
+      </figure>
+    </div>
   </div>
 </section>
 
-<p class="lede"><strong>Daling</strong>(달링, 예전 이름 '붕어빵')은 DGIST LMS의 강의자료와 과제 마감, 학교 메일, 학사일정과 공지를 자동으로 모아 한 화면에서 보여 주고, 이용자 본인의 <strong>Google Drive</strong>와 <strong>Google Calendar</strong>로 정리해 주는 Windows 데스크톱 앱입니다.</p>
-<p>앱은 이용자의 PC에서만 실행됩니다. 개발자가 운영하는 서버는 없고, 이용자의 자료나 계정 정보는 개발자에게 전송되지 않습니다.</p>
-
-<p>
-  <a class="btn" href="https://github.com/tutleblue/dgist-lms-autosaver/releases/latest">Windows용 내려받기</a>
-  <a class="btn ghost" href="https://github.com/tutleblue/dgist-lms-autosaver">소스 코드 (GitHub)</a>
-</p>
-
-<h2>하는 일</h2>
-<div class="cards">
-  <div class="card"><b>강의자료 모으기</b><span>LMS에 올라온 파일을 과목·주차별로 내려받아 내 컴퓨터와 내 Google Drive에 정리합니다.</span></div>
-  <div class="card"><b>마감 한눈에</b><span>과제·퀴즈 마감을 D-day로 보여 주고, 원하면 내 Google Calendar에 넣습니다.</span></div>
-  <div class="card"><b>학교 메일</b><span>DGIST 메일을 앱 안에서 읽고, 메일에 적힌 일정을 캘린더로 옮깁니다.</span></div>
-  <div class="card"><b>학사일정·공지</b><span>학사일정, 학교 공지, 셔틀 시간표를 함께 보여 줍니다.</span></div>
-</div>
-
-<h2>Google 계정으로 하는 일</h2>
-<p>Google 연결은 선택 기능입니다. 이용자가 앱 설정에서 직접 연결했을 때만, 아래 목적으로만 Google 계정에 접근합니다.</p>
-<div class="table-wrap">
-<table>
-  <thead><tr><th>권한</th><th>쓰는 곳</th></tr></thead>
-  <tbody>
-    <tr><td>Google Drive<br><code>drive.file</code></td><td>앱이 만든 폴더(과목·주차)에 강의자료를 올리고, 이미 올린 파일인지 확인합니다. 앱이 만들지 않은 Drive 파일은 볼 수 없습니다.</td></tr>
-    <tr><td>Google Calendar<br><code>calendar</code></td><td>앱 전용 캘린더를 하나 만들고, 그 안에 과제 마감·학사일정·메일 속 일정을 넣고 고칩니다. 같은 일정이 두 번 들어가지 않게 앱이 넣은 일정에 표시를 남깁니다.</td></tr>
-  </tbody>
-</table>
-</div>
-<p>Google에서 받은 정보는 이용자의 PC 안에서만 쓰이며, 개발자에게 보내거나 제3자에게 팔거나 넘기지 않고, 광고나 AI 모델 학습에 쓰지 않습니다. 자세한 내용은 <a href="./privacy">개인정보처리방침</a>을 보세요.</p>
-
-<h2>문서</h2>
-<ul>
-  <li><a href="./privacy">개인정보처리방침</a></li>
-  <li><a href="./terms">서비스 약관</a></li>
-  <li><a href="https://github.com/tutleblue/dgist-lms-autosaver/releases">업데이트 기록 (GitHub Releases)</a></li>
-</ul>
-
-<h2>문의</h2>
-<p>개발자: 김유준 (DGIST 기초학부) · <a href="mailto:jykim5215@gmail.com">jykim5215@gmail.com</a></p>
-
-<section class="en" id="english" lang="en">
-  <h2>About Daling (English)</h2>
-  <p><strong>Daling</strong> (formerly "Bungeoppang", DGIST LMS AutoSaver) is a Windows desktop app for DGIST students. It collects course materials and assignment deadlines from the DGIST LMS, school e-mail, the academic calendar and campus notices into one dashboard, and organizes them into the user's own <strong>Google Drive</strong> and <strong>Google Calendar</strong>.</p>
-  <p>The app runs entirely on the user's PC. There is no developer-operated server, and no user data or credentials are ever sent to the developer.</p>
-  <h3>How Daling uses Google user data</h3>
-  <ul>
-    <li><strong>Google Drive (<code>drive.file</code>)</strong> — uploads course materials into course/week folders that the app creates in the user's Drive, and checks whether a file was already uploaded. The app cannot see Drive files it did not create.</li>
-    <li><strong>Google Calendar (<code>calendar</code>)</strong> — creates one dedicated calendar and adds or updates assignment deadlines, academic-calendar events and dates found in school e-mail there. Events created by the app are tagged so they are never duplicated.</li>
-  </ul>
-  <p>Google user data is used only on the user's PC to provide these features. It is not sent to the developer, not sold or shared with third parties, and not used for advertising or to train AI models. See the <a href="./privacy#english">Privacy Policy</a> and <a href="./terms#english">Terms of Service</a>.</p>
-  <p>Contact: Yujun Kim · <a href="mailto:jykim5215@gmail.com">jykim5215@gmail.com</a></p>
+<!-- 흩어진 학교 서비스 → 하나로 -->
+<section class="section tint" id="why">
+  <div class="container">
+    <div class="center reveal">
+      <p class="kicker">왜 만들었나요</p>
+      <h2>매일 열던 창, 몇 개였나요?</h2>
+      <p class="sub">강의자료와 과제는 LMS에서, 행사와 행정 안내는 웹메일에서, 시험·수강신청 날짜는 학사일정에서, 장학·채용 소식은 학교 공지에서. 로그인도 따로, 확인도 따로라 마감과 공지를 놓치기 쉽습니다.</p>
+    </div>
+    <div class="sources reveal">
+      <figure class="source">
+        <div class="shot"><img src="img/school-lms.webp" width="960" height="600" loading="lazy" alt="DGIST LMS 로그인 화면"></div>
+        <figcaption><b>LMS</b>강의자료 · 과제 · 마감</figcaption>
+      </figure>
+      <figure class="source">
+        <div class="shot"><img src="img/school-mail.webp" width="960" height="600" loading="lazy" alt="DGIST 웹메일 통합 인증 화면"></div>
+        <figcaption><b>학교 메일</b>행사 · 세미나 · 행정 안내</figcaption>
+      </figure>
+      <figure class="source">
+        <div class="shot"><img src="img/school-calendar.webp" width="960" height="600" loading="lazy" alt="DGIST 홈페이지 학사일정"></div>
+        <figcaption><b>학사일정</b>시험 · 수강신청 · 휴일</figcaption>
+      </figure>
+      <figure class="source">
+        <div class="shot"><img src="img/school-notice.webp" width="960" height="600" loading="lazy" alt="DGIST 홈페이지 일반공지 게시판"></div>
+        <figcaption><b>학교 공지</b>장학 · 채용 · 학교 소식</figcaption>
+      </figure>
+    </div>
+    <div class="merge reveal" aria-hidden="true">
+      <svg viewBox="0 0 900 86" preserveAspectRatio="none" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="5 6">
+        <path d="M112 2 C112 50, 450 30, 450 84"/><path d="M337 2 C337 50, 450 40, 450 84"/>
+        <path d="M562 2 C562 50, 450 40, 450 84"/><path d="M787 2 C787 50, 450 30, 450 84"/>
+      </svg>
+    </div>
+    <div class="merge reveal">
+      <div class="badge"><img src="logo-120.png" alt="" width="38" height="38">Daling이 한데 모아 한 화면에 보여 줍니다</div>
+    </div>
+  </div>
 </section>
 
-<footer>
-  Daling · © 2026 김유준 (Yujun Kim), DGIST ·
-  <a href="./privacy">개인정보처리방침 Privacy</a> ·
-  <a href="./terms">약관 Terms</a>
+<!-- 기능 -->
+<section class="section" id="features">
+  <div class="container">
+    <div class="center reveal">
+      <p class="kicker">기능</p>
+      <h2>켜 두기만 하면, 알아서 모입니다</h2>
+      <p class="sub">한 번 로그인해 두면 Daling이 정해진 주기마다 LMS와 학교 메일을 확인해 새로 생긴 것만 가져옵니다.</p>
+    </div>
+
+    <article class="feature reveal">
+      <div class="copy">
+        <p class="tag" style="--c: var(--accent-ink)">대시보드 · 과제 마감</p>
+        <h3>오늘 할 일과 마감이 먼저 보여요</h3>
+        <p>첫 화면에 오늘 남은 수업, 7일 안에 끝나는 과제, 안 읽은 메일이 한 줄로 나옵니다. 모든 과목의 과제는 D-day 순으로 한 목록에 모입니다.</p>
+        <ul class="checks">
+          <li>미제출 과제는 '제출하러 가기'로 LMS 제출 화면을 바로 열기</li>
+          <li>시험·수강신청 같은 학사일정 D-day와 주간 시간표</li>
+          <li>시간표는 에브리타임 링크나 시간표 사진으로 가져오기</li>
+        </ul>
+      </div>
+      <figure class="window">
+        <div class="bar" aria-hidden="true"><i></i><i></i><i></i><span>과제 마감</span></div>
+        <img src="img/app-deadlines.webp" width="1440" height="900" loading="lazy" alt="과제 마감 화면: 과목별 과제가 D-2, D-3 같은 D-day 순으로 정리되고 '제출하러 가기' 버튼이 있다">
+      </figure>
+    </article>
+
+    <article class="feature flip reveal">
+      <div class="copy">
+        <p class="tag" style="--c: var(--amber)">강의자료</p>
+        <h3>LMS 폴더 그대로, 새 자료는 알아서</h3>
+        <p>새로 올라온 강의자료를 찾아 내려받고, LMS에 올라온 주차·강의 폴더 구조 그대로 정리합니다.</p>
+        <ul class="checks">
+          <li>과목·주차별로 내 Google Drive에 자동 업로드</li>
+          <li>내 컴퓨터 폴더, OneDrive·iCloud Drive 같은 클라우드 폴더에도 복사</li>
+          <li>열기·저장·Drive 올리기를 여러 파일에 한꺼번에 <small>(Windows는 삼성 노트로 보내기도)</small></li>
+        </ul>
+      </div>
+      <figure class="window">
+        <div class="bar" aria-hidden="true"><i></i><i></i><i></i><span>자료</span></div>
+        <img src="img/app-files.webp" width="1440" height="900" loading="lazy" alt="자료 화면: 과목 폴더를 펼치면 공지사항, Assignments, Course Materials 아래 Week 5·6·7 폴더와 PDF 파일이 LMS와 같은 구조로 보인다">
+      </figure>
+    </article>
+
+    <article class="feature reveal">
+      <div class="copy">
+        <p class="tag" style="--c: var(--blue)">학교 메일</p>
+        <h3>학교 메일을 앱 안에서 읽고 씁니다</h3>
+        <p>웹메일에 따로 로그인하지 않아도 받은 메일을 바로 보고 답장할 수 있어요. 메일은 내용에 따라 알아서 나뉩니다.</p>
+        <ul class="checks">
+          <li>세미나·행사, 행정·학생팀, 취업·진로처럼 자동 분류</li>
+          <li>조직도와 받은 주소로 받는 사람 자동완성, 첨부·임시저장</li>
+          <li>영어 메일 번역·요약 <small>(선택, 내 Gemini 키)</small></li>
+        </ul>
+      </div>
+      <figure class="window">
+        <div class="bar" aria-hidden="true"><i></i><i></i><i></i><span>메일함</span></div>
+        <img src="img/app-emails.webp" width="1440" height="900" loading="lazy" alt="메일함 화면: 왼쪽에 분류별 메일함, 가운데에 날짜별 메일 목록, 오른쪽에 고른 메일 본문">
+      </figure>
+    </article>
+
+    <article class="feature flip reveal">
+      <div class="copy">
+        <p class="tag" style="--c: var(--violet)">캘린더</p>
+        <h3>메일 속 행사 날짜까지 달력에</h3>
+        <p>과제 마감, 학사일정, 공휴일, 내 일정을 한 달력에 모읍니다. 메일에 적힌 행사·세미나 날짜도 읽어서 넣어 줍니다.</p>
+        <ul class="checks">
+          <li>과제 마감은 빨강, 학교 행사는 노랑, 내 일정은 파랑</li>
+          <li>Google Calendar 전용 캘린더로 자동 등록</li>
+          <li>마감 목록을 캘린더 파일(.ics)로 내보내기</li>
+        </ul>
+      </div>
+      <figure class="window">
+        <div class="bar" aria-hidden="true"><i></i><i></i><i></i><span>캘린더</span></div>
+        <img src="img/app-calendar.webp" width="1440" height="900" loading="lazy" alt="캘린더 화면: 10월 달력에 중간시험 기간, 과제 마감, 가을 축제, 스터디 일정이 색깔별로 표시된다">
+      </figure>
+    </article>
+
+  </div>
+</section>
+
+<!-- 알아 두면 좋은 기능 -->
+<section class="section tint" id="tips">
+  <div class="container">
+    <div class="center reveal">
+      <p class="kicker">꿀기능</p>
+      <h2>알아 두면 시간이 확 줄어드는 기능</h2>
+      <p class="sub">LMS와 웹메일을 따로 쓸 때는 할 수 없던 일들입니다.</p>
+    </div>
+
+    <div class="tip-hero stack reveal">
+      <div class="copy">
+        <p class="tag">메일 쓰기</p>
+        <h3>과목 이름만 치면 교수·조교 주소가 나와요</h3>
+        <p>받는 사람 칸에 <b>'일반물리'</b>만 쳐도 그 과목 교수와 조교가 분반과 함께 나옵니다. 조교 이메일을 LMS 공지에서 찾아 헤매지 않아도 됩니다.</p>
+      </div>
+      <figure class="shot-strip"><img src="img/feat-staff.webp" width="1340" height="194" loading="lazy" alt="메일 쓰기 받는 사람 칸에 '일반물리'를 치자 홍길동(일반물리Ⅱ 1분반 교수), 김철수·이영희(일반물리Ⅱ 1분반 조교), 송지호(일반물리실험Ⅱ 1분반 조교)가 주소와 함께 나온 모습"></figure>
+    </div>
+
+    <div class="tip-hero stack reveal">
+      <div class="copy">
+        <p class="tag">강의</p>
+        <h3>과목 카드마다 이번 학기 교수·조교</h3>
+        <p>LMS에서 이번 학기 교수·조교를 모아 과목 카드에 붙여 둡니다. 이름 옆 편지 아이콘을 누르면 받는 사람과 <b>'[과목 01분반]'</b> 제목이 채워진 메일 쓰기가 열립니다.</p>
+      </div>
+      <figure class="shot-strip"><img src="img/feat-courses.webp" width="1240" height="284" loading="lazy" alt="강의 화면의 과목 카드 세 장. 카드마다 다음 마감과 함께 교수·조교 이름이 분반과 함께 붙어 있다"></figure>
+    </div>
+
+    <div class="tips reveal">
+      <div class="tip"><b>과목으로 메일 찾기</b><span>'일반화학', 'General Chemistry', '일반화학2' 어떻게 쳐도 그 과목 메일과 교수·조교와 주고받은 메일까지 찾아요.</span></div>
+      <div class="tip"><b>보낸 사람이 누구인지</b><span>메일 보낸 사람 옆에 '일반물리Ⅱ 3분반 교수'처럼 어느 과목 누구인지 꼬리표가 붙어요.</span></div>
+      <div class="tip"><b>강의자료를 Drive에 바로</b><span>자료를 골라 'Drive에 올리기'. 과목·주차 폴더로 들어가고 이미 있는 파일은 건너뜁니다. 동기화 때 자동으로도.</span></div>
+      <div class="tip"><b>Drive 자료를 메일에 첨부</b><span>메일 쓰기에서 Drive 창을 열어 올려 둔 강의자료를 바로 붙여요. 구글 문서는 PDF로 바꿔 붙입니다.</span></div>
+      <div class="tip"><b>세미나 메일 → 달력</b><span>메일 속 날짜는 물론 연사·제목·장소까지 읽어 달력과 Google Calendar에 넣어요.</span></div>
+      <div class="tip"><b>답장 안 온 메일 찾기</b><span>보낸 메일 중 답이 없는 것을 모아 보고, 리마인드 메일 초안을 바로 만들어요.</span></div>
+      <div class="tip"><b>'제출하러 가기'</b><span>미제출 과제를 누르면 LMS의 그 과제 제출 화면이 바로 열려요.</span></div>
+      <div class="tip"><b>시간표는 사진 한 장으로</b><span>에브리타임 링크나 시간표 캡처로 주간 시간표를 채워요. <small>(사진은 Gemini 키 필요)</small></span></div>
+      <div class="tip"><b>클라우드 폴더에도 정리</b><span>OneDrive·iCloud Drive·Dropbox·네이버 MYBOX 폴더에 과목별로 복사해 휴대폰에서도 봐요.</span></div>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="container">
+    <div class="center reveal">
+      <p class="kicker">그 밖에도</p>
+      <h2>작지만 매일 쓰는 것들</h2>
+    </div>
+    <div class="extras reveal">
+      <div class="extra"><b>통합 검색</b><span>과목·자료·과제·메일·일정을 검색창 하나로. 초성으로도 찾아요.</span></div>
+      <div class="extra"><b>알림</b><span>마감이 다가오거나 새 자료·새 공지가 올라오면 알려 줘요.</span></div>
+      <div class="extra"><b>셔틀버스·공지</b><span>셔틀 시간표와 학교 공지를 앱 안에서 바로.</span></div>
+      <div class="extra"><b>해외 파견 지도</b><span>FGLP·학점교류 대학을 세계지도에서 한눈에.</span></div>
+      <div class="extra"><b>테마 5가지 · 영어 화면</b><span>밝은·어두운·남색 테마와 English 화면을 지원해요.</span></div>
+      <div class="extra"><b>첫 실행 안내</b><span>마스코트 달구가 화면 곳곳을 하나씩 소개해 줘요.</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- 왜 편한가 -->
+<section class="section tint">
+  <div class="container">
+    <div class="center reveal">
+      <p class="kicker">왜 편한가요</p>
+      <h2>확인하고, 찾고, 옮기는 일을 대신합니다</h2>
+    </div>
+    <div class="values reveal">
+      <div class="value">
+        <p class="num">5<small>분마다</small></p>
+        <h3>놓치지 않아요</h3>
+        <p>메일은 5분, 과제 마감은 1시간, 강의자료는 3시간마다 확인합니다. 주기는 설정에서 바꿀 수 있어요.</p>
+      </div>
+      <div class="value">
+        <p class="num">1<small>곳에서</small></p>
+        <h3>찾지 않아요</h3>
+        <p>자료는 과목·주차별로, 메일은 분류별로 정리돼 있고, 검색창 하나로 전부 찾을 수 있습니다.</p>
+      </div>
+      <div class="value">
+        <p class="num">0<small>번 옮기기</small></p>
+        <h3>옮기지 않아요</h3>
+        <p>Drive 업로드, 캘린더 등록, 내 컴퓨터 폴더 정리를 손으로 하지 않아도 됩니다.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 시작하기 -->
+<section class="section" id="how">
+  <div class="container">
+    <div class="center reveal">
+      <p class="kicker">시작하기</p>
+      <h2>설치부터 첫 동기화까지 몇 분이면 됩니다</h2>
+    </div>
+    <div class="steps-wrap reveal">
+      <img class="dalgu" src="img/dalgu/point.png" alt="" width="96" height="93">
+      <div class="steps">
+        <div class="step"><h3>내려받아 설치</h3><p>Windows는 설치 파일을 실행하고, Mac은 DMG를 열어 Daling을 응용 프로그램 폴더로 끌어 놓으세요.</p></div>
+        <div class="step"><h3>학교 계정 넣기</h3><p>설정에서 LMS와 학교 메일 계정을 넣습니다. 비밀번호는 이 컴퓨터에만 암호화해 둡니다.</p></div>
+        <div class="step"><h3>Google 연결 <small>(선택)</small></h3><p>Drive와 Calendar로 보내고 싶을 때만 연결하세요. 연결하지 않아도 앱은 그대로 씁니다.</p></div>
+        <div class="step"><h3>그다음은 알아서</h3><p>처음 켜면 달구가 화면을 안내해 줘요. 그 뒤로는 켜 두기만 하면 새 자료와 메일이 모입니다.</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 개인정보 요약 -->
+<section class="section tint" id="privacy">
+  <div class="container trust">
+    <div class="reveal">
+      <p class="kicker">개인정보</p>
+      <h2>내 컴퓨터에서만 돌아갑니다</h2>
+      <p class="sub">Daling에는 개발자가 운영하는 서버가 없습니다. 자료와 계정 정보는 이용자의 컴퓨터에만 저장되고 개발자에게 전송되지 않습니다.</p>
+      <ul class="checks">
+        <li>비밀번호·API 키는 Windows DPAPI 또는 macOS 키체인으로 암호화</li>
+        <li>분석·광고·사용 통계 수집 없음, 어떤 정보도 판매하지 않음</li>
+        <li>Google 연결은 선택이며 언제든 해제할 수 있음</li>
+      </ul>
+      <p style="margin-top:18px"><a href="./privacy">개인정보처리방침 전문 보기 →</a></p>
+    </div>
+    <div class="perm reveal">
+      <div class="row"><div><b>Google Drive</b><code>drive.file</code></div><p>앱이 만든 과목·주차 폴더에 강의자료를 올리고, 이미 올린 파일인지 확인합니다. 앱이 만들지 않은 Drive 파일은 볼 수 없습니다.</p></div>
+      <div class="row"><div><b>Google Calendar</b><code>calendar</code></div><p>앱 전용 캘린더를 하나 만들어 과제 마감·학사일정·메일 속 일정을 넣고 고칩니다. 앱이 만들지 않은 일정은 건드리지 않습니다.</p></div>
+      <div class="row"><div><b>그 밖의 연결</b></div><p>DGIST LMS·메일(학교 계정으로 로그인), 학교 홈페이지·공공데이터(공개 정보), 새 버전 확인(GitHub). Google에서 받은 정보는 광고나 AI 학습에 쓰지 않습니다.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- 내려받기 -->
+<section class="section" id="download">
+  <div class="container">
+    <div class="center reveal">
+      <p class="kicker">내려받기</p>
+      <h2>무료로 쓰세요</h2>
+      <p class="sub">오픈 소스(Apache License 2.0)로 공개된 무료 앱입니다.</p>
+    </div>
+    <div class="downloads-wrap reveal">
+      <img class="dalgu" src="img/dalgu/thumbs.png" alt="" width="92" height="94">
+      <div class="downloads">
+        <div class="dl">
+          <div class="os">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+            <h3>Windows</h3>
+          </div>
+          <p class="req">Windows 10·11 (64비트) · 설치 파일(.exe)</p>
+          <a class="btn primary" href="https://github.com/tutleblue/dgist-lms-autosaver/releases/download/v1.12.0/bungeoppang-1.12.0-win-x64-setup.exe" data-dl="win" download>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
+            Windows용 내려받기
+          </a>
+          <p class="ver" data-ver="win">버전 1.12.0 · 57MB</p>
+          <details>
+            <summary>설치할 때 'Windows의 PC 보호' 창이 뜨면</summary>
+            <ol>
+              <li>창의 <b>추가 정보</b>를 누릅니다.</li>
+              <li><b>실행</b>을 누르면 설치가 이어집니다.</li>
+            </ol>
+          </details>
+        </div>
+        <div class="dl">
+          <div class="os">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v9H4z"/><path d="M2 18h20l-1.2 2H3.2z"/></svg>
+            <h3>macOS</h3>
+            <span class="pill">베타</span>
+          </div>
+          <p class="req">Apple Silicon(M1 이상) Mac · macOS 12 이상 · 디스크 이미지(.dmg)</p>
+          <a class="btn primary" href="https://github.com/tutleblue/dgist-lms-autosaver/releases/download/mac-v1.12.21/daling-1.12.21-mac-arm64.dmg" data-dl="mac" download>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
+            Mac용 내려받기
+          </a>
+          <p class="ver" data-ver="mac">버전 1.12.21 · 77MB</p>
+          <p class="ver" data-mac-note>지금 베타에서는 Google Drive·Calendar 연결이 아직 안 됩니다. 다음 빌드에서 열립니다.</p>
+          <details>
+            <summary>처음 열 때 '확인되지 않은 개발자'라고 나오면</summary>
+            <ol>
+              <li>DMG를 열고 Daling을 응용 프로그램 폴더로 끌어 놓습니다.</li>
+              <li>응용 프로그램 폴더에서 Daling을 <b>Control-클릭 → 열기</b>를 누릅니다.</li>
+              <li>그래도 막히면 <b>시스템 설정 → 개인정보 보호 및 보안</b> 아래쪽의 <b>'그래도 열기'</b>를 누릅니다.</li>
+            </ol>
+          </details>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 자주 묻는 질문 -->
+<section class="section tint" id="faq">
+  <div class="narrow">
+    <div class="center reveal">
+      <p class="kicker">자주 묻는 질문</p>
+      <h2>궁금한 점</h2>
+    </div>
+    <div class="faq reveal">
+      <details><summary>무료인가요?</summary><p>네. 광고도 결제도 없는 무료 앱이고, 소스 코드도 공개되어 있습니다.</p></details>
+      <details><summary>DGIST 공식 앱인가요?</summary><p>아니요. DGIST 학생이 쓰려고 만든 비공식 앱이며, DGIST가 만들거나 운영하는 서비스가 아닙니다. 중요한 마감과 공지는 LMS와 학교 공식 채널에서도 꼭 확인하세요.</p></details>
+      <details><summary>제 비밀번호를 개발자가 볼 수 있나요?</summary><p>아니요. 비밀번호는 이용자 컴퓨터에만 암호화해 저장되고(Windows DPAPI, macOS 키체인) 어디로도 전송되지 않습니다. 앱은 학교 서버(LMS·메일)에 직접 로그인합니다.</p></details>
+      <details><summary>Google 계정 권한은 왜 필요한가요?</summary><p>강의자료를 내 Drive에 올리고(앱이 만든 파일에만 접근하는 <code>drive.file</code>), 마감과 행사를 내 Calendar에 넣기 위해서입니다. 연결은 선택이며, <a href="https://myaccount.google.com/connections">Google 계정의 서드 파티 연결</a>에서 언제든 해제할 수 있습니다.</p></details>
+      <details><summary>Mac에서 "손상되었기 때문에 열 수 없습니다"라고 나와요.</summary><p>인터넷에서 받은 앱에 붙는 격리 표시 때문입니다. 터미널에서 <code>xattr -dr com.apple.quarantine /Applications/Daling.app</code> 을 실행한 뒤 다시 열어 보세요.</p></details>
+      <details><summary>앱을 지우면 자료도 지워지나요?</summary><p>아니요. 받은 자료와 설정은 데이터 폴더(Windows <code>C:\lms-autosaver</code>, Mac <code>~/.lms-autosaver</code>)에 남습니다. 필요 없으면 그 폴더를 지우면 됩니다.</p></details>
+      <details><summary>문의나 오류 제보는 어디로 하나요?</summary><p>앱 왼쪽 아래의 '문의 · 제보' 버튼이나 <a href="mailto:tutleblue12@gmail.com">tutleblue12@gmail.com</a>으로 보내 주세요.</p></details>
+    </div>
+  </div>
+</section>
+
+<!-- 영어 요약 (Google OAuth 심사·외국인 학생용) -->
+<section class="section en" id="english" lang="en">
+  <div class="narrow">
+    <h2>About Daling</h2>
+    <p><strong>Daling</strong> is a free, open-source desktop app for Windows and macOS made for DGIST students. It collects course materials and assignment deadlines from the DGIST LMS, school e-mail, the academic calendar and campus notices into one dashboard, and organizes them into the user's own <strong>Google Drive</strong> and <strong>Google Calendar</strong>.</p>
+    <p>The app runs entirely on the user's computer. There is no developer-operated server, and no user data or credentials are ever sent to the developer.</p>
+    <ul>
+      <li><strong>Google Drive (<code>drive.file</code>)</strong> — uploads course materials into course/week folders the app creates, and checks whether a file was already uploaded. The app cannot see Drive files it did not create.</li>
+      <li><strong>Google Calendar (<code>calendar</code>)</strong> — creates one dedicated calendar and adds or updates assignment deadlines, academic-calendar events and dates found in school e-mail there. It does not change events it did not create.</li>
+    </ul>
+    <p>Google user data is used only on the user's computer to provide these features; it is not sold, shared, used for advertising, or used to train AI models. Read the <a href="./privacy#english">Privacy Policy</a> and <a href="./terms#english">Terms of Service</a>. Contact: <a href="mailto:tutleblue12@gmail.com">tutleblue12@gmail.com</a></p>
+  </div>
+</section>
+
+</main>
+
+<footer class="site-footer">
+  <div class="container">
+    <div>Daling · DGIST 학생을 위한 비공식 앱 · <a href="mailto:tutleblue12@gmail.com">tutleblue12@gmail.com</a></div>
+    <nav aria-label="문서">
+      <a href="./privacy">개인정보처리방침</a>
+      <a href="./terms">서비스 약관</a>
+      <a href="https://github.com/tutleblue/dgist-lms-autosaver">소스 코드</a>
+      <a href="#english">English</a>
+    </nav>
+  </div>
 </footer>
 
-</div>
+<script>
+  // 스크롤하면 메뉴 아래 선을 긋고, 구역이 화면에 들어올 때 살짝 떠오르게 한다.
+  document.documentElement.classList.remove("no-js");
+  const nav = document.querySelector(".nav");
+  const onScroll = () => nav.classList.toggle("scrolled", window.scrollY > 8);
+  window.addEventListener("scroll", onScroll, { passive: true });
+  onScroll();
+  const items = document.querySelectorAll(".reveal");
+  if ("IntersectionObserver" in window) {
+    const io = new IntersectionObserver((entries) => {
+      for (const e of entries) if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); }
+    }, { rootMargin: "0px 0px -8% 0px", threshold: 0.08 });
+    items.forEach((el) => io.observe(el));
+  } else {
+    items.forEach((el) => el.classList.add("in"));
+  }
+
+  // 내려받기 단추를 GitHub 릴리스의 최신 설치 파일로 바로 잇는다 (실패하면 HTML 에 적어 둔 주소 그대로).
+  // Windows 는 정식 릴리스만, Mac 은 베타(pre-release)도 본다.
+  // 첫 화면 단추는 Windows·Mac 이면 그 설치 파일로 바로, 휴대폰·리눅스면 내려받기 구역으로.
+  const ua = navigator.userAgent;
+  const os = /Windows/i.test(ua) ? "win" : /Macintosh|Mac OS X/i.test(ua) && !/iPhone|iPad|Mobile/i.test(ua) ? "mac" : "";
+  const hero = document.querySelector("[data-hero-dl]");
+  const pointHero = () => {
+    const link = os && document.querySelector(`[data-dl="${os}"]`);
+    if (!hero || !link) return;
+    hero.href = link.href;
+    hero.querySelector("[data-hero-label]").textContent = hero.dataset[os] || link.textContent.trim();
+  };
+  pointHero();
+  fetch("https://api.github.com/repos/tutleblue/dgist-lms-autosaver/releases?per_page=20")
+    .then((r) => (r.ok ? r.json() : []))
+    .then((list) => {
+      const pick = (re, allowPre) => {
+        for (const rel of list) {
+          if (rel.draft || (!allowPre && rel.prerelease)) continue;
+          const asset = (rel.assets || []).find((a) => re.test(a.name));
+          if (asset) return asset;
+        }
+        return null;
+      };
+      const set = (os, asset) => {
+        if (!asset) return;
+        const v = (asset.name.match(/(\d+\.\d+\.\d+)/) || [])[1] || "";
+        document.querySelectorAll(`[data-dl="${os}"]`).forEach((el) => { el.href = asset.browser_download_url; });
+        document.querySelectorAll(`[data-ver="${os}"]`).forEach((el) => {
+          el.textContent = (el.dataset.fmt || "버전 {v} · {mb}MB").replace("{v}", v).replace("{mb}", Math.round(asset.size / 1048576));
+        });
+      };
+      set("win", pick(/^(bungeoppang|daling)-[\d.]+-win-x64-setup\.exe$/i, false));
+      set("mac", pick(/^daling-[\d.]+-mac-arm64\.dmg$/i, true));
+      pointHero();
+    })
+    .catch(() => {});
+</script>
 </body>
 </html>

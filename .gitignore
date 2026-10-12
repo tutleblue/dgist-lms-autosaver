@@ -70,3 +70,9 @@ public_data_key.txt
 
 # Cloudflare wrangler 캐시 (계정 정보)
 .wrangler/
+
+# 개인 파일 이름이 든 정리용 메모 (공개 저장소에 올리지 않음)
+scratch_trashed.json
+
+# Cloudflare wrangler 작업 캐시 (소개 사이트 배포)
+.wrangler/
