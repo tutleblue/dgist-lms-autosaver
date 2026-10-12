@@ -44,11 +44,11 @@
 <section class="hero">
   <div class="container">
     <div class="hero-copy">
-      <p class="eyebrow">DGIST 학생을 위한 데스크톱 앱 · Windows · macOS</p>
+      <p class="eyebrow">DGIST 학생을 위한 데스크톱 앱 · Windows · macOS · Linux</p>
       <h1>LMS, 메일, 학사일정.<br><em>이제 한 화면</em>에서.</h1>
       <p class="lede"><strong>Daling</strong>은 강의자료와 과제 마감, 학교 메일, 학사일정과 공지를 알아서 모아 정리해 주는 앱입니다. 자료는 과목·주차별로 내 Google Drive에, 마감과 행사는 Google Calendar에 들어갑니다.</p>
       <div class="cta">
-        <a class="btn primary" href="#download" data-hero-dl data-win="Windows용 내려받기" data-mac="Mac용 내려받기">
+        <a class="btn primary" href="#download" data-hero-dl data-win="Windows용 내려받기" data-mac="Mac용 내려받기" data-linux="Linux용 내려받기">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
           <span data-hero-label>무료로 내려받기</span>
         </a>
@@ -277,7 +277,7 @@
     </div>
     <div class="steps-wrap reveal">
       <div class="steps">
-        <div class="step"><h3>내려받아 설치</h3><p>Windows는 설치 파일을 실행하고, Mac은 DMG를 열어 Daling을 응용 프로그램 폴더로 끌어 놓으세요.</p></div>
+        <div class="step"><h3>내려받아 설치</h3><p>Windows는 설치 파일을 실행하고, Mac은 DMG를 열어 Daling을 응용 프로그램 폴더로 끌어 놓고, Linux는 AppImage에 실행 권한을 주고 실행하세요.</p></div>
         <div class="step"><h3>학교 계정 넣기</h3><p>설정에서 LMS와 학교 메일 계정을 넣습니다. 비밀번호는 이 컴퓨터에만 암호화해 둡니다.</p></div>
         <div class="step"><h3>Google 연결 <small>(선택)</small></h3><p>Drive와 Calendar로 보내고 싶을 때만 연결하세요. 연결하지 않아도 앱은 그대로 씁니다.</p></div>
         <div class="step"><h3>그다음은 알아서</h3><p>처음 켜면 달구가 화면을 안내해 줘요. 그 뒤로는 켜 두기만 하면 새 자료와 메일이 모입니다.</p></div>
@@ -294,7 +294,7 @@
       <h2>내 컴퓨터에서만 돌아갑니다</h2>
       <p class="sub">Daling에는 개발자가 운영하는 서버가 없습니다. 자료와 계정 정보는 이용자의 컴퓨터에만 저장되고 개발자에게 전송되지 않습니다.</p>
       <ul class="checks">
-        <li>비밀번호·API 키는 Windows DPAPI 또는 macOS 키체인으로 암호화</li>
+        <li>비밀번호·API 키는 Windows DPAPI, macOS 키체인, Linux 키링으로 암호화</li>
         <li>분석·광고·사용 통계 수집 없음, 어떤 정보도 판매하지 않음</li>
         <li>Google 연결은 선택이며 언제든 해제할 수 있음</li>
       </ul>
@@ -359,6 +359,29 @@
             </ol>
           </details>
         </div>
+        <div class="dl">
+          <div class="os">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m7 9 3 3-3 3M13 15h4"/></svg>
+            <h3>Linux</h3>
+            <span class="pill">베타</span>
+          </div>
+          <p class="req">x86_64 · Ubuntu 22.04·Debian 12·Fedora 36 이상 · AppImage</p>
+          <a class="btn primary" href="https://github.com/tutleblue/dgist-lms-autosaver/releases/download/v1.12.21/daling-1.12.21-linux-x86_64.AppImage" data-dl="linux" download>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
+            Linux용 내려받기
+          </a>
+          <p class="ver" data-ver="linux">버전 1.12.21 · AppImage</p>
+          <p class="ver" data-mac-note>지금 베타에서는 Google Drive·Calendar 연결이 아직 안 됩니다. 다음 빌드에서 열립니다.</p>
+          <p class="ver">설치형이 좋다면 <a href="https://github.com/tutleblue/dgist-lms-autosaver/releases/download/v1.12.21/daling-1.12.21-linux-x86_64.tar.gz" data-dl="linux-tar">.tar.gz</a> (압축을 풀고 <code>./install.sh</code>)</p>
+          <details>
+            <summary>실행하는 방법</summary>
+            <ol>
+              <li>터미널에서 <code>chmod +x daling-*.AppImage</code> 로 실행 권한을 줍니다.</li>
+              <li>파일을 두 번 누르거나 <code>./daling-*.AppImage</code> 로 실행합니다.</li>
+              <li>LMS 로그인용 브라우저에 필요한 시스템 라이브러리가 없으면 앱이 설치 명령을 알려 줍니다.</li>
+            </ol>
+          </details>
+        </div>
       </div>
     </div>
   </div>
@@ -374,10 +397,11 @@
     <div class="faq reveal">
       <details><summary>무료인가요?</summary><p>네. 광고도 결제도 없는 무료 앱이고, 소스 코드도 공개되어 있습니다.</p></details>
       <details><summary>DGIST 공식 앱인가요?</summary><p>아니요. DGIST 학생이 쓰려고 만든 비공식 앱이며, DGIST가 만들거나 운영하는 서비스가 아닙니다. 중요한 마감과 공지는 LMS와 학교 공식 채널에서도 꼭 확인하세요.</p></details>
-      <details><summary>제 비밀번호를 개발자가 볼 수 있나요?</summary><p>아니요. 비밀번호는 이용자 컴퓨터에만 암호화해 저장되고(Windows DPAPI, macOS 키체인) 어디로도 전송되지 않습니다. 앱은 학교 서버(LMS·메일)에 직접 로그인합니다.</p></details>
+      <details><summary>제 비밀번호를 개발자가 볼 수 있나요?</summary><p>아니요. 비밀번호는 이용자 컴퓨터에만 암호화해 저장되고(Windows DPAPI, macOS 키체인, Linux 키링) 어디로도 전송되지 않습니다. 앱은 학교 서버(LMS·메일)에 직접 로그인합니다.</p></details>
       <details><summary>Google 계정 권한은 왜 필요한가요?</summary><p>강의자료를 내 Drive에 올리고(앱이 만든 파일에만 접근하는 <code>drive.file</code>), 마감과 행사를 내 Calendar에 넣기 위해서입니다. 연결은 선택이며, <a href="https://myaccount.google.com/connections">Google 계정의 서드 파티 연결</a>에서 언제든 해제할 수 있습니다.</p></details>
       <details><summary>Mac에서 "손상되었기 때문에 열 수 없습니다"라고 나와요.</summary><p>인터넷에서 받은 앱에 붙는 격리 표시 때문입니다. 터미널에서 <code>xattr -dr com.apple.quarantine /Applications/Daling.app</code> 을 실행한 뒤 다시 열어 보세요.</p></details>
-      <details><summary>앱을 지우면 자료도 지워지나요?</summary><p>아니요. 받은 자료와 설정은 데이터 폴더(Windows <code>C:\lms-autosaver</code>, Mac <code>~/.lms-autosaver</code>)에 남습니다. 필요 없으면 그 폴더를 지우면 됩니다.</p></details>
+      <details><summary>Linux에서 AppImage가 실행되지 않아요.</summary><p>먼저 <code>chmod +x</code>로 실행 권한을 주세요. 그래도 안 되면 압축 파일(<code>.tar.gz</code>)을 풀고 <code>./install.sh</code>로 설치해 앱 메뉴에서 여세요. 한글 입력은 ibus에서 됩니다.</p></details>
+      <details><summary>앱을 지우면 자료도 지워지나요?</summary><p>아니요. 받은 자료와 설정은 데이터 폴더(Windows <code>C:\lms-autosaver</code>, Mac·Linux <code>~/.lms-autosaver</code>)에 남습니다. 필요 없으면 그 폴더를 지우면 됩니다.</p></details>
       <details><summary>문의나 오류 제보는 어디로 하나요?</summary><p>앱 왼쪽 아래의 '문의 · 제보' 버튼이나 <a href="mailto:tutleblue12@gmail.com">tutleblue12@gmail.com</a>으로 보내 주세요.</p></details>
     </div>
   </div>
@@ -387,7 +411,7 @@
 <section class="section en" id="english" lang="en">
   <div class="narrow">
     <h2>About Daling</h2>
-    <p><strong>Daling</strong> is a free, open-source desktop app for Windows and macOS made for DGIST students. It collects course materials and assignment deadlines from the DGIST LMS, school e-mail, the academic calendar and campus notices into one dashboard, and organizes them into the user's own <strong>Google Drive</strong> and <strong>Google Calendar</strong>.</p>
+    <p><strong>Daling</strong> is a free, open-source desktop app for Windows, macOS and Linux made for DGIST students. It collects course materials and assignment deadlines from the DGIST LMS, school e-mail, the academic calendar and campus notices into one dashboard, and organizes them into the user's own <strong>Google Drive</strong> and <strong>Google Calendar</strong>.</p>
     <p>The app runs entirely on the user's computer. There is no developer-operated server, and no user data or credentials are ever sent to the developer.</p>
     <ul>
       <li><strong>Google Drive (<code>drive.file</code>)</strong> — uploads course materials into course/week folders the app creates, and checks whether a file was already uploaded. The app cannot see Drive files it did not create.</li>
@@ -432,7 +456,8 @@
   // Windows 는 정식 릴리스만, Mac 은 베타(pre-release)도 본다.
   // 첫 화면 단추는 Windows·Mac 이면 그 설치 파일로 바로, 휴대폰·리눅스면 내려받기 구역으로.
   const ua = navigator.userAgent;
-  const os = /Windows/i.test(ua) ? "win" : /Macintosh|Mac OS X/i.test(ua) && !/iPhone|iPad|Mobile/i.test(ua) ? "mac" : "";
+  const os = /Windows/i.test(ua) ? "win" : /Macintosh|Mac OS X/i.test(ua) && !/iPhone|iPad|Mobile/i.test(ua) ? "mac"
+    : /Linux|X11/i.test(ua) && !/Android|Mobile/i.test(ua) ? "linux" : "";
   const hero = document.querySelector("[data-hero-dl]");
   const pointHero = () => {
     const link = os && document.querySelector(`[data-dl="${os}"]`);
@@ -462,6 +487,8 @@
       };
       set("win", pick(/^(bungeoppang|daling)-[\d.]+-win-x64-setup\.exe$/i, false));
       set("mac", pick(/^daling-[\d.]+-mac-arm64\.dmg$/i, true));
+      set("linux", pick(/^daling-[\d.]+-linux-x86_64\.AppImage$/i, true));
+      set("linux-tar", pick(/^daling-[\d.]+-linux-x86_64\.tar\.gz$/i, true));
       pointHero();
     })
     .catch(() => {});

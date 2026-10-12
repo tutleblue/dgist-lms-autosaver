@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Daling — LMS, mail and the academic calendar in one place, for DGIST students</title>
-<meta name="description" content="Daling is a free desktop app for Windows and macOS that gathers DGIST LMS course materials, assignment deadlines, school e-mail, the academic calendar and notices into one dashboard, and organizes them into your own Google Drive and Google Calendar.">
+<meta name="description" content="Daling is a free desktop app for Windows, macOS and Linux that gathers DGIST LMS course materials, assignment deadlines, school e-mail, the academic calendar and notices into one dashboard, and organizes them into your own Google Drive and Google Calendar.">
 <meta name="theme-color" content="#faf9f5">
 <meta property="og:title" content="Daling — LMS, mail and the academic calendar in one place">
 <meta property="og:description" content="A desktop app for DGIST students that gathers course materials, deadlines, school mail and the academic calendar automatically.">
@@ -46,11 +46,11 @@
 <section class="hero">
   <div class="container">
     <div class="hero-copy">
-      <p class="eyebrow">A desktop app for DGIST students · Windows · macOS</p>
+      <p class="eyebrow">A desktop app for DGIST students · Windows · macOS · Linux</p>
       <h1>LMS, mail, academic calendar.<br><em>Now on one screen.</em></h1>
       <p class="lede"><strong>Daling</strong> gathers your course materials, assignment deadlines, school e-mail, the academic calendar and campus notices automatically. Files go into course and week folders in your own Google Drive; deadlines and events go into Google Calendar.</p>
       <div class="cta">
-        <a class="btn primary" href="#download" data-hero-dl data-win="Download for Windows" data-mac="Download for Mac">
+        <a class="btn primary" href="#download" data-hero-dl data-win="Download for Windows" data-mac="Download for Mac" data-linux="Download for Linux">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
           <span data-hero-label>Download for free</span>
         </a>
@@ -252,7 +252,7 @@
     </div>
     <div class="steps-wrap reveal">
       <div class="steps">
-        <div class="step"><h3>Download & install</h3><p>On Windows, run the installer. On a Mac, open the DMG and drag Daling into Applications.</p></div>
+        <div class="step"><h3>Download & install</h3><p>On Windows, run the installer. On a Mac, open the DMG and drag Daling into Applications. On Linux, make the AppImage executable and run it.</p></div>
         <div class="step"><h3>Add your school account</h3><p>Enter your LMS and school mail sign-in in Settings. Passwords are encrypted and stay on this computer.</p></div>
         <div class="step"><h3>Connect Google <small>(optional)</small></h3><p>Only if you want Drive and Calendar. Daling works fine without it.</p></div>
         <div class="step"><h3>That's it</h3><p>Dalgu gives you a tour on first launch. After that, just leave it running.</p></div>
@@ -268,7 +268,7 @@
       <h2>Runs only on your computer</h2>
       <p class="sub">There is no developer-operated server. Your files and account details are stored only on your computer and are never sent to the developer.</p>
       <ul class="checks">
-        <li>Passwords and API keys encrypted with Windows DPAPI or the macOS Keychain</li>
+        <li>Passwords and API keys encrypted with Windows DPAPI, the macOS Keychain or the Linux keyring</li>
         <li>No analytics, ads or usage tracking; nothing is ever sold</li>
         <li>Connecting Google is optional and can be revoked any time</li>
       </ul>
@@ -329,6 +329,29 @@
             </ol>
           </details>
         </div>
+        <div class="dl">
+          <div class="os">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m7 9 3 3-3 3M13 15h4"/></svg>
+            <h3>Linux</h3>
+            <span class="pill">Beta</span>
+          </div>
+          <p class="req">x86_64 · Ubuntu 22.04, Debian 12, Fedora 36 or newer · AppImage</p>
+          <a class="btn primary" href="https://github.com/tutleblue/dgist-lms-autosaver/releases/download/v1.12.21/daling-1.12.21-linux-x86_64.AppImage" data-dl="linux" download>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
+            Download for Linux
+          </a>
+          <p class="ver" data-ver="linux" data-fmt="Version {v} · {mb} MB">Version 1.12.21 · AppImage</p>
+          <p class="ver" data-mac-note>Google Drive and Calendar connection isn't available in this beta yet; it arrives in the next build.</p>
+          <p class="ver">Prefer an install? Get the <a href="https://github.com/tutleblue/dgist-lms-autosaver/releases/download/v1.12.21/daling-1.12.21-linux-x86_64.tar.gz" data-dl="linux-tar">.tar.gz</a> (extract and run <code>./install.sh</code>)</p>
+          <details>
+            <summary>How to run it</summary>
+            <ol>
+              <li>Make it executable: <code>chmod +x daling-*.AppImage</code></li>
+              <li>Double-click it, or run <code>./daling-*.AppImage</code></li>
+              <li>If system libraries for the LMS sign-in browser are missing, the app shows the command to install them.</li>
+            </ol>
+          </details>
+        </div>
       </div>
     </div>
   </div>
@@ -343,10 +366,11 @@
     <div class="faq reveal">
       <details><summary>Is it free?</summary><p>Yes. No ads, no payments, and the source code is public.</p></details>
       <details><summary>Is this an official DGIST app?</summary><p>No. It's an unofficial app made by a DGIST student and is not made or operated by DGIST. Always double-check important deadlines and notices on the LMS and official channels.</p></details>
-      <details><summary>Can the developer see my password?</summary><p>No. Passwords are encrypted on your computer (Windows DPAPI, macOS Keychain) and never sent anywhere. The app signs in to the school servers (LMS, mail) directly.</p></details>
+      <details><summary>Can the developer see my password?</summary><p>No. Passwords are encrypted on your computer (Windows DPAPI, macOS Keychain, Linux keyring) and never sent anywhere. The app signs in to the school servers (LMS, mail) directly.</p></details>
       <details><summary>Why does it ask for Google permissions?</summary><p>To upload course files to your Drive (<code>drive.file</code>, limited to files the app creates) and add deadlines and events to your Calendar. It's optional, and you can revoke access any time under <a href="https://myaccount.google.com/connections">Google Account → Third-party connections</a>.</p></details>
       <details><summary>macOS says the app "is damaged and can't be opened".</summary><p>That's the quarantine flag macOS adds to downloads. Run <code>xattr -dr com.apple.quarantine /Applications/Daling.app</code> in Terminal and open it again.</p></details>
-      <details><summary>Does uninstalling delete my files?</summary><p>No. Files and settings stay in the data folder (Windows <code>C:\lms-autosaver</code>, Mac <code>~/.lms-autosaver</code>). Delete that folder if you no longer need it.</p></details>
+      <details><summary>The AppImage won't start on Linux.</summary><p>Make it executable first with <code>chmod +x</code>. If it still doesn't start, extract the <code>.tar.gz</code> and run <code>./install.sh</code>, then open Daling from your app menu. Korean input works with ibus.</p></details>
+      <details><summary>Does uninstalling delete my files?</summary><p>No. Files and settings stay in the data folder (Windows <code>C:\lms-autosaver</code>, Mac and Linux <code>~/.lms-autosaver</code>). Delete that folder if you no longer need it.</p></details>
       <details><summary>Where do I send feedback or bug reports?</summary><p>Use the "Feedback" button at the bottom left of the app, or write to <a href="mailto:tutleblue12@gmail.com">tutleblue12@gmail.com</a>.</p></details>
     </div>
   </div>
@@ -383,7 +407,8 @@
   }
 
   const ua = navigator.userAgent;
-  const os = /Windows/i.test(ua) ? "win" : /Macintosh|Mac OS X/i.test(ua) && !/iPhone|iPad|Mobile/i.test(ua) ? "mac" : "";
+  const os = /Windows/i.test(ua) ? "win" : /Macintosh|Mac OS X/i.test(ua) && !/iPhone|iPad|Mobile/i.test(ua) ? "mac"
+    : /Linux|X11/i.test(ua) && !/Android|Mobile/i.test(ua) ? "linux" : "";
   const hero = document.querySelector("[data-hero-dl]");
   const pointHero = () => {
     const link = os && document.querySelector(`[data-dl="${os}"]`);
@@ -413,6 +438,8 @@
       };
       set("win", pick(/^(bungeoppang|daling)-[\d.]+-win-x64-setup\.exe$/i, false));
       set("mac", pick(/^daling-[\d.]+-mac-arm64\.dmg$/i, true));
+      set("linux", pick(/^daling-[\d.]+-linux-x86_64\.AppImage$/i, true));
+      set("linux-tar", pick(/^daling-[\d.]+-linux-x86_64\.tar\.gz$/i, true));
       pointHero();
     })
     .catch(() => {});
