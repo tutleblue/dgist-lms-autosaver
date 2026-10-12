@@ -39,6 +39,10 @@
     --accent: #e08a6c;
     --accent-ink: #f0a487;
     --accent-soft: #3a2a23;
+    --green: #8fbf95;
+    --blue: #8fb0d0;
+    --amber: #d9a93f;
+    --violet: #a98be6;
     --shadow-lg: 0 1px 2px rgba(0,0,0,.3), 0 24px 60px -24px rgba(0,0,0,.7);
     --shadow-md: 0 1px 2px rgba(0,0,0,.25), 0 12px 32px -16px rgba(0,0,0,.6);
   }
@@ -159,8 +163,8 @@ section { position: relative; }
 .feature.flip { grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); }
 .feature.flip > .copy { order: 2; }
 .feature h3 { font-family: var(--font-serif); font-size: clamp(1.4rem, 2.6vw, 1.9rem); line-height: 1.35; letter-spacing: -.015em; margin: 0 0 12px; }
-.feature .tag { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; font-size: .85rem; color: var(--c, var(--accent-ink)); margin: 0 0 12px; }
-.feature .tag::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+.feature .tag, .tip-hero .tag, .tip .tag { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; font-size: .85rem; color: var(--c, var(--accent-ink)); margin: 0 0 12px; }
+.feature .tag::before, .tip-hero .tag::before, .tip .tag::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
 .feature p { color: var(--muted); margin: 0 0 14px; }
 .checks { list-style: none; padding: 0; margin: 0; display: grid; gap: 9px; }
 .checks li { position: relative; padding-left: 28px; }
@@ -169,7 +173,9 @@ section { position: relative; }
 .checks small { color: var(--faint); }
 @media (max-width: 900px) { .feature, .feature.flip { grid-template-columns: minmax(0, 1fr); gap: 26px; } .feature.flip > .copy { order: 0; } }
 
-.extras { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: 36px; }
+.block-title { font-family: var(--font-serif); font-size: clamp(1.2rem, 2.2vw, 1.45rem); letter-spacing: -.01em; text-align: center; margin: 0; }
+.more { border-top: 1px solid var(--line); padding-top: 48px; margin-top: 4px; }
+.extras { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: 22px; }
 .extra { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px; }
 .extra b { display: block; margin-bottom: 4px; }
 .extra span { color: var(--muted); font-size: .94rem; }
@@ -179,31 +185,29 @@ section { position: relative; }
 /* ── 꿀기능 ── */
 .tip-hero { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 8fr); gap: 40px; align-items: center;
   background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 28px; margin-top: 28px; box-shadow: var(--shadow-md); }
-.tip-hero .tag { display: inline-block; font-weight: 700; font-size: .82rem; color: var(--accent-ink); background: var(--accent-soft);
-  padding: 4px 10px; border-radius: 999px; margin: 0 0 10px; }
 .tip-hero h3 { font-family: var(--font-serif); font-size: clamp(1.25rem, 2.2vw, 1.55rem); line-height: 1.4; margin: 0 0 10px; letter-spacing: -.01em; }
 .tip-hero p { color: var(--muted); margin: 0; }
+.tip-hero .checks { gap: 8px; }
+.tip-hero .checks li { color: var(--muted); }
+.tip-hero .checks b { color: var(--ink); }
+.strips { display: grid; gap: 14px; }
 /* 가로로 긴 화면 띠는 글 아래 전체 폭으로 (옆에 두면 글자가 너무 작아진다) */
 .tip-hero.stack { grid-template-columns: minmax(0, 1fr); gap: 20px; }
 .tip-hero.stack .copy { max-width: 46em; }
 .shot-strip { margin: 0; border-radius: 12px; overflow: hidden; border: 1px solid var(--line); background: #faf9f5; }
 .shot-strip img { width: 100%; height: auto; }
-.tips { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: 28px; }
-.tip { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px; }
+.tips { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-top: 18px; }
+.tip { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px; display: flex; flex-direction: column; }
+.tip .tag { margin-bottom: 6px; font-size: .8rem; }
 .tip b { display: block; margin-bottom: 4px; }
-.tip span { color: var(--muted); font-size: .94rem; }
+.tip > span { color: var(--muted); font-size: .94rem; }
+.tip > .svc { display: flex; flex-wrap: wrap; gap: 10px; margin-top: auto; padding-top: 14px; }
+.tip > .svc .logo { width: 22px; height: 22px; margin: 0; }
 .tip small { color: var(--faint); }
-@media (max-width: 900px) { .tip-hero { grid-template-columns: minmax(0, 1fr); gap: 18px; padding: 22px; } .tips { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 1000px) { .tips { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 900px) { .tip-hero { grid-template-columns: minmax(0, 1fr); gap: 18px; padding: 22px; } }
 @media (max-width: 520px) { .tips { grid-template-columns: minmax(0, 1fr); } .tip-hero { padding: 18px; } }
 
-/* ── 왜 편한가 ── */
-.values { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; margin-top: 40px; }
-.value { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 26px 24px; box-shadow: var(--shadow-md); }
-.value .num { font-family: var(--font-serif); font-size: 2.2rem; font-weight: 700; color: var(--accent); line-height: 1; margin: 0 0 6px; }
-.value .num small { font-size: 1rem; color: var(--muted); font-weight: 600; margin-left: 4px; }
-.value h3 { font-size: 1.15rem; margin: 10px 0 6px; }
-.value p { color: var(--muted); margin: 0; font-size: .97rem; }
-@media (max-width: 860px) { .values { grid-template-columns: minmax(0, 1fr); } }
 
 /* ── 시작하기 ── */
 .steps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; margin-top: 40px; counter-reset: step; }
@@ -213,6 +217,9 @@ section { position: relative; }
 .step h3 { font-size: 1.08rem; margin: 0 0 6px; }
 .step p { color: var(--muted); margin: 0; font-size: .95rem; }
 .steps-wrap { position: relative; }
+.start { margin-top: 64px; }
+.steps.three { grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 22px; }
+@media (max-width: 860px) { .steps.three { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 960px) { .steps { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 520px) { .steps { grid-template-columns: minmax(0, 1fr); } }
 
@@ -242,6 +249,7 @@ section { position: relative; }
 .dl details { font-size: .92rem; color: var(--muted); }
 .dl details summary { cursor: pointer; color: var(--ink); font-weight: 600; }
 .dl details ol { margin: 8px 0 0; padding-left: 1.2em; }
+.dl-note { text-align: center; color: var(--faint); font-size: .9rem; margin: 18px 0 0; }
 .downloads-wrap { position: relative; }
 @media (max-width: 1000px) { .downloads { grid-template-columns: minmax(0, 1fr); } }
 
@@ -296,15 +304,13 @@ th { background: var(--surface-soft); font-weight: 600; }
   .nav .btn { width: auto; }
 }
 
-/* ── 로고 (Windows·Apple·Linux·Google·Drive·Calendar·클라우드) ──
+/* ── 로고 ── 내려받기(운영체제)·권한 표(Drive·Calendar)·Google 연결·지원 클라우드 목록에만 쓴다.
+   첫 화면과 본문 글 사이에는 넣지 않는다 (2026-10-13 사용자: 로고를 다 끌어다 붙일 필요 없음).
    글자 높이에 맞춰 이름 바로 앞에 붙인다. Apple·Linux 는 글자색(currentColor)이라 어두운 테마에서도 보인다. */
 .logo { display: inline-flex; align-items: center; justify-content: center; width: 1.08em; height: 1.08em;
   vertical-align: -0.17em; margin-right: .32em; flex: none; }
 .logo svg { width: 100%; height: 100%; display: block; }
-.logo-row { display: inline-flex; gap: .22em; margin-right: .4em; vertical-align: -0.17em; }
-.logo-row .logo { margin-right: 0; }
 .dl .os .os-logo { width: 30px; height: 30px; margin: 0; vertical-align: 0; }
 .dl .os .os-logo svg { width: 30px; height: 30px; }
 .btn .btn-logo { width: 18px; height: 18px; margin: 0; vertical-align: 0; }
-.faq summary > span { display: inline; }
-.tip b .logo, .step h3 .logo, .perm .row b .logo { width: 1.15em; height: 1.15em; }
+.step h3 .logo, .perm .row b .logo { width: 1.15em; height: 1.15em; }
