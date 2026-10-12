@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Name=Daling
+GenericName=DGIST LMS assistant
+GenericName[ko]=DGIST LMS 도우미
+Comment=LMS materials, assignment deadlines and school mail in one place
+Comment[ko]=LMS 강의자료·과제 마감·학교 메일을 한곳에서
+Exec=daling
+Icon=daling
+Terminal=false
+Categories=Education;
+Keywords=DGIST;LMS;Blackboard;
+StartupWMClass=daling
+StartupNotify=true

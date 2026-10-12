@@ -10,6 +10,7 @@
   4) 설치 파일을 /SILENT 로 실행하고 앱은 스스로 끈다. 설치가 끝나면 설치 프로그램이 앱을 다시 켠다(/RELAUNCH=1)
 
 맥(Daling.app)은 1) 만 하고 daling-<버전>-mac-arm64.dmg 를 찾아, '지금 업데이트' 를 누르면 그 주소를 브라우저로 연다.
+리눅스도 같다: daling-<버전>-linux-x86_64.AppImage 를 찾아 브라우저로 연다 (.github/workflows/linux.yml 이 만든다).
 
 예전 방식(저장소 main 의 VERSION 과 비교)은 저장소가 1.8.6 에 멈춰 있어 늘 '최신' 으로 나왔다(2026-09-28).
 """
@@ -39,7 +40,22 @@ MAC_ASSET_PATTERN = re.compile(r"^daling-[\d.]+-mac-arm64\.dmg$")
 # 맥에서 앱이 스스로 덮어쓰지 않는 까닭: ad-hoc 서명이라 받은 DMG 가 진짜인지 macOS 공증으로 확인할 수 없고,
 # 응용 프로그램 폴더의 앱을 켜 둔 채 바꾸면 서명이 깨져 다음 실행이 막힌다. 내려받을 곳만 열어 준다.
 MAC_MANUAL_NOTE = "맥에서는 새 DMG 를 내려받아 Daling 을 응용 프로그램 폴더에 다시 끌어다 놓으면 바뀌어요"
+MAC_MISSING_NOTE = "맥용 새 버전 파일이 아직 올라오지 않았어요"
+# 리눅스 빌드(.github/workflows/linux.yml)가 만드는 AppImage. 리눅스 앱도 스스로 덮어쓰지 않는다:
+# AppImage 는 켜 둔 동안 읽기 전용으로 마운트돼 있고, tar.gz 로 깐 사람은 ~/.local/opt 에 있어 어느 쪽을 바꿀지 앱이 모른다.
+LINUX_ASSET_PATTERN = re.compile(r"^daling-[\d.]+-linux-x86_64\.AppImage$")
+LINUX_MANUAL_NOTE = "리눅스에서는 새 AppImage 를 내려받아 실행 권한을 주고 예전 파일과 바꾸면 돼요"
+LINUX_MISSING_NOTE = "리눅스용 새 버전 파일이 아직 올라오지 않았어요"
 _last_manual_url = ""
+
+
+def _manual_platform() -> bool:
+    """스스로 설치하지 않고 내려받을 곳만 열어 주는 운영체제 (맥·리눅스)."""
+    return sys.platform == "darwin" or sys.platform.startswith("linux")
+
+
+def _manual_note() -> str:
+    return MAC_MANUAL_NOTE if sys.platform == "darwin" else LINUX_MANUAL_NOTE
 # 설치 파일만 받는다. 다른 호스트로 넘어가는 주소는 쓰지 않는다 (GitHub 이 저장소를 옮기는 곳은 이 둘)
 ALLOWED_DOWNLOAD_HOSTS = ("github.com", "objects.githubusercontent.com", "release-assets.githubusercontent.com")
 VERSION_FILE = PROJECT_ROOT / "VERSION"
@@ -70,7 +86,13 @@ def _get_json(url: str) -> dict:
 
 def _pick_asset(release: dict) -> dict | None:
     # 맥은 맥용 DMG 만 본다. 릴리스에 DMG 가 없으면 '새 버전 없음' 으로 보인다 (깔 수 없는 것을 권하지 않게).
-    pattern = MAC_ASSET_PATTERN if sys.platform == "darwin" else ASSET_PATTERN
+    # 리눅스도 같은 까닭으로 리눅스용 AppImage 만 본다.
+    if sys.platform == "darwin":
+        pattern = MAC_ASSET_PATTERN
+    elif sys.platform.startswith("linux"):
+        pattern = LINUX_ASSET_PATTERN
+    else:
+        pattern = ASSET_PATTERN
     for asset in release.get("assets") or []:
         if pattern.match(str(asset.get("name", ""))):
             return asset
@@ -132,28 +154,29 @@ def check_update() -> dict:
         "canInstall": bool(getattr(sys, "frozen", False)) and os.name == "nt",
         "repo": REPO,
     }
-    if sys.platform == "darwin":
+    if _manual_platform():
         # 화면(app.js checkForUpdate)은 manualUrl 이 있으면 '지금 업데이트' 를 눌렀을 때 설치 대신 이 주소를 연다
         url =str((asset or {}).get("browser_download_url") or release.get("html_url") or "")
         _last_manual_url = url if available and _allowed_host(url) else ""
         result["manualUrl"] = _last_manual_url
-        result["manualNote"] = MAC_MANUAL_NOTE
+        result["manualNote"] = _manual_note()
     return result
 
 
 def open_manual_download() -> dict:
-    """맥: 최신 맥용 DMG 를 기본 브라우저로 연다. 주소는 화면이 아니라 마지막 확인 결과에서 꺼낸다."""
-    if sys.platform != "darwin":
+    """맥·리눅스: 최신 DMG·AppImage 를 기본 브라우저로 연다. 주소는 화면이 아니라 마지막 확인 결과에서 꺼낸다."""
+    if not _manual_platform():
         return {"ok": False, "message": "설치형 앱에서만 자동으로 업데이트해요"}
     url = _last_manual_url or str(check_update().get("manualUrl") or "")
     if not url:
-        return {"ok": False, "message": "맥용 새 버전 파일이 아직 올라오지 않았어요"}
+        return {"ok": False, "message": MAC_MISSING_NOTE if sys.platform == "darwin" else LINUX_MISSING_NOTE}
     if not _allowed_host(url):
         return {"ok": False, "message": f"허용되지 않은 다운로드 주소입니다: {urlparse(url).hostname}"}
     import webbrowser
 
+    # 리눅스 묶음에서는 app.py 가 webbrowser 를 원래 환경의 xdg-open 으로 돌려 둔다 (linux_support.register_system_browser)
     opened = webbrowser.open(url)
-    return {"ok": True, "url": url, "opened": opened, "message": MAC_MANUAL_NOTE}
+    return {"ok": True, "url": url, "opened": opened, "message": _manual_note()}
 
 
 # 내려받기·설치 진행 (화면이 물어 볼 수 있게)
@@ -260,9 +283,9 @@ def _run_update(on_ready_to_exit) -> None:
 
 def apply_update(on_ready_to_exit=None) -> dict:
     """설치형 앱: 최신 설치 파일을 받아 확인한 뒤 설치를 시작한다(뒤에서 돈다)."""
-    if sys.platform == "darwin":
-        # 맥은 설치 파일을 돌리지 않는다 (MAC_MANUAL_NOTE). 화면은 open_manual_download 를 부른다.
-        return {"ok": False, "manual": True, "message": MAC_MANUAL_NOTE}
+    if _manual_platform():
+        # 맥·리눅스는 설치 파일을 돌리지 않는다 (MAC_MANUAL_NOTE·LINUX_MANUAL_NOTE). 화면은 open_manual_download 를 부른다.
+        return {"ok": False, "manual": True, "message": _manual_note()}
     if not (getattr(sys, "frozen", False) and os.name == "nt"):
         return {"ok": False, "message": "소스로 실행 중이면 git pull 로 받아 주세요. 설치형 앱에서만 자동 업데이트합니다."}
     with _job_lock:

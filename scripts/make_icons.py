@@ -7,6 +7,7 @@
 
     python scripts/make_icons.py      (시스템 파이썬의 Pillow. 앱에는 필요 없다)
     python scripts/make_icons.py --mac   맥 앱 아이콘(packaging/mac/Daling.icns)만 다시 만든다
+    python scripts/make_icons.py --linux 리눅스 아이콘(packaging/linux/daling-128·256·512.png)만 다시 만든다
 
 - 맥 아이콘(.icns)은 Windows 처럼 타일을 꽉 채우면 Dock 에서 다른 앱보다 한 치수 크게 보인다.
   애플 격자(1024 안에 824 네모, 둘레 100 여백)대로 여백을 두고 같은 타일을 얹는다.
@@ -125,6 +126,28 @@ def save_mac_icns(mask: Image.Image) -> None:
     frames[-1].save(MAC_ICNS, format="ICNS", append_images=frames[:-1])
 
 
+LINUX_DIR = ROOT / "packaging" / "linux"
+LINUX_SIZES = (128, 256, 512)
+# 리눅스 데스크톱(GNOME·KDE) 앱 아이콘은 캔버스를 꽉 채우지 않고 둘레에 조금 여백을 둔다 (GNOME 아이콘 격자 128 안 112 정도).
+# 꽉 채우면 독·앱 목록에서 다른 앱보다 커 보인다 — 맥(.icns)과 같은 까닭, 여백은 맥보다 적다.
+LINUX_INNER = 112 / 128
+
+
+def save_linux_pngs(mask: Image.Image) -> list[Path]:
+    """AppImage(.DirIcon·hicolor)와 tar.gz 의 install.sh 가 쓰는 PNG. CI 에는 원본 그림이 없을 수 있어 저장소에 둔다."""
+    LINUX_DIR.mkdir(parents=True, exist_ok=True)
+    out = []
+    for size in LINUX_SIZES:
+        inner = round(size * LINUX_INNER)
+        canvas = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+        off = (size - inner) // 2
+        canvas.alpha_composite(tile(inner, mask), (off, off))
+        path = LINUX_DIR / f"daling-{size}.png"
+        canvas.save(path, optimize=True)
+        out.append(path)
+    return out
+
+
 def main() -> None:
     import sys
 
@@ -132,6 +155,10 @@ def main() -> None:
     if "--mac" in sys.argv[1:]:
         save_mac_icns(mask)
         print(f"{MAC_ICNS.relative_to(ROOT)} 를 만들었습니다.")
+        return
+    if "--linux" in sys.argv[1:]:
+        paths = save_linux_pngs(mask)
+        print(", ".join(str(p.relative_to(ROOT)) for p in paths), "를 만들었습니다.")
         return
 
     tile(256, mask).save(WEB / "app.png")

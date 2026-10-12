@@ -61,10 +61,19 @@ def parse_dgist_slots(text: str) -> list[dict[str, Any]]:
 
 
 async def _fetch_everytime(url: str, timeout_ms: int = 25000) -> list[dict[str, Any]]:
+    import sys
+
     from playwright.async_api import async_playwright
 
+    env = None  # None = 지금 환경 그대로 (Windows·맥은 예전과 같다)
+    if sys.platform.startswith("linux"):
+        # 화면 서버 안에서 돈다. 리눅스 묶음 앱이면 크로미움에 묶음 라이브러리 경로를 물려주지 않는다
+        from browser_setup import launch_env
+
+        env = launch_env()
+
     async with async_playwright() as pw:
-        browser = await pw.chromium.launch(headless=True)
+        browser = await pw.chromium.launch(headless=True, env=env)
         try:
             page = await browser.new_page()
             await page.goto(url, wait_until="networkidle", timeout=timeout_ms)

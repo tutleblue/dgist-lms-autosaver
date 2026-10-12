@@ -1,0 +1,66 @@
+# 리눅스(x86_64) 빌드용 고정 버전 — .github/workflows/linux.yml 이 ubuntu-22.04·Python 3.13 으로 쓴다.
+# 공통 판은 requirements-mac.txt 와 같다 (그쪽은 requirements-build.txt = Windows .venv 의 pip freeze 에서 왔다).
+# Windows 전용(pythonnet·winotify·winrt-*)·맥 전용(pyobjc·macholib)은 빼고, 리눅스 창(Qt)과 키링(Secret Service)을 더했다.
+altgraph==0.17.5
+annotated-types==0.8.0
+anyio==4.14.2
+bottle==0.13.4
+certifi==2026.7.22
+cffi==2.1.1
+charset-normalizer==3.5.1
+cryptography==50.0.0
+distro==1.9.0
+google-api-core==2.34.0
+google-api-python-client==2.199.0
+google-auth==2.56.3
+google-auth-httplib2==0.4.1
+google-auth-oauthlib==1.4.0
+google-genai==2.19.0
+googleapis-common-protos==1.75.1
+greenlet==3.5.5
+h11==0.16.0
+httpcore==1.0.9
+httplib2==0.32.0
+httpx==0.28.1
+idna==3.19
+oauthlib==3.3.1
+packaging==26.3
+playwright==1.62.0
+proto-plus==1.28.3
+protobuf==7.36.0
+proxy_tools==0.1.0
+pyasn1==0.6.4
+pyasn1_modules==0.4.2
+pycparser==3.0
+pydantic==2.13.4
+pydantic_core==2.46.4
+pyee==13.0.1
+pyinstaller==6.22.2
+pyinstaller-hooks-contrib==2026.6
+pyparsing==3.3.2
+pywebview==6.2.1
+requests==2.34.2
+requests-oauthlib==2.0.0
+schedule==1.2.2
+setuptools==84.0.0
+sniffio==1.3.1
+tenacity==9.1.4
+typing-inspection==0.4.4
+typing_extensions==4.16.0
+uritemplate==4.2.0
+urllib3==2.7.0
+websockets==16.1.1
+
+# 리눅스 전용 --------------------------------------------------------------
+# pywebview 의 Qt 창 (pywebview[qt6] 이 요구하는 목록). 휠이 Qt·QtWebEngine 을 스스로 싣고 있어 묶을 수 있다.
+# 6.10 부터 휠이 manylinux_2_34(glibc 2.34) — Ubuntu 22.04(2.35)·Debian 12(2.36)·Fedora 36(2.35) 에서 돈다.
+# PyQt6-Qt6 와 PyQt6-WebEngine-Qt6 은 같은 Qt 판(6.11.2)이어야 한다.
+PyQt6==6.11.0
+PyQt6-Qt6==6.11.2
+PyQt6-sip==13.12.0
+PyQt6-WebEngine==6.11.0
+PyQt6-WebEngine-Qt6==6.11.2
+QtPy==2.4.3
+# 비밀 설정을 GNOME 키링·KWallet(Secret Service)에 (linux_secrets.py). 순수 파이썬 D-Bus 라 묶어도 그대로 돈다
+SecretStorage==3.5.0
+jeepney==0.9.0

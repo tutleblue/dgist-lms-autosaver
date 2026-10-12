@@ -29,6 +29,8 @@ from typing import Any
 import urllib.request
 from urllib.parse import parse_qs, quote, urlencode, urlparse
 
+import secret_store
+
 
 def _bundle_root() -> Path:
     """소스로 돌 때와 EXE로 묶였을 때 모두 맞는 '앱 파일이 있는 곳'.
@@ -425,9 +427,7 @@ def save_config_dict(workspace: UserWorkspace, values: dict[str, Any]) -> None:
         elif not raw and _use_keychain():
             # 설정에서 지운 비밀 값은 키체인에서도 뺀다 (config.json 만 비우면 키체인에 남는다)
             try:
-                import mac_keychain
-
-                mac_keychain.forget(key)
+                secret_store.forget(key)
             except Exception:
                 pass
     workspace.root.mkdir(parents=True, exist_ok=True)
@@ -1736,6 +1736,16 @@ def documents_dir() -> Path:
                 return path
         except Exception:
             pass
+    if sys.platform.startswith("linux"):
+        # 리눅스는 언어에 따라 문서 폴더 이름이 다르다 (한국어 우분투는 ~/문서). user-dirs.dirs 에 적힌 것을 따른다.
+        try:
+            import linux_support
+
+            found = linux_support.xdg_user_dir("DOCUMENTS")
+            if found is not None:
+                return found
+        except Exception:
+            pass
     return Path.home() / "Documents"
 
 
@@ -2101,29 +2111,28 @@ SECRET_KEYS = (
 DPAPI_PREFIX = "dpapi:"
 # macOS 에는 DPAPI 가 없다. 예전에는 그래서 비밀번호가 config.json 에 평문으로 남았다.
 # 맥에서는 값을 로그인 키체인에 두고 config.json 에는 'keychain:<키>' 표시만 적는다 (mac_keychain.py).
-# runtime_config 도 같은 표시를 풀어야 작업 프로세스가 표시 문자열을 비밀번호로 쓰지 않는다.
-KEYCHAIN_PREFIX = "keychain:"
-# Windows 는 예전과 똑같이 'dpapi:' 만 본다
-_SECRET_PREFIXES = (DPAPI_PREFIX, KEYCHAIN_PREFIX) if sys.platform == "darwin" else (DPAPI_PREFIX,)
+# 리눅스는 Secret Service 에 같은 'keychain:<키>', 그걸 못 쓰면 0600 파일에 'secretfile:<키>' (linux_secrets.py).
+# 둘 다 secret_store 를 거친다. runtime_config 도 같은 표시를 풀어야 작업 프로세스가 표시 문자열을 비밀번호로 쓰지 않는다.
+KEYCHAIN_PREFIX = secret_store.KEYCHAIN_PREFIX
+# Windows 는 예전과 똑같이 'dpapi:' 만 본다 (secret_store.prefixes() 가 비어 있다)
+_SECRET_PREFIXES = (DPAPI_PREFIX, *secret_store.prefixes())
 
 
 def _use_keychain() -> bool:
     # 여러 사람이 쓰는 호스팅 모드는 한 키체인을 나눠 쓸 수 없으니 예전 동작(평문)을 그대로 둔다
-    return sys.platform == "darwin" and not MULTI_USER_MODE
+    return secret_store.supported() and not MULTI_USER_MODE
 
 
 def dpapi_protect(text: str, key: str | None = None) -> str:
     """Windows DPAPI로 문자열을 암호화한다 (현재 사용자 계정에서만 복호 가능).
 
     실패하거나 Windows가 아니면 원문을 그대로 돌려준다 — 저장은 되어야 하므로.
-    macOS 는 key(설정 이름)를 받아 키체인에 넣고 'keychain:<key>' 를 돌려준다.
+    macOS·리눅스는 key(설정 이름)를 받아 키체인(Secret Service)에 넣고 표시를 돌려준다 (secret_store).
     키체인이 거절하면(사용자가 '거부') 위와 같은 까닭으로 원문을 남기고, 다음 저장 때 다시 넣어 본다.
     """
     if text and key and _use_keychain():
         try:
-            import mac_keychain
-
-            return mac_keychain.protect(key, text)
+            return secret_store.protect(key, text)
         except Exception:
             return text
     if os.name != "nt" or not text:
@@ -2152,12 +2161,10 @@ def dpapi_protect(text: str, key: str | None = None) -> str:
 
 
 def dpapi_unprotect(text: str) -> str:
-    """dpapi: 로 시작하면 복호화, 아니면 그대로 (평문 호환). 맥의 keychain: 표시는 키체인에서 꺼낸다."""
-    if sys.platform == "darwin" and isinstance(text, str) and text.startswith(KEYCHAIN_PREFIX):
+    """dpapi: 로 시작하면 복호화, 아니면 그대로 (평문 호환). 맥·리눅스의 표시는 secret_store 가 꺼낸다."""
+    if secret_store.is_marker(text):
         try:
-            import mac_keychain
-
-            return mac_keychain.unprotect(text)
+            return secret_store.unprotect(text)
         except Exception:
             return ""
     if not isinstance(text, str) or not text.startswith(DPAPI_PREFIX):
@@ -3519,6 +3526,12 @@ def _restart_process() -> None:
     try:
         entry = PROJECT_ROOT / "app.py"
         args = [sys.executable, str(entry)] if entry.exists() else [sys.executable, *sys.argv]
+        if sys.platform.startswith("linux") and getattr(sys, "frozen", False):
+            # AppImage: 안쪽 실행 파일은 이 프로세스가 끝나면 마운트와 함께 사라진다. .AppImage 파일을 다시 켠다
+            import linux_support
+
+            if linux_support.appimage_path():
+                args = [linux_support.appimage_path()]
         creation = 0
         if os.name == "nt":
             # 콘솔 창이 새로 뜨지 않게
@@ -5559,6 +5572,16 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             # os.startfile 은 윈도우에만 있다. 맥은 open, 리눅스는 xdg-open.
             if os.name == "nt":
                 os.startfile(str(download_path))
+            elif sys.platform.startswith("linux"):
+                # 묶은 앱의 라이브러리 경로를 파일 관리자에 물려주지 않게 (linux_support 머리말)
+                import linux_support
+
+                if not linux_support.open_external(str(download_path)):
+                    self.send_json(
+                        {"ok": False, "message": "다운로드 폴더를 열지 못했어요 (xdg-open 없음)"},
+                        HTTPStatus.BAD_REQUEST,
+                    )
+                    return
             else:
                 subprocess.Popen(["open" if sys.platform == "darwin" else "xdg-open", str(download_path)])
             self.send_json({"ok": True})

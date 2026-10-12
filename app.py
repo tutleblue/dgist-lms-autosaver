@@ -47,6 +47,18 @@ if sys.platform == "darwin" and not os.environ.get("SSL_CERT_FILE"):
     except Exception:
         pass
 
+if sys.platform.startswith("linux"):
+    # 리눅스 판: Qt 설정을 바꾸기 전 환경을 먼저 기억해 둔다 (시스템 프로그램에는 그것을 준다, linux_support 머리말)
+    import linux_support
+
+    if getattr(sys, "frozen", False) and not os.environ.get("SSL_CERT_FILE"):
+        # 묶은 파이썬의 OpenSSL 은 빌드한 Ubuntu 22.04 의 자리(/usr/lib/ssl)에서 인증서를 찾는다. 페도라 등에는 그 자리가
+        # 없어 학교 메일(IMAP)·업데이트 확인이 '인증서 확인 실패' 가 난다 (맥과 같은 문제). 시스템 CA 묶음을, 없으면 certifi 를.
+        # 작업 프로세스도 이 환경 변수를 물려받는다.
+        _ca = linux_support.pick_ca_file()
+        if _ca:
+            os.environ["SSL_CERT_FILE"] = _ca
+
 from http.server import ThreadingHTTPServer
 
 import web_ui
@@ -147,6 +159,13 @@ def notify(title: str, message: str) -> None:
                 [WINDOW_TITLE, title, message[:200]],
                 timeout=15,
             )
+        except Exception:
+            pass
+        return
+    if sys.platform.startswith("linux"):
+        # notify-send(libnotify)가 있으면 그것으로, 없으면 조용히 넘어간다. 글은 셸 없이 인자로 넘긴다.
+        try:
+            linux_support.notify(title, message[:200], icon=str(APP_ICON))
         except Exception:
             pass
         return
@@ -635,6 +654,13 @@ def run_worker(job: str) -> int:
     import asyncio
 
     _bind_worker_output()
+    if sys.platform.startswith("linux"):
+        # 작업이 띄우는 것(Playwright 의 node·크로미움, 구글 로그인 때 브라우저)은 모두 시스템 프로그램이다.
+        # 묶음 라이브러리 경로를 물려주지 않는다 (linux_support.use_system_env_for_children).
+        try:
+            linux_support.use_system_env_for_children()
+        except Exception:
+            pass
 
     try:
         if job == "sync":
@@ -699,6 +725,21 @@ def initial_window_size() -> tuple[int, int, int | None, int | None]:
         except Exception:
             pass
         return want_w, want_h, None, None
+    if sys.platform.startswith("linux"):
+        # 리눅스(Qt): 1366×768 노트북이 흔하다 — 위 Windows 실측과 같은 문제. Qt 에 화면을 물어 작업 영역에 맞춘다
+        # (여기서 QApplication 이 생기고 webview.start 가 같은 것을 다시 쓴다. Qt 를 못 띄우면 예외 → 기본 크기).
+        # 단위는 Qt 논리 픽셀이라 pywebview 의 width/height 와 같다. 자리는 비워 두면 pywebview(qt)가 가운데에 놓는다
+        # (Wayland 에서는 자리를 컴포지터가 정한다). Wayland 는 패널을 빼지 않은 크기를 주므로 위아래 여유를 더 둔다.
+        try:
+            import webview
+
+            area = webview.screens[0].frame.availableGeometry()
+            area_w, area_h = float(area.width()), float(area.height())
+            if area_w >= 400 and area_h >= 400:
+                return int(min(want_w, area_w - 40)), int(min(want_h, area_h - 80)), None, None
+        except Exception:
+            pass
+        return want_w, want_h, None, None
     if os.name != "nt":
         return want_w, want_h, None, None
     try:
@@ -725,8 +766,71 @@ def initial_window_size() -> tuple[int, int, int | None, int | None]:
         return want_w, want_h, None, None
 
 
+def run_in_browser(server, url: str, reason: str) -> None:
+    """리눅스: 창(Qt)을 띄울 수 없으면 기본 브라우저로 같은 화면을 연다.
+
+    화면 서버·예약 작업(메일·마감·자료)은 그대로 돌고, Ctrl+C·SIGTERM 을 받으면 끝난다(서버는 부른 쪽이 닫는다).
+    죽지 않고 이렇게 하는 까닭: ssh 로 붙은 서버, Qt 라이브러리가 빠진 최소 설치에서도 쓸 수는 있게.
+    """
+    import signal
+    import webbrowser
+
+    print(f"{WINDOW_TITLE}: 창을 띄우지 못해 기본 브라우저로 엽니다 ({reason}).", file=sys.stderr, flush=True)
+    print(f"{WINDOW_TITLE}: 주소 {url} · 끝내려면 Ctrl+C", file=sys.stderr, flush=True)
+    try:
+        webbrowser.open(url)
+    except Exception:
+        pass
+    notify(WINDOW_TITLE, "창을 띄우지 못해 기본 브라우저로 열었어요")
+    if server is None:
+        return  # 이미 켜진 Daling 이 서버를 맡고 있다. 브라우저만 열고 끝낸다
+    stop = threading.Event()
+
+    def _stop(_signum, _frame) -> None:
+        stop.set()
+
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        try:
+            signal.signal(sig, _stop)
+        except (ValueError, OSError):
+            pass
+    while not stop.wait(1.0):
+        pass
+
+
+def run_linux_window(webview, server, url: str) -> None:
+    """리눅스: pywebview 의 Qt(QtWebEngine) 창. 못 띄우면 run_in_browser 로. 끝나면 서버를 닫는다.
+
+    WebKitGTK 가 아니라 Qt 인 까닭: PyQt6·PyQt6-WebEngine 휠은 필요한 것을 스스로 싣고 있어 PyInstaller·AppImage 로
+    묶을 수 있다. WebKitGTK 는 도우미 프로세스 경로가 빌드 때 박혀 있어 묶으면 깨진다.
+    """
+    try:
+        problem = linux_support.display_problem()
+        if not problem:
+            width, height, x, y = initial_window_size()
+            webview.create_window(WINDOW_TITLE, url, width=width, height=height, x=x, y=y, min_size=(360, 560))
+            try:
+                webview.start(gui="qt", icon=str(APP_ICON) if APP_ICON.exists() else None)
+            except Exception as exc:
+                # PyQt6·QtWebEngine 을 불러오지 못함(시스템 라이브러리 빠짐 등). 화면 없이 죽는 대신 브라우저로
+                problem = f"{type(exc).__name__}: {exc}"
+        if problem:
+            run_in_browser(server, url, problem)
+    finally:
+        if server is not None:
+            server.shutdown()
+            server.server_close()
+
+
 def main() -> None:
     set_app_user_model_id()  # 창을 만들기 전에 (작업표시줄 아이콘 반영의 핵심)
+    if sys.platform.startswith("linux"):
+        # Qt 를 부르기 전에: Qt(PyQt6) 고르기·필요할 때만 크로미움 샌드박스 끄기(linux_support.prepare_qt 설명),
+        # 그리고 webbrowser 가 원래 환경의 xdg-open 을 쓰게 (구글 로그인·업데이트 받기·바깥 링크)
+        _sandbox_off = linux_support.prepare_qt()
+        if _sandbox_off:
+            print(f"{WINDOW_TITLE}: 웹 화면 샌드박스를 끕니다 ({_sandbox_off}).", file=sys.stderr, flush=True)
+        linux_support.register_system_browser()
     import webview
 
     try:
@@ -738,6 +842,9 @@ def main() -> None:
             ctypes.windll.user32.MessageBoxW(0, str(exc), WINDOW_TITLE, 0x10)
         else:
             print(f"{WINDOW_TITLE}: {exc}", file=sys.stderr)
+            if sys.platform.startswith("linux"):
+                # 메뉴에서 켠 앱은 stderr 를 아무도 안 본다. 알림으로라도 까닭을 보여 준다
+                notify(WINDOW_TITLE, str(exc))
             if sys.platform == "darwin":
                 # Finder 에서 켠 앱은 stderr 를 아무도 안 본다. 창이 안 뜬 까닭을 알림 상자로 보여 준다.
                 try:
@@ -762,6 +869,9 @@ def main() -> None:
         # 켤 때마다 띄우던 '48시간 마감 요약' 은 없앴다. 마감 알림(하루·3시간·1시간 전)이 대신한다.
 
     url = f"http://{HOST}:{PORT}"
+    if sys.platform.startswith("linux"):
+        run_linux_window(webview, server, url)
+        return
     width, height, x, y = initial_window_size()
     webview.create_window(
         WINDOW_TITLE,

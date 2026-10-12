@@ -1,0 +1,312 @@
+# Daling 리눅스(x86_64) 빌드 — AppImage 와 tar.gz
+#
+# 왜 CI 에서 만드나: 개발 PC 는 Windows 뿐이라 리눅스 앱은 GitHub 의 ubuntu-22.04 에서만 묶고 시험한다.
+# 왜 22.04 인가: 묶은 파이썬·라이브러리는 빌드한 곳의 glibc(2.35) 이상을 요구한다. 대상(Ubuntu 22.04+·Debian 12+·
+#   Fedora 36+) 중 가장 오래된 곳에서 묶어야 모두에서 돈다. PyQt6 6.10+ 휠은 glibc 2.34 이상.
+# 흐름: PyInstaller(packaging/linux/daling-linux.spec) → node 실행 권한 → 실제 앱을 Xvfb 에서 띄워 화면 서버·창·스크린샷
+#       → 창 없는 점검(--autosaver-smoke) → (키링 왕복) → AppImage(daling-<버전>-linux-x86_64.AppImage) 와 점검
+#       → tar.gz(daling-<버전>-linux-x86_64.tar.gz, install.sh 포함) 와 설치 점검 → 아티팩트
+#  - build/linux 브랜치에 올리거나 Actions 탭에서 수동 실행(workflow_dispatch). 릴리스는 만들지 않는다.
+#    (앱의 업데이트 확인 updater.py 는 GitHub 릴리스에 이 이름의 AppImage 가 붙어 있어야 리눅스에 새 버전을 알린다)
+#  - AppImage 는 공식 appimagetool(정적 type2 런타임)로 만든다. 받는 사람에게 libfuse2 가 없어도 된다.
+#
+# 필요한 저장소 설정 (Settings → Secrets and variables → Actions, 없으면 빼고 빌드):
+#  secrets.GOOGLE_CLIENT_JSON   google_client.json 내용 (데스크톱 OAuth 클라이언트)
+#  secrets.DGIST_API_KEY        공공데이터포털 인증키 → public_data_key.txt
+name: linux
+
+on:
+  push:
+    branches: ["build/linux"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: linux-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    # 명시하면 -eo pipefail 로 돈다. `점검 | tee 로그` 에서 점검이 실패하면 단계도 실패해야 한다
+    shell: bash
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    env:
+      PYTHONUTF8: "1"
+      LANG: C.UTF-8
+      LC_ALL: C.UTF-8
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: requirements-linux.txt
+
+      - name: 시스템 패키지 (Qt 창·QtWebEngine·Xvfb·스크린샷·키링)
+        run: |
+          sudo apt-get update
+          # PyInstaller 는 빌드 기계에 있는 라이브러리만 묶는다. Qt 의 X11(xcb) 플러그인이 쓰는 libxcb-* 중
+          # 데스크톱에 기본으로 없는 것(cursor·icccm·image·keysyms·render-util·xinerama·util)도 여기서 깔아 묶음에 넣는다.
+          sudo apt-get install -y --no-install-recommends \
+            xvfb xauth x11-utils imagemagick \
+            libxkbcommon0 libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 \
+            libxcb-randr0 libxcb-render-util0 libxcb-xinerama0 libxcb-shape0 libxcb-xkb1 libxcb-xfixes0 \
+            libxcb-shm0 libxcb-sync1 libxcb-util1 libxcb-xinput0 \
+            libegl1 libgl1 libopengl0 libglx-mesa0 libgl1-mesa-dri libgbm1 libdrm2 \
+            libnss3 libnspr4 libxcomposite1 libxdamage1 libxrandr2 libxtst6 libxkbfile1 libxshmfence1 \
+            libasound2 libdbus-1-3 libfontconfig1 \
+            fonts-nanum \
+            dbus gnome-keyring libnotify-bin xdg-utils \
+            desktop-file-utils file
+          xvfb-run --help > /dev/null
+
+      - name: 패키지 설치
+        run: |
+          python -m pip install -r requirements-linux.txt
+          python -c "import platform, sys; print(sys.version, platform.machine(), platform.libc_ver())"
+          python -c "from PyQt6 import QtCore, QtWebEngineWidgets; print('Qt', QtCore.qVersion(), 'PyQt', QtCore.PYQT_VERSION_STR)"
+
+      - name: 빌드 준비물 (Google 클라이언트, 공공데이터 키)
+        env:
+          GOOGLE_CLIENT_JSON: ${{ secrets.GOOGLE_CLIENT_JSON }}
+          DGIST_API_KEY: ${{ secrets.DGIST_API_KEY }}
+        run: |
+          # release.yml·mac.yml 과 같은 규칙: 있으면 파일로 만들고(키는 앞뒤 공백 제거), 없으면 빼고 빌드한다
+          python - <<'PY'
+          import os, pathlib
+          key = os.environ.get("DGIST_API_KEY", "").strip()
+          if key:
+              pathlib.Path("public_data_key.txt").write_text(key, encoding="utf-8")
+          else:
+              print("DGIST_API_KEY 없음 — 공공데이터 기본 키 없이 빌드")
+          client = os.environ.get("GOOGLE_CLIENT_JSON", "")
+          if client:
+              pathlib.Path("google_client.json").write_text(client, encoding="utf-8")
+          else:
+              print("GOOGLE_CLIENT_JSON 없음 — 로그인 준비물 없이 빌드")
+          PY
+
+      - name: 버전
+        id: ver
+        run: |
+          v="$(tr -d '[:space:]' < VERSION)"
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          echo "appimage=daling-$v-linux-x86_64.AppImage" >> "$GITHUB_OUTPUT"
+          echo "tarname=daling-$v-linux-x86_64" >> "$GITHUB_OUTPUT"
+          echo "Daling $v"
+          # 아이콘은 Windows 에서 `python scripts/make_icons.py --linux` 로 만들어 저장소에 둔다
+          for s in 128 256 512; do test -f "packaging/linux/daling-$s.png" || { echo "::error::packaging/linux/daling-$s.png 가 없습니다"; exit 1; }; done
+          # Windows 에서 고친 셸 파일에 CR 이 섞이면 '/bin/sh^M: bad interpreter' 로 실행되지 않는다
+          sed -i 's/\r$//' packaging/linux/AppRun packaging/linux/install.sh packaging/linux/daling.desktop
+
+      - name: PyInstaller (dist/daling)
+        run: python -m PyInstaller packaging/linux/daling-linux.spec --noconfirm --clean
+
+      - name: 실행 권한·묶음 확인
+        run: |
+          mkdir -p logs
+          # Playwright 의 node 는 데이터 파일로 묶여 실행 권한이 빠진다. AppImage 안은 읽기 전용이라
+          # 앱이 나중에 고칠 수 없으니 여기서 붙인다 (browser_setup.py 는 쓸 수 있을 때만 한 번 더 본다)
+          find dist/daling -path "*/playwright/driver/node" -type f -exec chmod 755 {} +
+          chmod 755 dist/daling/daling
+          find dist/daling -path "*/playwright/driver/node" -type f -exec ls -l {} \;
+          find dist/daling -name QtWebEngineProcess -type f -exec ls -l {} \;
+          find dist/daling/_internal -maxdepth 1 -name "*.so*" -printf "%f\n" | sort > logs/bundled-libs.txt
+          wc -l logs/bundled-libs.txt
+          # 묶음 안에서 못 찾는 라이브러리 (시스템 것을 쓰게 뺀 것은 러너에 있으니 여기서는 비어야 한다)
+          for f in dist/daling/_internal/PyQt6/Qt6/plugins/platforms/libqxcb.so \
+                   dist/daling/_internal/PyQt6/Qt6/lib/libQt6WebEngineCore.so.6 \
+                   dist/daling/_internal/PyQt6/Qt6/libexec/QtWebEngineProcess; do
+            [ -e "$f" ] || { echo "::warning::$f 가 없습니다"; continue; }
+            echo "== $f" >> logs/ldd.txt
+            LD_LIBRARY_PATH=dist/daling/_internal ldd "$f" >> logs/ldd.txt 2>&1 || true
+          done
+          if grep -q "not found" logs/ldd.txt; then grep -B0 "not found" logs/ldd.txt; echo "::warning::묶음에서 못 찾는 라이브러리가 있습니다 (logs/ldd.txt)"; fi
+          du -sh dist/daling
+
+      - name: 실제 앱 띄워 보기 (Xvfb, 최대 40초)
+        timeout-minutes: 6
+        env:
+          # Xvfb 에는 GPU 가 없다. Mesa 소프트웨어 렌더러로 그린다 (CI 에서만)
+          LIBGL_ALWAYS_SOFTWARE: "1"
+        run: |
+          mkdir -p logs
+          python -m pip install --quiet py-spy || true
+          # mac.yml 과 같은 까닭으로, 저장소가 아닌 폴더(/)에서 실행 파일을 바로 띄우고 점검(smoke)보다 먼저 돌린다.
+          # 앱이 창(Qt) 대신 브라우저로 넘어가면(app.run_in_browser) 실패로 본다.
+          cat > "$RUNNER_TEMP/gui-test.sh" <<'SH'
+          set -u
+          LOGS="$1"; APP="$2"
+          # 명령줄이 실행 파일 경로로 '시작하는' 것만 (이 스크립트도 인자로 같은 경로를 받으므로 그냥 찾으면 자기도 잡힌다)
+          PAT="^$APP"
+          echo "DISPLAY=$DISPLAY"
+          ( cd / && exec "$APP" > "$LOGS/app-stdout.log" 2> "$LOGS/app-stderr.log" ) &
+          PORT=""
+          for i in $(seq 1 40); do
+            sleep 1
+            for p in $(seq 8765 8785); do
+              if curl -fsS --max-time 1 "http://127.0.0.1:$p/healthz" -o "$LOGS/healthz.json" 2>/dev/null \
+                 && grep -q '"mode"' "$LOGS/healthz.json"; then
+                PORT=$p
+                break
+              fi
+            done
+            if [ -n "$PORT" ]; then echo "server up after ${i}s"; break; fi
+          done
+          echo "port=${PORT:-없음}"
+          INDEX_OK=0
+          if [ -n "$PORT" ]; then
+            curl -fsS --max-time 10 "http://127.0.0.1:$PORT/" -o "$LOGS/index.html" && INDEX_OK=1
+            curl -fsS --max-time 30 "http://127.0.0.1:$PORT/api/status" -o "$LOGS/status.json" || true
+            sleep 10   # QtWebEngine 이 화면을 그릴 시간
+          fi
+          # PyInstaller 리눅스 실행 파일은 부트로더(부모)와 파이썬(자식) 두 프로세스다. 둘 다 남긴다
+          PIDS="$(pgrep -f "$PAT" || true)"
+          echo "pids=${PIDS:-없음}"
+          for pid in $PIDS; do
+            lsof -nP -a -p "$pid" -iTCP >> "$LOGS/lsof-tcp.txt" 2>&1 || true
+            sudo "$(command -v py-spy || echo py-spy)" dump --pid "$pid" >> "$LOGS/py-spy.txt" 2>&1 || true
+          done
+          ps -o pid,ppid,stat,etime,args -p "$(echo $PIDS | tr ' ' ',')" > "$LOGS/ps.txt" 2>&1 || true
+          xwininfo -root -tree > "$LOGS/windows.txt" 2>&1 || true
+          import -window root "$LOGS/screenshot.png" || echo "::warning::스크린샷을 찍지 못했습니다"
+          ALIVE=0
+          for pid in $PIDS; do kill -0 "$pid" 2>/dev/null && ALIVE=1; done
+          pkill -TERM -f "$PAT" || true
+          for _ in $(seq 1 10); do pgrep -f "$PAT" > /dev/null || break; sleep 1; done
+          pkill -KILL -f "$PAT" || true
+          cp ~/.lms-autosaver/server_errors.log "$LOGS/" 2>/dev/null || true
+          FAIL=0
+          [ "$ALIVE" = 1 ] || { echo "::error::앱이 40초 안에 꺼졌거나 뜨지 않았습니다 (logs/app-stderr.log)"; FAIL=1; }
+          [ -n "$PORT" ] || { echo "::error::앱의 화면 서버가 응답하지 않았습니다"; FAIL=1; }
+          [ "$INDEX_OK" = 1 ] || { echo "::error::화면(/)을 받지 못했습니다"; FAIL=1; }
+          if grep -q "창을 띄우지 못해" "$LOGS/app-stderr.log"; then
+            echo "::error::Qt 창 대신 브라우저로 넘어갔습니다 (logs/app-stderr.log)"; FAIL=1
+          fi
+          grep -q '"Daling"' "$LOGS/windows.txt" || { echo "::error::'Daling' 창이 보이지 않습니다 (logs/windows.txt)"; FAIL=1; }
+          echo "---- app-stderr (끝 40줄)"; tail -n 40 "$LOGS/app-stderr.log" || true
+          exit $FAIL
+          SH
+          xvfb-run -a -s "-screen 0 1440x900x24" bash "$RUNNER_TEMP/gui-test.sh" "$PWD/logs" "$PWD/dist/daling/daling"
+
+      - name: 창 없이 점검 (--autosaver-smoke)
+        timeout-minutes: 5
+        run: |
+          mkdir -p logs
+          # 사용자 데이터 대신 빈 임시 폴더로: 화면 서버·화면 파일·작업 프로세스·node·Qt 모듈·인증서·0600 파일 길 (smoke_test.py)
+          # 화면 없이도 돌아야 한다 (Qt 는 불러오기만 하고 창은 만들지 않는다)
+          env -u DISPLAY -u WAYLAND_DISPLAY dist/daling/daling --autosaver-smoke 2>&1 | tee logs/smoke.log
+
+      - name: 키링(Secret Service) 왕복 점검
+        # 러너에는 로그인 세션이 없다. 빈 D-Bus 세션 안에 gnome-keyring 을 암호로 풀어 띄워 점검용 항목만 쓰고 지운다.
+        # 실제 사용자 환경과 달라 실패해도 AppImage 는 만든다 (로그로 본다).
+        continue-on-error: true
+        timeout-minutes: 3
+        run: |
+          mkdir -p logs
+          dbus-run-session -- bash -c '
+            echo -n "daling-ci" | gnome-keyring-daemon --unlock > /dev/null
+            AUTOSAVER_SMOKE_KEYCHAIN=1 dist/daling/daling --autosaver-smoke
+          ' 2>&1 | tee logs/smoke-keyring.log
+
+      - name: AppImage 만들기
+        run: |
+          V="${{ steps.ver.outputs.version }}"
+          OUT="$PWD/${{ steps.ver.outputs.appimage }}"
+          APPDIR="$RUNNER_TEMP/Daling.AppDir"
+          rm -rf "$APPDIR"
+          mkdir -p "$APPDIR/usr/lib" "$APPDIR/usr/share/applications"
+          # cp -a: PyInstaller 가 만든 심볼릭 링크(_internal 위 Qt 라이브러리)·실행 권한을 그대로
+          cp -a dist/daling "$APPDIR/usr/lib/daling"
+          install -m 755 packaging/linux/AppRun "$APPDIR/AppRun"
+          install -m 644 packaging/linux/daling.desktop "$APPDIR/daling.desktop"
+          install -m 644 packaging/linux/daling.desktop "$APPDIR/usr/share/applications/daling.desktop"
+          install -m 644 packaging/linux/daling-256.png "$APPDIR/daling.png"
+          ln -s daling.png "$APPDIR/.DirIcon"
+          for s in 128 256 512; do
+            install -D -m 644 "packaging/linux/daling-$s.png" "$APPDIR/usr/share/icons/hicolor/${s}x${s}/apps/daling.png"
+          done
+          desktop-file-validate "$APPDIR/daling.desktop"
+          curl -fsSL --retry 3 -o "$RUNNER_TEMP/appimagetool" \
+            https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
+          chmod +x "$RUNNER_TEMP/appimagetool"
+          # appimagetool 자신도 AppImage 다. FUSE 없이 풀어서 돌린다 (러너에 libfuse2 를 깔 필요가 없다)
+          export APPIMAGE_EXTRACT_AND_RUN=1
+          "$RUNNER_TEMP/appimagetool" --version || true
+          ARCH=x86_64 VERSION="$V" "$RUNNER_TEMP/appimagetool" --no-appstream "$APPDIR" "$OUT"
+          test -f "$OUT"
+          chmod +x "$OUT"
+          file "$OUT"
+          ls -lh "$OUT"
+          sha256sum "$(basename "$OUT")" | tee "$OUT.sha256"
+
+      - name: AppImage 점검 (--autosaver-smoke)
+        timeout-minutes: 5
+        run: |
+          mkdir -p logs
+          # 받은 사람이 켜는 것과 같은 파일로. FUSE 없이 풀어서 돌린다 (풀린 파일의 권한·심볼릭 링크도 같이 확인된다)
+          APPIMAGE_EXTRACT_AND_RUN=1 env -u DISPLAY -u WAYLAND_DISPLAY \
+            "./${{ steps.ver.outputs.appimage }}" --autosaver-smoke 2>&1 | tee logs/smoke-appimage.log
+
+      - name: tar.gz 만들기·설치 점검
+        timeout-minutes: 5
+        run: |
+          NAME="${{ steps.ver.outputs.tarname }}"
+          STAGE="$RUNNER_TEMP/tar/$NAME"
+          rm -rf "$RUNNER_TEMP/tar" && mkdir -p "$STAGE"
+          cp -a dist/daling "$STAGE/daling"
+          install -m 755 packaging/linux/install.sh "$STAGE/install.sh"
+          install -m 644 packaging/linux/daling.desktop "$STAGE/daling.desktop"
+          for s in 128 256 512; do install -m 644 "packaging/linux/daling-$s.png" "$STAGE/daling-$s.png"; done
+          tar -C "$RUNNER_TEMP/tar" -czf "$NAME.tar.gz" "$NAME"
+          sha256sum "$NAME.tar.gz" | tee "$NAME.tar.gz.sha256"
+          ls -lh "$NAME.tar.gz"
+          # 빈 홈 폴더에 풀어 install.sh 를 돌리고, 만든 링크(~/.local/bin/daling)로 점검까지
+          T="$(mktemp -d)"
+          mkdir -p "$T/home" "$T/x"
+          tar -C "$T/x" -xzf "$NAME.tar.gz"
+          HOME="$T/home" XDG_DATA_HOME= sh "$T/x/$NAME/install.sh"
+          test -x "$T/home/.local/bin/daling"
+          test -f "$T/home/.local/share/applications/daling.desktop"
+          test -f "$T/home/.local/share/icons/hicolor/256x256/apps/daling.png"
+          desktop-file-validate "$T/home/.local/share/applications/daling.desktop"
+          cat "$T/home/.local/share/applications/daling.desktop"
+          mkdir -p logs
+          HOME="$T/home" env -u DISPLAY -u WAYLAND_DISPLAY "$T/home/.local/bin/daling" --autosaver-smoke 2>&1 | tee logs/smoke-tar.log
+          HOME="$T/home" sh "$T/x/$NAME/install.sh" --uninstall
+          test ! -e "$T/home/.local/opt/daling"
+
+      - name: AppImage 보관
+        uses: actions/upload-artifact@v4
+        with:
+          name: daling-linux-appimage
+          path: |
+            ${{ steps.ver.outputs.appimage }}
+            ${{ steps.ver.outputs.appimage }}.sha256
+          if-no-files-found: error
+
+      - name: tar.gz 보관
+        uses: actions/upload-artifact@v4
+        with:
+          name: daling-linux-tar
+          path: |
+            ${{ steps.ver.outputs.tarname }}.tar.gz
+            ${{ steps.ver.outputs.tarname }}.tar.gz.sha256
+          if-no-files-found: error
+
+      - name: 로그·스크린샷 보관
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: daling-linux-logs
+          path: |
+            logs/
+            build/daling-linux/warn-daling-linux.txt
+          if-no-files-found: ignore
