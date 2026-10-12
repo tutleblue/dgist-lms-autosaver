@@ -504,13 +504,14 @@ const SYNC_KIND_LABEL = { sync: "자료", deadlines: "마감", emails: "메일" 
    startRun 은 '시작해 달라' 고 부탁만 하고 바로 돌아오므로, 결과를 보려면 기다려야 한다.
    예전에는 이 함수가 버튼 묶는 함수 안에만 있어서, 밖에 있는 runViewRefresh 가 부르면
    'waitForTask is not defined' 로 멈췄다(작업은 돌지만 화면이 안 바뀌었다). */
-async function waitForTask(maxMs = 180000) {
+async function waitForTask(maxMs = 180000, lane = "main") {
   const until = Date.now() + maxMs;
   while (Date.now() < until) {
     await new Promise((r) => window.setTimeout(r, 900));
     try {
       const task = await api("/api/task");
-      if (!task.running) return true;
+      // 메일은 따로 도는 칸이라 메일만 기다린다 (자료 동기화가 끝나길 기다리지 않는다)
+      if (!(lane === "mail" ? task.mail?.running : task.running)) return true;
     } catch (error) {
       return false;
     }
@@ -555,7 +556,7 @@ async function runViewRefresh(view) {
     case "emails":
     case "compose":
       await startRun("/api/refresh-emails", "메일 가져오는 중");
-      await waitForTask();
+      await waitForTask(180000, "mail");
       break;
     case "deadlines":
       await startRun("/api/refresh-deadlines", "마감 가져오는 중");
@@ -579,10 +580,10 @@ async function runViewRefresh(view) {
       await loadShelves(true);
       break;
     default:
+      // 메일은 따로 돌 수 있으니 함께 시작하고 둘 다 기다린다
       await startRun("/api/refresh-deadlines", "마감·일정 가져오는 중");
-      await waitForTask();
       await startRun("/api/refresh-emails", "메일 가져오는 중");
-      await waitForTask();
+      await Promise.all([waitForTask(), waitForTask(180000, "mail")]);
   }
   await refreshAll();
 }
@@ -955,11 +956,76 @@ function formatEmailDate(iso) {
   return formatDue(date);
 }
 
+/* ===== 메일 검색: 과목으로도 찾기 (2026-10-09) =====
+   예전에는 제목·보낸 사람·미리보기에 글자가 그대로 있어야만 찾았고, 지금 보고 있는 폴더·탭 안에서만 찾았다.
+   그래서 '일반화학Ⅱ' 로 치면 내가 쓴 '[일반화학II 02분반]' 메일(보낸 편지함)도, 조교가 보낸 답장도 안 나왔다.
+   - 비교 전에 띄어쓰기를 빼고 로마 숫자(Ⅱ·II)를 아라비아 숫자로 맞춘다.
+   - 검색어가 내 과목 이름(한글·영어)이면 그 과목의 다른 이름과, 그 과목 교수·조교와 주고받은 메일도 찾는다.
+   - 검색 중에는 폴더·탭을 가리지 않고 휴지통만 빼고 다 찾는다(renderEmails). */
+const ROMAN_DIGITS = { "Ⅰ": "1", "Ⅱ": "2", "Ⅲ": "3", "Ⅳ": "4", "Ⅴ": "5", "ⅰ": "1", "ⅱ": "2", "ⅲ": "3", "ⅳ": "4" };
+function searchNorm(text) {
+  return String(text || "")
+    .replace(/[ⅠⅡⅢⅣⅤⅰⅱⅲⅳ]/g, (ch) => ROMAN_DIGITS[ch])
+    .toLowerCase()
+    .replace(/\s+/g, "")
+    // '일반화학ii' · 'physicsii' → '...2' (한글이나 영어 낱말 바로 뒤의 i·ii·iii·iv 만)
+    .replace(/([가-힣]|[a-z]{3,})(iv|iii|ii|i)(?=$|[^a-z])/g, (m, head, roman) => head + { i: "1", ii: "2", iii: "3", iv: "4" }[roman]);
+}
+
+/** 내 과목들: 한글 이름·영어 이름·교수·조교 메일 주소 */
+function mailCourseIndex() {
+  const key = `${(state.courseState?.current || []).length}|${state.courseStaffSig || ""}`;
+  if (mailCourseIndex.key === key) return mailCourseIndex.list;
+  const byLabel = new Map();
+  const add = (label, korean) => {
+    if (!label) return null;
+    const k = staffKey(label);
+    if (!byLabel.has(k)) byLabel.set(k, { names: new Set(), emails: new Set(), label });
+    const c = byLabel.get(k);
+    c.names.add(searchNorm(label));
+    if (korean) c.names.add(searchNorm(korean));
+    return c;
+  };
+  (state.courseState?.current || []).forEach((c) => {
+    add(extractCourseLabelJs(c.name), c.name.includes("(") ? c.name.split("(", 1)[0].trim() : "");
+  });
+  (state.courseStaff || new Map()).forEach(({ label, rows }) => {
+    const c = add(label, (rows[0] || {}).title);
+    rows.forEach((r) => r.email && c.emails.add(r.email.toLowerCase()));
+  });
+  // 개설강좌 담당교수 꼬리표: 과목명(한글)이 같으면 그 교수 주소도 그 과목으로 (다른 분반 교수 포함)
+  Object.entries(state.coursePeople || {}).forEach(([email, hits]) => {
+    hits.forEach((h) => {
+      byLabel.forEach((c) => {
+        if (c.names.has(searchNorm(h.title))) c.emails.add(email);
+      });
+    });
+  });
+  const list = [...byLabel.values()].map((c) => ({ ...c, names: [...c.names].filter((n) => n.length >= 2) }));
+  mailCourseIndex.key = key;
+  mailCourseIndex.list = list;
+  return list;
+}
+
 function emailMatchesQuery(mail) {
-  const query = `${state.query} ${state.emailQuery || ""}`.trim().toLowerCase();
-  if (!query) return true;
-  const haystack = `${mail.subject} ${mail.summary || ""} ${mail.fromName} ${mail.fromEmail} ${mail.snippet} ${mail.category}`.toLowerCase();
-  return query.split(/\s+/).every((word) => haystack.includes(word));
+  const raw = `${state.query} ${state.emailQuery || ""}`.trim();
+  if (!raw) return true;
+  const haystack = searchNorm(
+    `${mail.subject} ${mail.summary || ""} ${mail.fromName} ${mail.fromEmail} ${mail.toName || ""} ${mail.toEmail || ""} ${mail.snippet} ${mail.category}`,
+  );
+  const whole = searchNorm(raw);
+  if (haystack.includes(whole)) return true;
+  // 과목 이름으로 찾기: 검색어가 과목 이름의 일부면 그 과목의 다른 이름·교수·조교 메일까지
+  if (whole.length >= 2) {
+    const courses = mailCourseIndex().filter((c) => c.names.some((n) => n.includes(whole)));
+    if (courses.length) {
+      const people = [mail.fromEmail, mail.toEmail, ...(mail.to || []), ...(mail.cc || [])]
+        .map((e) => String(e?.email || e || "").toLowerCase())
+        .filter(Boolean);
+      if (courses.some((c) => c.names.some((n) => haystack.includes(n)) || people.some((e) => c.emails.has(e)))) return true;
+    }
+  }
+  return raw.split(/\s+/).every((word) => haystack.includes(searchNorm(word)));
 }
 
 function isPastEvent(mail) {
@@ -1208,6 +1274,9 @@ async function setEmailRead(mail, seen, { silent = false } = {}) {
   const target = state.emails.emails.find((m) => m.id === mail.id);
   if (target) target.unread = !seen;
   renderEmails();
+  // 막 휴지통으로 옮긴 메일은 서버 휴지통 번호를 아직 모른다. 서버에는 보내지 않는다
+  // (원래 번호로 보내면 휴지통에서 같은 번호인 다른 메일의 읽음 표시가 바뀌었다).
+  if (mail.pendingTrash || mail.uid === null || mail.uid === undefined) return;
   try {
     await api("/api/mark-read", {
       method: "POST",
@@ -1222,6 +1291,11 @@ async function setEmailRead(mail, seen, { silent = false } = {}) {
 async function deleteEmail(mail) {
   /* 받은 편지함에서 지우면 휴지통으로 간다 (되돌릴 수 있다).
      휴지통에서 지우면 영영 사라지므로 반드시 한 번 더 묻는다. */
+  if (mail.pendingTrash) {
+    // 막 휴지통으로 옮긴 메일은 서버 휴지통 안 번호를 아직 모른다(이 서버는 옮긴 번호를 알려 주지 않음).
+    showToast("방금 휴지통으로 옮긴 메일이에요. 메일을 다시 받은 뒤(잠시 뒤) 해 주세요.");
+    return;
+  }
   const inTrash = mail.folder === "trash";
   if (inTrash) {
     const ok = await uiConfirm(
@@ -1247,6 +1321,15 @@ async function deleteEmail(mail) {
       return;
     }
     showToast(res.message || (inTrash ? "완전히 지웠습니다." : "휴지통으로 옮겼습니다."));
+    if (!inTrash) {
+      // 휴지통에 바로 보이게. 예전에는 목록에서 빼기만 해서 '휴지통으로 안 옮겨진다'고 보였다.
+      state.emails.emails = [
+        ...state.emails.emails,
+        // uid 는 비운다: 원래 메일함 번호로 휴지통에 무언가를 하면 엉뚱한 메일이 바뀐다
+        { ...mail, folder: "trash", id: `trash:pending-${mail.folder}-${mail.uid}`, uid: null, pendingTrash: true },
+      ];
+      renderEmails();
+    }
   } catch (error) {
     state.emails.emails = before;
     renderEmails();
@@ -1256,6 +1339,11 @@ async function deleteEmail(mail) {
 
 /** 휴지통에 있는 메일을 받은 편지함으로 되돌린다 */
 async function restoreEmail(mail) {
+  if (mail.pendingTrash) {
+    // 막 휴지통으로 옮긴 메일은 서버 휴지통 안 번호를 아직 모른다(이 서버는 옮긴 번호를 알려 주지 않음).
+    showToast("방금 휴지통으로 옮긴 메일이에요. 메일을 다시 받은 뒤(잠시 뒤) 해 주세요.");
+    return;
+  }
   const before = state.emails.emails;
   state.emails.emails = before.filter((m) => m.id !== mail.id);
   renderEmails();
@@ -2739,10 +2827,12 @@ function renderEmails() {
 
   // 현재 폴더의 메일만 (지난 일정 숨김 설정은 받은편지함에서만 적용)
   const hidePast = Boolean(state.config?.hidePastEmails) && state.emailFolder === "inbox";
-  let folderPool = emails.filter(
-    (mail) => mailInFolder(mail, state.emailFolder) && !(hidePast && isPastEvent(mail)),
-  );
-  const isInboxLike = state.emailFolder === "inbox";
+  // 검색 중에는 폴더·탭을 가리지 않는다(휴지통만 뺀다). 받은 편지함에서 찾으면 내가 보낸 메일이 안 나왔다.
+  const searchingText = Boolean(state.emailQuery?.trim());
+  let folderPool = searchingText
+    ? emails.filter((mail) => mail.folder !== "trash")
+    : emails.filter((mail) => mailInFolder(mail, state.emailFolder) && !(hidePast && isPastEvent(mail)));
+  const isInboxLike = state.emailFolder === "inbox" && !searchingText;
 
   // 왼쪽 개수와 탭 개수는 '지금 보고 있는 메일함' 기준이어야 한다.
   // 전체 메일로 세면 '중요 7'인데 눌러 보니 2통인 식으로 어긋난다.
@@ -4094,6 +4184,42 @@ function taskProgress(task) {
   return { ...stage, detail };
 }
 
+/* 위쪽 떠 있는 진행 막대. 사용자가 시킨 일만 보여 준다.
+   자동 마감·메일 확인까지 띄우니 '메일만 가져오는데 왜 유난이냐' 는 말을 들었다. 자동 작업은 설정의 실행 기록에만 남는다.
+   작업은 두 칸(본 칸 = 자료·마감, 메일 칸)에서 따로 돌 수 있다(web_ui.task_key). 막대를 띄운 칸을
+   state.taskBar 에 기억해 그 칸이 끝나면 '완료' 를 보여 주고, 삼성 노트·내 컴퓨터 저장 막대는 건드리지 않는다. */
+function renderTaskBar(task, labels) {
+  if (state.notesJob?.running) return; // 삼성 노트를 넣는 중이면 그쪽이 막대를 쓴다
+  const lanes = { main: task, mail: task.mail || {} };
+  const labelOf = (t) => labels[t.kind] || "작업";
+  const pick = ["main", "mail"]
+    .filter((k) => lanes[k].running && !lanes[k].auto)
+    .sort((a, b) => String(lanes[b].startedAt || "").localeCompare(String(lanes[a].startedAt || "")))[0];
+  if (pick) {
+    const p = taskProgress(lanes[pick]);
+    const other = pick === "main" ? lanes.mail : lanes.main;
+    const more = other.running && !other.auto ? ` 외 1개` : "";
+    showTopProgress(`${labelOf(lanes[pick])}${more} · ${p.label}`, p.pct);
+    state.taskBar = pick;
+    return;
+  }
+  if (task.running && task.auto && task.queued) {
+    // 자동 작업이 끝나기를 기다리는 동안엔 시킨 일만 '곧 시작' 으로
+    showTopProgress(`${labels[task.queued.kind] || "작업"} · 곧 시작해요`, 4);
+    state.taskBar = "main";
+    return;
+  }
+  if (state.taskBar) {
+    const done = lanes[state.taskBar];
+    state.taskBar = null;
+    if (!done.auto && done.returnCode !== null && done.returnCode !== undefined) {
+      finishTopProgress(done.returnCode === 0 ? `${labelOf(done)} 완료` : `${labelOf(done)} 실패`);
+    } else {
+      hideTopProgress();
+    }
+  }
+}
+
 function renderTask(task) {
   state.task = task;
   const logBox = $("#logBox");
@@ -4112,9 +4238,15 @@ function renderTask(task) {
   /* 이 버튼들은 화면마다 있을 수도, 없을 수도 있다.
      ('마감 새로고침'은 없앴고 '지금 동기화'는 자료 화면으로 옮겼다) */
   const runButton = $("#runButton");
-  const busy = Boolean(task.running);
+  // 메일 칸이 직접 시킨 것이거나 30초 넘게 돌면(서버가 응답을 안 줄 때) 멈출 수 있게 한다.
+  // 5분마다 도는 자동 확인은 금방 끝나니 그때마다 버튼이 깜빡이지 않게 뺀다.
+  const mailLong = Boolean(task.mail?.running) &&
+    (!task.mail.auto || Date.now() - new Date(task.mail.startedAt || Date.now()).getTime() > 30000);
+  const busy = Boolean(task.running) || mailLong;
   const refreshButton = $("#refreshAllButton");
-  if (refreshButton) refreshButton.disabled = busy;
+  // 메일은 따로 도는 칸이라, 메일함에서는 메일 작업만 보고 버튼을 막는다
+  const mailView = ["emails", "compose"].includes(state.view);
+  if (refreshButton) refreshButton.disabled = mailView ? Boolean(task.mail?.running) : busy;
   /* 동기화 시작은 위쪽 '자료 새로고침' 하나로 모았다. 이 버튼은 돌고 있는 작업을
      멈추는 용도로만 남기고, 놀고 있을 때는 감춘다 (같은 일 하는 버튼을 둘 두지 않으려고). */
   if (runButton) {
@@ -4127,7 +4259,7 @@ function renderTask(task) {
     }
   }
 
-  // 진행 표시: 실행 중에는 단계 문구 + 막대, 끝나면 결과 한 줄
+  // 진행 표시: 실행 중에는 단계 문구 + 막대, 끝나면 결과 한 줄 (설정의 실행 기록 칸)
   const progressWrap = $("#taskProgress");
   if (task.running) {
     const p = taskProgress(task);
@@ -4136,7 +4268,6 @@ function renderTask(task) {
     $("#taskStageDetail").textContent = p.detail;
     $("#taskProgressFill").style.width = `${p.pct}%`;
     progressWrap.hidden = false;
-    if (!state.notesJob?.running) showTopProgress(`${taskLabel} · ${p.label}`, p.pct);
   } else {
     progressWrap.hidden = true;
     $("#taskSummary").textContent =
@@ -4145,16 +4276,8 @@ function renderTask(task) {
         : task.returnCode === 0
           ? `${taskLabel} 완료`
           : `${taskLabel} 실패 (코드 ${task.returnCode})`;
-    // 삼성 노트를 넣는 중이면 위쪽 막대는 그쪽이 쓴다
-    if (state.notesJob?.running) {
-      // 그대로 둔다
-    } else if (task.returnCode !== null) {
-      finishTopProgress(task.returnCode === 0 ? `${taskLabel} 완료` : `${taskLabel} 실패`);
-    } else {
-      hideTopProgress();
-    }
   }
-
+  renderTaskBar(task, labels);
   if (!logs.length) {
     logBox.innerHTML = '<div class="log-line">아직 실행 로그가 없습니다.</div>';
     return;
@@ -4362,6 +4485,13 @@ function eventShortTitle(subject) {
   return t || mailEventTitle(subject);
 }
 
+/** 세미나 메일에서 뽑은 연사·발표 제목 (서버 email_reader.guess_seminar_info). 장소는 아래 줄(sub)에 들어간다. */
+function seminarInfoHtml(s) {
+  const row = (label, value) =>
+    value ? `<span class="sem-row"><b>${escapeHtml(label)}</b>${escapeHtml(value)}</span>` : "";
+  return `<span class="sem-info">${row("연사", s.speaker)}${row("발표", s.title)}</span>`;
+}
+
 function calendarItems() {
   // 과제 마감 + 메일 이벤트(eventDate) 합치기
   const items = [];
@@ -4384,12 +4514,43 @@ function calendarItems() {
     // '세미나 · 관심: 세미나' 처럼 겹치면 관심 단어는 뺀다
     const hits = (m.interestHits || []).filter((w) => !/^(세미나|seminar)$/i.test(w));
     const why = hits.length && !m.schoolEvent ? `관심: ${hits.join(", ")}` : "";
+    // 여러 날 행사(eventEnd, 예: '10월 14일부터 20일까지')는 걸치는 날마다 하나씩 (최대 2주)
+    // 본문에 날짜를 하나하나 적었으면(eventDays) 그 날만: 주말을 쉬는 일정을 토·일까지 칠하지 않는다
+    let multiTotal = 0;
+    if (m.eventEnd) {
+      const last = new Date(`${m.eventEnd}T00:00`);
+      const day0 = new Date(dt);
+      day0.setHours(0, 0, 0, 0);
+      const span = Math.round((last - day0) / 86400000) + 1;
+      const offsets = (m.eventDays || []).length
+        ? m.eventDays.map((s) => Math.round((new Date(`${s}T00:00`) - day0) / 86400000))
+        : Array.from({ length: Math.min(span, 15) }, (_, i) => i);
+      const total = offsets.length;
+      multiTotal = total;
+      offsets.forEach((offset, k) => {
+        if (offset <= 0 || offset > 14) return;
+        const d = new Date(dt);
+        d.setDate(d.getDate() + offset);
+        const n = k;
+        items.push({
+          date: d,
+          title: m.summary || eventShortTitle(m.subject),
+          full: String(m.subject || "").replace(/^\s*(re|fw|fwd)\s*:\s*/i, "").split(" / ")[0].trim(),
+          sub: [`${n + 1}/${total}일째`, m.seminar?.place, m.fromName || m.fromEmail].filter(Boolean).join(" · "),
+          kind: m.schoolEvent ? "school" : "event",
+          seminar: m.seminar && (m.seminar.speaker || m.seminar.title) ? m.seminar : null,
+          mailId: m.id,
+          allDay: !String(m.eventDate).includes("T"),
+        });
+      });
+    }
     items.push({
       date: dt,
       title: m.summary || eventShortTitle(m.subject),
       full: String(m.subject || "").replace(/^\s*(re|fw|fwd)\s*:\s*/i, "").split(" / ")[0].trim(),
-      sub: [why, m.fromName || m.fromEmail].filter(Boolean).join(" · "),
+      sub: [multiTotal > 1 ? `1/${multiTotal}일째` : "", m.seminar?.place, why, m.fromName || m.fromEmail].filter(Boolean).join(" · "),
       kind: m.schoolEvent ? "school" : "event",
+      seminar: m.seminar && (m.seminar.speaker || m.seminar.title) ? m.seminar : null,
       mailId: m.id,
       allDay: !String(m.eventDate).includes("T"),
     });
@@ -4695,6 +4856,95 @@ function specialDay(at = new Date()) {
   };
 }
 
+/* ===== 시험 기간 응원 =====
+   '시험기간인데 따뜻한 글귀도 없네' 라는 말을 듣고 넣었다. 학사일정의 중간·기말 시험(학부)을 기준으로
+   일주일 전 · 시험 중 · 끝난 뒤 이틀 동안 한 줄씩 건넨다. 문장은 하루 동안 그대로(날짜로 고른다).
+   나우바 아래 줄에 짧게 쓴다. 대시보드 인사 아래에도 한 줄 넣었다가 '굳이 거기엔 없어도 된다' 고 해서 뺐다. */
+const EXAM_CHEERS = {
+  before: [
+    "차근차근 하면 충분해요",
+    "오늘 한 만큼이 쌓여요",
+    "잠은 꼭 챙겨 자요",
+    "물 한 잔 마시고 가요",
+    "할 수 있어요, 진짜로",
+  ],
+  during: [
+    "오늘도 할 수 있어요",
+    "끝까지 응원해요",
+    "밥 꼭 챙겨 먹어요",
+    "한 과목씩, 천천히",
+    "거의 다 왔어요",
+  ],
+  last: ["마지막 날이에요"],
+  after: [
+    "시험 끝! 고생했어요",
+    "수고했어요, 정말로",
+  ],
+};
+
+/* 나우바를 펼치면 달구가 건네는 말. 나우바 아래 줄과 겹치지 않는 것만 둔다.
+   달구를 누르면 폴짝 뛰며 다음 말로 바뀐다. */
+const EXAM_DALGU = {
+  before: { poses: ["study", "book", "read"], talk: [
+    "25분 공부하고 5분 쉬기, 같이 해요",
+    "모르는 건 표시만 해 두고 넘어가요",
+    "어제 본 걸 5분만 다시 훑어봐요",
+    "책상 정리하면 머리도 정리돼요",
+    "붕어빵 하나 먹고 다시 해요",
+  ] },
+  during: { poses: ["fight", "thumbs", "wink"], talk: [
+    "시험장 가기 전에 화장실 꼭 들러요",
+    "학생증 챙겼죠?",
+    "첫 문제가 어려우면 뒤에서부터 풀어도 돼요",
+    "끝난 과목은 답 맞춰 보지 말고 쉬어요",
+    "달구가 붕어빵 데워 놓을게요",
+  ] },
+  last: { poses: ["fight", "run"], talk: [
+    "마지막 한 과목, 달구도 같이 달려요",
+    "끝나면 하고 싶은 거 하나 정해 둬요",
+    "오늘은 일찍 자요. 내일은 늦잠 자도 돼요",
+  ] },
+  after: { poses: ["yay", "lounge", "munch", "laugh"], talk: [
+    "오늘은 알람 끄고 자요",
+    "붕어빵 파티해요!",
+    "보고 싶던 거 몰아 보기 어때요",
+    "고생한 나한테 칭찬 한마디 해 줘요",
+  ] },
+};
+
+/** 지금이 시험 기간 언저리면 { phase, name, days, short, start, end, pose, talk } (아니면 null) */
+function examSeason(at = new Date()) {
+  const today = new Date(at);
+  today.setHours(0, 0, 0, 0);
+  const DAY = 86400000;
+  for (const e of state.academic || []) {
+    if (e.kind === "대학원" || ddayTier(e.title) !== 0) continue;
+    const start = new Date(`${e.start}T00:00`);
+    const end = new Date(`${e.end || e.start}T00:00`);
+    if (Number.isNaN(start.getTime())) continue;
+    const name = /기말|학기말/.test(e.title) ? "기말고사" : "중간고사";
+    const untilStart = Math.round((start - today) / DAY);
+    const sinceEnd = Math.round((today - end) / DAY);
+    let phase = null;
+    if (untilStart >= 1 && untilStart <= 7) phase = "before";
+    else if (untilStart <= 0 && sinceEnd < 0) phase = "during";
+    else if (sinceEnd === 0) phase = start.getTime() === end.getTime() ? "during" : "last";
+    else if (sinceEnd >= 1 && sinceEnd <= 2) phase = "after";
+    if (!phase) continue;
+    const lines = EXAM_CHEERS[phase];
+    const seed = today.getFullYear() * 400 + today.getMonth() * 32 + today.getDate();
+    const short = lines[seed % lines.length];
+    const dalgu = EXAM_DALGU[phase];
+    return {
+      phase, name, days: untilStart, short, start, end,
+      pose: dalgu.poses[seed % dalgu.poses.length],
+      talk: dalgu.talk,
+      talkAt: seed % dalgu.talk.length,
+    };
+  }
+  return null;
+}
+
 /* ===== 날짜 상세 (셀을 누르면 아래로 펼쳐짐) ===== */
 /* 캘린더 상세에서 메일 일정을 누르면 메일함으로 넘어가지 않고 그 칸을 펼쳐 본문 글을 보여 준다.
    세미나 시간·장소만 확인하려는데 화면이 메일함으로 바뀌면 달력으로 돌아오기가 번거로웠다. */
@@ -4799,7 +5049,7 @@ function openDayDetail(day) {
               <span class="dot cal-${it.kind}"></span>
               <div class="day-item-main">
                 <strong>${escapeHtml(it.title || "")}</strong>
-                ${it.full && it.full !== it.title ? `<em>${escapeHtml(it.full)}</em>` : ""}
+                ${it.seminar ? seminarInfoHtml(it.seminar) : it.full && it.full !== it.title ? `<em>${escapeHtml(it.full)}</em>` : ""}
                 <span>${escapeHtml(KIND_LABEL[it.kind] || "")}${it.sub ? " · " + escapeHtml(it.sub) : ""}</span>
               </div>
               ${actions}
@@ -4939,7 +5189,7 @@ function renderCalendarDayList(byDay) {
         <div class="cal-item" ${it.mailId ? `data-mailid="${it.mailId}"` : ""}>
           <span class="cal-item-date">${it.date.getMonth() + 1}/${it.date.getDate()} ${String(it.date.getHours()).padStart(2, "0")}:${String(it.date.getMinutes()).padStart(2, "0")}</span>
           <span class="dot cal-${it.kind}"></span>
-          <div class="cal-item-main"><strong>${escapeHtml(it.title)}</strong><span>${escapeHtml(it.sub || "")}</span></div>
+          <div class="cal-item-main"><strong>${escapeHtml(it.title)}</strong><span>${escapeHtml([it.seminar?.speaker, it.sub].filter(Boolean).join(" · "))}</span></div>
         </div>`,
           )
           .join("")
@@ -4955,7 +5205,7 @@ function renderCalendarDayList(byDay) {
       <div class="cal-item" ${it.mailId ? `data-mailid="${it.mailId}"` : ""}>
         <span class="cal-item-date">${String(it.date.getHours()).padStart(2, "0")}:${String(it.date.getMinutes()).padStart(2, "0")}</span>
         <span class="dot cal-${it.kind}"></span>
-        <div class="cal-item-main"><strong>${escapeHtml(it.title)}</strong><span>${escapeHtml(it.sub || "")}</span></div>
+        <div class="cal-item-main"><strong>${escapeHtml(it.title)}</strong><span>${escapeHtml([it.seminar?.speaker, it.sub].filter(Boolean).join(" · "))}</span></div>
       </div>`,
       )
       .join("");
@@ -5015,7 +5265,7 @@ async function refreshAll() {
     const newMailNote = $("#metricNewMailNote");
     if (newMailNote) newMailNote.textContent = unreadInbox ? "안 읽은 메일" : "모두 읽었습니다";
     renderTask(task);
-    state._taskRunning = Boolean(task.running);
+    state._taskRunning = Boolean(task.running || task.mail?.running); // 메일 칸이 끝났을 때도 다시 받는다
     if (state.courseAnn !== null) loadCourseAnn();
   } catch (error) {
     // 앱 서버가 잠깐 없을 때(재설치·재시작) 12초마다 같은 오류를 띄우지 않는다.
@@ -5038,7 +5288,7 @@ async function pollLight() {
       return refreshAll();
     }
     const wasRunning = state._taskRunning;
-    state._taskRunning = Boolean(task.running);
+    state._taskRunning = Boolean(task.running || task.mail?.running); // 메일 칸이 끝났을 때도 다시 받는다
     if (health) state.health = health;
     renderTask(task);
     renderLastSync();
@@ -5046,7 +5296,7 @@ async function pollLight() {
     const sig = JSON.stringify(health?.lastSuccess || {});
     const since = Date.now() - (refreshAll.full || 0);
     const changed = health && sig !== state._healthSig;
-    const finished = wasRunning && !task.running;
+    const finished = wasRunning && !state._taskRunning;
     // 작업 중에는 새로 받은 파일이 조금씩 보이도록 20초마다, 평소에는 90초마다 한 번은 전부 받는다
     if (changed || finished || since > (task.running ? 20000 : 90000)) return refreshAll();
   } catch (error) {
@@ -5165,6 +5415,8 @@ async function populateSettings() {
     ["autoEmailMinutes", 5],
     ["autoDeadlineMinutes", 60],
     ["autoSyncMinutes", 180],
+    ["mailKeepDays", 21],
+    ["mailKeepMax", 60],
   ].forEach(([name, fallback]) => {
     const select = form.elements[name];
     if (!select) return;
@@ -5988,7 +6240,7 @@ function bindEvents() {
 
   // 이제는 '작업 중지' 전용이다 (시작은 위쪽 '자료 새로고침')
   $("#runButton")?.addEventListener("click", () => {
-    if (state.task?.running) startRun("/api/stop", "중지");
+    if (state.task?.running || state.task?.mail?.running) startRun("/api/stop", "중지");
   });
 
   $("#selectAllFiles").addEventListener("change", (event) => {
@@ -6812,7 +7064,12 @@ async function renderHealth() {
       banner.hidden = true;
       return;
     }
-    const last = Object.values(h.lastSuccess || {}).sort().pop();
+    // 실패한 작업의 마지막 성공을 보여 준다. 예전엔 모든 작업 중 가장 최근 것이라, 메일이 막혔는데
+    // 마감 확인 시각(15:32)이 '마지막 성공' 으로 나와 메일은 멀쩡한 것처럼 보였다.
+    const failKind = Object.keys(h.authFailed || {})[0] || h.lastFailure?.kind;
+    const last = failKind && h.lastSuccess?.[failKind]
+      ? h.lastSuccess[failKind]
+      : Object.values(h.lastSuccess || {}).sort().pop();
     $("#healthTitle").textContent =
       h.consecutiveFailures >= 2 ? "동기화가 계속 실패하고 있어요" : "한동안 동기화가 되지 않았어요";
     $("#healthDetail").textContent =
@@ -6843,7 +7100,7 @@ function bindBackup() {
       const a = document.createElement("a");
       const stamp = new Date().toISOString().slice(0, 10);
       a.href = url;
-      a.download = `붕어빵-설정-${stamp}${withSecrets ? "-비밀번호포함" : ""}.json`;
+      a.download = `Daling-설정-${stamp}${withSecrets ? "-비밀번호포함" : ""}.json`;
       a.click();
       URL.revokeObjectURL(url);
       showToast("설정을 내보냈습니다.");
@@ -8000,7 +8257,13 @@ function renderNowDetail(info, at) {
     rows.push(nowDetailRow("다음", d.next, `${d.next.start} · ${nowUntilText(gap)}`, d.next.color));
   }
   if (!rows.length) {
-    rows.push(`<p class="nowbar-detail-empty">${escapeHtml(info.sub || "오늘은 예정된 수업이 없어요")}</p>`);
+    // 예전엔 info.sub 를 그대로 다시 적어 바로 위 줄과 같은 말이 두 번 보였다.
+    const exam = examSeason(at);
+    if (exam) rows.push(nowDalguCard(exam));
+    else {
+      const special = specialDay(at);
+      rows.push(`<p class="nowbar-detail-empty">${escapeHtml(special?.holiday ? special.sub : "오늘은 예정된 수업이 없어요")}</p>`);
+    }
   }
   if (d?.today?.length) {
     rows.push(
@@ -8013,6 +8276,30 @@ function renderNowDetail(info, at) {
     box.dataset.html = html;
     box.innerHTML = html;
   }
+}
+
+/** 시험 기간에 나우바를 펼치면: 달구 + 남은 날 + 달구가 하는 말 */
+function nowDalguCard(exam) {
+  const fmt = (d) => `${d.getMonth() + 1}.${d.getDate()}`;
+  // 좁은 사이드바라 같은 달이면 '10.12~16' 처럼 줄인다
+  const range = exam.start.getTime() === exam.end.getTime()
+    ? fmt(exam.start)
+    : `${fmt(exam.start)}~${exam.start.getMonth() === exam.end.getMonth() ? exam.end.getDate() : fmt(exam.end)}`;
+  const head =
+    exam.phase === "before" ? `${exam.name} D-${exam.days}`
+      : exam.phase === "after" ? `${exam.name} 끝`
+        : exam.phase === "last" ? `${exam.name} 마지막 날` : `${exam.name} 중`;
+  const i = (state.dalguTalk ?? exam.talkAt) % exam.talk.length;
+  return `
+    <div class="now-dalgu" data-phase="${exam.phase}">
+      <button type="button" class="now-dalgu-pet" data-dalgu-pet aria-label="달구 쓰다듬기">
+        <img src="/img/dalgu/${exam.pose}.png" alt="" draggable="false" />
+      </button>
+      <div class="now-dalgu-text">
+        <em>${escapeHtml(head)} · ${escapeHtml(range)}</em>
+        <span class="now-dalgu-bubble">${escapeHtml(exam.talk[i])}</span>
+      </div>
+    </div>`;
 }
 
 function nowDetailRow(label, entry, when, tone) {
@@ -8963,6 +9250,8 @@ function bindShuttle() {
 
 
 function renderDday() {
+  // 학사일정이 늦게 오면 시험 기간 응원도 그때 붙는다
+  setHeroGreeting();
   const box = $("#ddayBanner");
   if (!box) return;
   const today = new Date();
@@ -9099,6 +9388,24 @@ function bindNowBar() {
   });
 }
 
+document.addEventListener("click", (event) => {
+  const pet = event.target.closest?.("[data-dalgu-pet]");
+  if (!pet) return;
+  event.stopPropagation();
+  const exam = examSeason();
+  if (!exam) return;
+  state.dalguTalk = ((state.dalguTalk ?? exam.talkAt) + 1) % exam.talk.length;
+  const card = pet.closest(".now-dalgu");
+  const bubble = card?.querySelector(".now-dalgu-bubble");
+  if (bubble) bubble.textContent = exam.talk[state.dalguTalk];
+  // renderNowDetail 이 1초마다 같은 HTML 인지 비교하므로 기억해 둔 HTML 을 지워 다음 틱에 새 말이 유지되게 한다
+  const box = $("#nowDetailBody");
+  if (box) delete box.dataset.html;
+  card?.classList.remove("hop");
+  void card?.offsetWidth;
+  card?.classList.add("hop");
+});
+
 function renderNowBar() {
   const bar = $("#nowBar");
   if (!bar) return;
@@ -9121,7 +9428,24 @@ function renderNowBar() {
   const dateText = `${at.getMonth() + 1}월 ${at.getDate()}일 ${NOW_WEEKDAY[at.getDay()]}`;
   if (date && date.textContent !== dateText) date.textContent = dateText;
 
+  // 자정을 넘기면 날짜에 기대는 것(D-day·인사·캘린더 '오늘'·마감 남은 날)을 다시 그린다.
+  // 밤 10시에 켜 둔 앱이 다음 날 시험 첫날에도 'D-1' 을 띄우고 있었다(2026-10-12). D-day 는 학사일정을
+  // 불러올 때만 그리고, 다른 부분은 값이 그대로면 다시 그리지 않기 때문이다.
+  const dayKey = `${at.getFullYear()}-${at.getMonth()}-${at.getDate()}`;
+  if (state.dayKey && state.dayKey !== dayKey) {
+    state.dayKey = dayKey;
+    renderSigns.clear();
+    renderedViews.clear();
+    renderDday();
+    renderAll(true);
+  }
+  state.dayKey = dayKey;
   const info = nowStatus(at, state.timetable, state.semester);
+  // 시험 기간에는 수업 중·직전이 아닐 때 아래 줄을 응원 한 줄로 바꾼다 (주말·공강·수업 끝 등)
+  if (!["class", "soon"].includes(info.state)) {
+    const exam = examSeason(at);
+    if (exam) info.sub = exam.short;
+  }
   if (bar.dataset.state !== info.state) bar.dataset.state = info.state;
   bar.dataset.tone = info.tone || "";
 
@@ -9786,20 +10110,29 @@ function renderMailRefreshAgo() {
   const button = $("#mailRefreshButton");
   if (!node || !button) return;
   const stamp = state.health?.lastSuccess?.emails || state.emails?.updatedAt;
-  const text = state.mailRefreshing ? "가져오는 중…" : stamp ? `${agoText(stamp)} 업데이트` : "아직 안 받음";
+  const text = state.mailRefreshing ? "가져오는 중 · 누르면 멈춤" : stamp ? `${agoText(stamp)} 업데이트` : "아직 안 받음";
   if (node.textContent !== text) node.textContent = text;
   button.classList.toggle("spinning", Boolean(state.mailRefreshing));
-  button.disabled = Boolean(state.mailRefreshing);
+  // 가져오는 동안에도 누를 수 있게 둔다: 누르면 메일 가져오기만 멈춘다(서버가 응답을 안 줄 때 빠져나갈 길)
+  button.disabled = false;
   button.title = stamp ? `메일 새로고침 (마지막: ${String(stamp).replace("T", " ").slice(0, 16)})` : "메일 새로고침";
 }
 
 async function refreshMailNow() {
-  if (state.mailRefreshing) return;
+  if (state.mailRefreshing) {
+    try {
+      const res = await api("/api/stop", { method: "POST", body: JSON.stringify({ lane: "mail" }) });
+      showToast(res.message || "메일 가져오기를 멈췄습니다.");
+    } catch (error) {
+      showToast(humanError(error));
+    }
+    return;
+  }
   state.mailRefreshing = true;
   renderMailRefreshAgo();
   try {
     await startRun("/api/refresh-emails", "메일 가져오는 중");
-    await waitForTask();
+    await waitForTask(180000, "mail");
   } finally {
     state.mailRefreshing = false;
     await refreshAll();
@@ -10129,7 +10462,7 @@ const TOUR_STEPS = [
     chapter: "시작",
     pose: "yay",
     title: "안녕! 나는 달구야",
-    text: "붕어빵은 학교생활에 흩어진 것들을 알아서 모아 한 화면에 보여 주는 앱이야. 어떤 걸 할 수 있는지 하나씩 보여 줄게.",
+    text: "Daling은 학교생활에 흩어진 것들을 알아서 모아 한 화면에 보여 주는 앱이야. 어떤 걸 할 수 있는지 하나씩 보여 줄게.",
     tips: ["LMS 강의자료", "과제 마감", "학교 메일", "학사일정", "과목 공지", "셔틀버스"],
     chips: true,
     note: "← → 키로 넘기고, Esc 로 언제든 그만둘 수 있어.",
@@ -10224,9 +10557,9 @@ const TOUR_STEPS = [
     text: "흩어진 날짜를 달력 하나에 모았어. 색만 봐도 무슨 일정인지 알 수 있어.",
     tips: [
       "과제 마감 · 학사일정 · 공휴일 · 내 일정",
-      "메일로 온 학교 행사·관심 세미나도 날짜를 찾아 표시",
+      "달빛제 같은 학교 공식 행사는 노란색으로",
+      "메일로 온 세미나도 날짜를 찾아 표시 (같은 행사 재공지는 하나로)",
       "날짜를 누르고 '이 날에 추가'로 내 일정 넣기",
-      "구글 캘린더로 보내기",
     ],
   },
   {
@@ -10238,7 +10571,8 @@ const TOUR_STEPS = [
     text: "이번 학기 과목을 카드로 정리해 뒀어.",
     tips: [
       "과목마다 학점과 강의계획서 바로가기",
-      "교수·조교 이름을 누르면 바로 메일 쓰기",
+      "교수·조교를 분반까지 표시 (이번 학기 기준)",
+      "이름을 누르면 '[과목 02분반]' 제목으로 바로 메일 쓰기",
       "'편집'으로 안 보는 과목 숨기기",
     ],
   },
@@ -10250,6 +10584,10 @@ const TOUR_STEPS = [
     pose: "reach",
     title: "과목 공지사항",
     text: "과목마다 흩어진 LMS 공지를 게시판처럼 모아 봐. 최근 7일 공지는 맨 위에 따로 모이고, 새 공지가 올라오면 알려 줘.",
+    tips: [
+      "공지를 열고 옆으로 끌거나 ← → 로 다음 공지",
+      "취소선·목록 같은 서식도 LMS 그대로",
+    ],
   },
   {
     chapter: "공부",
@@ -10295,13 +10633,40 @@ const TOUR_STEPS = [
   {
     chapter: "메일",
     view: "emails",
+    targets: ["#emailSearchInput"],
+    fallback: ['.nav-item[data-view="emails"]'],
+    pose: "search",
+    title: "과목으로 메일 찾기",
+    text: "검색칸에 과목 이름만 쳐도 그 과목 메일이 다 나와. 받은 편지함·보낸 편지함·LMS 탭을 한 번에 찾아.",
+    tips: [
+      "'일반화학2'·'일반화학Ⅱ'·'General Chemistry' 다 같은 과목",
+      "그 과목 교수·조교와 주고받은 메일까지",
+    ],
+  },
+  {
+    chapter: "메일",
+    view: "emails",
+    when: () => Object.keys(state.coursePeople || {}).length > 0,
+    targets: ["#newsGrid .person-course"],
+    fallback: ["#emailSearchInput"],
+    pose: "point",
+    title: "누가 보낸 메일이야?",
+    text: "보낸 사람이 이번 학기에 무슨 과목 몇 분반을 맡았는지 이름 옆에 붙여 줘. 내 수업이면 주황색이야.",
+    tips: [
+      "교수는 학교 개설강좌 전체에서, 조교는 내 과목에서 찾아",
+      "마우스를 올리면 맡은 과목·분반이 다 보여",
+    ],
+  },
+  {
+    chapter: "메일",
+    view: "emails",
     targets: ["#composeButton"],
     fallback: ['.nav-item[data-view="emails"]'],
     pose: "give",
     title: "메일 쓰기",
     text: "웹메일을 따로 열 필요 없이 여기서 보내.",
     tips: [
-      "이름만 쳐도 주고받은 사람·과목 교수·조교 주소를 찾아 줘",
+      "'물리 조교'처럼 쳐도 그 과목 교수·조교 주소를 찾아 줘",
       "내 PC나 Drive 파일을 첨부",
       "쓰다 멈추면 알아서 임시저장",
     ],
@@ -10348,6 +10713,17 @@ const TOUR_STEPS = [
     text: "누를 때마다 다음 테마로 넘어가. 기본·화이트·남색·다크가 있고, '자동'은 윈도우의 밝은·어두운 모드를 따라가.",
   },
   {
+    chapter: "편하게 쓰기",
+    pose: "stretch",
+    title: "창을 줄여도 괜찮아",
+    text: "창 크기에 맞춰 화면이 바뀌어. 옆에 다른 창을 띄워 놓고 같이 써도 돼.",
+    tips: [
+      "좁히면 왼쪽 메뉴가 아이콘만 남아",
+      "휴대폰처럼 세로로 줄이면 아래 탭 + 더보기",
+      "좁은 메일함은 폴더가 한 줄 띠로, 옆으로 넘겨 봐",
+    ],
+  },
+  {
     chapter: "설정",
     view: "settings",
     targets: ["#stStorage .st-head"],
@@ -10392,7 +10768,7 @@ const TOUR_STEPS = [
     chapter: "끝",
     pose: "laugh",
     title: "준비 끝!",
-    text: "이 소개는 설정 맨 아래 '앱 소개 다시 보기'로 언제든 다시 볼 수 있어. 이제 붕어빵 구우러 가자!",
+    text: "이 소개는 설정 맨 아래 '앱 소개 다시 보기'로 언제든 다시 볼 수 있어. 이제 시작해 보자!",
     last: true,
   },
 ];
@@ -12286,7 +12662,7 @@ async function openFeedback() {
   }
   const theme = THEMES.find((t) => t.key === themeKey)?.label;
   const lines = [
-    "안녕하세요, 붕어빵을 쓰고 있는 사용자입니다.",
+    "안녕하세요, Daling을 쓰고 있는 사용자입니다.",
     "",
     ...kind.body,
     "",
@@ -12308,7 +12684,7 @@ async function openFeedback() {
     for (let i = 0; i < 20 && state.view !== "emails"; i += 1) await new Promise((r) => setTimeout(r, 25));
     await new Promise((r) => setTimeout(r, 30));
   }
-  openCompose({ to: FEEDBACK_TO, subject: `[붕어빵 ${kind.tag}] `, body: lines.join("\n") });
+  openCompose({ to: FEEDBACK_TO, subject: `[Daling ${kind.tag}] `, body: lines.join("\n") });
   // 제목 뒤에 바로 이어 쓰게
   const subject = $("#composeForm [name=subject]");
   if (subject) {

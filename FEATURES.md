@@ -77,6 +77,7 @@ DGIST 학생용 데스크톱 앱 "붕어빵"(저장소 이름 dgist-lms-autosave
 - **주간 시간표**: 수업을 눌러 편집 창에서 고치기(드래그로 옮기지 않음 — 사용자가 정한 방식), 에브리타임 링크 가져오기, 시간표 이미지 가져오기(Gemini 키 필요), 토요일 표시
   - 색: 과목(과목번호, 없으면 이름)마다 반드시 다른 색. 12가지(`TT_COLORS`, `.tone-*`). 그릴 때마다 `normalizeTtColors`가 겹친 과목만 다시 칠하고 바뀐 칸만 저장. 12과목을 넘을 때만 가장 적게 쓰인 색을 나눠 씀.
 - 다가오는 마감, 다가오는 일정, 학교 공지, 학교 사이트 바로가기
+- 시험 기간 응원(`examSeason`, `EXAM_CHEERS`): 학사일정의 학부 중간·기말 시험 기준으로 7일 전(before)·시험 중(during)·마지막 날(last)·끝난 뒤 2일(after). 나우바 아래 줄에 짧은 문장(수업 중·직전 제외). 대시보드 인사 아래 줄(`#heroCheer`)은 1.12.13 에 뺐다(사용자: 거기엔 없어도 됨). 문장은 날짜로 골라 하루 동안 그대로. 나우바를 펼치면(수업이 없을 때) 달구 카드(`nowDalguCard`, `EXAM_DALGU`): 시기별 포즈·움직임(전 study/book 흔들림, 중 fight 주먹, 후 yay/lounge 폴짝)과 위 두 줄과 겹치지 않는 '달구가 하는 말'. 달구를 누르면 폴짝 뛰며 다음 말. 예전엔 펼친 칸이 나우바 아래 줄을 그대로 되풀이했다
 - 화면 편집(블록 순서 끌어 옮기기), 모두 접기
 - 과목 변경 감지 배너 → "확인했어요" (`/api/acknowledge-courses`)
 
@@ -89,6 +90,8 @@ DGIST 학생용 데스크톱 앱 "붕어빵"(저장소 이름 dgist-lms-autosave
 ### 3.4 캘린더 (`calendar`)
 
 - 월 달력에 과제 마감 + 학사일정 + 내 일정 + 공휴일 + **메일로 온 행사**
+- 여러 날 행사(1.12.18): 행사일 바로 뒤 '부터 …까지'·'~' 의 끝날을 `email_reader.guess_event_end` 가 `eventEnd` 로(2주 이내만, 그보다 길면 신청 기간으로 봄). 본문에 그 사이 날짜를 셋 이상 따로 적었으면 `guess_event_days` → `eventDays`(주말 쉬는 일정). 캘린더는 날마다 'n/N일째' 로, 구글 캘린더는 끝날까지 이어진 종일 일정. 날짜 이름표('개최' 등)가 문장 끝에 있으면 같은 줄 200자 앞까지 본다(비즈니스 모델 세미나가 10/19 로 잡혔던 원인)
+- 세미나 연사·발표 제목·장소(`email_reader.guess_seminar_info`, AI 없음): '연사/Speaker/발표자', '제목/Title/주제', '장소/Venue' 이름표 줄(깨진 'Spe a k'·'Venu' 도), 이름표만 있고 값은 다음 줄, 이름표 없는 숫자 번호 줄(사람·강의실·긴 제목으로 짐작, 제목에 세미나류 말이 있을 때만)을 읽는다. 세미나류 말(`_TALK_WORDS`)이 없는 메일은 뽑지 않는다(공모전 상금·강의성찰 목록을 제목으로 읽었었다). `_mark_events` 가 `mail.seminar` 에 넣고, 캘린더 상세(`seminarInfoHtml`)·목록·구글 캘린더(location·description)가 쓴다. 2026-10 메일로 연사까지 뽑힌 것 8건
 - 메일 행사: 공식 학사일정에는 달빛제 같은 행사가 없다. 메일 본문·제목에서 날짜를 규칙으로 뽑고(`email_reader.guess_event_date`, AI 불필요), 관심 분야와 맞는 세미나와 학교 전체 행사만 `calendar` 로 표시(`web_ui._mark_events`). 같은 날 같은 행사의 재공지는 하나로 합침. 구글 캘린더 동기화도 이 표시가 붙은 것만 보냄
 - 색: 과제 마감 빨강(`cal-deadline`), 학교 행사 노랑(`cal-school`, `schoolEvent`), 관심 세미나 보라(`cal-event`), 제출 완료 초록, 내 일정 파랑, 학사일정 회색 띠. 칸 이름은 `app.js eventShortTitle` 이 날짜·연도·"개최 안내"를 떼고 영어 제목이면 [학과] 꼬리표로 만든다. 오른쪽 상세는 짧은 이름 + 메일 원래 제목 전체(`it.full`)를 줄바꿈해 보여 준다
 - 상세에서 메일 일정을 누르면 메일함으로 가지 않고 그 칸이 펼쳐지며(`toggleDayMail`, `.day-item.open`) 본문 글(`mailPlainText`, 주소는 `linkifyText` → `/api/mail/open-link`)을 보여 준다. 읽는 동안 패널이 넓어짐(`.calendar-stage.reading`). '메일함에서 열기'는 보조 버튼
@@ -245,6 +248,11 @@ GitHub 업데이트 확인 버튼은 뺐다. 설치형은 새 설치 파일로 �
 - OAuth: 앱에 들어 있는 데스크톱 클라이언트(`google_client.json`), 토큰은 `token.json`. 설치형 클라이언트라 루프백 포트가 바뀌어도 됩니다.
 - Drive (`drive_uploader.py`): 루트 폴더 아래 과목 폴더, 업로드 선택(`upload_selection.json`의 `courses`)을 따름. 권한은 `drive.file`.
 - Calendar (`calendar_sync.py`): 메일에서 뽑은 일정, 학사일정을 지정한 캘린더로.
+- **OAuth 동의 화면 브랜딩** (2026-10-12): 데스크톱 앱이 쓰는 클라이언트는 Cloud 프로젝트 `dgist-lms-autosaver-2`, 예전 웹판(Render) 클라이언트는 `dgist-lms-sync`. 두 프로젝트 모두 앱 이름 Daling, 로고 `docs/logo-120.png`(= `web/app-logo-120.png`), 홈 `https://daling-app.pages.dev/`, 개인정보처리방침 `/privacy`, 약관 `/terms`, 승인된 도메인 `daling-app.pages.dev`.
+  - 이전 반려 사유 4가지: 홈페이지(`jykim5215.github.io/…`)가 내 소유로 확인 안 됨(GitHub 이름이 tutleblue로 바뀌어 404, 게다가 Search Console 확인이 하위 경로라 도메인 소유로 안 침), 개인정보처리방침 내용 부족, 홈에 앱 목적 설명 없음, 동의 화면 이름(Daling)과 홈 이름(붕어빵) 불일치.
+  - 사이트 원본은 `docs/`(한국어 + 심사관용 영어). 배포: `npx wrangler pages deploy docs --project-name daling-app --branch main`. Pages 가 `.html`을 떼는 308 리디렉트를 하므로 동의 화면에는 `/privacy`처럼 확장자 없는 주소를 넣습니다.
+  - Search Console 속성 `https://daling-app.pages.dev/`(URL 접두어, 도메인 루트)는 `docs/googlee81e6dcdac788920.html`로 jykim5215@gmail.com 소유 확인. 이 파일을 지우면 소유 확인이 풀립니다.
+  - Google 은 github.io 같은 공용 호스팅 하위 도메인을 "소유 확인 불가"로 반려한 사례가 있습니다(2026-06 포럼 답변). pages.dev 도 반려되면 개인 도메인을 사서 같은 Pages 프로젝트에 붙이고 Search Console '도메인' 속성(DNS TXT)으로 확인합니다.
 
 ### 4.6 DGIST 공공데이터 (`dgist_api.py`)
 
@@ -645,3 +653,35 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 - 화면: 메일 목록 보낸 사람 옆·읽기 화면 주소 옆 `.person-course`('일반물리Ⅱ 3분반 교수 · 외 2개 분반', 내 수업이면 강조색, 마우스를 올리면 전체). 강의 카드 교수·조교에 분반, 메일 쓰기 제목 `[과목 NN분반] `.
 - 안 듣는 과목의 조교 (2026-10-09 실측, 읽기만): `public/v3/courses?name=` 로 다른 분반 과목은 찾을 수 있지만 `public/v1/courses/{id}/users` 403, `v1/courses/{id}/memberships` 403, `v1/courses/{id}?expand=instructorsMembership` 은 200 이나 대표 교수(role P) 한 명만(내 과목에서도 조교는 안 나옴). 저장된 메일 81통 중 조교 언급 7통(대부분 내가 보낸 것). → 다른 과목 조교는 모을 길이 없어 넣지 않았다.
 - 좁은 메일 쓰기(`@container mailmain ≤620px`): `.cfield` 를 이름 붙인 칸('label opt find' / 'body body body')으로. 예전 두 칸 규칙은 옵션(개별·중요)이 둘째 칸을 먼저 차지해 입력칸이 58px 첫째 칸으로 밀렸다(615px 창). 첨부가 없으면 빈 표 머리줄을 접고, 쓰는 동안 폴더 띠는 숨긴다.
+
+## 메일 검색: 과목으로 찾기 (2026-10-09)
+- `app.js emailMatchesQuery`: `searchNorm`(띄어쓰기 빼고 Ⅱ/ii → 2) 로 비교. 검색어가 내 과목 이름(한글·영어, `mailCourseIndex`)의 일부면 그 과목의 다른 이름이 든 메일과 그 과목 교수·조교(`state.courseStaff` 주소 + 같은 과목명의 `state.coursePeople`) 와 주고받은 메일도 찾는다.
+- 검색어가 있으면 `renderEmails` 가 폴더·탭을 가리지 않고 휴지통만 빼고 찾는다. 예전에는 받은 편지함·기본 탭 안에서만 찾아, '다변수' 10통 중 1통만 보였다.
+- 실측(81통): 일반화학Ⅱ 0→5, 일반화학II·일반화학2·General Chemistry 0→5, 다변수 1→10, 학술 글쓰기 0→5.
+- 첫 실행 소개 27단계: '과목으로 메일 찾기'(#emailSearchInput), '누가 보낸 메일이야?'(.person-course, 꼬리표가 있을 때만), '창을 줄여도 괜찮아' 추가, 캘린더·강의·공지·메일 쓰기 tips 갱신.
+
+## 메일 지우기·휴지통·보관 설정 (2026-10-09)
+- 원인(실측): 메일 받기가 '최근 21일(받은 날짜 기준)·폴더당 60통'으로 못 박혀 있었다. 휴지통으로 옮겨도 받은 날짜는 그대로라, 3주 넘은 메일을 지우면 서버 휴지통에는 있지만 앱 휴지통에는 안 보였다(서버 휴지통 10통 중 앱에 4통). 지운 직후에도 목록에서 빼기만 해서 다음 메일 받기(최대 5분)까지 휴지통이 비어 보였다.
+- `email_reader.delete_message`: 휴지통 복사가 성공한 것을 확인한 뒤에만 원본에 `\Deleted`. 휴지통을 못 찾거나 복사가 실패하면 지우지 않고 오류(예전엔 복사 결과를 보지 않았다). EXPUNGE 는 여전히 보내지 않는다(`expunge_uid` 는 UIDPLUS 없으면 아무것도 안 함).
+- `MiniIMAP.search_all` + `fetch_school_emails`: 휴지통은 SINCE 대신 UID 순서(버린 순서)로 최근 N통.
+- 지운 뒤 `patch_email_local(to_trash=True)` 로 이 컴퓨터에서 바로 휴지통으로 옮기고(`pendingTrash`, id `trash:pending-…`), 메일 받기 작업을 뒤에서 시작한다. 서버가 새 번호(COPYUID)를 안 주므로 그 사이 되돌리기·완전 삭제는 막는다.
+- 설정 '자동으로 가져오기'에 `MAIL_KEEP_DAYS`(7~730, 기본 21: 1주·3주·2달·6달·1년)·`MAIL_KEEP_MAX`(30~2000, 기본 60: 60·150·300·1000). `runtime_config` 가 읽고 작업 프로세스가 쓴다. 서버 메일은 지우지 않는다. 실측 받은 편지함 412통(21일 안 101통).
+
+## 진행 막대와 자동 작업 (2026-10-11)
+- 위쪽 떠 있는 진행 막대(`showTopProgress`)는 사용자가 시킨 작업만 보여 준다. `task.auto`(예약·주기 실행)면 띄우지 않고 실행 기록에만 남는다. 막대를 작업이 띄웠는지 `state.taskOwnsBar` 로 기억해, 삼성 노트·내 컴퓨터 저장 막대는 건드리지 않는다.
+- 자동 작업이 도는 중에 사용자가 작업을 시키면 거절하지 않고 `task_state['queued']` 에 두었다가 `run_process` 끝에서 이어서 시작한다(`web_ui.start_task`). 그동안 막대는 '○○ · 곧 시작해요'. 사용자 작업끼리는 예전처럼 '이미 실행 중'.
+- 계기: 메일만 새로 가져오려는데 '자동 마감·일정 새로고침' 막대가 떠 있었다.
+- 메일 칸 분리(1.12.16): 메일 가져오기는 IMAP 만 써서 `web_ui.task_key(user, 'emails')` = `user:mail` 칸에서 따로 돈다(상태·로그·프로세스). `/api/task` 응답의 `mail` 에 들어 있고, 화면은 `renderTaskBar` 가 두 칸 중 사용자가 시킨 것을 보여 준다('외 1개'). 예약 실행(`app.scheduler_loop`)도 메일은 따로, LMS 작업(마감·자료)만 한 번에 하나. 이어서 하기(queued)는 이제 본 칸 작업에만 쓰인다. 작업 중지 버튼은 본 칸만 멈춘다.
+- 교수·조교(`fetch_course_staff`)는 과제 마감 확인(1시간)과 자료 동기화(`crawl_lms` 끝, 마감 수집 뒤) 둘 다에서 받는다. 새 PC 에서 첫 동기화를 마치면 바로 채워진다. 받은 것은 그 PC 의 `course_staff.json` 에만 두어 사용자마다 자기 과목 조교만 보인다(다른 사용자와 나누지 않음 — 수강 정보가 모이는 서버를 두지 않기로, 2026-10-11).
+
+## 리뷰 고침: 막 지운 메일·메일 작업 중지 (2026-10-11)
+- 막 휴지통으로 옮긴 메일(`pendingTrash`)은 `uid` 를 비운다(서버 `patch_email_local(to_trash)`·화면 `deleteEmail` 둘 다). IMAP 번호는 메일함마다 따로라, 원래 번호로 휴지통에 읽음·별표를 붙이면 같은 번호인 다른 메일이 바뀌었다(메일을 열면 자동 읽음 표시로 조용히 일어남). `setEmailRead` 는 uid 가 없으면 서버에 안 보낸다. 서버는 `mark-read`·`delete-email`·`restore-email`·`mail/star`·`mail/move`·`mail/eml` 에서 uid 가 없으면 409 `pendingTrash` 로 거절한다.
+- `stop_task(workspace, lane)`: 메일은 따로 도는 칸(`task_key(user, "emails")`)이라 예전처럼 `user_id` 칸만 보면 멈춘 메일 가져오기를 끌 수 없었다. `lane` 'mail'·'main'·빈 값(둘 다). `/api/stop` 본문 `{lane}`. 실패 알림도 그 작업의 칸(`key`)에 적는다.
+- 화면: '작업 중지'(`#runButton`)는 메일 칸이 직접 시킨 것이거나 30초 넘게 돌 때도 보인다. 메일함 새로고침 단추는 가져오는 동안 '가져오는 중 · 누르면 멈춤' 이고 누르면 메일만 멈춘다.
+
+## 이름·로고: Daling (2026-10-11)
+- 보이는 이름만 Daling: 창 제목·알림(`app.WINDOW_TITLE`), 화면 제목·설정 '앱' 카드, EXE 이름표(`FileDescription`·`ProductName`), 설치 화면·제어판·바로가기(`.iss` `AppName`), 설치 그림(`make_installer_art.py`), 첫 실행 소개·문의 메일 제목·설정 내보내기 파일 이름, 영어 번역.
+- 그대로 둔 것(기존 설치본이 앱 안 업데이트로 넘어오게): 실행 파일 `붕어빵.exe`, 설치 폴더(`.iss` `AppFolder` → `Programs\붕어빵`), AppId, 업데이트 파일 이름, 데이터 폴더, 사용자 자료 폴더 이름, 설정 백업의 `"app": "붕어빵"` 표시(불러오기 호환), 달구 말풍선의 붕어빵(간식) 농담.
+- 예전 '붕어빵' 바로가기는 설치 때 `[InstallDelete]` 로 지운다(바탕화면·시작 메뉴·시작 프로그램에 둘이 생기지 않게).
+- 로고: `design/logo/daling-source.webp`(흰 바탕 붓선) → `scripts/make_icons.py` 가 밝기를 불투명도로 바꿔 크림색 둥근 네모(`BG`) 위에 먹색으로 얹어 app.png·app.ico(16~256)·app-logo-120.png·favicon.svg·img/daling-mark.png 를 만든다. 16·24·32px 은 선을 굵게(MaxFilter). 화면의 로고 주소에는 `?v=daling` 을 붙였다(WebView2 캐시에 옛 물고기 그림이 남아 있었다).
+

@@ -110,12 +110,12 @@ _version_file.write_text(f"""VSVersionInfo(
   kids=[
     StringFileInfo([StringTable('041204B0', [
       StringStruct('CompanyName', 'jykim5215'),
-      StringStruct('FileDescription', '붕어빵 - DGIST LMS AutoSaver'),
+      StringStruct('FileDescription', 'Daling - DGIST LMS AutoSaver'),
       StringStruct('FileVersion', '{_ver}'),
       StringStruct('InternalName', 'bungeoppang'),
       StringStruct('LegalCopyright', 'jykim5215'),
       StringStruct('OriginalFilename', '붕어빵.exe'),
-      StringStruct('ProductName', '붕어빵'),
+      StringStruct('ProductName', 'Daling'),
       StringStruct('ProductVersion', '{_ver}')])]),
     VarFileInfo([VarStruct('Translation', [1042, 1200])])
   ]

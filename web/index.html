@@ -1,10 +1,10 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="ko">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>붕어빵</title>
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>Daling</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=daling" />
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
@@ -255,12 +255,12 @@
                   <span id="dashEditLabel">화면 편집</span>
                 </button>
                 <h1 id="heroTitle" class="hero-greeting">
+                  <!-- Daling 로고 (scripts/make_icons.py 의 STROKES 를 32칸으로 옮긴 것). 색은 테마 강조색(currentColor) -->
                   <svg class="hero-spark" viewBox="0 0 32 32" aria-hidden="true">
-                    <g fill="currentColor">
-                      <rect x="14.6" y="1" width="2.8" height="30" rx="1.4" />
-                      <rect x="14.6" y="1" width="2.8" height="30" rx="1.4" transform="rotate(45 16 16)" />
-                      <rect x="14.6" y="1" width="2.8" height="30" rx="1.4" transform="rotate(90 16 16)" />
-                      <rect x="14.6" y="1" width="2.8" height="30" rx="1.4" transform="rotate(135 16 16)" />
+                    <g fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M24.8 3.2 L3.2 27.2" />
+                      <path d="M3.2 27.3 C7.5 26 12.6 25.1 18.2 24.8 L24.2 24.6" />
+                      <path d="M19.8 15.6 C20.4 18.2 22.3 20.4 24 22.6 L28.5 28.7" />
                     </g>
                   </svg>
                   <span id="heroText">안녕하세요</span>
@@ -1478,6 +1478,32 @@
                 </span>
                 <input name="scheduleTime" type="time" aria-label="매일 전체 확인 시각" />
               </label>
+              <!-- 이 컴퓨터에 남길 메일 (예전엔 21일·폴더당 60통으로 못 박혀 있었다) -->
+              <label class="st-auto-item">
+                <span class="icon" data-icon="mail"></span>
+                <span class="st-auto-label">메일 보관 기간
+                  <button type="button" class="hint" data-hint="이 기간에 받은 메일만 이 컴퓨터에 받아 둡니다. 길게 잡으면 처음 한 번은 받는 데 오래 걸려요(한 통에 약 0.1초). 서버의 메일은 지우지 않습니다.">?</button>
+                </span>
+                <select name="mailKeepDays" aria-label="메일 보관 기간">
+                  <option value="7">1주</option>
+                  <option value="21">3주</option>
+                  <option value="60">2달</option>
+                  <option value="180">6달</option>
+                  <option value="365">1년</option>
+                </select>
+              </label>
+              <label class="st-auto-item">
+                <span class="icon" data-icon="box"></span>
+                <span class="st-auto-label">메일함마다 최대
+                  <button type="button" class="hint" data-hint="받은·보낸·휴지통 같은 메일함마다 최근 몇 통까지 받아 둘지 정합니다. 휴지통은 최근에 버린 순서로 받습니다.">?</button>
+                </span>
+                <select name="mailKeepMax" aria-label="메일함마다 최대 통수">
+                  <option value="60">60통</option>
+                  <option value="150">150통</option>
+                  <option value="300">300통</option>
+                  <option value="1000">1000통</option>
+                </select>
+              </label>
               <!-- 알림: 누르는 즉시 저장된다 -->
               <label class="st-auto-item">
                 <span class="icon" data-icon="clock"></span>
@@ -1580,9 +1606,9 @@
           <!-- ⑦ 앱 -->
           <section class="st-card">
             <header class="st-head">
-              <span class="st-tile bp"><img src="/app-logo-120.png" alt="" /></span>
+              <span class="st-tile bp"><img src="/app-logo-120.png?v=daling" alt="" /></span>
               <div>
-                <h3>붕어빵 <span id="appVersion">-</span></h3>
+                <h3>Daling <span id="appVersion">-</span></h3>
                 <p>DGIST 기초학부 26학번 김유준 제작</p>
               </div>
               <button class="button compact ghost" id="settingsWhatsNewButton" type="button">업데이트 내용</button>

@@ -40,7 +40,7 @@ for scale in (100, 125, 150, 200):
         title = ImageFont.truetype(str(FONT), round(24 * scale / 100))
     sub = ImageFont.truetype(str(FONT).replace("malgunbd", "malgun"), round(10.5 * scale / 100))
     y = round(34 * scale / 100)
-    for text, font, color, gap in (("붕어빵", title, ACCENT, 8), ("DGIST 학생의 LMS 도우미", sub, SOFT, 0)):
+    for text, font, color, gap in (("Daling", title, ACCENT, 8), ("DGIST 학생의 LMS 도우미", sub, SOFT, 0)):
         tw = draw.textbbox((0, 0), text, font=font)[2]
         draw.text(((w - tw) / 2, y), text, font=font, fill=color)
         y += font.size + round(gap * scale / 100)

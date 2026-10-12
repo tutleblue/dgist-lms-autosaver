@@ -222,6 +222,10 @@ body {
   /* 숫자 폭을 고정해야 초마다 글자가 흔들리지 않는다 */
   font-variant-numeric: tabular-nums;
   font-feature-settings: "tnum";
+  /* 펼쳐서 초가 붙으면 '17:39:44' + 날짜가 칸(173px)을 꽉 채워, 초가 늘어나는 도중 아랫줄로 떨어졌다(실측).
+     시각은 절대 줄바꿈하지 않고, 대신 날짜가 줄어들어 두 줄이 된다. */
+  white-space: nowrap;
+  flex: none;
 }
 /* 초는 펼쳤을 때만. 폭까지 0으로 줄여야 접힌 상태가 흔들리지 않는다 */
 .nowbar-sec {
@@ -241,7 +245,10 @@ body {
   font-size: 10.5px;
   color: var(--text-faint);
   white-space: nowrap;
+  min-width: 0;
+  text-align: right;
 }
+.nowbar-open .nowbar-date { white-space: normal; }
 
 /* 펼침 영역: 자식이 정확히 하나여야 0fr→1fr 이 동작한다 */
 .nowbar-detail {
@@ -8591,6 +8598,51 @@ body.tour-open { overflow: hidden; }
 }
 @keyframes hero-spark-in { from { transform: rotate(-90deg) scale(0.4); opacity: 0; } to { transform: none; opacity: 1; } }
 .hero-panel .hero-sub { margin: 2px 0 0 38px; font-size: 13.5px; color: var(--text-soft); }
+/* 나우바 펼침: 시험 기간 달구 카드 */
+.now-dalgu { display: flex; align-items: center; gap: 10px; padding: 4px 2px 2px; }
+.now-dalgu-pet {
+  flex: none; width: 54px; height: 54px; padding: 0; border: 0; background: none; cursor: pointer;
+  border-radius: 14px;
+}
+.now-dalgu-pet img {
+  width: 100%; height: 100%; object-fit: contain; display: block;
+  animation: dalgu-bob 2.6s ease-in-out infinite; transform-origin: 50% 100%;
+}
+.now-dalgu[data-phase="during"] .now-dalgu-pet img,
+.now-dalgu[data-phase="last"] .now-dalgu-pet img { animation-name: dalgu-pump; animation-duration: 1.6s; }
+.now-dalgu[data-phase="after"] .now-dalgu-pet img { animation-name: dalgu-hop; animation-duration: 1.4s; }
+.now-dalgu.hop .now-dalgu-pet { animation: dalgu-jump 0.45s cubic-bezier(.3,1.6,.5,1); }
+.now-dalgu-text { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.now-dalgu-text em { font-style: normal; font-size: 11px; font-weight: 700; color: var(--accent-strong); }
+.now-dalgu-bubble {
+  position: relative;
+  font-size: 12.5px; line-height: 1.45; color: var(--text);
+  background: var(--surface-soft); border: 1px solid var(--border);
+  border-radius: 10px; padding: 6px 9px;
+}
+.now-dalgu-bubble::before {
+  content: ""; position: absolute; left: -5px; top: 50%; width: 8px; height: 8px;
+  background: inherit; border-left: 1px solid var(--border); border-bottom: 1px solid var(--border);
+  transform: translateY(-50%) rotate(45deg);
+}
+@keyframes dalgu-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+@keyframes dalgu-pump {
+  0%, 60%, 100% { transform: rotate(0) translateY(0); }
+  70% { transform: rotate(-6deg) translateY(-3px); }
+  80% { transform: rotate(5deg) translateY(-1px); }
+}
+@keyframes dalgu-hop {
+  0%, 55%, 100% { transform: translateY(0) scale(1, 1); }
+  62% { transform: translateY(0) scale(1.08, 0.9); }
+  75% { transform: translateY(-7px) scale(0.95, 1.06); }
+  88% { transform: translateY(0) scale(1.04, 0.96); }
+}
+@keyframes dalgu-jump {
+  0% { transform: translateY(0); } 45% { transform: translateY(-10px) rotate(-6deg); } 100% { transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .now-dalgu-pet img, .now-dalgu.hop .now-dalgu-pet { animation: none !important; }
+}
 @media (prefers-reduced-motion: reduce) { .hero-spark { animation: none; } }
 
 /* D-day 아래 '다음에 챙길 것' */
@@ -10219,3 +10271,11 @@ body.mail-resizing iframe { pointer-events: none; } /* 끄는 중 본문 iframe 
 /* 메일함 집중 모드(사이드바 72px)에서 '문의 · 제보' 글자가 세로로 한 글자씩 쌓였다 → 아이콘만 */
 .app-shell.mail-focus .whats-new { font-size: 0; justify-content: center; padding: 9px 0; }
 .app-shell.mail-focus .whats-new .icon { width: 18px; height: 18px; }
+
+/* 세미나 연사·발표 제목 (메일에서 뽑음) */
+.sem-info { display: flex; flex-direction: column; gap: 2px; margin: 3px 0 2px; }
+.sem-row { font-size: 12px; line-height: 1.45; color: var(--text-soft); overflow-wrap: anywhere; }
+.sem-row b {
+  display: inline-block; min-width: 30px; margin-right: 6px;
+  font-size: 10.5px; font-weight: 700; color: var(--accent-strong);
+}

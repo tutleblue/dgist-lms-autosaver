@@ -120,11 +120,14 @@ def _build_event(mail: dict) -> dict[str, Any] | None:
 
     # 시:분이 모두 0이면 종일 일정으로 취급
     all_day = start.hour == 0 and start.minute == 0 and start.second == 0
+    last = _parse_dt(mail.get("eventEnd"))
     if all_day:
         day = start.date()
+        # 여러 날 행사(eventEnd)면 끝날까지 (구글 종일 일정의 end 는 다음 날)
+        stop = last.date() if last and last.date() > day else day
         when = {
             "start": {"date": day.isoformat()},
-            "end": {"date": (day + _dt.timedelta(days=1)).isoformat()},
+            "end": {"date": (stop + _dt.timedelta(days=1)).isoformat()},
         }
     else:
         end = start + _dt.timedelta(hours=1)
@@ -134,6 +137,15 @@ def _build_event(mail: dict) -> dict[str, Any] | None:
         }
 
     description_parts = []
+    seminar = mail.get("seminar") or {}
+    if seminar.get("speaker"):
+        description_parts.append(f"연사: {seminar['speaker']}")
+    if seminar.get("title"):
+        description_parts.append(f"발표 제목: {seminar['title']}")
+    if seminar.get("place"):
+        description_parts.append(f"장소: {seminar['place']}")
+    if seminar:
+        description_parts.append("")
     if sender:
         description_parts.append(f"보낸 사람: {sender}")
     if mail.get("subject"):
@@ -145,6 +157,8 @@ def _build_event(mail: dict) -> dict[str, Any] | None:
         "description": "\n".join(description_parts),
         "extendedProperties": {"private": {"autosaverKey": _event_key(mail), "source": _TAG}},
     }
+    if seminar.get("place"):
+        body["location"] = str(seminar["place"])[:200]
     body.update(when)
     return body
 
@@ -230,7 +244,7 @@ def _build_academic_event(item: dict) -> dict[str, Any] | None:
     kind = (item.get("kind") or "").strip()
     return {
         "summary": title,
-        "description": f"DGIST 학사일정{f' · {kind}' if kind else ''}\n붕어빵이 자동으로 넣었습니다.",
+        "description": f"DGIST 학사일정{f' · {kind}' if kind else ''}\nDaling이 자동으로 넣었습니다.",
         "start": {"date": start},
         "end": {"date": end_date.isoformat()},
         "extendedProperties": {"private": {"autosaverKey": f"acad-{item.get('id') or start}"}},

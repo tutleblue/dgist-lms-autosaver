@@ -1,6 +1,6 @@
 # CLAUDE.md — 붕어빵 (DGIST LMS AutoSaver) 작업 안내
 
-DGIST 학생용 Windows 데스크톱 앱입니다. LMS 강의자료·과제 마감·학교 메일·학사일정·공지를 자동으로 모아
+DGIST 학생용 Windows 데스크톱 앱입니다. **보이는 이름은 Daling**(2026-10-11, 예전 이름 붕어빵)이고, 실행 파일(`붕어빵.exe`)·설치 폴더(`Programs\붕어빵`)·데이터 폴더·업데이트 파일(`bungeoppang-*-setup.exe`)·사용자 자료 폴더(`문서\붕어빵 파일 정리`, `붕어빵 강의자료`)는 기존 설치본 업데이트를 위해 그대로 둡니다. 로고는 `design/logo/daling-source.webp` → `python scripts/make_icons.py`. LMS 강의자료·과제 마감·학교 메일·학사일정·공지를 자동으로 모아
 한 화면에서 보고, Google Drive·Google Calendar·삼성 노트·내 컴퓨터로 보냅니다.
 
 - **기능 전체 지도, API 목록, 데이터 파일, 설정 키는 `FEATURES.md`** 에 있습니다. 기능을 고치기 전에 해당 절을 먼저 읽습니다.

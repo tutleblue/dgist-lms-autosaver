@@ -173,6 +173,18 @@ SCHOOL_IMAP_PORT = int(_CONFIG.get("SCHOOL_IMAP_PORT", 993))
 SCHOOL_SMTP_HOST = str(_CONFIG.get("SCHOOL_SMTP_HOST", "smtp.dgist.ac.kr"))
 SCHOOL_SMTP_PORT = int(_CONFIG.get("SCHOOL_SMTP_PORT", 465))
 EMAIL_INTERESTS = str(_CONFIG.get("EMAIL_INTERESTS", "전공 탐색, 취업, 음악, 세미나"))
+
+
+def _int_setting(key: str, default: int, low: int, high: int) -> int:
+    try:
+        return min(high, max(low, int(_CONFIG.get(key, default))))
+    except (TypeError, ValueError):
+        return default
+
+
+# 메일을 이 컴퓨터에 얼마나 남길지 (설정 > 자동으로 가져오기). 예전엔 21일·폴더당 60통으로 못 박혀 있었다.
+MAIL_KEEP_DAYS = _int_setting("MAIL_KEEP_DAYS", 21, 7, 730)
+MAIL_KEEP_MAX = _int_setting("MAIL_KEEP_MAX", 60, 30, 2000)
 LOCAL_SAVE_PATH = str(_CONFIG.get("LOCAL_SAVE_PATH", ""))
 # 동기화 때 구글 드라이브에도 올릴지. 예전 설정에는 이 키가 없고, 그때는 늘 올렸다.
 DRIVE_UPLOAD = _CONFIG.get("AUTO_DRIVE_UPLOAD", True) is not False

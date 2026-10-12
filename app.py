@@ -32,7 +32,8 @@ import web_ui
 
 HOST = "127.0.0.1"
 PORT = int(os.environ.get("AUTOSAVER_UI_PORT", "8765"))
-WINDOW_TITLE = "붕어빵"
+# 보이는 앱 이름(2026-10-11 붕어빵 → Daling). 실행 파일은 그대로 붕어빵.exe
+WINDOW_TITLE = "Daling"
 # 작업표시줄이 pythonw.exe나 옛 캐시가 아니라 이 앱을 별도 앱으로 인식하게 하는 식별자.
 # 바로가기(install.ps1)에도 같은 값을 넣어야 아이콘이 완전히 일치한다.
 APP_USER_MODEL_ID = "DGIST.Bungeoppang.App"
@@ -381,12 +382,17 @@ def scheduler_loop() -> None:
             # 종류별 자동 실행. 자동이 기본이고, 새로고침 버튼은 '지금 당장' 용.
             # 기준은 메모리가 아니라 health.json 의 마지막 성공 시각이라,
             # 앱을 껐다 켜도 방금 한 걸 또 하지 않고, 오래 안 했으면 곧 한다.
-            # 한 번에 하나만 돌린다 (LMS 로그인이 겹치지 않게).
+            # LMS 작업(마감·자료)은 한 번에 하나만 돌린다 (LMS 로그인이 겹치지 않게).
+            # 메일은 IMAP 만 써서 따로 돈다 (web_ui.task_key).
             if time.monotonic() - started_at > 45:
+                minutes = web_ui.auto_minutes(config)
                 with web_ui.task_lock:
                     running = web_ui.task_states.get(workspace.user_id, {}).get("running", False)
+                    mail_running = web_ui.task_states.get(web_ui.task_key(workspace.user_id, "emails"), {}).get("running", False)
+                if not mail_running and next_due_job(workspace, minutes, ("emails",)):
+                    web_ui.start_task(workspace, "emails", auto=True)
                 if not running:
-                    kind = next_due_job(workspace, web_ui.auto_minutes(config))
+                    kind = next_due_job(workspace, minutes, ("deadlines", "sync"))
                     if kind:
                         web_ui.start_task(workspace, kind, auto=True)
         except Exception:
@@ -394,7 +400,7 @@ def scheduler_loop() -> None:
         time.sleep(30)
 
 
-def next_due_job(workspace, minutes: dict[str, int]) -> str | None:
+def next_due_job(workspace, minutes: dict[str, int], kinds=("emails", "deadlines", "sync")) -> str | None:
     """지금 돌 차례인 자동 작업 하나. 없으면 None.
 
     급한 순서: 메일(짧은 주기) → 마감 → 자료.
@@ -423,7 +429,7 @@ def next_due_job(workspace, minutes: dict[str, int]) -> str | None:
     except OSError:
         config_stamp = None
 
-    for kind in ("emails", "deadlines", "sync"):
+    for kind in kinds:
         every = int(minutes.get(kind, 0) or 0)
         if every <= 0:
             continue
@@ -521,7 +527,7 @@ def start_server() -> ThreadingHTTPServer | None:
         return server
 
     raise RuntimeError(
-        f"붕어빵이 쓸 포트를 찾지 못했습니다 ({PORT_CANDIDATES[0]}~{PORT_CANDIDATES[-1]} 모두 사용 중). "
+        f"Daling이 쓸 포트를 찾지 못했습니다 ({PORT_CANDIDATES[0]}~{PORT_CANDIDATES[-1]} 모두 사용 중). "
         "다른 프로그램을 몇 개 닫고 다시 켜 주세요."
     )
 

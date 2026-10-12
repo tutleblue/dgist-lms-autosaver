@@ -6,7 +6,10 @@
 ;  - WebView2 런타임 미설치 환경 → 부트스트래퍼 자동 실행
 ;  - .NET Framework 4.7.2 미만 → 설치 전에 명확한 안내로 중단
 
-#define AppName "붕어빵"
+; 보이는 이름은 Daling(2026-10-11). 설치 폴더·실행 파일·업데이트 파일 이름은 그대로 두어
+; 이미 설치한 사람도 앱 안 업데이트로 그대로 넘어온다(AppId 도 그대로).
+#define AppName "Daling"
+#define AppFolder "붕어빵"
 ; 버전은 build_installer.ps1 이 VERSION 파일에서 읽어 /DAppVersion 으로 넘긴다
 #ifndef AppVersion
   #define AppVersion "1.11.0"
@@ -37,9 +40,11 @@ SignedUninstaller=yes
 
 ; 관리자 권한 없이 사용자 폴더에 설치 → 공용/제한 PC에서도 UAC 없이 설치됨
 PrivilegesRequired=lowest
-DefaultDirName={localappdata}\Programs\{#AppName}
+DefaultDirName={localappdata}\Programs\{#AppFolder}
 DefaultGroupName={#AppName}
 DisableProgramGroupPage=yes
+; 이름을 바꾼 뒤 업데이트하면 Inno 가 예전 시작 메뉴 폴더(붕어빵)를 다시 써서 '붕어빵' 폴더 안에 Daling 이 생겼다
+UsePreviousGroup=no
 ; 단계는 앱처럼 짧게: 환영(달구) → 추가 옵션 → 설치 → 완료.
 ; 설치 위치·'모든 사용자' 고르기·'준비됨' 확인은 학생에게 필요 없어 뺐다 (사용자 폴더에 설치)
 DisableDirPage=yes
@@ -86,14 +91,14 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Messages]
 ; 앱 말투로 짧게 (기본 문구는 '마법사' 같은 딱딱한 말이 많다)
-korean.WelcomeLabel1=붕어빵을 설치할게요
+korean.WelcomeLabel1=Daling을 설치할게요
 ; 개인정보 안내: SignPath Foundation 서명 조건(설치 중 개인정보 처리 고지). 자세한 것은 PRIVACY.md
 korean.WelcomeLabel2=LMS 강의자료, 과제 마감, 학교 메일을 한 화면에 모아 주는 앱이에요.%n%n개인정보: 로그인 정보와 받은 자료는 이 PC에만 저장되고, 개발자에게 보내지 않아요. 직접 연결한 Google Drive·Calendar로만 보냅니다.%n자세히: github.com/tutleblue/dgist-lms-autosaver/blob/main/PRIVACY.md
 english.WelcomeLabel2=Collects your LMS materials, deadlines and school mail in one place.%n%nPrivacy: your sign-in details and files stay on this PC and are never sent to the developer — only to the Google Drive/Calendar you connect.%nDetails: github.com/tutleblue/dgist-lms-autosaver/blob/main/PRIVACY.md
 korean.ClickNext=[다음] 을 누르면 바로 설치해요. 1분이면 끝나요.
 korean.FinishedHeadingLabel=설치를 마쳤어요
-korean.FinishedLabel=이제 붕어빵을 쓸 수 있어요.%n처음 켜면 달구가 앱을 짧게 소개해 줄 거예요.
-korean.FinishedLabelNoIcons=이제 붕어빵을 쓸 수 있어요.
+korean.FinishedLabel=이제 Daling을 쓸 수 있어요.%n처음 켜면 달구가 앱을 짧게 소개해 줄 거예요.
+korean.FinishedLabelNoIcons=이제 Daling을 쓸 수 있어요.
 korean.ClickFinish=[마침] 을 누르면 창이 닫힙니다.
 korean.SelectTasksLabel2=원하는 것만 켜고 [다음] 을 눌러 주세요.
 
@@ -108,16 +113,30 @@ Source: "payload\_internal\*"; DestDir: "{app}\_internal"; Flags: ignoreversion 
 Source: "MicrosoftEdgeWebview2Setup.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall; Check: NeedsWebView2
 
 [Icons]
-Name: "{group}\{#AppName}"; Filename: "{app}\{#AppExe}"; WorkingDir: "{app}"; IconFilename: "{app}\_internal\web\app.ico"
+; 아이콘은 daling.ico: Windows 가 아이콘을 파일 경로로 기억해, 같은 app.ico 를 가리키면 옛 물고기가 남았다
+Name: "{group}\{#AppName}"; Filename: "{app}\{#AppExe}"; WorkingDir: "{app}"; IconFilename: "{app}\_internal\web\daling.ico"
 Name: "{group}\{cm:UninstallProgram,{#AppName}}"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; WorkingDir: "{app}"; IconFilename: "{app}\_internal\web\app.ico"; Tasks: desktopicon
+Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; WorkingDir: "{app}"; IconFilename: "{app}\_internal\web\daling.ico"; Tasks: desktopicon
 Name: "{userstartup}\{#AppName}"; Filename: "{app}\{#AppExe}"; WorkingDir: "{app}"; Tasks: startupicon
 
 [Run]
+; 아이콘 캐시 새로 고침: 실행 파일 경로가 그대로라 작업 표시줄·프로그램 목록이 옛 아이콘을 기억했다(로고 교체 2026-10-11)
+Filename: "{sys}\ie4uinit.exe"; Parameters: "-show"; Flags: runhidden nowait
 Filename: "{tmp}\MicrosoftEdgeWebview2Setup.exe"; Parameters: "/silent /install"; StatusMsg: "WebView2 런타임을 설치하는 중입니다..."; Check: NeedsWebView2; Flags: waituntilterminated
 Filename: "{app}\{#AppExe}"; Description: "{cm:LaunchProgram,{#AppName}}"; WorkingDir: "{app}"; Flags: nowait postinstall skipifsilent
 ; 앱 안 '지금 업데이트' 는 /SILENT /RELAUNCH=1 로 부른다. 조용히 설치한 뒤 앱을 다시 켠다 (updater.py)
 Filename: "{app}\{#AppExe}"; WorkingDir: "{app}"; Flags: nowait runasoriginaluser; Check: ShouldRelaunch
+
+[InstallDelete]
+; 이름을 Daling 으로 바꾸기 전에 만든 '붕어빵' 바로가기 (그대로 두면 바탕화면·시작 메뉴에 둘이 생긴다)
+Type: files; Name: "{autodesktop}\붕어빵.lnk"
+Type: files; Name: "{userstartup}\붕어빵.lnk"
+Type: files; Name: "{group}\붕어빵.lnk"
+Type: files; Name: "{userprograms}\붕어빵\붕어빵.lnk"
+Type: files; Name: "{userprograms}\붕어빵\붕어빵 제거.lnk"
+Type: files; Name: "{userprograms}\붕어빵\Daling.lnk"
+Type: files; Name: "{userprograms}\붕어빵\Daling 제거.lnk"
+Type: dirifempty; Name: "{userprograms}\붕어빵"
 
 [UninstallRun]
 ; 삭제할 때는 설치와 달리 켜져 있는 앱을 닫아 주지 않는다. 창을 닫아도 알림 영역에서 돌고 있으면
@@ -173,7 +192,7 @@ begin
   Result := True;
   if not DotNetOK then
   begin
-    MsgBox('붕어빵을 실행하려면 .NET Framework 4.7.2 이상이 필요합니다.' + #13#10#13#10 +
+    MsgBox('Daling을 실행하려면 .NET Framework 4.7.2 이상이 필요합니다.' + #13#10#13#10 +
            'Windows Update를 먼저 실행하거나 아래 주소에서 설치한 뒤 다시 시도해 주세요.' + #13#10 +
            'https://dotnet.microsoft.com/download/dotnet-framework',
            mbCriticalError, MB_OK);

@@ -164,6 +164,22 @@ class MiniIMAP:
                 ids += [int(n) for n in line.split()[2:] if n.isdigit()]
         return sorted(ids)
 
+    def search_all(self) -> list[int]:
+        """지운 표시가 없는 메일 전부의 UID (오래된 → 새 순).
+
+        휴지통은 '받은 날짜'로 고르면 안 된다. 옮겨도 받은 날짜(INTERNALDATE)는 그대로라
+        한 달 전 메일을 지우면 SINCE 21일에 걸리지 않아 휴지통에 영영 안 보였다.
+        UID 는 그 폴더에 들어온 순서라 '최근에 버린 것'이 뒤쪽에 온다.
+        """
+        status, lines = self.cmd("UID SEARCH NOT DELETED")
+        if status != "OK":
+            return []
+        ids: list[int] = []
+        for line, _ in lines:
+            if line.upper().startswith(b"* SEARCH"):
+                ids += [int(n) for n in line.split()[2:] if n.isdigit()]
+        return sorted(ids)
+
     def search_flagged(self) -> list[int]:
         """별표(\\Flagged) 가 붙은 메일. 폰·웹메일에서 붙인 것도 여기서 보인다."""
         status, lines = self.cmd("UID SEARCH NOT DELETED FLAGGED")
@@ -991,6 +1007,10 @@ _EVENT_WORDS = (
     "행사", "축제", "달빛제", "세미나", "특강", "설명회", "공연", "영화제", "콘서트", "간담회",
     "워크숍", "워크샵", "박람회", "캠프", "페스티벌", "festival", "seminar", "colloquium",
     "콜로퀴움", "강연", "포럼", "시상식", "체육대회", "오픈하우스", "부스", "투어",
+    # 'Distinguished Lecture Series' 가 '세미나' 라는 말 없이 와서 캘린더에 안 나왔다(2026-10-07 DLS 메일).
+    # 그냥 'lecture' 는 수업 메일(Lecture 5 …)까지 걸려서 묶음 말로만 넣는다.
+    "lecture series", "distinguished lecture", "special lecture", "invited lecture", "keynote",
+    "symposium", "심포지엄",
 )
 _MONTHS_EN = {
     "jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6,
@@ -1089,16 +1109,197 @@ def guess_event_date(subject: str, body: str, mail_date: str = "") -> str:
                 if lead:
                     hour = int(lead.group(1)) % 12 + (12 if lead.group(3).upper() == "PM" else 0)
                     found = f"{found}T{hour:02d}:{lead.group(2)}"
+                else:
+                    # 뇌과학과는 'Seminar - 16:00, October 7(Wed)' 처럼 24시 시각을 날짜 앞에 쓴다
+                    lead = re.search(r"(?<![\d:])([01]?\d|2[0-3]):([0-5]\d)(?![\d:])", subject)
+                    if lead:
+                        found = f"{found}T{int(lead.group(1)):02d}:{lead.group(2)}"
             return found
     # 2) '일시·개최·열리는' 가까이의 날짜
     for anchor in _EVENT_ANCHORS.finditer(body):
-        near = body[max(0, anchor.start() - 40):anchor.end() + 60]
-        offset = max(0, anchor.start() - 40)
+        # '오는 10월 14일(수)부터 … DGIST R1 203호에서 「…세미나」 를 개최합니다.' 처럼 날짜가 문장 앞에,
+        # '개최' 가 문장 끝에 오면 40자 앞까지만 봐서 못 찾고, 아래 일정 목록의 '10월 19일' 을 잡았다(실측).
+        # 그래서 같은 줄이면 200자 앞까지 본다.
+        line_start = body.rfind("\n", 0, anchor.start()) + 1
+        offset = max(0, min(anchor.start() - 40, max(line_start, anchor.start() - 200)))
+        near = body[offset:anchor.end() + 60]
         for item in dates_in(near):
             shifted = (item[0] + offset, item[1], item[2] + offset)
             if usable(body, shifted):
                 return with_time(body, shifted)
     return ""
+
+
+# ===== 세미나 메일에서 연사·발표 제목·장소 뽑기 (AI 없이) =====
+# 학과 세미나 안내는 거의 같은 모양이다(2026-10 실제 메일 11통으로 맞춤):
+#   '3. Speaker: Prof. Heechan Kim(POSTECH)' / '- 연사: 이평세 교수 (…)' / '4. Venue : E4-114'
+#   이름표 없이 번호만: '2. Prof. Jongwoo Lim (Seoul National University)' '3. Next-Generation Battery…' '4. Venue: E7 242'
+#   이름표만 한 줄, 값은 다음 줄: '📍 개최 장소' ↵ 'DGIST R1 2층 203호( 국제회의실)'
+#   메일 편집기가 글자 사이에 빈칸을 넣어 'Spe a k' 'Venu' 'H o st' 처럼 깨진 이름표도 있다.
+_SEMINAR_LABELS = {
+    "speaker": ("연사", "발표자", "강연자", "강사", "speaker", "presenter", "lecturer"),
+    "title": ("발표제목", "강연제목", "제목", "주제", "title", "topic"),
+    "place": ("장소", "개최장소", "venue", "place", "location"),
+}
+_SEM_BULLET = re.compile(r"^\s*(?:\d{1,2}\s*[.)]|[-•▶·*※]|[①-⑩])\s*")
+_SEM_PERSON = re.compile(r"prof\.|professor|교수|ph\.?\s*d|박사|\bdr\.|연구원|대표|ceo", re.I)
+_SEM_ROOM = re.compile(
+    r"^(?:[A-Z]\d{1,2}(?:\s|-|$)|[A-Z]\d{1,2}\s*\d{2,3})|\d{2,3}\s*호|room\b|hall\b|홀|강당|세미나실|회의실|online|온라인|zoom|webex",
+    re.I,
+)
+_SEM_DATEISH = re.compile(
+    r"\d{1,2}\s*월\s*\d{1,2}\s*일|\b20\d{2}\s*[./]|\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s*\d|\d{1,2}\s*:\s*\d{2}",
+    re.I,
+)
+
+
+def _sem_label(label: str) -> str | None:
+    letters = re.sub(r"[^a-z가-힣]", "", label.lower())
+    if not letters or len(letters) > 12:
+        return None
+    for field, names in _SEMINAR_LABELS.items():
+        for name in names:
+            if letters == name or letters.startswith(name) or (len(letters) >= 4 and name.startswith(letters)):
+                return field
+    return None
+
+
+def _sem_clean(value: str) -> str:
+    value = re.sub(r"[『』「」“”\"]", " ", value)
+    # '( H o st : Hyosang Lee, Ph.D. )' '(초청자 : 고재원 교수 )' 는 연사가 아니다
+    value = re.sub(r"[(（]\s*(?:h\s*o\s*s\s*t\w*|초청자?|hosted)\b[^)）]*[)）]", " ", value, flags=re.I)
+    value = re.sub(r"\s+", " ", value).strip(" -:·,")
+    value = re.sub(r"\s+([).,])", r"\1", value)
+    value = re.sub(r"([(])\s+", r"\1", value)
+    # 'E4 -114 호' → 'E4-114호'
+    value = re.sub(r"(?<=[A-Za-z0-9])\s*-\s*(?=\d)", "-", value)
+    value = re.sub(r"(\d)\s+호", r"\1호", value)
+    return value[:160]
+
+
+# 연사·제목을 뽑을 메일: 발표가 있는 행사만. 공모전·설명회·출결 메일에서 '상금' 이나 '메일 제목' 을
+# 발표 제목으로 잘못 뽑았다(실측). 그래서 _EVENT_WORDS 보다 좁게, 제목과 본문 앞부분만 본다.
+_TALK_WORDS = (
+    "세미나", "seminar", "콜로키움", "콜로퀴움", "colloquium", "특강", "강연",
+    "lecture series", "distinguished lecture", "special lecture", "invited lecture",
+    "심포지엄", "symposium", "포럼", "forum", "keynote",
+)  # 그냥 'lecture' 는 교수학습센터 '강의성찰(Lecture Reflection)' 메일까지 걸렸다
+
+
+def guess_seminar_info(subject: str, body: str) -> dict[str, str]:
+    """세미나·특강 안내 메일이면 {speaker, title, place} 중 찾은 것만. 없으면 빈 dict."""
+    text = f"{subject or ''}\n{(body or '')[:1500]}".lower()
+    if not any(word in text for word in _TALK_WORDS):
+        return {}
+    lines = [ln.strip() for ln in re.sub(r"<[^>]+>", " ", (body or "")[:6000]).splitlines()]
+    lines = [ln for ln in lines if ln and not ln.startswith(("http", "▶ omn", "base64"))]
+    found: dict[str, str] = {}
+    loose: list[str] = []  # 이름표 없이 번호만 붙은 줄
+    for i, raw in enumerate(lines):
+        # 이름표 없는 줄은 '2. Prof. …' 처럼 숫자 번호가 붙은 것만 짐작한다. '- bs101 … · 미제출' 같은
+        # 목록(강의성찰 안내)을 발표 제목으로 읽은 적이 있다.
+        numbered = bool(re.match(r"^\s*\d{1,2}\s*[.)]", raw))
+        line = _SEM_BULLET.sub("", raw)
+        line = re.sub(r"^[^\w가-힣(]+", "", line)  # 앞쪽 그림 글자(📍🔹)
+        if not line:
+            continue
+        pair = re.match(r"^(.{1,20}?)\s*[:：]\s*(.*)$", line)
+        head, rest, sep = (pair.group(1), pair.group(2), True) if pair else (line, "", False)
+        field = _sem_label(head)
+        if field and sep and rest.strip():
+            found.setdefault(field, _sem_clean(rest))
+        elif field and not sep and i + 1 < len(lines) and len(line) <= 12:
+            # 이름표만 한 줄: 값은 다음 줄
+            found.setdefault(field, _sem_clean(_SEM_BULLET.sub("", lines[i + 1])))
+        elif numbered and not sep:
+            loose.append(_sem_clean(line))
+    # 이름표 없는 줄 짐작은 제목부터 세미나인 메일에서만 한다. 본문 어딘가에 'seminar' 가 든
+    # 강의성찰 안내의 '3. 이렇게 써 주시면…' 을 발표 제목으로 읽었다.
+    if not any(word in (subject or "").lower() for word in _TALK_WORDS):
+        loose = []
+    for item in loose:
+        if _SEM_DATEISH.search(item) and len(item) < 40:
+            continue
+        if "speaker" not in found and _SEM_PERSON.search(item) and len(item) <= 120:
+            found["speaker"] = item
+        elif "place" not in found and _SEM_ROOM.search(item) and len(item) <= 60:
+            found["place"] = item
+        elif "title" not in found and len(item) >= 15 and not _SEM_PERSON.search(item[:20]):
+            found["title"] = item
+    # '교수, UNIST' 처럼 이름이 빠진 것은 연사로 쓰지 않는다
+    speaker = found.get("speaker", "")
+    if speaker and re.match(r"^(교수|prof\.?|professor)\s*[,，]", speaker, re.I):
+        found.pop("speaker")
+    return {k: v for k, v in found.items() if v and len(v) >= 2}
+
+
+_RANGE_JOIN = re.compile(r"^\s*(?:\([^)]{0,6}\)\s*)?(?:부터|~|∼|–|—|-)\s*")
+
+
+def guess_event_end(subject: str, body: str, start_iso: str, mail_date: str = "") -> str:
+    """행사 날짜(start_iso) 바로 뒤에 '부터 …까지' / '~' 로 끝나는 날이 적혀 있으면 그 날(YYYY-MM-DD).
+
+    연례 비즈니스 모델 세미나처럼 '10월 14일(수)부터 10월 20일(화)까지 총 5일간' 인 행사를
+    하루짜리로 올려 앞의 나흘이 캘린더에 없었다. 2주 넘는 기간은 신청 기간일 가능성이 커서 보지 않는다.
+    """
+    if not start_iso:
+        return ""
+    try:
+        start = datetime.fromisoformat(start_iso[:10])
+        base = datetime.fromisoformat(str(mail_date).replace("Z", "+00:00")).replace(tzinfo=None) if mail_date else start
+    except ValueError:
+        return ""
+    text = f"{subject or ''}\n{(body or '')[:6000]}"
+    for index, pattern in enumerate(_DATE_PATTERNS):
+        for match in pattern.finditer(text):
+            when = _date_from_match(match, index, base)
+            if not when or when.date() != start.date():
+                continue
+            join = _RANGE_JOIN.match(text[match.end():match.end() + 12])
+            if not join:
+                continue
+            tail = text[match.end() + join.end():match.end() + join.end() + 30]
+            for index2, pattern2 in enumerate(_DATE_PATTERNS):
+                hit = pattern2.match(tail)
+                if not hit and index2 == 0:
+                    # '10월 14일부터 20일까지' 처럼 달을 생략한 끝날
+                    day_only = re.match(r"(\d{1,2})\s*일", tail)
+                    if day_only:
+                        try:
+                            end = start.replace(day=int(day_only.group(1)))
+                        except ValueError:
+                            end = None
+                        if end and 0 < (end - start).days <= 14:
+                            return end.date().isoformat()
+                if not hit:
+                    continue
+                end = _date_from_match(hit, index2, start)
+                if end and 0 < (end - start).days <= 14:
+                    return end.date().isoformat()
+    return ""
+
+
+def guess_event_days(subject: str, body: str, start_iso: str, end_iso: str, mail_date: str = "") -> list[str]:
+    """여러 날 행사에서 본문에 날짜를 하나하나 적어 두었으면 그 날들만(주말을 건너뛰는 일정).
+
+    비즈니스 모델 세미나는 '10월 14일부터 20일까지 총 5일간' 이고 14·15·16·19·20 일을 따로 적었다.
+    기간 전체로 칠하면 쉬는 토·일까지 행사로 보인다. 적힌 날이 셋 이상일 때만 믿는다.
+    """
+    try:
+        start = datetime.fromisoformat(start_iso[:10])
+        end = datetime.fromisoformat(end_iso[:10])
+        base = datetime.fromisoformat(str(mail_date).replace("Z", "+00:00")).replace(tzinfo=None) if mail_date else start
+    except ValueError:
+        return []
+    text = f"{subject or ''}\n{(body or '')[:6000]}"
+    days = set()
+    for index, pattern in enumerate(_DATE_PATTERNS):
+        for match in pattern.finditer(text):
+            when = _date_from_match(match, index, base)
+            if when and start <= when <= end:
+                days.add(when.date().isoformat())
+    span = (end - start).days + 1
+    return sorted(days) if 3 <= len(days) < span else []
 
 
 def build_contacts(emails: list[dict]) -> list[dict]:
@@ -1135,7 +1336,7 @@ def _load_cached_emails() -> dict[str, dict]:
     return {m["id"]: m for m in mails if isinstance(m, dict) and m.get("id")}
 
 
-def fetch_school_emails(days: int = 21, max_count: int = 60) -> list[dict]:
+def fetch_school_emails(days: int | None = None, max_count: int | None = None) -> list[dict]:
     """받은편지함 + 보낸편지함 + 광고편지함을 각각 최근 메일 수집.
 
     예전에는 새로고침할 때마다 49통을 처음부터 다시 받았다. 한 통에 0.135초씩
@@ -1148,8 +1349,12 @@ def fetch_school_emails(days: int = 21, max_count: int = 60) -> list[dict]:
     """
     if not SCHOOL_EMAIL or not SCHOOL_EMAIL_PASSWORD:
         raise RuntimeError("설정에서 학교 이메일 계정을 먼저 입력해 주세요.")
+    from runtime_config import MAIL_KEEP_DAYS, MAIL_KEEP_MAX
 
-    print(f"학교 메일 서버 접속 중... ({SCHOOL_IMAP_HOST})")
+    days = int(days or MAIL_KEEP_DAYS)
+    max_count = int(max_count or MAIL_KEEP_MAX)
+
+    print(f"학교 메일 서버 접속 중... ({SCHOOL_IMAP_HOST}) · 최근 {days}일, 폴더마다 {max_count}통까지")
     client = MiniIMAP(SCHOOL_IMAP_HOST, SCHOOL_IMAP_PORT)
     client.login(SCHOOL_EMAIL, SCHOOL_EMAIL_PASSWORD)
 
@@ -1173,7 +1378,8 @@ def fetch_school_emails(days: int = 21, max_count: int = 60) -> list[dict]:
     for raw, key in targets:
         if not client.select_folder(raw):
             continue
-        ids = client.search_since(since)[-max_count:]
+        # 휴지통은 받은 날짜가 아니라 버린 순서로 (search_all 설명 참고)
+        ids = (client.search_all() if key == "trash" else client.search_since(since))[-max_count:]
         unseen = set(client.search_unseen())
         flagged = set(client.search_flagged())
 
@@ -1609,8 +1815,13 @@ def delete_message(uid: int, folder_key: str = "inbox", permanent: bool = False)
                 "message": "휴지통에서 지우면 되살릴 수 없습니다.",
             }
 
-        if trash and not in_trash:
-            client.copy_to(int(uid), trash)
+        if not in_trash and not permanent:
+            # 휴지통으로 복사가 된 것을 확인한 뒤에만 원본에 지운 표시를 한다.
+            # 예전에는 복사 결과를 보지 않아, 복사가 실패해도 메일이 목록에서 그냥 사라졌다.
+            if not trash:
+                raise RuntimeError("메일 서버에서 휴지통(지운편지함)을 찾지 못해 지우지 않았습니다.")
+            if not client.copy_to(int(uid), trash):
+                raise RuntimeError("휴지통으로 옮기지 못해 지우지 않았습니다.")
         client.store_flag(int(uid), r"\Deleted", add=True)
         client.expunge_uid(int(uid))
     finally:

@@ -157,6 +157,15 @@ def workspace_for_user(user_id: str) -> UserWorkspace:
     )
 
 
+def task_key(user_id: str, kind: str | None) -> str:
+    """작업 상태를 담는 칸. 메일은 따로 둔다.
+
+    메일 가져오기는 IMAP 만 쓰고 LMS 로그인·자료 파일을 건드리지 않는다. 같은 칸을 쓰면
+    자료 동기화(수 분)나 자동 마감 확인이 도는 동안 메일 새로고침이 '이미 실행 중' 으로 막혔다.
+    """
+    return f"{user_id}:mail" if kind == "emails" else user_id
+
+
 def task_state_for(user_id: str) -> dict[str, Any]:
     with task_lock:
         return task_states.setdefault(user_id, default_task_state())
@@ -354,6 +363,9 @@ def write_config(workspace: UserWorkspace, payload: dict[str, Any]) -> dict[str,
         # 자동으로 가져오는 게 기본이다. 메일 5분 / 마감 1시간 / 자료 3시간.
         # 예전 설정(AUTO_INTERVAL_*)은 메일 주기로 이어받는다.
         "AUTO_EMAIL_MINUTES": _minutes_field(payload, existing, "autoEmailMinutes", "AUTO_EMAIL_MINUTES", _legacy_email_minutes(existing)),
+        # 이 컴퓨터에 남길 메일: 최근 며칠, 폴더마다 몇 통까지
+        "MAIL_KEEP_DAYS": min(730, max(7, _minutes_field(payload, existing, "mailKeepDays", "MAIL_KEEP_DAYS", 21) or 21)),
+        "MAIL_KEEP_MAX": min(2000, max(30, _minutes_field(payload, existing, "mailKeepMax", "MAIL_KEEP_MAX", 60) or 60)),
         "AUTO_DEADLINE_MINUTES": _minutes_field(payload, existing, "autoDeadlineMinutes", "AUTO_DEADLINE_MINUTES", 60),
         "AUTO_SYNC_MINUTES": _minutes_field(payload, existing, "autoSyncMinutes", "AUTO_SYNC_MINUTES", 180),
         # 구글 캘린더 자동 동기화
@@ -1257,13 +1269,23 @@ def acknowledge_courses(workspace: UserWorkspace) -> dict[str, Any]:
 
 def patch_email_local(workspace: UserWorkspace, uid: int | None, folder: str,
                       unread: bool | None = None, remove: bool = False,
-                      all_in_folder: bool = False) -> None:
+                      all_in_folder: bool = False, to_trash: bool = False) -> None:
     """IMAP 작업 후 로컬 emails.json을 즉시 반영해 UI가 새로고침 없이 갱신되게."""
     data = read_json(workspace.emails_log, {})
     if not isinstance(data, dict) or not isinstance(data.get("emails"), list):
         return
     emails = data["emails"]
-    if remove and uid is not None:
+    if to_trash and uid is not None:
+        for m in emails:
+            if m.get("uid") == uid and m.get("folder") == folder:
+                m["folder"] = "trash"
+                m["id"] = f"trash:pending-{folder}-{uid}"
+                # 원래 메일함의 번호를 그대로 두면 휴지통에서 그 번호를 가진 다른 메일의 읽음·별표를 바꿨다
+                # (IMAP 번호는 메일함마다 따로 매긴다). 진짜 번호를 받을 때까지 번호를 비워 서버 작업을 막는다.
+                m["uid"] = None
+                # 휴지통 안의 진짜 번호는 다음 메일 받기에서 채워진다. 그때까지는 되돌리기·완전 삭제를 막는다.
+                m["pendingTrash"] = True
+    elif remove and uid is not None:
         data["emails"] = [m for m in emails if not (m.get("uid") == uid and m.get("folder") == folder)]
     else:
         for m in emails:
@@ -1340,7 +1362,11 @@ _INTEREST_WORDS: dict[str, tuple[str, ...]] = {
     "봉사": ("봉사", "volunteer"),
 }
 # 관심사와 상관없이 누구나 알 만한 학교 전체 행사
-_SCHOOL_EVENT_WORDS = ("달빛제", "축제", "festival", "영화제", "체육대회", "졸업식", "입학식", "개교기념", "오픈하우스")
+# 'Distinguished Lecture Series'(국제교류팀, 전 구성원 대상 석학 강연)는 관심 분야와 상관없이 올린다
+_SCHOOL_EVENT_WORDS = (
+    "달빛제", "축제", "festival", "영화제", "체육대회", "졸업식", "입학식", "개교기념", "오픈하우스",
+    "distinguished lecture",
+)
 
 
 def _interest_words(config: dict[str, Any]) -> list[str]:
@@ -1448,8 +1474,21 @@ def _mark_events(emails: list[dict[str, Any]], config: dict[str, Any], school_ev
             if guessed:
                 mail["eventDate"] = guessed
                 mail["eventGuessed"] = True
+                end = email_reader.guess_event_end(
+                    str(mail.get("subject", "")), str(mail.get("body", "")), guessed, str(mail.get("date", ""))
+                )
+                if end:
+                    mail["eventEnd"] = end
+                    days = email_reader.guess_event_days(
+                        str(mail.get("subject", "")), str(mail.get("body", "")), guessed, end, str(mail.get("date", ""))
+                    )
+                    if days:
+                        mail["eventDays"] = days
         if not mail.get("eventDate"):
             continue
+        # 세미나면 연사·발표 제목·장소 (캘린더 상세와 구글 캘린더 '장소'·'설명' 에 쓴다)
+        if "seminar" not in mail:
+            mail["seminar"] = email_reader.guess_seminar_info(str(mail.get("subject", "")), str(mail.get("body", "")))
         head = f"{mail.get('subject', '')} {mail.get('fromName', '')} {mail.get('fromEmail', '')}".lower()
         hits = [w for w in words if w in head]
         school = any(w in head for w in _SCHOOL_EVENT_WORDS)
@@ -3713,6 +3752,8 @@ def safe_public_config(workspace: UserWorkspace) -> dict[str, Any]:
         "schoolEmail": config.get("SCHOOL_EMAIL", ""),
         "schoolImapHost": config.get("SCHOOL_IMAP_HOST", "mail.dgist.ac.kr"),
         "autoEmailMinutes": auto_minutes(config)["emails"],
+        "mailKeepDays": int(config.get("MAIL_KEEP_DAYS", 21) or 21),
+        "mailKeepMax": int(config.get("MAIL_KEEP_MAX", 60) or 60),
         "autoDeadlineMinutes": auto_minutes(config)["deadlines"],
         "autoSyncMinutes": auto_minutes(config)["sync"],
         "gcalSyncEnabled": bool(config.get("GCAL_SYNC_ENABLED", False)),
@@ -3746,6 +3787,7 @@ def append_log(user_id: str, line: str) -> None:
 
 
 def run_process(workspace: UserWorkspace, kind: str, command: list[str], extra_env: dict[str, str] | None = None, auto: bool = False) -> None:
+    key = task_key(workspace.user_id, kind)
     env = os.environ.copy()
     env["PYTHONIOENCODING"] = "utf-8"
     env["AUTOSAVER_DATA_ROOT"] = str(workspace.root)
@@ -3757,7 +3799,7 @@ def run_process(workspace: UserWorkspace, kind: str, command: list[str], extra_e
         env["AUTOSAVER_DISABLE_LEGACY_CONFIG"] = "1"
 
     with task_lock:
-        task_state = task_states.setdefault(workspace.user_id, default_task_state())
+        task_state = task_states.setdefault(key, default_task_state())
         task_state.update(
             {
                 "running": True,
@@ -3785,19 +3827,19 @@ def run_process(workspace: UserWorkspace, kind: str, command: list[str], extra_e
             env=env,
         )
         with task_lock:
-            current_processes[workspace.user_id] = process
+            current_processes[key] = process
 
         assert process.stdout is not None
         for line in process.stdout:
-            append_log(workspace.user_id, line)
+            append_log(key, line)
         return_code = process.wait()
     except Exception as exc:  # pragma: no cover - defensive runtime guard
-        append_log(workspace.user_id, f"[오류] {exc}")
+        append_log(key, f"[오류] {exc}")
         return_code = -1
 
     with task_lock:
-        current_processes.pop(workspace.user_id, None)
-        task_state = task_states.setdefault(workspace.user_id, default_task_state())
+        current_processes.pop(key, None)
+        task_state = task_states.setdefault(key, default_task_state())
         task_state.update(
             {
                 "running": False,
@@ -3815,16 +3857,16 @@ def run_process(workspace: UserWorkspace, kind: str, command: list[str], extra_e
         try:
             result = organize_downloads(workspace)
             if result.get("moved"):
-                append_log(workspace.user_id, f"[정리] {result['message']}")
+                append_log(key, f"[정리] {result['message']}")
         except Exception as exc:
-            append_log(workspace.user_id, f"[정리] 건너뜀: {exc}")
+            append_log(key, f"[정리] 건너뜀: {exc}")
         # 설정에서 켠 경우, Drive 처럼 내 컴퓨터 저장 폴더에도 자동으로 둔다
         try:
             local = autosave_local(workspace)
             if not local.get("skipped") and (local.get("saved") or local.get("updated") or local.get("kept") or local.get("failed")):
-                append_log(workspace.user_id, f"[자동 저장] {local['message']}")
+                append_log(key, f"[자동 저장] {local['message']}")
         except Exception as exc:
-            append_log(workspace.user_id, f"[자동 저장] 저장하지 못했습니다: {exc}")
+            append_log(key, f"[자동 저장] 저장하지 못했습니다: {exc}")
 
     # 성공/실패 기록 (조용한 실패를 사용자에게 알리기 위함)
     if kind in ("sync", "emails", "deadlines"):
@@ -3835,13 +3877,19 @@ def run_process(workspace: UserWorkspace, kind: str, command: list[str], extra_e
         if return_code != 0:
             fails = health.get("consecutiveFailures", 0)
             append_log(
-                workspace.user_id,
+                key,  # 메일 작업이면 메일 칸에 (예전엔 자료 칸에 적혀 메일 실패가 엉뚱한 곳에 보였다)
                 f"[알림] {kind} 작업이 실패했습니다 (연속 {fails}회). 계정 정보나 네트워크를 확인해 주세요.",
             )
 
     # 메일을 새로 읽어온 뒤 구글 캘린더 자동 동기화 (설정에서 켠 경우에만)
     if kind in ("emails", "sync") and return_code == 0:
         auto_sync_calendar(workspace)
+
+    # 자동 작업이 도는 동안 사용자가 시킨 일이 있으면 이어서 시작한다
+    with task_lock:
+        queued = task_states.setdefault(workspace.user_id, default_task_state()).pop("queued", None) if key == workspace.user_id else None
+    if queued:
+        start_task(workspace, queued["kind"], queued.get("mode", "fast"))
 
 
 def auto_sync_calendar(workspace: UserWorkspace) -> None:
@@ -3880,10 +3928,21 @@ def auto_sync_calendar(workspace: UserWorkspace) -> None:
         append_log(workspace.user_id, f"[캘린더] 자동 동기화 실패: {exc}")
 
 
+# 조사까지 붙여 둔다 ('설정 점검를' 이 되지 않게)
+TASK_NAMES = {"sync": "자료 동기화를", "verify": "설정 점검을", "deadlines": "마감 확인을", "emails": "메일 가져오기를"}
+
+
 def start_task(workspace: UserWorkspace, kind: str, sync_mode: str = "fast", auto: bool = False) -> tuple[bool, str]:
     with task_lock:
-        task_state = task_states.setdefault(workspace.user_id, default_task_state())
+        task_state = task_states.setdefault(task_key(workspace.user_id, kind), default_task_state())
         if task_state["running"]:
+            if kind == "emails":
+                return False, "이미 메일을 가져오는 중이에요."
+            # 메일만 새로 가져오라고 눌렀는데 뒤에서 돌던 '자동 마감 확인' 이 화면을 차지하고
+            # '이미 실행 중' 이라며 거절했다. 자동 작업 중이면 거절하지 않고 끝난 뒤 바로 이어서 한다.
+            if not auto and task_state.get("auto") and kind in TASK_NAMES:
+                task_state["queued"] = {"kind": kind, "mode": sync_mode}
+                return True, f"하던 자동 확인이 끝나면 {TASK_NAMES[kind]} 바로 시작해요"
             return False, "이미 실행 중인 작업이 있습니다."
 
     extra_env = {}
@@ -3947,18 +4006,30 @@ def start_task(workspace: UserWorkspace, kind: str, sync_mode: str = "fast", aut
     return True, "작업을 시작했습니다."
 
 
-def stop_task(workspace: UserWorkspace) -> tuple[bool, str]:
-    with task_lock:
-        process = current_processes.get(workspace.user_id)
-        task_state = task_states.setdefault(workspace.user_id, default_task_state())
-        running = bool(task_state["running"])
+def stop_task(workspace: UserWorkspace, lane: str = "") -> tuple[bool, str]:
+    """돌고 있는 작업을 멈춘다. lane='mail' 이면 메일만, 'main' 이면 자료·마감만, 비우면 둘 다.
 
-    if not running or process is None or process.poll() is not None:
+    메일 가져오기는 따로 도는 칸(task_key)이라, 예전처럼 user_id 칸만 보면 멈춘 IMAP 연결을
+    끌 방법이 없었다('실행 중인 작업이 없습니다').
+    """
+    keys = {
+        "main": [workspace.user_id],
+        "mail": [task_key(workspace.user_id, "emails")],
+    }.get(lane, [workspace.user_id, task_key(workspace.user_id, "emails")])
+    stopped = []
+    for key in keys:
+        with task_lock:
+            process = current_processes.get(key)
+            running = bool(task_states.setdefault(key, default_task_state())["running"])
+        if not running or process is None or process.poll() is not None:
+            continue
+        process.terminate()
+        append_log(key, f"[{now_iso()}] 사용자가 작업 중지를 요청했습니다.")
+        stopped.append(key)
+    if not stopped:
         return False, "실행 중인 작업이 없습니다."
-
-    process.terminate()
-    append_log(workspace.user_id, f"[{now_iso()}] 사용자가 작업 중지를 요청했습니다.")
-    return True, "작업 중지를 요청했습니다."
+    only_mail = stopped == [task_key(workspace.user_id, "emails")]
+    return True, "메일 가져오기를 멈췄습니다." if only_mail else "작업 중지를 요청했습니다."
 
 
 def disconnect_google_oauth(workspace: UserWorkspace) -> tuple[bool, str]:
@@ -4191,7 +4262,12 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             return
         if route == "/api/task":
             with task_lock:
-                self.send_json(dict(task_states.setdefault(workspace.user_id, default_task_state())))
+                main = dict(task_states.setdefault(workspace.user_id, default_task_state()))
+                # 메일은 따로 도는 칸이라 함께 보낸다 (화면이 메일 새로고침 진행을 따로 보여 준다)
+                mail = dict(task_states.setdefault(task_key(workspace.user_id, "emails"), default_task_state()))
+                mail["logs"] = mail.get("logs", [])[-40:]
+                main["mail"] = mail
+                self.send_json(main)
             return
         if route == "/api/config":
             self.send_json(safe_public_config(workspace))
@@ -4251,7 +4327,11 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             try:
                 import email_reader
 
-                uid = int(params.get("uid", ["0"])[0] or 0)
+                uid_text = params.get("uid", [""])[0]
+                if not uid_text.isdigit():
+                    self.send_json({"ok": False, "pendingTrash": True, "message": "방금 휴지통으로 옮긴 메일이에요. 메일을 다시 받은 뒤(잠시 뒤) 해 주세요."}, HTTPStatus.CONFLICT)
+                    return
+                uid = int(uid_text)
                 folder = params.get("folder", ["inbox"])[0]
                 raw = email_reader.fetch_raw_message(uid, folder)
                 name = f"mail-{uid}.eml"
@@ -4811,6 +4891,9 @@ class DashboardHandler(SimpleHTTPRequestHandler):
 
                 uid = payload.get("uid")
                 folder = str(payload.get("folder", "inbox"))
+                if route != "/api/mark-all-read" and uid in (None, "", "null"):
+                    self.send_json({"ok": False, "pendingTrash": True, "message": "방금 휴지통으로 옮긴 메일이에요. 메일을 다시 받은 뒤(잠시 뒤) 해 주세요."}, HTTPStatus.CONFLICT)
+                    return
                 if route == "/api/mark-read":
                     email_reader.mark_read(int(uid), folder, bool(payload.get("seen", True)))
                     patch_email_local(workspace, int(uid), folder, unread=not bool(payload.get("seen", True)))
@@ -4831,7 +4914,16 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                     if not result.get("ok") and result.get("needsConfirm"):
                         self.send_json(result)
                         return
-                    patch_email_local(workspace, int(uid), folder, remove=True)
+                    if permanent:
+                        patch_email_local(workspace, int(uid), folder, remove=True)
+                    else:
+                        # 서버 휴지통에서의 새 번호는 이 서버(UIDPLUS 없음)가 알려 주지 않는다.
+                        # 우선 이 컴퓨터에서 휴지통으로 옮겨 보여 주고, 메일을 다시 받아 진짜 번호로 바꾼다.
+                        patch_email_local(workspace, int(uid), folder, to_trash=True)
+                        try:
+                            start_task(workspace, "emails", auto=True)
+                        except Exception:
+                            pass
                     self.send_json({
                         "ok": True,
                         "message": "완전히 지웠습니다." if permanent else "휴지통으로 옮겼습니다.",
@@ -4912,6 +5004,9 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 import email_reader
 
                 payload = self.read_body_json()
+                if route in ("/api/mail/star", "/api/mail/move") and payload.get("uid") in (None, "", "null"):
+                    self.send_json({"ok": False, "pendingTrash": True, "message": "방금 휴지통으로 옮긴 메일이에요. 메일을 다시 받은 뒤(잠시 뒤) 해 주세요."}, HTTPStatus.CONFLICT)
+                    return
                 if route == "/api/mail/star":
                     self.send_json(
                         email_reader.star_message(
@@ -5284,7 +5379,8 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             self.send_json({"ok": ok, "message": message})
             return
         if route == "/api/stop":
-            ok, message = stop_task(workspace)
+            body = self.read_body_json() or {}
+            ok, message = stop_task(workspace, str(body.get("lane", "")) if isinstance(body, dict) else "")
             self.send_json({"ok": ok, "message": message}, HTTPStatus.OK if ok else HTTPStatus.CONFLICT)
             return
         if route == "/api/tutorial/done":

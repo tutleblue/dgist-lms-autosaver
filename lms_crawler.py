@@ -797,6 +797,13 @@ async def crawl_lms(fast=None):
             await fetch_deadlines(page, unique_courses)
         except Exception as e:
             print(f"[과제 마감일] 수집 실패: {e}")
+        # 교수·조교도 같은 로그인으로 받는다. 예전엔 1시간마다 도는 마감 확인에서만 받아,
+        # 새 PC에서 첫 자료 동기화를 마쳐도 강의 카드·메일 꼬리표에 조교가 비어 있었다.
+        # 과목마다 요청 하나라 동기화 시간은 거의 늘지 않는다. 받은 것은 이 PC 에만 둔다.
+        try:
+            await fetch_course_staff(page, unique_courses)
+        except Exception as e:
+            print(f"[교수·조교] 수집 실패: {e}")
 
         await browser.close()
         _page = None
