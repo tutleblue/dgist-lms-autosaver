@@ -742,5 +742,6 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 
 ## 리뷰 지적 고침 (2026-10-14)
 - `calendar_sync._can_use_calendar`: 403·404 만 '못 씀'. 호출 한도·시간 초과·5xx 는 오류를 올려 이번 동기화만 실패(예전엔 False 로 보고 같은 이름 캘린더를 또 만들었다).
-- `_calendar_lock`: 캘린더 찾기·만들기·`gcal_calendars.json` 기록을 한 번에 하나만(메일 일정·학사일정 동시 동기화 때 기록이 지워졌다).
+  Google Calendar 는 호출 한도도 403(이유 `rateLimitExceeded`·`userRateLimitExceeded`·`dailyLimitExceeded`·`quotaExceeded`, 새 형식 `RESOURCE_EXHAUSTED`)으로 돌려주므로 `_error_reasons` 로 응답 본문의 이유를 읽어 가른다(1.12.26).
+- `_calendar_lock(token_path)`: 캘린더 찾기·만들기·`gcal_calendars.json` 기록을 한 번에 하나만(메일 일정·학사일정 동시 동기화 때 기록이 지워졌다). 자물쇠는 기록 파일(사용자)마다 따로라 공유 웹 모드에서 다른 사용자끼리는 기다리지 않는다(1.12.26).
 - 학사일정 낱말표는 `web/i18n/en.json` 의 `_academic` 한 곳에만 둔다(app.js 하드코딩 제거, 중복 18개 정리). `i18nCompile` 이 `ACAD_TERMS` 를 채운다.

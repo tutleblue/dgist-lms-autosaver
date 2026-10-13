@@ -98,11 +98,23 @@ def _load_saved_calendars(token_path: str | None) -> dict[str, str]:
 # '지금 넣기'(메일 일정)와 '학사일정도 넣기' 를 연달아 누르면 두 요청이 동시에 돈다(ThreadingHTTPServer).
 # 둘 다 gcal_calendars.json 을 읽고 고쳐 쓰므로 늦게 쓴 쪽이 먼저 쓴 쪽의 기록을 지웠다(리뷰 지적).
 # 찾기·만들기·기록을 통째로 한 번에 하나만 한다. 같은 이름 캘린더를 둘이 동시에 만드는 일도 막는다.
-_calendar_lock = threading.RLock()
+# 자물쇠는 기록 파일(=토큰, 사용자)마다 따로 둔다. 하나로 두면 공유 웹 모드에서 다른 사용자의 동기화까지
+# Google 응답을 기다리며 줄을 섰다(리뷰 지적).
+_calendar_locks: dict[str, threading.RLock] = {}
+_calendar_locks_guard = threading.Lock()
+
+
+def _calendar_lock(token_path: str | None) -> threading.RLock:
+    key = str(_saved_calendars_path(token_path).resolve())
+    with _calendar_locks_guard:
+        lock = _calendar_locks.get(key)
+        if lock is None:
+            lock = _calendar_locks[key] = threading.RLock()
+        return lock
 
 
 def _save_calendar_id(token_path: str | None, name: str, calendar_id: str) -> None:
-    with _calendar_lock:
+    with _calendar_lock(token_path):
         saved = _load_saved_calendars(token_path)
         if saved.get(name) == calendar_id:
             return
@@ -115,6 +127,36 @@ def _save_calendar_id(token_path: str | None, name: str, calendar_id: str) -> No
             )
         except Exception:
             pass  # 기억 못 해도 다음에 이름으로 다시 찾는다
+
+
+# Google Calendar 는 호출 한도도 429 가 아니라 403 으로 돌려준다(이유: rateLimitExceeded 등).
+# 상태 코드만 보면 '권한 없음' 과 구별이 안 돼, 이유 문자열을 함께 본다(리뷰 지적).
+_RATE_LIMIT_REASONS = {
+    "ratelimitexceeded", "userratelimitexceeded", "dailylimitexceeded", "quotaexceeded",
+    "variabletermlimitexceeded", "rate_limit_exceeded", "resource_exhausted",
+}
+
+
+def _error_reasons(exc: Exception) -> set[str]:
+    """HttpError 응답 본문에서 이유(reason·status)를 모두 꺼낸다. 못 읽으면 빈 집합."""
+    reasons: set[str] = set()
+    try:
+        content = getattr(exc, "content", b"") or b""
+        data = json.loads(content.decode("utf-8") if isinstance(content, bytes) else str(content))
+        errors = data if isinstance(data, list) else [data]
+        for item in errors:
+            err = item.get("error") if isinstance(item, dict) else None
+            if not isinstance(err, dict):
+                continue
+            if err.get("status"):
+                reasons.add(str(err["status"]).lower())
+            for key in ("errors", "details"):
+                for detail in err.get(key) or []:
+                    if isinstance(detail, dict) and detail.get("reason"):
+                        reasons.add(str(detail["reason"]).lower())
+    except Exception:
+        pass
+    return reasons
 
 
 def _can_use_calendar(service, calendar_id: str) -> bool:
@@ -135,6 +177,8 @@ def _can_use_calendar(service, calendar_id: str) -> bool:
             status = int(status)
         except (TypeError, ValueError):
             status = None
+        if status == 403 and _error_reasons(exc) & _RATE_LIMIT_REASONS:
+            raise
         if status in (403, 404):
             return False
         raise
@@ -147,7 +191,7 @@ def find_or_create_calendar(service, name: str | None = None, token_path: str | 
     캘린더가 여럿이거나 그중 하나를 이 토큰으로 못 열 때, 매번 새로 만들지 않기 위해서다.
     """
     target = (name or DEFAULT_CALENDAR_NAME).strip() or DEFAULT_CALENDAR_NAME
-    with _calendar_lock:
+    with _calendar_lock(token_path):
         return _find_or_create_locked(service, target, token_path)
 
 

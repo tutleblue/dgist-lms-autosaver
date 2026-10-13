@@ -62,7 +62,6 @@ from runtime_config import calendar_scope_granted
 from runtime_config import atomic_write_text
 
 GOOGLE_OAUTH_SCOPE = _GOOGLE_SCOPES[0]
-GOOGLE_CALENDAR_SCOPE = _GOOGLE_SCOPES[1]
 # Drive 업로드 + 캘린더 동기화를 함께 사용하므로 두 권한을 같이 요청한다.
 GOOGLE_OAUTH_SCOPES = list(_GOOGLE_SCOPES)
 GOOGLE_OAUTH_FALLBACK_REDIRECT_URI = "http://127.0.0.1:8765/oauth2callback"
@@ -5170,6 +5169,8 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 if action == "drive":
                     from drive_uploader import upload_to_drive_with_path
 
+                    # 설정은 한 번만 읽는다 (파일마다 읽으면 수백 개를 고를 때 디스크·복호화가 그만큼 반복된다)
+                    drive_layout = read_config(workspace).get("FOLDER_LAYOUT")
                     for raw_name in names:
                         safe, meta, path = resolve(raw_name)
                         if not path:
@@ -5181,7 +5182,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                             result = upload_to_drive_with_path(
                                 str(path), display, course,
                                 meta.get("folder_path") if isinstance(meta, dict) else None,
-                                read_config(workspace).get("FOLDER_LAYOUT"),
+                                drive_layout,
                             )
                             (skipped if result == "exists" else done).append(display)
                         except Exception:
