@@ -247,12 +247,19 @@ GitHub 업데이트 확인 버튼은 뺐다. 설치형은 새 설치 파일로 �
 
 - OAuth: 앱에 들어 있는 데스크톱 클라이언트(`google_client.json`), 토큰은 `token.json`. 설치형 클라이언트라 루프백 포트가 바뀌어도 됩니다.
 - Drive (`drive_uploader.py`): 루트 폴더 아래 과목 폴더, 업로드 선택(`upload_selection.json`의 `courses`)을 따름. 권한은 `drive.file`.
-- Calendar (`calendar_sync.py`): 메일에서 뽑은 일정, 학사일정을 지정한 캘린더로.
-- **OAuth 동의 화면 브랜딩** (2026-10-12): 데스크톱 앱이 쓰는 클라이언트는 Cloud 프로젝트 `dgist-lms-autosaver-2`, 예전 웹판(Render) 클라이언트는 `dgist-lms-sync`. 두 프로젝트 모두 앱 이름 Daling, 로고 `docs/logo-120.png`(= `web/app-logo-120.png`), 홈 `https://daling-app.pages.dev/`, 개인정보처리방침 `/privacy`, 약관 `/terms`, 승인된 도메인 `daling-app.pages.dev`.
+- Calendar (`calendar_sync.py`): 메일에서 뽑은 일정, 학사일정을 지정한 캘린더로. 권한은 `calendar.app.created`(앱이 만든 보조 캘린더와 그 일정) + `calendar.calendarlist.readonly`(이름으로 찾기), 둘 다 민감하지 않은 범위라 데이터 액세스 인증이 필요 없다(1.12.23, 2026-10-13).
+  - 예전 토큰(전체 `calendar`)도 그대로 쓴다(`runtime_config.calendar_scope_granted`). 그래서 토큰을 읽을 때 권한 목록을 넘기지 않는다 — 넘기면 갱신 때 없는 좁은 권한을 달라고 해 `invalid_scope` 로 실패한다.
+  - 실측(jykim5215 계정): 전체 `calendar` 로 예전에 만든 'DGIST 메일 일정'도 `app.created` 로 열리고 일정 넣기·고치기·키로 찾기·지우기가 된다 → 다시 연결해도 캘린더가 두 개로 갈라지지 않는다.
+  - 찾은 캘린더 ID 는 토큰 옆 `gcal_calendars.json` 에 적어 두고 먼저 쓴다. 같은 이름의 캘린더가 여럿이거나 이 토큰으로 못 여는 것(사용자가 직접 만든 같은 이름)이면 건너뛴다.
+  - 연결 URL 에 `include_granted_scopes` 를 넣지 않는다. 넣으면 예전에 허락한 전체 `calendar` 가 새 토큰에 다시 묶인다.
+- **OAuth 동의 화면 브랜딩** (2026-10-12): 데스크톱 앱이 쓰는 클라이언트는 Cloud 프로젝트 `dgist-lms-autosaver-2`, 예전 웹판(Render) 클라이언트는 `dgist-lms-sync`. 두 프로젝트 모두 앱 이름 Daling, 로고 `docs/logo-120.png`(= `web/app-logo-120.png`), 홈 `https://gudaling.dev/`, 개인정보처리방침 `/privacy`, 약관 `/terms`, 승인된 도메인 `gudaling.dev`.
+  - 2026-10-12 `daling-app.pages.dev` 로 낸 재인증은 "웹사이트가 나에게 등록되어 있지 않음"으로 남아, 같은 날 개인 도메인 `gudaling.dev`(Cloudflare Registrar, 같은 계정)를 사서 Pages 프로젝트 `daling-app` 에 붙였다(DNS: `@` CNAME → `daling-app.pages.dev`, 프록시). `daling-app.pages.dev` 도 같은 내용을 내보내지만 페이지마다 canonical 은 `gudaling.dev`.
   - 이전 반려 사유 4가지: 홈페이지(`jykim5215.github.io/…`)가 내 소유로 확인 안 됨(GitHub 이름이 tutleblue로 바뀌어 404, 게다가 Search Console 확인이 하위 경로라 도메인 소유로 안 침), 개인정보처리방침 내용 부족, 홈에 앱 목적 설명 없음, 동의 화면 이름(Daling)과 홈 이름(붕어빵) 불일치.
   - 사이트 원본은 `docs/`(한국어 + 심사관용 영어). 배포: `npx wrangler pages deploy docs --project-name daling-app --branch main`. Pages 가 `.html`을 떼는 308 리디렉트를 하므로 동의 화면에는 `/privacy`처럼 확장자 없는 주소를 넣습니다.
-  - Search Console 속성 `https://daling-app.pages.dev/`(URL 접두어, 도메인 루트)는 `docs/googlee81e6dcdac788920.html`로 jykim5215@gmail.com 소유 확인. 이 파일을 지우면 소유 확인이 풀립니다.
-  - Google 은 github.io 같은 공용 호스팅 하위 도메인을 "소유 확인 불가"로 반려한 사례가 있습니다(2026-06 포럼 답변). pages.dev 도 반려되면 개인 도메인을 사서 같은 Pages 프로젝트에 붙이고 Search Console '도메인' 속성(DNS TXT)으로 확인합니다.
+  - Search Console: '도메인' 속성 `gudaling.dev` 를 DNS TXT(`google-site-verification=…`, Cloudflare DNS 의 `@` TXT)로 jykim5215@gmail.com 소유 확인. 이 TXT 를 지우면 소유 확인이 풀립니다. 예전 URL 접두어 속성 `https://daling-app.pages.dev/` 는 `docs/googlee81e6dcdac788920.html` 로 확인해 두었다.
+  - Google 은 github.io 같은 공용 호스팅 하위 도메인을 "소유 확인 불가"로 반려한 사례가 있습니다(2026-06 포럼 답변). 그래서 개인 도메인을 쓴다.
+  - **결과**: 2026-10-13 0시경 `gudaling.dev` 로 낸 재인증이 두 프로젝트 모두 몇 분 만에 통과했고 '브랜딩 게시'까지 마쳐, 인증 센터에 "브랜딩이 인증되었으며 사용자에게 표시되고 있습니다". 이름·로고·주소를 바꾸면 다시 인증받아야 하고, 통과한 결과는 7일 안에 게시하지 않으면 만료됩니다.
+  - **데이터 액세스** (2026-10-13): 두 프로젝트 모두 데이터 액세스에 `drive.file`·`calendar.app.created`·`calendar.calendarlist.readonly` 만 등록(전부 '민감하지 않은 범위'), `dgist-lms-sync` 에 있던 민감 범위 `calendar` 는 지움. 인증 센터: "앱이 민감하거나 제한된 범위를 요청하지 않으므로 인증이 필요하지 않습니다". 동의 화면은 '확인되지 않은 앱' 경고 없이 Daling 이름·로고로 바로 권한 선택이 나온다. 민감 범위를 다시 넣으면 시연 영상까지 내는 데이터 액세스 인증을 받아야 한다.
 
 ### 4.6 DGIST 공공데이터 (`dgist_api.py`)
 
@@ -388,7 +395,7 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 | `/api/directory/import` | 조직도 넣기 |
 | `/api/assignment/open`, `/api/open-url` | 외부 페이지 열기 |
 | `/api/update/apply`, `/api/restart` | 업데이트, 재시작 |
-| `/api/update/open-download` | (맥) 새 DMG 받을 곳을 브라우저로 |
+| `/api/update/open-download` | (맥·리눅스) 새 DMG·AppImage 받을 곳을 브라우저로 |
 
 ---
 
@@ -457,6 +464,7 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 | 설치 파일 | `packaging\build_installer.ps1` → `packaging\out\bungeoppang-<버전>-win-x64-setup.exe` (약 54MB) |
 | 이 PC에 설치 | `packaging\build_installer.ps1 -Install` |
 | 맥 앱 (DMG) | GitHub Actions `.github/workflows/mac.yml` → `daling-<버전>-mac-arm64.dmg` 아티팩트 (아래 'macOS 판') |
+| 리눅스 앱 (AppImage·tar.gz) | GitHub Actions `.github/workflows/linux.yml` → `daling-<버전>-linux-x86_64.AppImage`·`.tar.gz` 아티팩트 (아래 '리눅스 판') |
 | 설치본 점검 | `<실행 파일> --autosaver-smoke` (창 없이, 빈 임시 데이터 폴더로. `smoke_test.py`) |
 
 설치 파일(Inno Setup)은 관리자 권한 없이 사용자 폴더에 설치하고, WebView2가 없으면 부트스트래퍼를 실행하고, .NET 4.7.2 미만이면 안내 후 중단합니다. zip 배포에서 생기던 "인터넷에서 받은 파일" 차단 문제를 피하려고 설치 파일로 바꿨습니다. 서명이 없어서 처음 실행 때 SmartScreen이 뜹니다.
@@ -709,3 +717,30 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 - 업데이트: 릴리스의 `daling-<버전>-mac-arm64.dmg` 만 본다. '지금 업데이트' 는 설치 대신 그 주소를 브라우저로 연다(`/api/update/open-download`, 주소는 updater 가 고른 것만).
 - 아이콘: `packaging/mac/Daling.icns` ← `python scripts/make_icons.py --mac` (애플 격자: 1024 안 824 네모).
 - 점검 `--autosaver-smoke`: 빈 임시 데이터 폴더로 화면 서버(빈 포트)·화면 파일·가벼운 /api·작업 프로세스(`--autosaver-job smoke`)·node·(맥) Cocoa 모듈·인증서, `AUTOSAVER_SMOKE_KEYCHAIN=1` 이면 점검용 계정으로 키체인 왕복. Windows 소스에서도 돈다(13개 통과).
+- 맥에서 HTTPServer 의 `getfqdn` 역조회를 건너뛴다(`ExclusiveHTTPServer.server_bind`). 첫 CI 실행에서 '로컬 네트워크의 기기 찾기 허용?' 창이 떴고 서버가 15초 늦게 떴다. 건너뛰고 나서 창이 없어지고 1초 만에 뜬다.
+
+## 리눅스 판 (2026-10-12)
+- 빌드는 GitHub Actions `.github/workflows/linux.yml`(수동 실행 또는 `build/linux` 푸시). ubuntu-22.04(glibc 2.35 → Ubuntu 22.04·Debian 12·Fedora 36 이상)·Python 3.13·`requirements-linux.txt` → `packaging/linux/daling-linux.spec`(onedir, 실행 파일 `daling`) → Xvfb 로 실제 창 띄워 보기 → `--autosaver-smoke` → `daling-<버전>-linux-x86_64.AppImage`(appimagetool, 정적 런타임이라 libfuse2 불필요)·`.tar.gz`(`install.sh` 가 `~/.local/opt/daling`·`~/.local/bin/daling`·`.desktop`). 첫 실행: 19개 점검이 바이너리·AppImage·tar 설치본 모두 통과, 키링 왕복 20개 통과. 크기는 AppImage 262MB(QtWebEngine 이 크롬 하나를 통째로 든다).
+- 창: pywebview Qt(PyQt6·QtWebEngine). WebKitGTK 는 보조 프로세스 경로가 컴파일 때 박혀 묶을 수 없다. Ubuntu 23.10+ 처럼 AppArmor·커널이 사용자 네임스페이스를 막으면 크로미움 샌드박스가 죽으므로 그때만 `QTWEBENGINE_DISABLE_SANDBOX=1`(메일 HTML 은 스크립트 막은 iframe). 화면(DISPLAY·WAYLAND)이 없거나 Qt 를 못 띄우면 기본 브라우저로 열고 서버·스케줄러는 Ctrl+C 까지 돈다 (`linux_support.py`, `app.run_linux_window`).
+- 비밀 설정: `secret_store.py` 가 맥(`mac_keychain`)·리눅스(`linux_secrets`)를 고른다. 리눅스는 Secret Service(GNOME 키링·KWallet, `secretstorage`) 항목 하나(application=Daling, account=settings)에 JSON, config.json 에는 `keychain:<키>`. 쓸 수 없으면 `<데이터 폴더>/secrets.json`(0600)에 두고 `secretfile:<키>`. 잠긴 키링을 여는 창은 앱 본체만 띄운다(작업 프로세스는 안 띄움).
+- 시스템 프로그램(`xdg-open`·`notify-send`·브라우저)에는 묶음의 `LD_LIBRARY_PATH`·Qt 설정을 뺀 환경을 준다(PyInstaller 안내). 알림은 `notify-send`(인자로 넘김, 셸 없음). 인증서는 시스템 CA 묶음.
+- 경로: 데이터 `~/.lms-autosaver`, LMS 브라우저 `~/.cache/ms-playwright`(XDG_CACHE_HOME), 문서 폴더는 `user-dirs.dirs`(예: `~/문서`). `node` 실행 권한은 CI 에서 준다(AppImage 안은 읽기 전용). 크로미움이 시스템 라이브러리가 없어 못 뜨면 배포판별 설치 명령을 한 줄로 알린다(`browser_setup.explain_launch_failure`). `browser_ready` 가 리눅스 `chrome-headless-shell` 도 본다(예전엔 못 알아봤다).
+- 묶음에서 뺀 시스템 라이브러리(C++ 런타임·GLib·글꼴·D-Bus·NSS·GTK·CUPS 인쇄 플러그인): 새 배포판의 Mesa·GIO·fontconfig 가 우리 22.04 판을 끌어오지 않게. 24.04·Fedora 에서 문제가 나면 CI 로그 `ldd.txt`·`bundled-libs.txt` 를 본다.
+- 업데이트: 맥처럼 설치하지 않고 릴리스의 `daling-<버전>-linux-x86_64.AppImage` 주소를 연다(`manualUrl`). `/api/restart` 는 `.AppImage` 파일을 다시 띄운다.
+- 아이콘: `packaging/linux/daling-128/256/512.png` ← `python scripts/make_icons.py --linux`. 한글 입력은 PyQt6 휠에 든 ibus 플러그인만(fcitx5·kime 는 안 될 수 있다).
+
+## 영어 화면의 학사일정 (2026-10-12)
+- 학사일정 이름은 학교 데이터라 번역표에 없어 영어 화면에서도 한국어였다. `acadTitleEn` 이 낱말표(`ACAD_TERMS`)로 옮긴다: '대학 및 대학원' 머리는 빼고, '대학원' 은 'Grad:', 'YYYY학년도 N학기' 는 'Spring/Fall YYYY', 계절학기는 'Summer/Winter session YYYY', "('26.8월 졸업생)" 은 "(Aug '26 grads)", 뒤의 'D-52' 는 그대로. `tr` 안에서 표·틀 다음에 부르며, 다 옮겨 한글이 하나도 안 남을 때만 쓴다(메일 제목은 그대로). 2026 학사일정 38개 이름 모두 옮겨짐.
+- 과목명은 예외로 LMS 공식 영어 이름을 쓴다(사용자 요청, 2026-10-13): `learnCourseNames` 가 이번 학기·마감·자료의 LMS 과목 전체 이름 '한국어 (English )_NN[ …학기 ]' 에서 짝을 익히고(`COURSE_EN`, 키는 NFKC·띄어쓰기 없앤 한국어), `tr` 이 글 조각이 과목명과 통째로 같을 때 바꾼다. 시간표에 직접 적은 '일반화학Ⅱ' 도 'General Chemistry II' 로. 과제명·메일 제목·보낸 부서·사람 이름은 그대로(CLAUDE.md 26-5).
+
+## 폴더 정리 방식 (2026-10-14)
+- 설정 키 `FOLDER_LAYOUT`: `lms`(기본, 과목 / LMS 폴더 / 파일) · `flat`(과목 / 파일). Drive·내 컴퓨터·클라우드 폴더·자료 화면의 '내 컴퓨터에 저장'·'Drive에 올리기' 모두 같은 값을 쓴다. 규칙은 `folder_layout.py`(web_ui·main·drive_uploader 공용: `safe_folder`, `lms_subfolders`, `layout_subfolders`, `normalize_layout`).
+- 예전에는 내 컴퓨터만 LMS 폴더대로, Drive 는 늘 과목 폴더에 모아 두었다. 키가 없는 예전 설정은 `lms` 라 다음 동기화 때 Drive 파일이 LMS 폴더로 옮겨진다.
+- 방식을 바꾸면 옮긴다(다시 받거나 올리지 않음): 내 컴퓨터·클라우드는 `_mirror_rows` 가 다른 방식 자리의 '우리가 넣은 그대로' 사본을 `os.replace`, 비게 된 하위 폴더는 `os.rmdir`(비었을 때만). 사용자가 고친 사본은 그대로 두고 새 자리에 또 만들지 않는다. Drive 는 `upload_to_drive_with_path` 가 다른 방식 자리에서 같은 이름을 찾아 `files.update(addParents/removeParents)`. 비게 된 Drive 폴더는 지우지 않는다: drive.file 권한으로는 사용자가 넣은 파일이 안 보여 비었는지 알 수 없다. 옛 자리를 볼 때는 `find_folder`(만들지 않음).
+- 한 과목 안 같은 이름 파일은 받을 때 하나만 남기므로(`dedupe_downloads`) 모아 두어도 이름이 겹치지 않는다(실측: 19과목 360개 중 0).
+- 화면: 설정 › 강의자료 저장 '폴더 정리 방식' 카드 두 개(`#folderLayoutRow`). '?'(`#folderLayoutHelp`)를 누르면 `renderLayoutHelp` 가 내 자료 중 LMS 폴더가 여럿인 과목(공지 첨부 먼저)으로 두 방식의 폴더 모양을 탐색기 창처럼 나란히 그린다(자료가 없으면 일반화학Ⅱ 예시). 그림을 눌러도 고른다. 바꾸면 즉시 저장하고 내 컴퓨터·클라우드는 바로 옮긴다(`runLocalSaveNow`).
+
+## 리뷰 지적 고침 (2026-10-14)
+- `calendar_sync._can_use_calendar`: 403·404 만 '못 씀'. 호출 한도·시간 초과·5xx 는 오류를 올려 이번 동기화만 실패(예전엔 False 로 보고 같은 이름 캘린더를 또 만들었다).
+- `_calendar_lock`: 캘린더 찾기·만들기·`gcal_calendars.json` 기록을 한 번에 하나만(메일 일정·학사일정 동시 동기화 때 기록이 지워졌다).
+- 학사일정 낱말표는 `web/i18n/en.json` 의 `_academic` 한 곳에만 둔다(app.js 하드코딩 제거, 중복 18개 정리). `i18nCompile` 이 `ACAD_TERMS` 를 채운다.

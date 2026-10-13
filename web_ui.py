@@ -58,6 +58,7 @@ DRIVE_CREDENTIALS_PATH = Path(
 GOOGLE_OAUTH_PENDING_PATH = AUTOSAVER_ROOT / "oauth_pending.json"
 FALLBACK_COURSE_MAP = PROJECT_ROOT / "file_course_map.json"
 from runtime_config import GOOGLE_SCOPES as _GOOGLE_SCOPES
+from runtime_config import calendar_scope_granted
 from runtime_config import atomic_write_text
 
 GOOGLE_OAUTH_SCOPE = _GOOGLE_SCOPES[0]
@@ -350,6 +351,9 @@ def write_config(workspace: UserWorkspace, payload: dict[str, Any]) -> dict[str,
         "AUTO_LOCAL_SAVE": local_autosave_mode(
             {"AUTO_LOCAL_SAVE": payload.get("autoLocalSave", existing.get("AUTO_LOCAL_SAVE", "off"))}
         ),
+        # 저장 위치(Drive·내 컴퓨터·클라우드) 폴더 모양: lms(LMS 폴더 그대로) / flat(과목 폴더에 모아서)
+        "FOLDER_LAYOUT": normalize_layout(payload.get("folderLayout") if "folderLayout" in payload
+                                          else existing.get("FOLDER_LAYOUT")),
         # 내 컴퓨터·클라우드 폴더에 넣을 과목 범위
         "SAVE_SCOPE": (str(payload.get("saveScope")) if str(payload.get("saveScope")) in ("current", "all")
                        else str(existing.get("SAVE_SCOPE", "current"))),
@@ -670,7 +674,7 @@ def get_google_oauth_status(workspace: UserWorkspace, base_url: str | None = Non
         # creds.scopes는 '요청한' 값을 그대로 돌려주므로 토큰 파일을 직접 읽어 확인한다.
         token_data = read_json(workspace.token_path, {})
         granted = set(token_data.get("scopes") or []) if isinstance(token_data, dict) else set()
-        status["calendarGranted"] = GOOGLE_CALENDAR_SCOPE in granted
+        status["calendarGranted"] = calendar_scope_granted(granted)
     except Exception as exc:
         status["error"] = str(exc)
     return status
@@ -693,9 +697,10 @@ def create_google_oauth_url(
         scopes=GOOGLE_OAUTH_SCOPES,
         redirect_uri=choose_google_redirect_uri(base_url),
     )
+    # include_granted_scopes 는 넣지 않는다. 넣으면 예전에 허락한 전체 'calendar' 권한까지
+    # 새 토큰에 다시 묶여, 좁은 권한으로 바꾼 의미가 없어진다.
     auth_url, state = flow.authorization_url(
         access_type="offline",
-        include_granted_scopes="true",
         prompt="consent",
     )
     remember_oauth_state(workspace, state, flow.redirect_uri, flow.code_verifier, session_token)
@@ -740,11 +745,14 @@ def stored_relpath(name: str, meta: Any) -> str:
     return name
 
 
-def _safe_folder(text: str, limit: int = 60) -> str:
-    """폴더 이름으로 쓸 수 있게 다듬는다."""
-    cleaned = re.sub(r'[<>:"/\\|?*\x00-\x1f]', " ", str(text or "")).strip(" .")
-    cleaned = re.sub(r"\s+", " ", cleaned)
-    return (cleaned or "기타")[:limit].strip(" .") or "기타"
+# 폴더 이름 다듬기·LMS 하위 폴더·정리 방식은 동기화 작업(main·drive_uploader)과 같은 규칙을 쓴다
+from folder_layout import (  # noqa: E402
+    HIDDEN_FOLDER_TITLES as _HIDDEN_FOLDER_TITLES,
+    layout_subfolders,
+    lms_subfolders,
+    normalize_layout,
+    safe_folder as _safe_folder,
+)
 
 
 def dedupe_downloads(workspace: UserWorkspace) -> int:
@@ -1148,7 +1156,6 @@ def _build_file_rows(
 
 
 # LMS 가 속으로만 쓰는 이름. 예전에 받은 자료의 경로에 들어 있어도 화면에는 안 보인다.
-_HIDDEN_FOLDER_TITLES = {"weekly schedule", "ultradocumentbody"}
 
 
 def natural_key(text: str) -> list:
@@ -1941,7 +1948,7 @@ def autosave_local(workspace: UserWorkspace, mode: str | None = None) -> dict[st
         if item["kept"]:
             parts.append(f"새 버전 {item['kept']}개")
         if item["moved"]:
-            parts.append(f"LMS 폴더대로 옮김 {item['moved']}개")
+            parts.append(f"정리 방식대로 옮김 {item['moved']}개")
         if item["failed"]:
             parts.append(f"실패 {item['failed']}개")
         if parts:
@@ -1952,20 +1959,6 @@ def autosave_local(workspace: UserWorkspace, mode: str | None = None) -> dict[st
     return {"ok": True, "mode": scope, "targets": per_target, **totals, "message": message}
 
 
-def lms_subfolders(folder_path: Any) -> list[str]:
-    """LMS 폴더 경로(['1주차', 'Lecture 1'])를 폴더 이름으로 쓸 수 있게.
-
-    자료 화면·Drive 와 같은 구조로 두려고 쓴다. 'Weekly Schedule' 처럼 화면에서 감추는
-    틀 폴더는 뺀다. 이름마다 40자로 잘라 경로가 너무 길어지지 않게 한다.
-    """
-    parts = []
-    for part in folder_path or []:
-        text = str(part).strip()
-        if text and text.lower() not in _HIDDEN_FOLDER_TITLES:
-            parts.append(_safe_folder(text, 40))
-    return parts
-
-
 def _mirror_rows(
     workspace: UserWorkspace,
     config: dict[str, Any],
@@ -1973,11 +1966,12 @@ def _mirror_rows(
     target_root: Path,
     copies: dict[str, dict[str, Any]],
 ) -> dict[str, int]:
-    """자료 줄들을 target_root / 과목 / LMS 하위 폴더 / 파일 로 복사한다. copies 기록을 고쳐 가며.
+    """자료 줄들을 target_root / 과목 / (LMS 하위 폴더) / 파일 로 복사한다. copies 기록을 고쳐 가며.
 
-    예전(1.11.3까지)에는 하위 폴더 없이 과목 폴더에 바로 펼쳐 넣었다. 그 자리에 있는
-    '우리가 넣은 그대로' 인 사본은 새 자리로 옮긴다(다시 복사하지 않는다).
-    사용자가 고친 옛 사본은 그대로 두고, 새 자리에 또 만들지 않는다.
+    폴더 모양은 설정 FOLDER_LAYOUT 을 따른다(lms: LMS 폴더 그대로, flat: 과목 폴더에 모아서).
+    방식을 바꾸면 다른 방식 자리에 있는 '우리가 넣은 그대로' 인 사본을 새 자리로 옮긴다(다시 복사하지 않는다).
+    사용자가 고친 옛 사본은 그대로 두고, 새 자리에 또 만들지 않는다. 옮기고 비어 버린 하위 폴더는 지운다.
+    한 과목 안에서 같은 이름 파일은 받을 때 하나만 남기므로(dedupe_downloads) 모아 두어도 이름이 겹치지 않는다.
     """
     import shutil
 
@@ -1986,6 +1980,8 @@ def _mirror_rows(
     if not isinstance(metadata, dict):
         metadata = {}
     enabled = get_upload_selection(workspace).get("courses") or {}
+    layout = normalize_layout(config.get("FOLDER_LAYOUT"))
+    vacated: set[Path] = set()
 
     saved = updated = kept = skipped = failed = moved = 0
     for row in rows:
@@ -2002,22 +1998,26 @@ def _mirror_rows(
             continue
         course_dir = target_root / _safe_folder(label)
         file_name = str(row.get("name") or source.name)
-        parts = lms_subfolders(row.get("folderPath"))
+        lms_parts = lms_subfolders(row.get("folderPath"))
+        parts = lms_parts if layout == "lms" else []
         dest_dir = course_dir.joinpath(*parts)
         dest = dest_dir / file_name
         try:
-            # 예전에 과목 폴더에 바로 넣었던 사본을 제자리(하위 폴더)로
-            flat = course_dir / file_name
-            if parts and not os.path.exists(_long_path(dest)) and os.path.exists(_long_path(flat)):
-                old = copies.get(str(flat))
-                flat_stat = os.stat(_long_path(flat))
+            # 다른 정리 방식 자리(과목 폴더 바로 아래 ↔ LMS 하위 폴더)에 넣어 둔 사본을 새 자리로
+            alt_dir = course_dir.joinpath(*lms_parts) if layout == "flat" else course_dir
+            alt = alt_dir / file_name
+            if alt != dest and not os.path.exists(_long_path(dest)) and os.path.exists(_long_path(alt)):
+                old = copies.get(str(alt))
+                alt_stat = os.stat(_long_path(alt))
                 if old and old.get("source") == local_name:
-                    if old.get("size") == flat_stat.st_size and old.get("mtime") == flat_stat.st_mtime_ns:
+                    if old.get("size") == alt_stat.st_size and old.get("mtime") == alt_stat.st_mtime_ns:
                         os.makedirs(_long_path(dest_dir), exist_ok=True)
-                        os.replace(_long_path(flat), _long_path(dest))
-                        copies.pop(str(flat), None)
+                        os.replace(_long_path(alt), _long_path(dest))
+                        copies.pop(str(alt), None)
                         copies[str(dest)] = dict(old)
                         moved += 1
+                        if alt_dir != course_dir:
+                            vacated.add(alt_dir)
                     else:
                         skipped += 1
                         continue
@@ -2054,7 +2054,17 @@ def _mirror_rows(
             copies[str(dest)] = {"source": local_name, "size": final.st_size, "mtime": final.st_mtime_ns}
         except OSError:
             failed += 1
-    # 옮기고 나서 빈 채로 남은 폴더는 없다(과목 폴더는 파일이 옮겨 가도 하위 폴더를 품는다)
+    # 모아 두기로 바꾸며 비어 버린 LMS 하위 폴더를 지운다. 비어 있을 때만(os.rmdir) 지우므로 파일은 잃지 않는다.
+    for folder in sorted(vacated, key=lambda p: len(str(p)), reverse=True):
+        current = folder
+        while current != target_root and target_root in current.parents:
+            try:
+                os.rmdir(_long_path(current))
+            except OSError:
+                break  # 비어 있지 않다(사용자 파일·다른 자료)
+            current = current.parent
+            if current.parent == target_root:  # 과목 폴더는 남긴다
+                break
     return {"saved": saved, "updated": updated, "kept": kept, "unchanged": skipped, "failed": failed, "moved": moved}
 
 
@@ -3826,6 +3836,7 @@ def safe_public_config(workspace: UserWorkspace) -> dict[str, Any]:
         "localSaveFolder": str(get_local_save_dir(workspace)),
         "driveUpload": config.get("AUTO_DRIVE_UPLOAD", True) is not False,
         "saveScope": save_scope(config),
+        "folderLayout": normalize_layout(config.get("FOLDER_LAYOUT")),
         "clouds": cloud_targets(config),
         "driveFolderName": drive_root_folder_name(),
         "hasLmsPassword": bool(config.get("LMS_PASSWORD")),
@@ -5167,7 +5178,11 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                         display = str(meta.get("original_name", safe)) if isinstance(meta, dict) else safe
                         course = str(meta.get("course", "기타")) if isinstance(meta, dict) else "기타"
                         try:
-                            result = upload_to_drive_with_path(str(path), display, course)
+                            result = upload_to_drive_with_path(
+                                str(path), display, course,
+                                meta.get("folder_path") if isinstance(meta, dict) else None,
+                                read_config(workspace).get("FOLDER_LAYOUT"),
+                            )
                             (skipped if result == "exists" else done).append(display)
                         except Exception:
                             failed.append(display)
@@ -5511,9 +5526,12 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                     failed.append(safe_name or str(raw_name))
                     continue
                 display_name = str(meta.get("original_name", safe_name)) if isinstance(meta, dict) else safe_name
-                # 문서\붕어빵 파일 정리\<과목>\<LMS 하위 폴더>\ 로 갈라 담는다 (자동 저장·Drive 와 같은 구조)
+                # 문서\붕어빵 파일 정리\<과목>\(<LMS 하위 폴더>)\ 로 담는다 (자동 저장·Drive 와 같은 정리 방식)
                 course = str(meta.get("course", "")) if isinstance(meta, dict) else ""
-                sub = lms_subfolders(meta.get("folder_path") if isinstance(meta, dict) else None)
+                sub = layout_subfolders(
+                    meta.get("folder_path") if isinstance(meta, dict) else None,
+                    read_config(workspace).get("FOLDER_LAYOUT"),
+                )
                 course_dir = (target_dir / _safe_folder(extract_course_label(course))).joinpath(*sub)
                 os.makedirs(_long_path(course_dir), exist_ok=True)
                 target = course_dir / display_name

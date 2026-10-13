@@ -22,4 +22,4 @@ Data stays on your PC (`C:\lms-autosaver\`). The app only talks to services you 
 (with your school account), Google Drive/Calendar (when you connect Google), Google Gemini (when you add a key),
 public data portals, OpenStreetMap place search, and GitHub for update checks. Secrets are encrypted with Windows DPAPI.
 
-전체 방침(Google 사용자 데이터 포함): https://daling-app.pages.dev/privacy
+전체 방침(Google 사용자 데이터 포함): https://gudaling.dev/privacy

@@ -7,6 +7,7 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 from runtime_config import GOOGLE_CLIENT_SECRETS_PATH, GOOGLE_SCOPES, GOOGLE_TOKEN_PATH
+from folder_layout import lms_subfolders, normalize_layout
 
 # Drive만 쓰지만, 권한 목록은 앱 전체와 같아야 한다.
 # 여기서 Drive 권한만 요청하면 로그인할 때 token.json이 덮어써져
@@ -90,11 +91,11 @@ def get_drive_service(interactive=True):
     _service = build('drive', 'v3', credentials=creds)
     return _service
 
-def get_or_create_folder(service, name, parent_id=None):
+def find_folder(service, name, parent_id=None):
+    """이름이 같은 폴더를 찾기만 한다(없으면 None). 옛 정리 방식 자리를 확인할 때 빈 폴더를 만들지 않으려고."""
     cache_key = f"{parent_id}:{name}"
     if cache_key in _folder_cache:
         return _folder_cache[cache_key]
-
     query = f"name='{_q(name)}' and mimeType='application/vnd.google-apps.folder' and trashed=false"
     if parent_id:
         query += f" and '{parent_id}' in parents"
@@ -103,6 +104,14 @@ def get_or_create_folder(service, name, parent_id=None):
     if files:
         _folder_cache[cache_key] = files[0]['id']
         return files[0]['id']
+    return None
+
+
+def get_or_create_folder(service, name, parent_id=None):
+    found = find_folder(service, name, parent_id)
+    if found:
+        return found
+    cache_key = f"{parent_id}:{name}"
 
     metadata = {'name': name, 'mimeType': 'application/vnd.google-apps.folder'}
     if parent_id:
@@ -158,10 +167,24 @@ def _md5(path):
             h.update(chunk)
     return h.hexdigest()
 
-def upload_to_drive_with_path(file_path, file_name, course_name, folder_path=None):
+def _folder_chain(service, course_id, parts, create):
+    """과목 폴더 아래 하위 폴더 경로의 마지막 폴더 id. create=False 면 없을 때 None."""
+    parent = course_id
+    for part in parts:
+        parent = get_or_create_folder(service, part, parent) if create else find_folder(service, part, parent)
+        if not parent:
+            return None
+    return parent
+
+
+def upload_to_drive_with_path(file_path, file_name, course_name, folder_path=None, layout="lms"):
     """
-    Drive 구조: 내 드라이브 / AutoSaver / 과목명 / 파일
-    (주차 등 하위 폴더 없이 과목 폴더 바로 아래에 정리)
+    Drive 구조 (설정 FOLDER_LAYOUT, folder_layout.py):
+      lms  : 내 드라이브 / AutoSaver / 과목명 / LMS 폴더(공지사항·주차…) / 파일
+      flat : 내 드라이브 / AutoSaver / 과목명 / 파일
+    예전에는 늘 flat 이었다. 방식이 바뀌면 다른 방식 자리에 올려 둔 파일을 새 자리로 옮긴다(다시 올리지 않음).
+    옮기고 비어 버린 Drive 폴더는 지우지 않는다: 앱 권한(drive.file)으로는 사용자가 넣은 파일이 안 보여
+    비었는지 확신할 수 없다.
     """
     try:
         service = get_drive_service()
@@ -169,29 +192,48 @@ def upload_to_drive_with_path(file_path, file_name, course_name, folder_path=Non
         root_id = get_or_create_folder(service, ROOT_FOLDER)
         course_clean = drive_folder_name(course_name)
         course_id = get_or_create_folder(service, course_clean, root_id)
+        lms_parts = lms_subfolders(folder_path)
+        parts = lms_parts if normalize_layout(layout) == "lms" else []
+        target_id = _folder_chain(service, course_id, parts, create=True)
+        where = "/".join(["AutoSaver", course_clean, *parts])
+
+        # 다른 정리 방식 자리(과목 폴더 바로 아래 ↔ LMS 하위 폴더)에 올려 둔 같은 파일을 새 자리로 옮긴다
+        existing = find_in_drive(service, file_name, target_id)
+        moved = False
+        if not existing and lms_parts:
+            alt_id = course_id if parts else _folder_chain(service, course_id, lms_parts, create=False)
+            old = find_in_drive(service, file_name, alt_id) if alt_id and alt_id != target_id else None
+            if old:
+                done = service.files().update(
+                    fileId=old['id'], addParents=target_id, removeParents=alt_id, fields='id, md5Checksum'
+                ).execute()
+                _folder_listing(service, alt_id).pop(file_name, None)
+                existing = {**old, **done}
+                _folder_listing(service, target_id)[file_name] = existing
+                moved = True
+                print(f"Drive 정리 방식대로 옮김: {file_name} → {where}")
 
         # Drive 에 같은 이름이 있으면: 내용이 같으면 건너뛰고, 다르면(교수가 고쳐 다시 올린 파일) 새 내용으로 바꾼다.
         # 예전에는 이름만 보고 건너뛰어, 고친 자료가 Drive 에는 옛 판으로 남았다.
-        existing = find_in_drive(service, file_name, course_id)
         if existing:
             if existing.get('md5Checksum') and existing['md5Checksum'] == _md5(file_path):
-                return 'exists'
+                return 'moved' if moved else 'exists'
             media = MediaFileUpload(file_path, resumable=True)
             updated = service.files().update(fileId=existing['id'], media_body=media, fields='id, md5Checksum').execute()
-            _folder_listing(service, course_id)[file_name] = {**existing, **updated}
-            print(f"Drive 새 판으로 바꿈: {file_name} → AutoSaver/{course_clean}")
+            _folder_listing(service, target_id)[file_name] = {**existing, **updated}
+            print(f"Drive 새 판으로 바꿈: {file_name} → {where}")
             return 'updated'
 
-        file_metadata = {'name': file_name, 'parents': [course_id]}
+        file_metadata = {'name': file_name, 'parents': [target_id]}
         media = MediaFileUpload(file_path, resumable=True)
         file = service.files().create(
             body=file_metadata,
             media_body=media,
             fields='id, webViewLink, md5Checksum'
         ).execute()
-        _folder_listing(service, course_id)[file_name] = {'id': file.get('id'), 'name': file_name, 'md5Checksum': file.get('md5Checksum')}
+        _folder_listing(service, target_id)[file_name] = {'id': file.get('id'), 'name': file_name, 'md5Checksum': file.get('md5Checksum')}
 
-        print(f"Drive 업로드 완료: {file_name} → AutoSaver/{course_clean}")
+        print(f"Drive 업로드 완료: {file_name} → {where}")
         return file.get('webViewLink', '')
 
     except Exception as e:

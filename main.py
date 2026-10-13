@@ -2,7 +2,7 @@
 import asyncio
 import time
 import os
-from runtime_config import SCHEDULE_TIME, DOWNLOAD_PATH, DRIVE_UPLOAD, course_upload_enabled, load_upload_selection
+from runtime_config import SCHEDULE_TIME, DOWNLOAD_PATH, DRIVE_UPLOAD, FOLDER_LAYOUT, course_upload_enabled, load_upload_selection
 from lms_crawler import crawl_lms, load_file_metadata, get_all_courses
 from drive_uploader import (
     DriveLoginRequired, upload_to_drive_with_path, get_drive_service, get_or_create_folder, drive_folder_name, ROOT_FOLDER,
@@ -83,6 +83,7 @@ async def run_job():
                 personal_count += 1
 
     updated_count = 0
+    moved_count = 0  # 정리 방식(LMS 폴더 그대로 ↔ 과목 폴더에 모아서)을 바꿔 Drive 안에서 옮긴 것
     if targets:
         for file_name, file_path, meta in targets:
 
@@ -95,9 +96,11 @@ async def run_job():
                 continue
 
             result = upload_to_drive_with_path(
-                file_path, drive_file_name, course_name, folder_path
+                file_path, drive_file_name, course_name, folder_path, FOLDER_LAYOUT
             )
-            if result == 'exists':
+            if result == 'moved':
+                moved_count += 1
+            elif result == 'exists':
                 skipped_count += 1
             elif result == 'updated':
                 updated_count += 1
@@ -105,6 +108,8 @@ async def run_job():
                 uploaded_count += 1
 
     summary = f"[Drive 동기화 완료] 신규 {uploaded_count}개 업로드, 새 판 {updated_count}개 교체, 기존 {skipped_count}개 스킵, 선택 제외 {excluded_count}개"
+    if moved_count:
+        summary += f", 정리 방식대로 옮김 {moved_count}개"
     if personal_count:
         summary += f", 앱과 무관한 개인 파일 {personal_count}개는 건드리지 않음"
     print(summary)

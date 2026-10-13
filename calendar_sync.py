@@ -8,15 +8,21 @@ from __future__ import annotations
 
 import datetime as _dt
 import hashlib
+import json
+import threading
+from pathlib import Path
 from typing import Any, Iterable
 
-from runtime_config import GOOGLE_CLIENT_SECRETS_PATH, GOOGLE_TOKEN_PATH
+from runtime_config import (
+    GOOGLE_CLIENT_SECRETS_PATH,
+    GOOGLE_SCOPES,
+    GOOGLE_TOKEN_PATH,
+    atomic_write_text,
+    calendar_scope_granted,
+)
 
-# Drive와 Calendar를 함께 쓰므로 두 스코프를 모두 요청한다.
-SCOPES = [
-    "https://www.googleapis.com/auth/drive.file",
-    "https://www.googleapis.com/auth/calendar",
-]
+# Drive와 Calendar를 함께 쓰므로 권한 목록은 runtime_config 한 곳에서 가져온다.
+SCOPES = list(GOOGLE_SCOPES)
 
 DEFAULT_CALENDAR_NAME = "DGIST 메일 일정"
 TIMEZONE = "Asia/Seoul"
@@ -30,7 +36,9 @@ def _credentials(token_path: str | None = None):
     from google.oauth2.credentials import Credentials
 
     path = str(token_path or GOOGLE_TOKEN_PATH)
-    creds = Credentials.from_authorized_user_file(path, SCOPES)
+    # 파일에 실제로 승인된 권한 그대로 읽는다. SCOPES 를 넘기면 갱신할 때 그 권한을 달라고
+    # 요청하는데, 예전 토큰(전체 'calendar')에 없는 좁은 권한을 달라고 하면 invalid_scope 로 실패한다.
+    creds = Credentials.from_authorized_user_file(path)
     if not creds.valid:
         if creds.expired and creds.refresh_token:
             creds.refresh(Request())
@@ -68,18 +76,92 @@ def granted_scopes(token_path: str | None = None) -> set[str]:
 
 
 def has_calendar_scope(token_path: str | None = None) -> bool:
-    """토큰이 캘린더 권한까지 가지고 있는지 확인 (없으면 재연결 필요)."""
-    return "https://www.googleapis.com/auth/calendar" in granted_scopes(token_path)
+    """토큰이 캘린더 권한까지 가지고 있는지 확인 (없으면 재연결 필요).
+
+    새 토큰은 좁은 권한 둘(app.created + calendarlist.readonly), 예전 토큰은 전체 'calendar'.
+    """
+    return calendar_scope_granted(granted_scopes(token_path))
 
 
-def find_or_create_calendar(service, name: str | None = None) -> str:
-    """이름이 같은 캘린더(카테고리)를 찾고, 없으면 새로 만든다."""
+def _saved_calendars_path(token_path: str | None) -> Path:
+    return Path(str(token_path or GOOGLE_TOKEN_PATH)).with_name("gcal_calendars.json")
+
+
+def _load_saved_calendars(token_path: str | None) -> dict[str, str]:
+    try:
+        data = json.loads(_saved_calendars_path(token_path).read_text(encoding="utf-8"))
+        return {str(k): str(v) for k, v in data.items()} if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+# '지금 넣기'(메일 일정)와 '학사일정도 넣기' 를 연달아 누르면 두 요청이 동시에 돈다(ThreadingHTTPServer).
+# 둘 다 gcal_calendars.json 을 읽고 고쳐 쓰므로 늦게 쓴 쪽이 먼저 쓴 쪽의 기록을 지웠다(리뷰 지적).
+# 찾기·만들기·기록을 통째로 한 번에 하나만 한다. 같은 이름 캘린더를 둘이 동시에 만드는 일도 막는다.
+_calendar_lock = threading.RLock()
+
+
+def _save_calendar_id(token_path: str | None, name: str, calendar_id: str) -> None:
+    with _calendar_lock:
+        saved = _load_saved_calendars(token_path)
+        if saved.get(name) == calendar_id:
+            return
+        saved[name] = calendar_id
+        try:
+            atomic_write_text(
+                _saved_calendars_path(token_path),
+                json.dumps(saved, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+        except Exception:
+            pass  # 기억 못 해도 다음에 이름으로 다시 찾는다
+
+
+def _can_use_calendar(service, calendar_id: str) -> bool:
+    """이 토큰으로 그 캘린더의 일정을 읽을 수 있는지.
+
+    좁은 권한(app.created)은 이 앱이 만든 캘린더만 열어 준다. 같은 이름이어도
+    사용자가 직접 만든 캘린더나 남이 공유한 캘린더면 403·404 가 난다.
+    """
+    try:
+        service.events().list(calendarId=calendar_id, maxResults=1, fields="items(id)").execute()
+        return True
+    except Exception as exc:
+        # 권한 없음·없는 캘린더(403·404)만 '못 쓴다' 로 본다. 호출 한도·시간 초과·5xx 같은 잠깐의 오류까지
+        # False 로 보면 멀쩡한 캘린더를 버리고 같은 이름 캘린더를 또 만들었다(리뷰 지적). 그런 오류는
+        # 그대로 올려 이번 동기화만 실패시키고, 다음 동기화 때 다시 해 본다.
+        status = getattr(getattr(exc, "resp", None), "status", None)
+        try:
+            status = int(status)
+        except (TypeError, ValueError):
+            status = None
+        if status in (403, 404):
+            return False
+        raise
+
+
+def find_or_create_calendar(service, name: str | None = None, token_path: str | None = None) -> str:
+    """이름이 같은 캘린더(카테고리)를 찾고, 없으면 새로 만든다.
+
+    찾은 캘린더는 gcal_calendars.json 에 적어 두고 다음부터 먼저 쓴다. 같은 이름의
+    캘린더가 여럿이거나 그중 하나를 이 토큰으로 못 열 때, 매번 새로 만들지 않기 위해서다.
+    """
     target = (name or DEFAULT_CALENDAR_NAME).strip() or DEFAULT_CALENDAR_NAME
+    with _calendar_lock:
+        return _find_or_create_locked(service, target, token_path)
+
+
+def _find_or_create_locked(service, target: str, token_path: str | None) -> str:
+    saved_id = _load_saved_calendars(token_path).get(target)
+    if saved_id and _can_use_calendar(service, saved_id):
+        return saved_id
+
     page_token = None
     while True:
-        resp = service.calendarList().list(pageToken=page_token).execute()
+        resp = service.calendarList().list(pageToken=page_token, minAccessRole="writer").execute()
         for entry in resp.get("items", []):
-            if (entry.get("summary") or "").strip() == target:
+            if (entry.get("summary") or "").strip() == target and _can_use_calendar(service, entry["id"]):
+                _save_calendar_id(token_path, target, entry["id"])
                 return entry["id"]
         page_token = resp.get("nextPageToken")
         if not page_token:
@@ -88,6 +170,7 @@ def find_or_create_calendar(service, name: str | None = None) -> str:
     created = service.calendars().insert(
         body={"summary": target, "timeZone": TIMEZONE}
     ).execute()
+    _save_calendar_id(token_path, target, created["id"])
     return created["id"]
 
 
@@ -184,7 +267,7 @@ def sync_email_events(
         }
 
     service = get_calendar_service(token_path)
-    calendar_id = find_or_create_calendar(service, calendar_name)
+    calendar_id = find_or_create_calendar(service, calendar_name, token_path)
 
     created = updated = skipped = 0
     for mail in mails:
@@ -267,7 +350,7 @@ def sync_academic_events(
                 "calendar": name, "message": "동기화할 학사일정이 없습니다."}
 
     service = get_calendar_service(token_path)
-    calendar_id = find_or_create_calendar(service, name)
+    calendar_id = find_or_create_calendar(service, name, token_path)
 
     created = updated = skipped = 0
     last_error = ""

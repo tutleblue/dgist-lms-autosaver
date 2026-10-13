@@ -215,6 +215,8 @@ MAIL_KEEP_MAX = _int_setting("MAIL_KEEP_MAX", 60, 30, 2000)
 LOCAL_SAVE_PATH = str(_CONFIG.get("LOCAL_SAVE_PATH", ""))
 # 동기화 때 구글 드라이브에도 올릴지. 예전 설정에는 이 키가 없고, 그때는 늘 올렸다.
 DRIVE_UPLOAD = _CONFIG.get("AUTO_DRIVE_UPLOAD", True) is not False
+# 저장 위치 폴더 모양: lms(LMS 폴더 그대로) / flat(과목 폴더에 모아서). folder_layout.py 참고
+FOLDER_LAYOUT = str(_CONFIG.get("FOLDER_LAYOUT", "lms") or "lms")
 LMS_URL = str(_CONFIG.get("LMS_URL", "https://lms.dgist.ac.kr"))
 LOGIN_URL = str(
     _CONFIG.get(
@@ -275,8 +277,24 @@ GOOGLE_TOKEN_PATH = str(AUTOSAVER_DATA_ROOT / "token.json")
 # 요청해서 파일을 덮어쓰면 다른 쪽 권한이 사라진다. (실제로 그래서
 # 동기화를 돌릴 때마다 캘린더 권한이 날아가 학사일정 업로드가 막혔다)
 GOOGLE_DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file"
-GOOGLE_CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar"
-GOOGLE_SCOPES = [GOOGLE_DRIVE_SCOPE, GOOGLE_CALENDAR_SCOPE]
+# 캘린더는 앱이 만든 보조 캘린더('DGIST 메일 일정' 등)에만 일정을 넣으므로 좁은 권한 둘이면 된다.
+# app.created = 보조 캘린더 만들기와 그 안의 일정, calendarlist.readonly = 이름으로 찾기.
+# 예전의 'calendar'(모든 캘린더 보기·수정·삭제)는 Google 이 민감 범위로 분류해
+# 데이터 액세스 인증(시연 영상·심사)을 받아야 했다. 두 좁은 권한은 민감하지 않은 범위다
+# (2026-10-13 Cloud 콘솔 범위 목록에서 자물쇠 표시 없음 확인).
+GOOGLE_CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar.app.created"
+GOOGLE_CALENDAR_LIST_SCOPE = "https://www.googleapis.com/auth/calendar.calendarlist.readonly"
+# 예전에 연결한 사람의 token.json 에는 이 권한이 남아 있다. 그대로 계속 쓸 수 있다.
+GOOGLE_LEGACY_CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar"
+GOOGLE_SCOPES = [GOOGLE_DRIVE_SCOPE, GOOGLE_CALENDAR_SCOPE, GOOGLE_CALENDAR_LIST_SCOPE]
+
+
+def calendar_scope_granted(granted: set[str] | list[str]) -> bool:
+    """토큰에 실제로 승인된 권한으로 캘린더 동기화를 할 수 있는지."""
+    granted = set(granted)
+    if GOOGLE_LEGACY_CALENDAR_SCOPE in granted:
+        return True
+    return GOOGLE_CALENDAR_SCOPE in granted and GOOGLE_CALENDAR_LIST_SCOPE in granted
 
 PLAYWRIGHT_HEADLESS = os.environ.get("AUTOSAVER_HEADLESS", "1").lower() not in {
     "0",

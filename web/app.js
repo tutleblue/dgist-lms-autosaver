@@ -169,6 +169,9 @@ async function api(path, options = {}) {
      - 새로 그려지는 글자는 MutationObserver 가 따라가며 바꾼다. 글자를 바꾸면 한글이 없어지므로 다시 걸리지 않는다.
    빠진 문구 찾기: python scripts/i18n_extract.py */
 const I18N = { lang: "ko", exact: new Map(), patterns: [], observer: null };
+/* 학사일정 낱말표: web/i18n/en.json 의 "_academic" 한 곳에만 둔다(i18nCompile 이 채운다). 예전엔 app.js 와
+   en.json 에 같은 낱말이 따로 있어 한쪽만 고치면 어긋났다(리뷰 지적). 버튼용 짧은 번역('등록'→'Add')과는 뜻이 달라 따로 둔다. */
+let ACAD_TERMS = [];
 const HANGUL_RE = /[가-힣]/;
 const I18N_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const I18N_DATE_MAP = { "(월)": "(Mon)", "(화)": "(Tue)", "(수)": "(Wed)", "(목)": "(Thu)", "(금)": "(Fri)", "(토)": "(Sat)", "(일)": "(Sun)" };
@@ -179,6 +182,11 @@ function i18nCompile(table) {
   I18N.exact.clear();
   I18N.patterns = [];
   const esc = (s) => s.replace(/[.*+?^$()|[\]\\]/g, "\\$&");
+  const academic = table && typeof table._academic === "object" ? table._academic : {};
+  // 긴 낱말부터 바꾼다 ('수강신청 변경' 을 '수강신청' 보다 먼저)
+  ACAD_TERMS = Object.entries(academic)
+    .filter(([, en]) => typeof en === "string" && en)
+    .sort((a, b) => b[0].length - a[0].length);
   Object.entries(table || {}).forEach(([ko, en]) => {
     if (typeof en !== "string" || !en) return;
     if (/\{\d+\}/.test(ko)) {
@@ -206,6 +214,63 @@ function i18nCompile(table) {
   I18N.patterns.sort((a, b) => b.weight - a.weight);
 }
 
+/* ===== 학사일정 이름 (영어 화면) =====
+   학사일정은 학교 데이터라 번역표에 없어서, 영어 화면에서도 '대학 및 대학원 중간시험' 이 그대로 나왔다(2026-10-12).
+   해마다 연도·학기만 바뀌므로 통째 문장 대신 낱말을 옮겨 이어 붙인다. 다 옮겨서 한글이 하나도 안 남을 때만 쓰므로
+   메일 제목 같은 사용자 글은 건드리지 않는다. */
+const ACAD_ORDINAL = (n) => `${n}${["th", "st", "nd", "rd"][(n % 100 > 10 && n % 100 < 14) || n % 10 > 3 ? 0 : n % 10]}`;
+
+function acadTitleEn(text) {
+  let s = String(text || "").trim();
+  if (!/[가-힣]/.test(s)) return null;
+  let tail = "";
+  s = s.replace(/\s+(D-\d+|진행 중)$/, (_, d) => { tail = d === "진행 중" ? " · now" : ` ${d}`; return ""; });
+  let grad = false;
+  s = s.replace(/^대학 및 대학원\s*/, "");
+  if (/^대학원\s+/.test(s)) { grad = true; s = s.replace(/^대학원\s+/, ""); }
+  s = s.replace(/^대학\s+/, "");
+  let year = "";
+  s = s.replace(/(\d{4})학년도\s*/, (_, y) => { year = y; return ""; });
+  let term = "";
+  s = s.replace(/(여름|겨울)\s*계절학기\s*/, (_, w) => { term = `${w === "여름" ? "Summer" : "Winter"} session`; return ""; });
+  s = s.replace(/(^|\s)([12])학기\s*/, (_, a, n) => { term = n === "1" ? "Spring" : "Fall"; return a; });
+  s = s.replace(/\('(\d{2})\.(\d{1,2})월 졸업생\)/, (_, y, m) => ` (${I18N_MONTHS[Number(m) - 1]} '${y} grads)`);
+  s = s.replace(/수업일수\s*(\d)\/4선/, (_, n) => `${n}/4 of semester`);
+  s = s.replace(/(\d+)주년\s*/, (_, n) => `${ACAD_ORDINAL(Number(n))} `);
+  // '대체공휴일(한글날)': 괄호 안 공휴일 이름은 번역표(신정·추석…)에서 찾는다
+  s = s.replace(/대체공휴일\(([^)]+)\)/, (_, h) => `substitute holiday (${I18N.exact.get(h) || h})`);
+  for (const [ko, en] of ACAD_TERMS) s = s.split(ko).join(en);
+  s = s.replace(/\s+/g, " ").trim();
+  if (!s || /[가-힣]/.test(s)) return null;
+  const head = [grad ? "Grad:" : "", term ? `${term}${year ? ` ${year}` : ""}` : year ? `AY${year}` : ""].filter(Boolean).join(" ");
+  const out = `${head ? `${head} ` : ""}${s}`;
+  return out.charAt(0).toUpperCase() + out.slice(1) + tail;
+}
+
+/* ===== 과목명 (영어 화면) =====
+   LMS 과목명에는 학교 공식 영어 이름이 함께 있다: '일반화학Ⅱ (General Chemistry II )_02[ 2026_2학기 ]'.
+   시간표(내가 적은 '일반화학Ⅱ')·과목 카드처럼 한국어 이름이 그대로 보이는 곳을 영어 화면에서는 이 이름으로 바꾼다.
+   'Ⅱ' 와 'II', 띄어쓰기 차이는 NFKC 로 맞춘다. 이름이 통째로 같을 때만 바꾼다. */
+const COURSE_EN = new Map();
+const courseNameKey = (s) => String(s || "").normalize("NFKC").replace(/\s+/g, "").toLowerCase();
+
+function learnCourseNames(names) {
+  let added = 0;
+  (names || []).forEach((name) => {
+    const m = String(name || "").match(/^(.+?)\s*\((.+?)\s*\)\s*_\d+\s*\[/);
+    if (!m || !/[가-힣]/.test(m[1]) || /[가-힣]/.test(m[2])) return;
+    const key = courseNameKey(m[1]);
+    // 'General PhysicsⅡ' → 'General Physics II'
+    const en = m[2].replace(/([A-Za-z])([Ⅰ-Ⅻ])/g, "$1 $2").normalize("NFKC").replace(/\s+/g, " ").trim();
+    if (COURSE_EN.get(key) !== en) {
+      COURSE_EN.set(key, en);
+      added += 1;
+    }
+  });
+  // 영어 화면인데 이미 그려 둔 한국어 과목명이 있으면 다시 옮긴다
+  if (added && I18N.lang === "en" && document.body) i18nTranslateTree(document.body);
+}
+
 function tr(text, depth = 0) {
   if (I18N.lang !== "en" || text == null) return text;
   const s = String(text);
@@ -227,6 +292,10 @@ function tr(text, depth = 0) {
       break;
     }
   }
+  // 과목명 → LMS 공식 영어 이름
+  if (out == null && COURSE_EN.size) out = COURSE_EN.get(courseNameKey(core)) ?? null;
+  // 학사일정·공휴일 이름 (낱말을 다 옮길 수 있을 때만)
+  if (out == null) out = acadTitleEn(core);
   // '오늘은 남은 수업이 없어요 · 안 읽은 메일 25통' 처럼 여러 문구를 이어 붙인 줄은 마디마다 옮긴다
   if (out == null && depth === 0 && / [·—|] /.test(core)) {
     const parts = core.split(/( [·—|] )/);
@@ -5254,6 +5323,12 @@ async function refreshAll() {
     state.status = status;
     state.files = files.files || [];
     state.deadlines = deadlines;
+    // 영어 화면의 과목명: 이번 학기·마감·자료에 나온 LMS 과목 전체 이름에서 공식 영어 이름을 익힌다
+    learnCourseNames([
+      ...(state.courseState.current || []).map((c) => c.name),
+      ...(state.deadlines?.items || []).map((d) => d.course),
+      ...state.files.map((f) => f.course),
+    ]);
     state.selection = selection.courses ? selection : { courses: {} };
     if (!Array.isArray(state.selection.hidden)) state.selection.hidden = [];
     if (!Array.isArray(state.selection.hiddenDeadlines)) state.selection.hiddenDeadlines = [];
@@ -5438,6 +5513,9 @@ async function populateSettings() {
   const scopeValue = state.config?.saveScope === "all" ? "all" : "current";
   const scope = form.querySelector(`input[name=localSaveScope][value="${scopeValue}"]`);
   if (scope) scope.checked = true;
+  const layoutValue = state.config?.folderLayout === "flat" ? "flat" : "lms";
+  const layoutInput = form.querySelector(`input[name=folderLayout][value="${layoutValue}"]`);
+  if (layoutInput) layoutInput.checked = true;
   form.elements.localSavePath.value = state.config?.localSavePath || "";
   const folderText = $("#localSaveFolderText");
   if (folderText && state.config?.localSaveFolder) {
@@ -9856,6 +9934,10 @@ function saveScopeValue() {
   return $("#configForm")?.querySelector("input[name=localSaveScope]:checked")?.value || "current";
 }
 
+function folderLayoutValue() {
+  return $("#configForm")?.querySelector("input[name=folderLayout]:checked")?.value === "flat" ? "flat" : "lms";
+}
+
 function localSaveMode() {
   if (!$("#localSaveToggle")?.checked) return "off";
   return saveScopeValue();
@@ -9870,6 +9952,111 @@ function anyCloudOn() {
   });
 }
 
+/* ===== 폴더 정리 방식 설명 (? 를 누르면) =====
+   말로만 'LMS 폴더 그대로 / 과목 폴더에 모아서' 라고 하면 무슨 차이인지 알기 어렵다.
+   내 자료 중 LMS 폴더가 여러 개인 과목을 골라, 두 방식으로 저장하면 폴더가 어떻게 보이는지 나란히 그린다.
+   (자료가 아직 없으면 일반화학Ⅱ 공지 첨부를 예로 든다) */
+function layoutExample() {
+  const hidden = /^(weekly schedule|ultradocumentbody)$/i;
+  const byCourse = new Map();
+  (state.files || []).forEach((f) => {
+    if (f.status !== "local" || !f.courseLabel) return;
+    // 실제 저장 폴더 이름과 같게: 폴더 이름에 못 쓰는 글자(: 등)는 빈칸, 40자까지 (folder_layout.safe_folder)
+    const folder = (f.folderPath || [])
+      .map((p) => String(p).trim())
+      .filter((p) => p && !hidden.test(p))
+      // 따옴표는 \x22 로 적는다: 글자 그대로 쓰면 영어 번역 추출기(scripts/i18n_extract.py)가 문자열 경계로 오해한다
+      .map((p) => p.replace(/[<>:\x22/\\|?*\u0000-\u001f]/g, " ").replace(/\s+/g, " ").trim().slice(0, 40).trim());
+    const list = byCourse.get(f.courseLabel) || [];
+    list.push({ name: String(f.name || ""), folder, year: f.year || 0, term: f.term || 0 });
+    byCourse.set(f.courseLabel, list);
+  });
+  let best = null;
+  byCourse.forEach((files, label) => {
+    const folders = new Set(files.filter((f) => f.folder.length).map((f) => f.folder.join("/")));
+    const score = [Math.max(...files.map((f) => f.year * 10 + f.term)), Math.min(folders.size, 3), files.length];
+    if (folders.size >= 2 && (!best || score.join() > best.score.join())) best = { label, files, score };
+  });
+  if (!best) {
+    return {
+      course: "일반화학Ⅱ",
+      files: [
+        { name: "Lecture Material_Chapter 13_BS119.pdf", folder: ["공지사항(Announcements)"] },
+        { name: "Lecture Material_Chapter 14_BS119.pdf", folder: ["Chapter 14_Lecture Materials"] },
+        { name: "Practice Exercises_BS119_Chapter 15.pdf", folder: ["Practice Exercises Chapter 15"] },
+      ],
+    };
+  }
+  // 서로 다른 폴더에서 하나씩, 공지사항 첨부가 있으면 먼저 (LMS 공지에 붙은 파일이 어디로 가는지가 제일 헷갈린다)
+  const picked = [];
+  const seen = new Set();
+  const order = [...best.files].sort((a, b) => /공지|announcement/i.test(b.folder.join()) - /공지|announcement/i.test(a.folder.join()));
+  for (const f of order) {
+    const key = f.folder.join("/");
+    if (!f.folder.length || seen.has(key)) continue;
+    seen.add(key);
+    picked.push(f);
+    if (picked.length === 3) break;
+  }
+  return { course: courseShortName(best.label), files: picked };
+}
+
+function layoutTreeHtml(example, layout) {
+  const folderIco = iconHtml("folder");
+  const fileIco = iconHtml("file");
+  const short = (s, n) => escapeHtml(shortText(s, n));
+  const rows = [`<li class="lt-course">${folderIco}<span>${short(example.course, 26)}</span></li>`];
+  if (layout === "lms") {
+    example.files.forEach((f) => {
+      rows.push(`<li class="lt-sub" style="--lv:1">${folderIco}<span>${short(f.folder[f.folder.length - 1], 30)}</span></li>`);
+      rows.push(`<li class="lt-file" style="--lv:2">${fileIco}<span>${short(f.name, 34)}</span></li>`);
+    });
+  } else {
+    example.files.forEach((f) => {
+      rows.push(`<li class="lt-file" style="--lv:1">${fileIco}<span>${short(f.name, 40)}</span></li>`);
+    });
+  }
+  return `<ul class="lt-tree">${rows.join("")}</ul>`;
+}
+
+function renderLayoutHelp() {
+  const pop = $("#folderLayoutPop");
+  if (!pop) return;
+  const now = folderLayoutValue();
+  const ex = layoutExample();
+  const card = (value, title, caption) => `
+    <button type="button" class="lt-card ${now === value ? "on" : ""}" data-layout-pick="${value}" aria-pressed="${now === value}">
+      <span class="lt-window"><i></i><i></i><i></i><b>${escapeHtml(title)}</b>${now === value ? '<em class="lt-now">지금 방식</em>' : ""}</span>
+      ${layoutTreeHtml(ex, value)}
+      <span class="lt-caption">${escapeHtml(caption)}</span>
+    </button>`;
+  pop.innerHTML = `
+    <div class="lt-head">
+      <strong>저장하면 폴더가 이렇게 보여요</strong>
+      <span>내 자료 '${escapeHtml(shortText(ex.course, 24))}' 로 그렸어요. 눌러서 고를 수 있어요.</span>
+      <button type="button" class="icon-button" data-layout-close aria-label="닫기">${iconHtml("x")}</button>
+    </div>
+    <div class="lt-cards">
+      ${card("lms", "LMS 폴더 그대로", "교수님이 LMS에 올린 자리 그대로예요. 공지에 붙은 파일은 '공지사항' 폴더, 주차 자료는 그 주차 폴더에 들어가요.")}
+      ${card("flat", "과목 폴더에 모아서", "폴더를 열지 않고 과목 자료를 한눈에 봐요. 파일 이름은 LMS 그대로예요.")}
+    </div>
+    <ul class="lt-notes">
+      <li>${iconHtml("sync")}바꾸면 이미 저장한 파일도 새 모양으로 옮겨요. 다시 받지 않아요.</li>
+      <li>${iconHtml("check")}내가 필기한 파일은 그 자리에 그대로 둬요.</li>
+      <li>${iconHtml("cloud")}Drive는 다음 동기화 때 옮겨요. 비게 된 Drive 폴더는 남아 있으니 필요 없으면 지워 주세요.</li>
+    </ul>`;
+}
+
+function toggleLayoutHelp(open) {
+  const pop = $("#folderLayoutPop");
+  const button = $("#folderLayoutHelp");
+  if (!pop) return;
+  const show = open ?? pop.hidden;
+  if (show) renderLayoutHelp();
+  pop.hidden = !show;
+  button?.setAttribute("aria-expanded", String(show));
+}
+
 /** 설정 저장·지금 맞추기에 함께 보내는 저장 위치 값 */
 function savePlacePayload() {
   const form = $("#configForm");
@@ -9877,6 +10064,7 @@ function savePlacePayload() {
     driveUpload: Boolean(form?.elements?.driveUpload?.checked),
     autoLocalSave: localSaveMode(),
     saveScope: saveScopeValue(),
+    folderLayout: folderLayoutValue(),
     localSavePath: form?.elements?.localSavePath?.value || "",
     clouds: state.cloudDraft || {},
   };
@@ -10013,12 +10201,20 @@ function saveSavePlaceSoon() {
   savePlaceTimer = window.setTimeout(async () => {
     const payload = savePlacePayload();
     const wasLocal = state.config?.autoLocalSave || "off";
+    const layoutChanged = (state.config?.folderLayout || "lms") !== payload.folderLayout;
     const cloudsBefore = (state.config?.clouds || []).filter((c) => c.on).map((c) => c.key).join();
     try {
       await api("/api/config", { method: "POST", body: JSON.stringify(payload) });
       state.config = await api("/api/config");
       const cloudsNow = (state.config?.clouds || []).filter((c) => c.on).map((c) => c.key).join();
       const localOn = payload.autoLocalSave !== "off";
+      if (layoutChanged) {
+        // 이미 넣어 둔 파일도 새 모양으로 옮긴다: 내 컴퓨터·클라우드는 지금, Drive 는 다음 동기화 때(작업 프로세스가 올린다)
+        const where = payload.folderLayout === "flat" ? "과목 폴더에 모아" : "LMS 폴더대로 나눠";
+        showToast(`이제 ${where} 둬요.${payload.driveUpload ? " Drive는 다음 동기화 때 옮겨요." : ""}`);
+        if (localOn || cloudsNow) runLocalSaveNow({ alreadySaved: true });
+        return;
+      }
       showToast(
         payload.autoLocalSave !== wasLocal
           ? localOn ? "내 컴퓨터 저장을 켰어요" : "내 컴퓨터 저장을 껐어요"
@@ -10043,6 +10239,32 @@ function saveSavePlaceSoon() {
   $("#localSaveToggle")?.addEventListener("change", refresh);
   $("#driveUploadToggle")?.addEventListener("change", refresh);
   $("#saveScopeRow")?.addEventListener("change", refresh);
+  $("#folderLayoutRow")?.addEventListener("change", (event) => {
+    if (event.target.name !== "folderLayout") return;
+    if (!$("#folderLayoutPop").hidden) renderLayoutHelp();
+    refresh();
+  });
+  $("#folderLayoutHelp")?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    toggleLayoutHelp();
+  });
+  $("#folderLayoutPop")?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    if (event.target.closest("[data-layout-close]")) return toggleLayoutHelp(false);
+    const pick = event.target.closest("[data-layout-pick]")?.dataset.layoutPick;
+    if (!pick) return;
+    const input = $(`#configForm input[name=folderLayout][value="${pick}"]`);
+    if (input && !input.checked) {
+      input.checked = true;
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+  });
+  document.addEventListener("click", (event) => {
+    if (!$("#folderLayoutPop")?.hidden && !event.target.closest("#folderLayoutRow")) toggleLayoutHelp(false);
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !$("#folderLayoutPop")?.hidden) toggleLayoutHelp(false);
+  });
   $("#cloudDestGrid")?.addEventListener("change", (event) => {
     const key = event.target.dataset?.cloudToggle;
     if (!key) return;
