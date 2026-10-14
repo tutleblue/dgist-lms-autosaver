@@ -22,6 +22,9 @@ on:
 
 permissions:
   contents: read
+  id-token: write           # 빌드 출처 증명(Sigstore) 인증서 받기
+  attestations: write       # 빌드 출처 증명 저장
+  artifact-metadata: write  # 증명과 이어지는 파일 기록 (actions/attest v4)
 
 concurrency:
   group: linux-${{ github.ref }}
@@ -282,6 +285,29 @@ jobs:
           HOME="$T/home" env -u DISPLAY -u WAYLAND_DISPLAY "$T/home/.local/bin/daling" --autosaver-smoke 2>&1 | tee logs/smoke-tar.log
           HOME="$T/home" sh "$T/x/$NAME/install.sh" --uninstall
           test ! -e "$T/home/.local/opt/daling"
+
+      - name: 한 줄 설치 점검 (지금 릴리스)
+        # 사이트의 'curl -fsSL https://gudaling.dev/install.sh | sh' 와 같은 docs/install.sh 로 빈 홈 폴더에 깔아 본다.
+        # 받는 것은 이번 빌드가 아니라 GitHub 릴리스의 tar.gz(와 .sha256)다. 화면이 없으니 켜지는 않는다.
+        timeout-minutes: 10
+        run: |
+          mkdir -p logs
+          T="$(mktemp -d)"
+          mkdir -p "$T/home"
+          HOME="$T/home" XDG_CACHE_HOME= XDG_DATA_HOME= env -u DISPLAY -u WAYLAND_DISPLAY             sh docs/install.sh 2>&1 | tee logs/install-oneline.log
+          test -x "$T/home/.local/bin/daling"
+          test -f "$T/home/.local/share/applications/daling.desktop"
+          test -z "$(ls -A "$T/home/.cache" 2>/dev/null | grep daling-install || true)"
+          HOME="$T/home" env -u DISPLAY -u WAYLAND_DISPLAY "$T/home/.local/bin/daling" --autosaver-smoke 2>&1 | tee logs/smoke-oneline.log
+
+      - name: 빌드 출처 증명 (Sigstore)
+        # 리눅스에는 실행 파일 서명 검사가 없다. 대신 '이 저장소의 이 워크플로가 만든 파일' 임을 공개 기록에 남긴다
+        # (공개 저장소는 무료). 확인: gh attestation verify <파일> -R tutleblue/dgist-lms-autosaver
+        uses: actions/attest@v4
+        with:
+          subject-path: |
+            ${{ steps.ver.outputs.appimage }}
+            ${{ steps.ver.outputs.tarname }}.tar.gz
 
       - name: AppImage 보관
         uses: actions/upload-artifact@v4

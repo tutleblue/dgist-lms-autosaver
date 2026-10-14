@@ -296,11 +296,11 @@
           </a>
           <p class="ver" data-ver="mac" data-fmt="Version {v} · {mb} MB">Version 1.12.27 · 77 MB</p>
           <details>
-            <summary>If macOS won't open it</summary>
+            <summary>If the app from the DMG won't open</summary>
             <ol>
               <li>Open the DMG and drag Daling into Applications.</li>
-              <li>In Applications, <b>Control-click Daling → Open</b>.</li>
-              <li>If it's still blocked, go to <b>System Settings → Privacy & Security</b> and click <b>Open Anyway</b>.</li>
+              <li>Open Daling once; when the warning appears, click <b>Done</b>.</li>
+              <li>Go to <b>System Settings → Privacy & Security</b>, click <b>Open Anyway</b> and enter your password.</li>
               <li>If it says the app "is damaged and can't be opened", run <code>xattr -dr com.apple.quarantine /Applications/Daling.app</code> in Terminal and open it again.</li>
             </ol>
           </details>
@@ -320,7 +320,7 @@
           <details>
             <summary>How to run it</summary>
             <ol>
-              <li>Make it executable: <code>chmod +x daling-*.AppImage</code></li>
+              <li>Make it executable: <code>chmod +x daling-*.AppImage</code> (or Properties → "Allow executing file as program")</li>
               <li>Double-click it, or run <code>./daling-*.AppImage</code></li>
               <li>If system libraries for the LMS sign-in browser are missing, the app shows the command to install them.</li>
               <li>Korean input works with ibus.</li>
@@ -328,6 +328,13 @@
             </ol>
           </details>
         </div>
+      </div>
+      <div class="oneline">
+        <h3>Install without the warning</h3>
+        <p>Paste into PowerShell on Windows, or Terminal on Mac and Linux. It fetches the same file, checks it matches the original (SHA-256) and installs it.</p>
+        <div class="cmd-row"><span class="cmd-os">Windows</span><code>irm https://gudaling.dev/install.ps1 | iex</code><button type="button" class="copy" data-copy data-done="Copied">Copy</button></div>
+        <div class="cmd-row"><span class="cmd-os">Mac · Linux</span><code>curl -fsSL https://gudaling.dev/install.sh | sh</code><button type="button" class="copy" data-copy data-done="Copied">Copy</button></div>
+        <p class="src">Script source: <a href="/install.ps1" target="_blank" rel="noopener">install.ps1</a> · <a href="/install.sh" target="_blank" rel="noopener">install.sh</a> · If macOS Terminal blocks the paste, allow it from that warning.</p>
       </div>
       <p class="dl-note" data-mac-note>The Mac and Linux betas can't connect to Google Drive or Calendar yet; that arrives in the next build.</p>
     </div>
@@ -428,6 +435,30 @@
       pointHero();
     })
     .catch(() => {});
+
+  // 한 줄 설치 명령 복사. 클립보드 API 를 못 쓰면(권한·앱 안 브라우저) 글자를 골라 옛 방식으로 복사하고,
+  // 그것도 안 되면 골라 둔 채로 두어 Ctrl+C 로 복사하게 한다
+  document.querySelectorAll("[data-copy]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const code = btn.parentElement.querySelector("code");
+      try {
+        await navigator.clipboard.writeText(code.textContent.trim());
+      } catch {
+        const range = document.createRange();
+        range.selectNodeContents(code);
+        const sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+        let copied = false;
+        try { copied = document.execCommand("copy"); } catch { /* 골라 둔 채로 둔다 */ }
+        if (!copied) return;
+      }
+      const label = btn.textContent;
+      btn.textContent = btn.dataset.done;
+      btn.classList.add("done");
+      setTimeout(() => { btn.textContent = label; btn.classList.remove("done"); }, 1600);
+    });
+  });
 </script>
 </body>
 </html>

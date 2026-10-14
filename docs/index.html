@@ -296,11 +296,11 @@
           </a>
           <p class="ver" data-ver="mac">버전 1.12.27 · 77MB</p>
           <details>
-            <summary>처음 열 때 막히면</summary>
+            <summary>DMG로 받은 앱이 열리지 않으면</summary>
             <ol>
               <li>DMG를 열고 Daling을 응용 프로그램 폴더로 끌어 놓습니다.</li>
-              <li>응용 프로그램 폴더에서 Daling을 <b>Control-클릭 → 열기</b>를 누릅니다.</li>
-              <li>그래도 막히면 <b>시스템 설정 → 개인정보 보호 및 보안</b> 아래쪽의 <b>'그래도 열기'</b>를 누릅니다.</li>
+              <li>Daling을 한 번 열고, 경고 창이 뜨면 <b>완료</b>를 누릅니다.</li>
+              <li><b>시스템 설정 → 개인정보 보호 및 보안</b> 아래쪽의 <b>'그래도 열기'</b>를 누르고 암호를 넣습니다.</li>
               <li>'손상되었기 때문에 열 수 없습니다'가 나오면 터미널에서 <code>xattr -dr com.apple.quarantine /Applications/Daling.app</code> 을 실행하고 다시 엽니다.</li>
             </ol>
           </details>
@@ -320,7 +320,7 @@
           <details>
             <summary>실행하는 방법</summary>
             <ol>
-              <li>터미널에서 <code>chmod +x daling-*.AppImage</code> 로 실행 권한을 줍니다.</li>
+              <li>터미널에서 <code>chmod +x daling-*.AppImage</code> 로 실행 권한을 줍니다. (파일 속성 → '프로그램으로 실행 허용'도 됩니다)</li>
               <li>파일을 두 번 누르거나 <code>./daling-*.AppImage</code> 로 실행합니다.</li>
               <li>LMS 로그인용 브라우저에 필요한 시스템 라이브러리가 없으면 앱이 설치 명령을 알려 줍니다.</li>
               <li>한글 입력은 ibus에서 됩니다.</li>
@@ -328,6 +328,13 @@
             </ol>
           </details>
         </div>
+      </div>
+      <div class="oneline">
+        <h3>경고 창 없이 한 줄로 설치</h3>
+        <p>Windows는 PowerShell, Mac·Linux는 터미널에 붙여 넣으세요. 같은 파일을 받아 원본과 같은지(SHA-256) 확인한 뒤 설치합니다.</p>
+        <div class="cmd-row"><span class="cmd-os">Windows</span><code>irm https://gudaling.dev/install.ps1 | iex</code><button type="button" class="copy" data-copy data-done="복사됨">복사</button></div>
+        <div class="cmd-row"><span class="cmd-os">Mac · Linux</span><code>curl -fsSL https://gudaling.dev/install.sh | sh</code><button type="button" class="copy" data-copy data-done="복사됨">복사</button></div>
+        <p class="src">스크립트 내용: <a href="/install.ps1" target="_blank" rel="noopener">install.ps1</a> · <a href="/install.sh" target="_blank" rel="noopener">install.sh</a> · 맥 터미널이 붙여 넣기를 막으면 그 경고 창에서 허용하세요.</p>
       </div>
       <p class="dl-note" data-mac-note>Mac·Linux 베타는 아직 Google Drive·Calendar에 연결할 수 없습니다. 다음 빌드에서 열립니다.</p>
     </div>
@@ -446,6 +453,30 @@
       pointHero();
     })
     .catch(() => {});
+
+  // 한 줄 설치 명령 복사. 클립보드 API 를 못 쓰면(권한·앱 안 브라우저) 글자를 골라 옛 방식으로 복사하고,
+  // 그것도 안 되면 골라 둔 채로 두어 Ctrl+C 로 복사하게 한다
+  document.querySelectorAll("[data-copy]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const code = btn.parentElement.querySelector("code");
+      try {
+        await navigator.clipboard.writeText(code.textContent.trim());
+      } catch {
+        const range = document.createRange();
+        range.selectNodeContents(code);
+        const sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+        let copied = false;
+        try { copied = document.execCommand("copy"); } catch { /* 골라 둔 채로 둔다 */ }
+        if (!copied) return;
+      }
+      const label = btn.textContent;
+      btn.textContent = btn.dataset.done;
+      btn.classList.add("done");
+      setTimeout(() => { btn.textContent = label; btn.classList.remove("done"); }, 1600);
+    });
+  });
 </script>
 </body>
 </html>

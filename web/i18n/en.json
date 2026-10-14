@@ -1740,6 +1740,7 @@
  "맥용 새 버전 파일이 아직 올라오지 않았어요": "The Mac version of this update hasn't been uploaded yet",
  "리눅스에서는 새 AppImage 를 내려받아 실행 권한을 주고 예전 파일과 바꾸면 돼요": "On Linux, download the new AppImage, make it executable and replace the old file to update",
  "리눅스용 새 버전 파일이 아직 올라오지 않았어요": "The Linux version of this update hasn't been uploaded yet",
+ "터미널에서 curl -fsSL https://gudaling.dev/install.sh | sh 를 다시 실행하면 새 버전으로 바뀌어요": "Run curl -fsSL https://gudaling.dev/install.sh | sh in a terminal again to update",
  "다운로드 폴더를 열지 못했어요 (xdg-open 없음)": "Couldn't open the download folder (xdg-open not found)",
  "{0}-{1}학기 기준": "as of term {0}-{1}",
  "다음 마감": "Next due",

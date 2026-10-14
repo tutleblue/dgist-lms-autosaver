@@ -77,6 +77,11 @@ if ($canSign) {
 if ($LASTEXITCODE -ne 0) { throw "ISCC 실패" }
 $setup = Get-ChildItem (Join-Path $packaging "out") -Filter "*.exe" | Sort-Object LastWriteTime -Descending | Select-Object -First 1
 "설치 파일: $($setup.FullName) ($([math]::Round($setup.Length / 1MB, 1)) MB)"
+# 확인값 파일 (sha256sum 형식). 릴리스에 설치 파일과 함께 올린다: 한 줄 설치(docs/install.ps1)가 GitHub API 한도에
+# 걸리면 API 의 digest 대신 이것으로 받은 파일을 확인한다. CI 는 SignPath 서명 뒤에 다시 만든다 (release.yml).
+$hash = (Get-FileHash $setup.FullName -Algorithm SHA256).Hash.ToLower()
+[IO.File]::WriteAllText("$($setup.FullName).sha256", "$hash  $($setup.Name)`n", (New-Object Text.UTF8Encoding $false))
+"확인값: $($setup.Name).sha256"
 
 if (-not $Install) { "완료 (설치는 -Install 로)"; return }
 
