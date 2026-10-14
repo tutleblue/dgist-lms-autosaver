@@ -10854,3 +10854,11 @@ html.log-open .log-close { display: grid; flex: none; }
 #view-dashboard > .dash-half.folded > .panel-header { align-items: center; }
 /* 접힌 카드에서는 '전체 보기' 가 숨어 있으니 접기 단추를 내리지 않는다 */
 .folded .panel-header > .fold-toggle { margin-top: 0; }
+
+/* ===== 창 단추 다듬기 (2026-10-14 사용자 스크린샷) =====
+   단추가 상단 바 높이(64px)만큼 맨 위 끝까지 늘어난 네모라 부자연스러웠고, 누른 뒤 주황 네모 테두리가 남았다.
+   Spotify 처럼 상단 바 세로 가운데에 작은 둥근 단추(40×32)로 두고, 테두리는 키보드로 옮겨 왔을 때만. */
+.win-controls { align-items: center; gap: 2px; padding-right: 10px; }
+.win-btn { width: 40px; height: 32px; border-radius: 8px; }
+.win-btn:focus { outline: none; }
+.win-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
