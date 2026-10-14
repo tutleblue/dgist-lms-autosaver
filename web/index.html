@@ -1252,6 +1252,9 @@
                     <h2>실행 로그</h2>
                     <p id="taskSummary">대기 중</p>
                   </div>
+                  <button type="button" class="icon-button log-close" id="closeLogButton" aria-label="닫기" title="닫기">
+                    <span class="icon" data-icon="x"></span>
+                  </button>
                 </div>
                 <div class="task-progress" id="taskProgress" hidden>
                   <div class="task-progress-head">
@@ -1647,6 +1650,8 @@
               </div>
               <button class="button compact ghost" id="settingsWhatsNewButton" type="button">업데이트 내용</button>
               <button class="button compact ghost" id="replayTourButton" type="button">앱 소개 다시 보기</button>
+              <!-- 실행 로그는 화면 오른쪽 손잡이로 늘 떠 있었는데 '거추장스럽다' 해서 여기서만 연다 -->
+              <button class="button compact ghost" id="openLogButton" type="button">실행 로그</button>
             </header>
             <span id="aboutVersion" hidden></span>
             <div class="st-list">

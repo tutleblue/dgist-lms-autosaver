@@ -550,7 +550,7 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 ### 앱 업데이트 (`updater.py`, GitHub 릴리스)
 
 - 확인: `/api/update/check` → api.github.com `releases/latest` 의 태그(v1.2.3)와 `VERSION` 비교. 켤 때 4초 뒤, 그 뒤 6시간마다 (`checkForUpdate`).
-- 설치: `/api/update/apply` → 첨부 `bungeoppang-<버전>-win-x64-setup.exe` 를 %TEMP%ungeoppang-update 에 받고, GitHub 자산 digest(SHA-256)와 맞을 때만
+- 설치: `/api/update/apply` → 첨부 `bungeoppang-<버전>-win-x64-setup.exe` 를 %TEMP%\bungeoppang-update 에 받고, GitHub 자산 digest(SHA-256)와 맞을 때만
   `/SILENT /CLOSEAPPLICATIONS /RELAUNCH=1` 로 실행, 앱은 2초 뒤 스스로 끈다. 설치 스크립트 `ShouldRelaunch` 가 끝나고 앱을 다시 켠다. 진행은 `/api/update/job`.
 - 새 버전 내기: VERSION·changelog 올리고 빌드 → `gh release create v<버전> packaging/out/bungeoppang-<버전>-win-x64-setup.exe` (본문은 '- ' 줄로 짧게).
 - 예전 방식(저장소 main 의 VERSION·raw 파일 교체)은 설치형에서 동작하지 않았고, main 이 1.8.6 에 멈춰 늘 '최신' 이었다.
@@ -766,3 +766,14 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 - 메일함 검색 줄: 폴더 이름 제목은 폴더 칸을 접었거나 좁을 때만, 새로고침은 아이콘만(시각은 도움말).
 - 두 번째로 켜면 창을 또 열지 않고 떠 있는 창을 앞으로(`window_chrome.focus_existing`). 예전 두 번째 창은 회색 제목 줄과 앱 창 단추가 겹쳤고, 그 단추가 첫 창을 닫았다.
 - 스크롤바(2026-10-14): 기본 막대가 어두운 화면에서 밝은 회색 + 위아래 화살표로 오른쪽 끝을 차지하고 창 단추 옆까지 올라왔다. `::-webkit-scrollbar` 로 얇은 둥근 막대만(화살표·바탕 없음), 전체 화면 막대는 8px·상단 바 아래부터(`margin-top: var(--winctl-h)`). `scrollbar-width/color` 를 같이 주면 크로미움이 webkit 규칙을 무시하니 섞지 않는다.
+- 실행 로그(2026-10-14): 오른쪽 308px 기둥·접힌 '실행 로그' 손잡이를 없앴다('거추장스럽다'). 로그·진행은 그대로 쌓이고 설정 맨 아래 앱 정보의 '실행 로그' 단추(`#openLogButton`)로 오른쪽에 떠 있는 창(`html.log-open`)을 연다. Esc·× 로 닫는다. 오류 알림 문구도 '설정 → 실행 로그' 로.
+- 화면 전환 중 창이 가려지면 `InvalidStateError: Transition was aborted` 도 나서 오류 알림이 떴다 → AbortError 와 같이 무시.
+- 메일함 목록 위 줄 합치기(2026-10-14): 제목 줄 모드에서 새로고침·검색·정렬·보기 단추를 상단 바 가운데 `#topbarMail` 로 옮기고 그 줄(`.mail-topbar.emptied`)은 숨긴다. 폴더 칸을 접으면 ☰·폴더 이름 때문에 줄을 다시 보인다. 처음 자리에 주석 노드를 남겨 다른 화면으로 가면 제자리로 돌린다(`placeMailSearch`).
+- '목록' 단추가 `.icon-button` 의 grid 를 물려받아 화살표·글자가 세로로 쌓여 알약 밖으로 나왔다 → inline-flex. 또 `.custom-frame .mail-nav` 숨김이 읽기 화면의 이전·다음 메일 화살표까지 숨기고 있어 `.mail-topbar .mail-nav` 로 좁혔다.
+
+## 남은 결함 정리 (2026-10-14)
+- 메일 목록 날짜 머리(`.mail-day`, sticky): 스크롤 칸(`#mailScroll`)의 위 여백(20px, 좁은 칸 12px)만큼 아래에 붙어 그 틈으로 메일 줄이 '어제' 위에 비쳤다. 여백을 `--mail-scroll-top` 변수로 두고 머리를 `top: calc(-1 * var(--mail-scroll-top))` 로 칸 맨 위에 붙인다(실측: 머리 위치 130 → 110px = 칸 위 끝).
+- 마감 수집(`lms_crawler.fetch_deadlines`): 과목별 실패(403 이 아닌 상태 코드·예외)를 `failedCourses` 에 적고 그 과목의 예전 마감을 이어 쓴다. 예전엔 기록 없이 건너뛰어 그 과목 마감이 다음 저장에서 사라졌고, 한 과목의 네트워크 예외는 `asyncio.gather` 째로 작업 전체를 멈췄다. 과목이 끝까지 받아졌을 때만 `items` 에 넣는다. 지난 학기 403 은 정상이라 실패로 치지 않는다. 내 제출 상태(users/me)를 못 받으면 로그만 남기고 마감은 둔다.
+- `/api/health`(`get_health`): '+09:00'·'Z' 가 붙은 시각이 섞이면 비교·뺄셈 TypeError 로 500 이었다. 모두 현지 시각(시간대 없음)으로 맞추고 못 읽는 값은 건너뛴다.
+- 자료 표 보기: 400줄 뒤를 말없이 버렸다. 이제 400줄 + '나머지 N개 더 보기'(`state.fileTableAll`).
+- 맨 `except:`(setup.py 시간 입력, verify.py 공지 첨부 해석)를 `ValueError` 등으로 좁혔다(Ctrl+C 까지 삼켰다).

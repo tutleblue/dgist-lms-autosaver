@@ -478,8 +478,18 @@ async def fetch_deadlines(page, courses):
     print("\n[과제 마감일 수집]")
     items = []
     semaphore = asyncio.Semaphore(4)
+    # 과목별로 실패하면 예전엔 기록 없이 건너뛰어, 그 과목의 마감이 다음 저장에서 통째로 사라졌다
+    # (다른 과목은 받아져서 '비었으면 예전 것 유지' 보호도 안 걸렸다). 실패한 과목은 적어 두고 예전 마감을 이어 쓴다.
+    # 지난 학기 과목은 LMS 가 403 을 주는 게 정상이라(CLAUDE.md) 실패로 치지 않는다.
+    failed = []  # [(course_id, course_name, reason)]
 
     async def fetch_course_deadlines(course):
+        try:
+            await _fetch_course_deadlines(course)
+        except Exception as exc:  # 한 과목의 네트워크 오류가 asyncio.gather 째로 마감 작업 전체를 멈추지 않게
+            failed.append((course.get('id'), course.get('text', ''), f"{type(exc).__name__}: {exc}"[:160]))
+
+    async def _fetch_course_deadlines(course):
         course_id = course['id']
         course_name = course['text']
         async with semaphore:
@@ -488,7 +498,10 @@ async def fetch_deadlines(page, courses):
                 f"{LMS_URL}/learn/api/public/v2/courses/{course_id}/gradebook/columns?limit=100"
             )
         if status != 200:
+            if status != 403:
+                failed.append((course_id, course_name, f"HTTP {status}"))
             return
+        mine = []  # 이 과목이 끝까지 받아졌을 때만 items 에 넣는다 (중간에 끊기면 예전 것을 이어 쓴다)
         count = 0
         for col in columns:
             due = (col.get('grading') or {}).get('due')
@@ -515,14 +528,32 @@ async def fetch_deadlines(page, courses):
                     attempt = await resp.json()
                     entry['myStatus'] = attempt.get('status') or None
                     entry['myScore'] = (attempt.get('displayGrade') or {}).get('score')
-            except Exception:
-                pass
-            items.append(entry)
+            except Exception as exc:
+                # 내 제출 상태만 못 받은 것이다. 마감은 그대로 두고, 상태는 '모름'(None)으로 남긴다.
+                print(f"  {course_name[:30]} · {entry['name'][:30]}: 제출 상태를 못 받음 ({type(exc).__name__})")
+            mine.append(entry)
             count += 1
+        items.extend(mine)
         if count:
             print(f"  {course_name[:40]}: 마감 {count}건")
 
     await asyncio.gather(*[fetch_course_deadlines(course) for course in courses])
+
+    if failed:
+        kept = 0
+        try:
+            with open(DEADLINES_LOG, 'r', encoding='utf-8-sig') as f:
+                previous = json.load(f)
+            failed_ids = {cid for cid, _, _ in failed}
+            for old in previous.get('items') or []:
+                if isinstance(old, dict) and old.get('courseId') in failed_ids:
+                    items.append(old)
+                    kept += 1
+        except (OSError, ValueError):
+            pass
+        for _, name, reason in failed:
+            print(f"  ⚠ {name[:40]}: 마감을 받지 못함 ({reason})")
+        print(f"  ⚠ 받지 못한 과목 {len(failed)}개 — 예전에 받아 둔 마감 {kept}건을 그대로 둡니다.")
 
     # 캘린더 일정 (API 제한: 16주 이내)
     events = []
@@ -563,6 +594,8 @@ async def fetch_deadlines(page, courses):
         'updatedAt': datetime.now().isoformat(timespec='seconds'),
         'items': items,
         'events': events,
+        # 이번에 받지 못한 과목 (예전 마감을 이어 씀). 화면·점검에서 볼 수 있게 남긴다
+        'failedCourses': [{'course': name, 'reason': reason} for _, name, reason in failed],
     }
     atomic_write_json(DEADLINES_LOG, payload, ensure_ascii=False, indent=2)
     print(f"[과제 마감일] {len(items)}건, 캘린더 {len(events)}건 저장")

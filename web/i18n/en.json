@@ -1816,5 +1816,7 @@
  "최대화": "Maximize",
  "최소화": "Minimize",
  "이미지로 가져오기 · 에브리타임 시간표를 캡처해서 넣기": "Import from image · Add a screenshot of your Everytime timetable",
- "수업 없는 날": "No classes today"
+ "수업 없는 날": "No classes today",
+ "문제가 생겼어요. 앱을 다시 켜 보고, 계속되면 설정 → 실행 로그를 확인해 주세요.": "Something went wrong. Restart the app, and if it keeps happening, check Settings → Activity log.",
+ "나머지 {0}개 더 보기": "Show {0} more"
 }

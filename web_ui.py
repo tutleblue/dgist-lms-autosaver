@@ -2284,15 +2284,20 @@ def get_health(workspace: UserWorkspace) -> dict[str, Any]:
     out["authFailed"] = data.get("authFailed") or {}
     out["failStreak"] = data.get("failStreak") or {}
     # 동기화/메일 중 가장 최근 성공을 기준으로 며칠 지났는지 계산
-    stamps = [v for v in out["lastSuccess"].values() if v]
-    if stamps:
+    # 시각은 대부분 시간대 없는 현지 시각이지만, '+09:00'·'Z' 가 붙은 것이 섞이면 비교·뺄셈에서 TypeError 가 나
+    # /api/health 가 500 을 냈다. 모두 시간대 없는 현지 시각으로 맞춰 비교한다. 못 읽는 값은 건너뛴다.
+    def local_naive(value: Any) -> datetime | None:
         try:
-            newest = max(datetime.fromisoformat(str(s)) for s in stamps)
-            days = (datetime.now() - newest).days
-            out["staleDays"] = days
-            out["stale"] = days >= 3
-        except ValueError:
-            pass
+            when = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        except (TypeError, ValueError):
+            return None
+        return when.astimezone().replace(tzinfo=None) if when.tzinfo else when
+
+    stamps = [t for t in (local_naive(v) for v in out["lastSuccess"].values() if v) if t]
+    if stamps:
+        days = (datetime.now() - max(stamps)).days
+        out["staleDays"] = days
+        out["stale"] = days >= 3
     auth = data.get("authFailed") or {}
     if auth:
         names = {"emails": "학교 메일", "sync": "LMS", "deadlines": "LMS"}

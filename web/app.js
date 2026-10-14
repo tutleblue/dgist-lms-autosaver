@@ -441,7 +441,7 @@ function humanError(err) {
   for (const [re, msg] of table) {
     if (re.test(raw)) return msg;
   }
-  return "문제가 생겼어요. 앱을 다시 켜 보고, 계속되면 실행 로그를 확인해 주세요.";
+  return "문제가 생겼어요. 앱을 다시 켜 보고, 계속되면 설정 → 실행 로그를 확인해 주세요.";
 }
 
 /** 예기치 못한 오류를 한 번만, 사람 말로 알린다 */
@@ -474,7 +474,9 @@ window.addEventListener("error", (event) => {
 window.addEventListener("unhandledrejection", (event) => {
   // 화면 전환 애니메이션 중에 다른 메뉴를 빨리 누르면 브라우저가 앞 전환을 건너뛰며 AbortError 를 낸다.
   // 화면은 제대로 바뀌므로 오류가 아니다. 예전엔 '문제가 생겼어요' 알림이 떴다.
-  if (event.reason && event.reason.name === "AbortError") {
+  // 창이 가려졌거나 최소화된 사이에 전환이 시작되면 'InvalidStateError: Transition was aborted' 도 난다(실측). 같은 경우다.
+  const reason = event.reason;
+  if (reason && (reason.name === "AbortError" || (reason.name === "InvalidStateError" && /transition/i.test(reason.message || "")))) {
     event.preventDefault();
     return;
   }
@@ -705,6 +707,7 @@ function applyView(view) {
   closeMoreSheet();
   // 메일함은 Gmail식 집중 모드: 사이드바 축소 + 우측 로그 레일 숨김
   document.querySelector(".app-shell").classList.toggle("mail-focus", shellView === "emails");
+  placeMailSearch();
   // 사이드바 폭이 바뀐 뒤에 재야 알약이 엉뚱한 크기로 남지 않는다.
   // 폭 변화는 애니메이션이라 ResizeObserver가 그동안 계속 맞춰 준다.
   moveNavPill();
@@ -4123,12 +4126,16 @@ function renderFiles() {
   // 자료가 277개인데 정렬이 과목 이름순이라, M 으로 시작하는
   // Multivariable Calculus(258번째~)는 화면에 아예 안 나왔다.
   // 폴더 보기는 과목별로 묶기만 하므로 전부 그려도 가볍다.
-  // 표(리스트) 보기만 성능 때문에 넉넉한 상한을 둔다.
+  // 표(리스트) 보기만 성능 때문에 처음엔 400줄까지 그린다. 예전엔 그 뒤를 말없이 버려서
+  // 자료가 400개를 넘으면(지금 약 360개) 뒤쪽 자료가 표에서 그냥 사라졌다.
+  // 이제 남은 수를 알리고 '나머지 N개 더 보기' 로 전부 그린다.
+  const FILE_TABLE_FIRST = 400;
   const all = filteredFiles();
   const table = $("#filesTable");
   const empty = $("#emptyState");
   const mode = state.fileMode || "list";
-  const rows = mode === "list" ? all.slice(0, 400) : all;
+  const rows = mode === "list" && !state.fileTableAll ? all.slice(0, FILE_TABLE_FIRST) : all;
+  const hiddenRows = all.length - rows.length;
   if (mode === "folder" || mode === "shelf") {
     // 폴더 보기에도 선택이 있으므로, 리스트 보기와 똑같이
     // 화면에 없는 파일은 선택에서 빼고 일괄 작업 버튼 상태를 맞춘다.
@@ -4182,7 +4189,12 @@ function renderFiles() {
         </tr>
       `,
     )
-    .join("");
+    .join("") +
+    (hiddenRows > 0
+      ? `<tr class="file-more-row"><td colspan="7">
+           <button type="button" class="button compact ghost" data-file-more>나머지 ${hiddenRows}개 더 보기</button>
+         </td></tr>`
+      : "");
 
   empty.hidden = rows.length > 0;
   bindFileTableOnce(table);
@@ -4204,6 +4216,12 @@ function bindFileTableOnce(table) {
   };
 
   table.addEventListener("click", (event) => {
+    // 처음 400줄 뒤의 '나머지 N개 더 보기': 이번 실행 동안은 표를 전부 그린다
+    if (event.target.closest("[data-file-more]")) {
+      state.fileTableAll = true;
+      renderFiles();
+      return;
+    }
     const saveBtn = event.target.closest("[data-save]");
     if (saveBtn) {
       if (!saveBtn.disabled) saveFilesToComputer(saveBtn.dataset.save);
@@ -13259,6 +13277,7 @@ $("#mailRailFold")?.addEventListener("click", () => setMailRailFolded(true, true
     .then((st) => {
       if (!st || !st.custom) return;
       document.documentElement.classList.add("custom-frame");
+      placeMailSearch(); // 메일함에서 켜졌으면 검색창을 상단 바로
       box.hidden = false;
       paintMax(st.maximized);
       fitHeight();
@@ -13294,3 +13313,67 @@ $("#mailRailFold")?.addEventListener("click", () => setMailRailFolded(true, true
   new MutationObserver(sync).observe(src, { childList: true, characterData: true, subtree: true });
   sync();
 })();
+
+/* ===== 실행 로그: 설정에서만 여는 떠 있는 창 =====
+   오른쪽에 늘 붙어 있던 '실행 로그' 손잡이는 거추장스럽다고 해서 뺐다(2026-10-14). 로그 상자·진행 표시는 그대로
+   쌓이고(#logBox), 설정의 '실행 로그' 단추로 오른쪽에 띄워 본다. 진행은 상단 바 물방울이 보여 준다. */
+(function bindLogPanel() {
+  const root = document.documentElement;
+  const setOpen = (open) => {
+    root.classList.toggle("log-open", open);
+    if (open) $("#closeLogButton")?.focus();
+  };
+  $("#openLogButton")?.addEventListener("click", () => setOpen(true));
+  $("#closeLogButton")?.addEventListener("click", () => setOpen(false));
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && root.classList.contains("log-open")) setOpen(false);
+  });
+})();
+
+/* ===== 메일함: 메일 검색창을 상단 바 가운데로 =====
+   제목 줄 모드에서 메일함은 전역 검색(메일함 자체 검색과 겹침)·새로고침을 숨겨 상단 바 가운데가 텅 비었다
+   ('메일 화면에서는 왜 위가 비어?'). 그 자리에 메일 검색창을 옮겨 놓고, 메일함을 떠나면 제자리로 돌린다.
+   요소를 통째로 옮기므로 입력·리스너는 그대로다. 휴대폰 폭(≤760px)은 상단 바가 두 줄이라 옮기지 않는다. */
+// 목록 위 줄의 새로고침·검색·정렬·보기 단추를 상단 바로 올린다(사용자: '상단 바로 합쳐서 한 줄을 없애줘').
+// 제자리로 돌려놓을 수 있게 처음 자리에 표시(주석 노드)를 남겨 둔다.
+const MAIL_TOOL_MARKS = new Map();
+function placeMailSearch() {
+  const topbar = document.querySelector(".topbar");
+  const globalSearch = topbar?.querySelector(".search-wrap:not(.email-search)");
+  const row = document.querySelector(".mail-topbar");
+  const tools = ["#mailRefreshButton", ".email-search", "#emailSortSelect", ".mail-topbar .view-toggle"]
+    .map((sel) => MAIL_TOOL_MARKS.get(sel)?.el || document.querySelector(sel))
+    .filter(Boolean);
+  if (!topbar || !globalSearch || !row || tools.length < 4) return;
+  const sels = ["#mailRefreshButton", ".email-search", "#emailSortSelect", ".mail-topbar .view-toggle"];
+  sels.forEach((sel, i) => {
+    if (!MAIL_TOOL_MARKS.has(sel)) {
+      const mark = document.createComment(`mail-tool ${sel}`);
+      tools[i].before(mark);
+      MAIL_TOOL_MARKS.set(sel, { el: tools[i], mark });
+    }
+  });
+  const up =
+    document.documentElement.classList.contains("custom-frame") &&
+    document.querySelector(".app-shell")?.classList.contains("mail-focus") &&
+    window.innerWidth > 760;
+  let wrap = $("#topbarMail");
+  if (up) {
+    if (!wrap) {
+      wrap = document.createElement("div");
+      wrap.id = "topbarMail";
+      wrap.className = "topbar-mail";
+    }
+    if (wrap.parentElement !== topbar) globalSearch.after(wrap);
+    // 검색창이 가운데 오도록: 새로고침 · 검색 · 정렬 · 보기
+    tools.forEach((el) => {
+      if (el.parentElement !== wrap) wrap.append(el);
+    });
+  } else if (wrap?.parentElement) {
+    MAIL_TOOL_MARKS.forEach(({ el, mark }) => mark.after(el));
+    wrap.remove();
+  }
+  tools[1].classList.toggle("in-topbar", up);
+  row.classList.toggle("emptied", up);
+}
+window.addEventListener("resize", () => placeMailSearch());

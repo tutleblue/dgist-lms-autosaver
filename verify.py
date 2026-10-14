@@ -78,8 +78,9 @@ async def verify():
                             fname = file_info.get('fileName', '') or file_info.get('linkName', '') or file_info.get('alternativeText', '')
                             if fname:
                                 lms_files.append(f"[공지] {fname}")
-                        except:
-                            pass
+                        except (ValueError, AttributeError) as exc:
+                            # 공지 본문에 박힌 첨부 정보가 JSON 이 아니거나 모양이 다르다. 점검 결과에 남긴다
+                            print(f"  공지 첨부 정보를 읽지 못함 ({type(exc).__name__}): {str(match)[:60]}")
 
             # 비교
             missing = []

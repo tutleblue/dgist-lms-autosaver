@@ -142,7 +142,8 @@ def get_schedule_time():
             h, m = time_input.split(':')
             if 0 <= int(h) <= 23 and 0 <= int(m) <= 59:
                 return time_input
-        except:
+        except ValueError:
+            # '8시' 처럼 ':' 가 없거나 숫자가 아니면 다시 묻는다. 맨 except 는 Ctrl+C 까지 삼켜 빠져나갈 수 없었다
             pass
         print("  ❌ 올바른 형식으로 입력해주세요 (HH:MM)")
 

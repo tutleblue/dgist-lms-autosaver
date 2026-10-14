@@ -4210,7 +4210,9 @@ tbody tr:hover {
 .mail-scroll {
   flex: 1;
   overflow-y: auto;
-  padding: 20px 22px 40px;
+  /* 위 여백은 변수로: 날짜 머리(.mail-day)가 이만큼 위로 붙어야 여백 틈으로 메일 줄이 비치지 않는다 */
+  --mail-scroll-top: 20px;
+  padding: var(--mail-scroll-top) 22px 40px;
   display: flex;
   flex-direction: column;
   gap: 15px;
@@ -6928,7 +6930,9 @@ body.dash-dragging-now * { cursor: grabbing !important; }
 /* 날짜 묶음 머리글 (오늘 / 어제 / 9월 5일 금요일) */
 .mail-day {
   position: sticky;
-  top: 0;
+  /* 스크롤 칸의 위 여백(20px)만큼 아래에 붙어서, 그 틈으로 지나가는 메일 줄이 '어제' 위에 비쳐 보였다(2026-10-14).
+     여백만큼 위로 올려 칸 맨 위에 딱 붙인다 */
+  top: calc(-1 * var(--mail-scroll-top, 0px));
   z-index: 2;
   padding: 9px 12px 5px;
   font-size: 11.5px;
@@ -6995,7 +6999,7 @@ body.dash-dragging-now * { cursor: grabbing !important; }
 
 /* 400px 칸에서 좌우 22px씩 44px을 여백으로 내주면 제목이 그만큼 짧아진다 */
 @container mailpane (max-width: 640px) {
-  #mailListPane .mail-scroll { padding: 12px 10px 32px; }
+  #mailListPane .mail-scroll { --mail-scroll-top: 12px; padding: var(--mail-scroll-top) 10px 32px; }
 }
 
 /* 제목은 한 줄로 자른다. 밑에 미리보기 줄이 따로 있어서
@@ -10487,12 +10491,13 @@ body.mail-resizing iframe { pointer-events: none; } /* 끄는 중 본문 iframe 
    전역 검색은 메일함 자체 검색과 겹치므로 빼고, 메일 머리의 ←/→ 도 상단 바와 겹쳐 뺀다. */
 @media (min-width: 761px) {
   .custom-frame .app-shell.mail-focus .topbar { display: flex; flex: none; }
-  .custom-frame .app-shell.mail-focus .topbar .search-wrap { visibility: hidden; }
+  .custom-frame .app-shell.mail-focus .topbar .search-wrap:not(.email-search) { display: none; }
   .custom-frame .app-shell.mail-focus .main { height: 100vh; display: flex; flex-direction: column; }
   .custom-frame .app-shell.mail-focus .workspace { flex: 1 1 auto; min-height: 0; height: auto; grid-template-rows: minmax(0, 1fr); }
   .custom-frame .app-shell.mail-focus .content-column,
   .custom-frame .app-shell.mail-focus #view-emails { height: 100%; min-height: 0; }
-  .custom-frame .mail-nav { display: none; }
+  /* 메일 목록 머리의 ←/→ 만. 읽기 화면의 이전·다음 메일(.mail-pane-topbar .mail-nav)은 남긴다 */
+  .custom-frame .mail-topbar .mail-nav { display: none; }
 }
 @media (min-width: 1101px) {
   .custom-frame .app-shell.mail-focus .topbar { display: grid; }
@@ -10651,3 +10656,54 @@ html.vt-quick::view-transition-new(topbar) { animation: none !important; opacity
 .bus-line { scrollbar-width: auto; }
 .metric-inline-list::-webkit-scrollbar { width: 8px; }
 .metric-inline-list::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--text) 18%, transparent); background-clip: padding-box; border: 2px solid transparent; }
+
+/* ===== 실행 로그 손잡이 없애기 (2026-10-14) =====
+   오른쪽 308px(접으면 40px 손잡이) 기둥을 없애고 본문이 그 자리를 쓴다. 로그는 설정 → '실행 로그' 로 띄운다. */
+.workspace,
+.workspace.rail-collapsed { grid-template-columns: minmax(0, 1fr); }
+.right-rail { display: none; }
+#railToggle { display: none; }
+.log-close { display: none; }
+html.log-open .right-rail {
+  display: block;
+  position: fixed;
+  right: 16px;
+  top: calc(var(--winctl-h, 48px) + 12px);
+  bottom: 16px;
+  width: min(380px, calc(100vw - 32px));
+  z-index: 90;
+  overflow: auto;
+  border-radius: 16px;
+  box-shadow: 0 18px 50px -12px rgba(0, 0, 0, 0.45);
+}
+html.log-open .right-rail-body { display: block !important; }
+html.log-open .right-rail .activity-panel { min-height: 100%; margin: 0; }
+html.log-open .log-close { display: grid; flex: none; }
+
+/* 상단 바로 올라온 메일 검색창: 전역 검색창과 같은 모양·자리 */
+.topbar .email-search.in-topbar { flex: 1 1 auto; max-width: 520px; width: 100%; min-width: 0; }
+@media (min-width: 1101px) {
+  .custom-frame .topbar .email-search.in-topbar { grid-column: 2; justify-self: stretch; max-width: none; }
+}
+
+/* 자료 표: 처음 400줄 뒤에 남은 수를 알리고 전부 보기 (예전엔 말없이 잘랐다) */
+.file-more-row td { padding: 12px; text-align: center; border-bottom: 0; }
+
+/* '목록' 단추: .icon-button 의 grid 를 물려받아 화살표와 글자가 세로로 쌓여 알약 밖으로 삐져나왔다(사용자 스크린샷).
+   가로로 나란히 놓는다. */
+.back-button { display: inline-flex; align-items: center; justify-content: center; height: 34px; white-space: nowrap; }
+
+/* ===== 메일함: 목록 위 줄을 상단 바로 합치기 =====
+   검색창을 상단 바로 올린 뒤 목록 위 줄엔 새로고침·정렬·보기 단추만 남아 한 줄이 통째로 비었다.
+   그 셋도 검색창 옆으로 올리고(#topbarMail), 줄은 숨긴다. 폴더 칸을 접었을 때는 ☰·폴더 이름이 필요하니 줄을 남긴다. */
+.topbar-mail { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1 1 auto; }
+.topbar-mail .email-search { flex: 1 1 auto; min-width: 0; }
+.topbar-mail > :not(.email-search) { flex: none; }
+.topbar-mail #emailSortSelect { height: 40px; border-radius: 999px; padding: 0 12px; }
+.topbar-mail .mail-refresh { width: 40px; height: 40px; border-radius: 50%; }
+.custom-frame .topbar-mail :is(button, select) { -webkit-app-region: no-drag; app-region: no-drag; }
+@media (min-width: 1101px) {
+  .custom-frame .app-shell.mail-focus .topbar { grid-template-columns: minmax(0, 1fr) minmax(320px, 720px) minmax(0, 1fr); }
+  .custom-frame .topbar .topbar-mail { grid-column: 2; }
+}
+.custom-frame .app-shell.mail-focus .mail-app:not(.rail-folded) .mail-topbar.emptied { display: none; }
