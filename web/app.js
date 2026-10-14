@@ -3453,6 +3453,7 @@ function renderStatus() {
 
 
   $("#metricDeadlines").textContent = deadlineInfo.upcoming7d ?? 0;
+  fillMetricInline("deadlines");
   $("#metricDeadlinesNote").textContent = deadlineInfo.overdueUnsubmitted
     ? `지난 미제출 ${deadlineInfo.overdueUnsubmitted}건`
     : "7일 이내 미제출";
@@ -6918,6 +6919,7 @@ function paintThemeCard(choice) {
     installIcons(card);
   }
   if (name) name.textContent = meta.label;
+  renderThemeOptions(choice);
   const flip = $("#themeFlip");
   if (flip) {
     flip.title =
@@ -6934,10 +6936,31 @@ function followSystemTheme() {
   if (systemDark.matches === lastSystemDark) return;
   lastSystemDark = systemDark.matches;
   if (state.themeChoice === "auto") applyTheme("auto", { save: false });
+  else renderThemeOptions();
 }
 systemDark.addEventListener?.("change", followSystemTheme);
 window.addEventListener("focus", followSystemTheme);
 window.setInterval(followSystemTheme, 3000);
+
+/** 설정 › 화면의 테마 단추들. 누르면 바로 바뀐다 (설정 저장 단추와 상관없이 ui-prefs 로 저장) */
+function renderThemeOptions(choice = currentTheme()) {
+  const box = $("#themeOptions");
+  if (!box) return;
+  const sig = `${choice}|${systemDark.matches}`;
+  if (box.dataset.sig === sig) return;
+  box.dataset.sig = sig;
+  const dark = systemDark.matches ? "어두운" : "밝은";
+  const note = choice === "auto" ? `윈도우 설정을 따라요 · 지금 ${dark} 화면` : "자동으로 두면 윈도우의 밝은·어두운 모드를 따라가요";
+  box.innerHTML = THEMES.map(
+    (t) => `<button type="button" class="st-theme-opt ${t.key === choice ? "on" : ""}" role="radio" aria-checked="${t.key === choice}" data-theme-choice="${t.key}">
+      <span class="icon" data-icon="${t.icon}"></span><span>${escapeHtml(t.label)}</span></button>`,
+  ).join("") + `<p class="st-theme-note">${escapeHtml(note)}</p>`;
+  installIcons(box);
+}
+$("#themeOptions")?.addEventListener("click", (event) => {
+  const b = event.target.closest("[data-theme-choice]");
+  if (b) applyTheme(b.dataset.themeChoice);
+});
 
 /** 카드를 반 바퀴 돌리고, 뒤집힌 순간에 내용을 갈아 끼운다 */
 function flipTheme(next) {
@@ -8119,9 +8142,15 @@ function peekRows(kind) {
 }
 
 function showMetricPeek(kind) {
+  if (fillMetricInline(kind)) document.querySelector("#metricsStage")?.classList.add("peek-open");
+}
+
+/** 카드 안 목록을 채운다. 다가오는 마감 카드는 마우스를 올리지 않아도 늘 목록을 보여 준다
+    (예전엔 숫자 하나만 크게 보이고 어떤 마감인지는 올려야 보였다 — 디자인 검토 2026-10-14). */
+function fillMetricInline(kind) {
   const card = document.querySelector(`[data-peek="${kind}"]`);
   const body = card?.querySelector(`[data-inline="${kind}"]`);
-  if (!card || !body) return;
+  if (!card || !body) return false;
   if (body.dataset.filled !== "1") {
     const data = peekRows(kind);
     const rows = data.rows.length
@@ -8148,7 +8177,7 @@ function showMetricPeek(kind) {
       <div class="metric-inline-list">${rows}</div>`;
     body.dataset.filled = "1";
   }
-  document.querySelector("#metricsStage")?.classList.add("peek-open");
+  return true;
 }
 
 function hideMetricPeek() {
@@ -8174,6 +8203,7 @@ function bindMetricPeek() {
 /* 데이터가 바뀌면 카드 안 목록을 다시 만들게 표시 */
 function invalidateMetricPeek() {
   document.querySelectorAll("[data-inline]").forEach((el) => (el.dataset.filled = ""));
+  fillMetricInline("deadlines");
 }
 
 /* ===== 상단 진행 표시 =====
@@ -11090,11 +11120,11 @@ const TOUR_STEPS = [
   },
   {
     chapter: "편하게 쓰기",
-    view: "dashboard",
-    targets: ["#themeFlip"],
+    view: "settings",
+    targets: ["#stLook"],
     pose: "shy",
     title: "옷 갈아입기",
-    text: "누를 때마다 다음 테마로 넘어가. 기본·화이트·남색·다크가 있고, '자동'은 윈도우의 밝은·어두운 모드를 따라가.",
+    text: "테마는 설정의 '화면'에서 골라. 기본·화이트·남색·다크가 있고, '자동'은 윈도우의 밝은·어두운 모드를 따라가.",
   },
   {
     chapter: "편하게 쓰기",
@@ -11634,7 +11664,7 @@ function buildSearchResults(query) {
   });
   [
     ["지금 새로고침", "새로고침 동기화 가져오기", () => $("#refreshAllButton")?.click()],
-    ["테마 바꾸기", "테마 다크 화이트 남색 색", () => $("#themeFlip")?.click()],
+    ["테마 바꾸기", "테마 다크 화이트 남색 색 화면", () => openSettingsAt("stLook")],
     // 작성 창은 메일함 안의 칸이라 먼저 메일함으로 간 뒤 연다
     ["메일 쓰기", "메일쓰기 보내기 작성 새메일", () => {
       switchView("emails");
@@ -12050,6 +12080,7 @@ function renderStatusCard(task) {
     problem ? "누르면 설정으로 갑니다" : "누르면 자동 가져오기 설정으로 갑니다",
   ].join("\n");
 
+  renderAuthBanner(problem);
   const sig = `${tone}|${title}|${line}|${lightHtml}|${tip}`;
   if (card.dataset.sig === sig) return;
   card.dataset.sig = sig;
@@ -12062,6 +12093,33 @@ function renderStatusCard(task) {
   dot.classList.toggle("bad", tone === "bad");
   card.title = tip;
   card.dataset.target = problem ? "stAccounts" : "stAuto";
+}
+
+/** 로그인·연결이 끊긴 것('bad')은 어느 화면에서든 맨 위 한 줄로 알린다.
+    사이드바 맨 아래 카드는 창을 내려 두면 가려져서, 끊긴 줄 모르고 며칠 지나는 일이 있었다. '나중에' 는 같은 문제일 때만 접는다. */
+function renderAuthBanner(problem) {
+  const banner = $("#authBanner");
+  if (!banner) return;
+  const show = !!problem && problem.tone === "bad" && state.authDismissed !== problem.why;
+  banner.hidden = !show;
+  if (show) $("#authBannerTitle").textContent = problem.why;
+}
+$("#authBannerFix")?.addEventListener("click", () => openSettingsAt("stAccounts"));
+$("#authBannerLater")?.addEventListener("click", () => {
+  state.authDismissed = $("#authBannerTitle").textContent;
+  $("#authBanner").hidden = true;
+});
+
+function openSettingsAt(target) {
+  openSettings();
+  window.setTimeout(() => {
+    const el = document.getElementById(target);
+    if (!el) return;
+    el.scrollIntoView({ block: "start", behavior: "smooth" });
+    el.classList.remove("search-flash");
+    void el.offsetWidth;
+    el.classList.add("search-flash");
+  }, 220);
 }
 
 $("#statusCard")?.addEventListener("click", () => {

@@ -1832,5 +1832,13 @@
  "메일 로그인 실패": "Mail sign-in failed",
  "메일 연결 오류": "Mail error",
  "메일 가져오는 중 · 누르면 멈춤": "Fetching mail · click to stop",
- "7일 안에 잡힌 행사·일정이 없어요": "No events in the next 7 days"
+ "7일 안에 잡힌 행사·일정이 없어요": "No events in the next 7 days",
+ "나중에": "Later",
+ "다시 로그인이 필요해요": "Please sign in again",
+ "윈도우 설정을 따라요 · 지금 {0} 화면": "Follows Windows · currently {0} mode",
+ "자동으로 두면 윈도우의 밝은·어두운 모드를 따라가요": "Auto follows Windows light/dark mode",
+ "테마": "Theme",
+ "테마 다크 화이트 남색 색 화면": "theme dark white navy color display",
+ "테마는 설정의 '화면'에서 골라. 기본·화이트·남색·다크가 있고, '자동'은 윈도우의 밝은·어두운 모드를 따라가.": "Pick a theme in Settings › Display: Default, White, Navy and Dark. 'Auto' follows Windows light/dark mode.",
+ "화면": "Display"
 }

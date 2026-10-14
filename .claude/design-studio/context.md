@@ -3,7 +3,7 @@
 DGIST 학생용 Windows 데스크톱 앱(pywebview). 화면은 프레임워크 없는 `web/index.html`·`web/app.js`·`web/styles.css`, 서버는 `web_ui.py`.
 
 ## 디자인
-- 따뜻한 크림 바탕·코랄 강조(기본 테마). 색은 토큰(`--accent`, `--surface`, `--text-soft` …)을 쓴다. 새 색이 꼭 필요할 때만 hex.
+- 크림 바탕 + 달구 파랑 강조(`--accent #3e6bb9`, 2026-10-14 테라코타에서 바꿈). 글꼴은 고딕 한 벌(웹폰트·명조 없음). 색은 토큰(`--accent`, `--surface`, `--text-soft` …)을 쓴다. 새 색이 꼭 필요할 때만 hex.
 - 화면 문구는 짧은 한국어, 사람 말로. 둥근 카드(`--radius`), 옅은 그림자(`--shadow`). 지나친 장식·그라데이션은 피한다.
 
 ## 테마 (styles.css 맨 위 블록)
