@@ -45,10 +45,10 @@ artifacts/
 # Claude Code 로컬 설정 (스킬은 함께 쓰도록 올린다)
 .claude/*
 !.claude/skills/
+!.claude/design-studio/
 
-# 디자인 스튜디오 저장본·사진 (real 모드면 실제 메일 제목이 들어갈 수 있다)
-tools/design_studio/requests/
-tools/design_studio/proposals/
+# 디자인 스튜디오 저장본·시안·사진 (real 모드면 실제 메일 제목이 들어갈 수 있다)
+.design-studio/
 
 # 별도 하위 프로젝트 (자체 저장소)
 doc2paper/
