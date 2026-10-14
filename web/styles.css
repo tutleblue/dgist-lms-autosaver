@@ -10779,3 +10779,20 @@ html.log-open .log-close { display: grid; flex: none; }
   margin-bottom: 4px;
 }
 .mail-header-row .mail-actions button { border-radius: 999px; }
+
+/* ===== 메일 목록 머리줄·날짜 머리 겹침 (2026-10-14 사용자 스크린샷) =====
+   위에 붙는 위치는 스크롤 칸의 '안쪽 여백(20px) 안'이 기준이다. 머리줄은 top:0 이라 칸 맨 위에서 20px 아래에 붙어
+   그 틈으로 메일 줄이 지나갔고, 날짜 머리(top:-20px)는 칸 맨 위에 붙어 머리줄 위로 '어제' 글씨가 삐져나왔다.
+   머리줄을 칸 맨 위(-여백)에 붙이고 그 둘레를 바탕색으로 칠해 뒤가 비치지 않게 하고,
+   날짜 머리는 머리줄 바로 아래(머리줄 높이 50px - 여백)에 붙인다. */
+.mail-scroll { --mail-hdr-h: 50px; }
+.mail-header-row {
+  top: calc(-1 * var(--mail-scroll-top, 0px));
+  z-index: 6;
+  /* 둥근 모서리 둘레로 뒤 메일 줄이 비치지 않게 바탕색 테를 두른다 */
+  box-shadow: 0 0 0 8px var(--bg);
+}
+.mail-day {
+  top: calc(var(--mail-hdr-h) - var(--mail-scroll-top, 0px));
+  z-index: 4;
+}
