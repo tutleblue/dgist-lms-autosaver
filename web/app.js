@@ -832,35 +832,102 @@ function renderUpcoming() {
   list.innerHTML = upcoming.map(deadlineRow).join("");
 }
 
+/* 다가오는 일정: 과제 마감은 바로 위 '다가오는 마감' 에 있으니 빼고, 7일 안의 세미나·학교 행사·학사일정·내 일정·
+   LMS 의 마감 아닌 일정(시험 등)을 보인다. 예전엔 LMS 캘린더를 그대로 옮겨 마감과 같은 줄이 두 번 떴다(2026-10-14). */
+const EVENT_KIND = {
+  event: ["세미나", "violet"],
+  school: ["학교 행사", "blue"],
+  academic: ["학사일정", "amber"],
+  mine: ["내 일정", "green"],
+  lms: ["LMS", "coral"],
+};
+const EVENT_DAYS_AHEAD = 7; // 대시보드 요약줄의 마감 기간(7일)과 맞춘다
+
+function upcomingEventItems() {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const until = today.getTime() + EVENT_DAYS_AHEAD * 86400000;
+  const norm = (t) => String(t || "").replace(/\s+/g, "").toLowerCase();
+  const deadlineNames = (state.deadlines.items || []).map((d) => norm(d.name)).filter((n) => n.length >= 4);
+  const isDeadline = (title) => {
+    const t = norm(title);
+    return deadlineNames.some((n) => t.includes(n) || n.includes(t));
+  };
+  const items = calendarItems().filter((it) => EVENT_KIND[it.kind]);
+  // LMS 캘린더 일정 중 과제 마감과 같은 것은 빼고 남은 것(시험·휴강 공지 등)만
+  (state.deadlines.events || []).forEach((ev) => {
+    if (!ev.start || isDeadline(ev.title)) return;
+    const dt = new Date(ev.start);
+    if (Number.isNaN(dt.getTime())) return;
+    items.push({ date: dt, title: ev.title, sub: [ev.calendarName, ev.location].filter(Boolean).join(" · "), kind: "lms" });
+  });
+  // 여러 날 학사일정(시험 기간 등)은 시작일 하나로
+  (state.academic || [])
+    .filter((e) => !state.academicUnderOnly || e.kind !== "대학원")
+    .forEach((e) => {
+      if (!e.end || e.end === e.start) return;
+      const dt = new Date(`${e.start}T00:00`);
+      if (Number.isNaN(dt.getTime())) return;
+      items.push({ date: dt, title: e.title, sub: `${e.start.slice(5).replace("-", "/")} ~ ${e.end.slice(5).replace("-", "/")}`, kind: "academic", allDay: true });
+    });
+  const seen = new Set();
+  return items
+    .filter((it) => {
+      const t = it.date.getTime();
+      return t >= today.getTime() && t < until;
+    })
+    .sort((a, b) => a.date - b.date)
+    .filter((it) => {
+      // 여러 날 행사는 날마다 하나씩 들어 있어 첫날만 남긴다
+      const key = `${it.kind}|${norm(it.title)}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0, 6);
+}
+
 function renderEvents() {
   const box = $("#eventsList");
-  const now = Date.now();
-  const events = (state.deadlines.events || [])
-    .filter((ev) => ev.start && new Date(ev.start).getTime() >= now - 3600000)
-    .sort((a, b) => new Date(a.start) - new Date(b.start))
-    .slice(0, 6);
-
-  if (!events.length) {
-    box.innerHTML = '<div class="empty-state"><strong>등록된 일정이 없습니다.</strong></div>';
+  if (!box) return;
+  const items = upcomingEventItems();
+  if (!items.length) {
+    box.innerHTML = `<div class="empty-state"><strong>7일 안에 잡힌 행사·일정이 없어요</strong></div>`;
     return;
   }
-
-  box.innerHTML = events
-    .map((ev) => {
-      const start = new Date(ev.start);
-      const sub = [ev.calendarName, ev.location].filter(Boolean).join(" · ");
+  const todayKey = new Date().toDateString();
+  box.innerHTML = items
+    .map((it) => {
+      const [label, tone] = EVENT_KIND[it.kind];
+      const d = it.date;
+      const day = d.toDateString() === todayKey ? "오늘" : `${d.getMonth() + 1}/${d.getDate()} (${NOW_WEEKDAY[d.getDay()]})`;
+      const time = it.allDay ? "" : `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+      // 꼬리표와 같은 말('학사일정')·'1/5일째' 는 아래 줄에서 뺀다
+      const sub = shortText(String(it.sub || "").replace(/^\d+\/\d+일째( · )?/, "").replace(/^학사일정( · )?/, ""), 56);
       return `
-        <div class="event-row">
-          <span class="event-date">${formatDue(start)}</span>
-          <div class="event-title">
-            ${escapeHtml(shortText(ev.title, 52))}
-            ${sub ? `<span class="event-sub">${escapeHtml(shortText(sub, 56))}</span>` : ""}
-          </div>
-        </div>
-      `;
+        <button type="button" class="event-row" ${it.mailId ? `data-mailid="${escapeHtml(String(it.mailId))}"` : "data-go-calendar"}>
+          <span class="event-date">${escapeHtml(day)}${time ? `<em>${time}</em>` : ""}</span>
+          <span class="event-title">
+            <span class="event-kind tone-${tone}">${escapeHtml(label)}</span>
+            ${escapeHtml(shortText(it.title, 52))}
+            ${sub ? `<span class="event-sub">${escapeHtml(sub)}</span>` : ""}
+          </span>
+        </button>`;
     })
     .join("");
 }
+
+$("#eventsList")?.addEventListener("click", (event) => {
+  const row = event.target.closest(".event-row");
+  if (!row) return;
+  const mail = row.dataset.mailid && (state.emails.emails || []).find((m) => String(m.id) === row.dataset.mailid);
+  if (mail) {
+    switchView("emails");
+    window.setTimeout(() => openEmailDetail(mail), 200);
+  } else {
+    switchView("calendar");
+  }
+});
 
 /* ===== 과제 마감 뷰 ===== */
 function queryMatcher() {
@@ -4411,7 +4478,8 @@ const RENDER_PARTS = [
   { key: "upcoming", views: ["dashboard"], render: renderUpcoming,
     of: (s) => sig(s.deadlines?.updatedAt, (s.deadlines?.items || []).length, (s.selection?.hiddenDeadlines || []).length) },
   { key: "events", views: ["dashboard"], render: renderEvents,
-    of: (s) => sig(s.emails?.updatedAt, (s.myEvents || []).length) },
+    of: (s) => sig(s.emails?.updatedAt, (s.myEvents || []).length, s.deadlines?.updatedAt, (s.academic || []).length,
+      (s.schoolEvents || []).length, s.academicUnderOnly, new Date().toDateString()) },
   { key: "deadlineFilters", views: ["deadlines"], render: renderDeadlineFilters,
     of: (s) => sig(s.deadlines?.updatedAt, (s.deadlines?.items || []).length) },
   { key: "deadlines", views: ["deadlines"], render: renderDeadlines,
@@ -10381,7 +10449,12 @@ function renderMailRefreshAgo() {
   button.classList.toggle("spinning", Boolean(state.mailRefreshing));
   // 가져오는 동안에도 누를 수 있게 둔다: 누르면 메일 가져오기만 멈춘다(서버가 응답을 안 줄 때 빠져나갈 길)
   button.disabled = false;
-  button.title = stamp ? `메일 새로고침 (마지막: ${String(stamp).replace("T", " ").slice(0, 16)})` : "메일 새로고침";
+  // 단추에는 글을 안 붙이므로(상단 바), 가져오는 중이면 '누르면 멈춤' 을 도움말로 알린다
+  button.title = state.mailRefreshing
+    ? "메일 가져오는 중 · 누르면 멈춤"
+    : stamp
+      ? `메일 새로고침 (마지막: ${String(stamp).replace("T", " ").slice(0, 16)})`
+      : "메일 새로고침";
 }
 
 async function refreshMailNow() {

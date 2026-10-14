@@ -10796,3 +10796,44 @@ html.log-open .log-close { display: grid; flex: none; }
   top: calc(var(--mail-hdr-h) - var(--mail-scroll-top, 0px));
   z-index: 4;
 }
+
+/* 상단 바로 올린 메일 새로고침 단추: 가져오는 중에 '가져오는 중 · 누르면 멈춤' 글이 붙어 40px 동그라미 밖으로 넘쳐
+   ←·검색창 위에 겹쳤고, 오른쪽 진행 물방울('메일 새로고침 · 메일을 읽는 중 8%')과 같은 말이 두 번 나왔다.
+   여기서는 아이콘만 돌리고(누르면 멈춤은 도움말에), 진행은 오른쪽 한 곳에서만 보인다. */
+.topbar-mail .mail-refresh .mail-refresh-ago { display: none !important; }
+.topbar-mail .mail-refresh { width: 40px !important; padding: 0 !important; justify-content: center; overflow: hidden; }
+
+/* ===== 대시보드 '다가오는 일정' (2026-10-14) =====
+   과제 마감과 겹치던 목록을 세미나·학교 행사·학사일정·내 일정으로 바꾸고, 종류를 작은 꼬리표로 보인다. 누르면 메일 또는 캘린더로. */
+#eventsList .event-row {
+  width: 100%;
+  border: none;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 12px;
+  padding: 9px 8px;
+  align-items: flex-start;
+}
+#eventsList .event-row:hover { background: var(--surface-soft); }
+#eventsList .event-date { display: flex; flex-direction: column; gap: 1px; width: 76px; }
+#eventsList .event-date em { font-style: normal; font-weight: 500; color: var(--text-faint); font-size: 11.5px; }
+#eventsList .event-title { white-space: normal; display: block; }
+#eventsList .event-kind {
+  display: inline-block;
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 1px 7px;
+  border-radius: 999px;
+  margin-right: 5px;
+  vertical-align: 1px;
+  background: var(--surface-soft);
+  color: var(--text-soft);
+}
+#eventsList .event-kind.tone-violet { background: color-mix(in srgb, #8b6fd6 16%, transparent); color: #7a5fc6; }
+#eventsList .event-kind.tone-blue { background: color-mix(in srgb, #4f86c6 16%, transparent); color: #3f76b6; }
+#eventsList .event-kind.tone-amber { background: color-mix(in srgb, #d49a2a 18%, transparent); color: #a8761a; }
+#eventsList .event-kind.tone-green { background: color-mix(in srgb, #4f9a6a 16%, transparent); color: #3f8a5a; }
+#eventsList .event-kind.tone-coral { background: var(--accent-soft); color: var(--accent-strong); }
