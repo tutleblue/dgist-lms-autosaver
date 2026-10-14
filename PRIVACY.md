@@ -12,7 +12,7 @@ Daling(예전 이름 붕어빵)은 **개발자에게 아무 정보도 보내지 
 | OpenStreetMap Nominatim | 일정 장소 검색 | 검색한 장소 이름 |
 | GitHub (`api.github.com`) | 새 버전 확인 | 없음 |
 
-- 비밀번호와 API 키는 Windows DPAPI로 암호화해 이 PC의 현재 사용자만 풀 수 있게 저장합니다.
+- 비밀번호와 API 키는 Windows DPAPI로 암호화해 이용자 본인 PC에 저장하며, 그 PC의 현재 사용자 계정만 풀 수 있습니다.
 - 앱을 지워도 `C:\lms-autosaver\`의 자료는 남습니다. 필요 없으면 그 폴더를 지우면 됩니다.
 
 ---

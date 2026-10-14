@@ -104,7 +104,7 @@
 </ul>
 
 <h2>6. 보안</h2>
-<p>비밀번호와 API 키는 Windows에서는 DPAPI로, macOS에서는 로그인 키체인에, Linux에서는 키링(Secret Service, 쓸 수 없으면 본인만 읽을 수 있는 파일)에 암호화해 이 컴퓨터의 현재 사용자만 풀 수 있게 저장합니다. Google과의 통신은 모두 HTTPS로 이루어집니다. PC 자체의 계정 보안은 이용자가 관리해야 합니다.</p>
+<p>비밀번호와 API 키는 Windows에서는 DPAPI로, macOS에서는 로그인 키체인에, Linux에서는 키링(Secret Service, 쓸 수 없으면 본인만 읽을 수 있는 파일)에 암호화해 이용자 본인의 컴퓨터에 저장하며, 그 컴퓨터의 현재 사용자 계정만 풀 수 있습니다. Google과의 통신은 모두 HTTPS로 이루어집니다. PC 자체의 계정 보안은 이용자가 관리해야 합니다.</p>
 
 <h2>7. 아동</h2>
 <p>앱은 DGIST 재학생을 위한 것이며, 만 14세 미만 아동을 대상으로 하지 않습니다.</p>
@@ -145,7 +145,7 @@
   <p>All data stays on the user's PC for as long as the user keeps it. Disconnecting Google in the app's settings deletes the local Google token, and access can be revoked at any time at <a href="https://myaccount.google.com/connections">Google Account → Third-party connections</a>. Deleting the data folder (Windows <code>C:\lms-autosaver\</code>, macOS and Linux <code>~/.lms-autosaver/</code>) removes all local data; also delete the "Daling" item in the macOS Keychain or Linux keyring. Files uploaded to Drive and events added to Calendar live in the user's Google account and can be deleted there.</p>
 
   <h3>Security</h3>
-  <p>Passwords and API keys are encrypted with Windows DPAPI or stored in the macOS login Keychain or the Linux keyring (Secret Service, or a file only you can read), so only the current user on that computer can read them. All communication with Google uses HTTPS.</p>
+  <p>Passwords and API keys are encrypted with Windows DPAPI or stored in the macOS login Keychain or the Linux keyring (Secret Service, or a file only you can read), on the user's own computer, so only the current user account on that computer can read them. All communication with Google uses HTTPS.</p>
 
   <h3>Children</h3>
   <p>The app is intended for DGIST students and is not directed to children under 14.</p>
