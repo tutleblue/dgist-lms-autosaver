@@ -10747,3 +10747,35 @@ html.log-open .log-close { display: grid; flex: none; }
 .mail-header-row.picking .mail-unpick { display: grid; margin-left: auto; width: 30px; height: 30px; }
 .mail-header-row.picking .mail-unpick .icon { width: 14px; height: 14px; }
 .mail-header-row .mail-actions button { font-size: 13px; padding: 6px 10px; }
+
+/* ===== 메일함도 둥글게 (2026-10-14) =====
+   '모든 화면이 둥글둥글한데 메일만 사각'. 날짜 머리는 흰 사각 띠, 목록 머리줄도 사각, 메일 줄은 9px 에
+   아래 선으로 이어 붙어 한 덩어리 표처럼 보였다. 다른 화면의 카드처럼 줄마다 둥근 카드로 띄우고,
+   날짜 머리는 바탕색 위의 글씨로(위에 붙어 있을 때 뒤가 비치지 않게 바탕은 칠한다), 머리줄은 둥근 알약 판으로. */
+.news-grid.list-mode { gap: 6px; }
+.news-grid.list-mode .email-list-row {
+  border-radius: 14px;
+  border: 1px solid transparent;
+  border-bottom: 1px solid transparent;
+  background: var(--surface);
+}
+.news-grid.list-mode .email-list-row:hover { border-color: var(--border); background: var(--surface); }
+.news-grid.list-mode .email-list-row.unread { background: color-mix(in srgb, var(--accent-soft) 45%, var(--surface)); }
+.news-grid.list-mode .email-list-row.picked {
+  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  box-shadow: none;
+}
+.mail-day {
+  background: var(--bg);
+  border-bottom: none;
+  border-radius: 0 0 12px 12px;
+  padding: 12px 6px 6px;
+}
+.mail-header-row {
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  padding: 0 8px 0 14px;
+  margin-bottom: 4px;
+}
+.mail-header-row .mail-actions button { border-radius: 999px; }
