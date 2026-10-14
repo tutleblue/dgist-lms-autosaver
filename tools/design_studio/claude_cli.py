@@ -13,7 +13,11 @@ from pathlib import Path
 
 
 def find_claude() -> str | None:
-    return os.environ.get("STUDIO_CLAUDE") or shutil.which("claude")
+    # STUDIO_CLAUDE 가 없는 파일을 가리키면 쓰지 않는다. 처음엔 그대로 믿어서, 시안이 '만드는 중' 에서 영영 멈췄다(검증 중 실측).
+    explicit = os.environ.get("STUDIO_CLAUDE")
+    if explicit:
+        return explicit if Path(explicit).is_file() else shutil.which(explicit)
+    return shutil.which("claude")
 
 
 def child_env(proxy_env: dict | None) -> dict:

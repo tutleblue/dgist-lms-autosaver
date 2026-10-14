@@ -535,6 +535,7 @@
       <div class="grp">
         <button class="icon" data-act="undo" title="되돌리기 (Ctrl+Z)">↶</button>
         <button class="icon" data-act="redo" title="다시 하기 (Ctrl+Shift+Z)">↷</button>
+        ${INFO.claude ? `<button class="icon ai-btn" data-ai="open" title="AI 추천">✨</button>` : ""}
       </div>
       <div class="grp variants" title="조합마다 따로 바꿔 보고 숫자 키(1~9)로 오가며 비교해요">
         ${S.variants.map((v, i) => `<button class="vpill ${i === S.active ? "on" : ""}" data-variant="${i}" title="${esc(v.name)} · 바꾼 것 ${v.changes.length}">${esc(v.name.replace(/^조합\s*/, "")) || i + 1}</button>`).join("")}
@@ -546,6 +547,7 @@
       </div>
       ${ctxPill()}
       <div class="hint">${esc(hintText())}</div>`;
+    setBarHeight();
   }
   function ctxPill() {
     if (INFO.ctx) {
@@ -558,6 +560,12 @@
     if (running.length) return `<div class="grp ctx"><button data-tab-go="proposals"><span class="spin"></span>Claude 가 시안을 만드는 중</button></div>`;
     if (ready.length) return `<div class="grp ctx"><button data-prop-act="view" data-name="${esc(ready[0].name)}">시안 ${ready.length}개 보기</button></div>`;
     return "";
+  }
+  // 좁은 창에서는 아래 막대가 두세 줄로 접힌다. 패널·AI 카드가 그 위에서 끝나게 실제 높이를 알려 준다
+  // (420px 폭에서 막대가 패널 아래 53px 를 덮었다 — 검증 중 실측)
+  function setBarHeight() {
+    const bar = $(".bar");
+    host.style.setProperty("--barh", `${(bar && !bar.hidden && bar.offsetHeight) || 0}px`);
   }
   function hintText() {
     if (INFO.ctx && S.mode === "browse") return "Claude 가 만든 시안이에요 · 마음에 안 드는 곳에 댓글을 달고 '더 고쳐 달라기', 좋으면 시안 탭에서 '이대로 반영'";
@@ -2410,6 +2418,7 @@
   }
   function onTopResize() {
     if (!ovHost.isConnected) return TOP.removeEventListener("resize", onTopResize);
+    setBarHeight();
     renderPanel();
     renderAi();
   }
@@ -2535,7 +2544,15 @@
       .panel { position: fixed; top: 12px; right: 12px; bottom: 12px; width: 330px; z-index: 2147483001; display: flex; flex-direction: column;
                background: var(--s-bg); border: 1px solid var(--s-line); border-radius: 14px; box-shadow: 0 12px 40px rgba(0,0,0,.4); overflow: hidden; }
       .panel.left { right: auto; left: 12px; }
-      @media (max-width: 760px) { .panel { left: 8px; right: 8px; width: auto; top: auto; height: 46vh; bottom: 96px; } }
+      @media (max-width: 760px) { .panel { left: 8px; right: 8px; width: auto; top: auto; height: 46vh; bottom: calc(var(--barh, 76px) + 20px); } }
+      /* 좁은 창: AI 는 떠 있는 알약 대신 아래 막대의 ✨ 단추로. 펼친 카드는 막대 위에 */
+      .ai-btn { display: none; }
+      @media (max-width: 760px) {
+        .ai-btn { display: inline-block; }
+        .ai:not(.open) { display: none; }
+        .ai.open { bottom: calc(var(--barh, 76px) + 24px); left: 12px !important; }
+        .ai-card { width: min(290px, calc(100vw - 24px)); }
+      }
       header { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px 6px; }
       .brand { font: 600 14px/1.3 var(--s-head); letter-spacing: -0.01em; }
       .brand small { display: block; font-weight: 400; color: var(--s-soft); font-size: 11px; }

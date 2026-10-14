@@ -115,11 +115,10 @@ def build(root: Path, version: str = "") -> None:
         (root / name).write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
     write("config.json", {
-        # 화면이 '연결됨' 으로 보이게 하는 자리만 채운다. 비밀번호 칸은 지어낸 글자다(어디에도 안 쓴다).
+        # 비밀번호 칸은 파일·코드에 적지 않는다(CLAUDE.md 4). '연결됨' 으로 보이게 하는 값은
+        # studio_server 가 demo 모드에서 실행할 때마다 무작위로 만들어 메모리에서만 넣는다.
         "LMS_ID": "202600000",
-        "LMS_PASSWORD": "design-studio-demo",
         "EMAIL_ADDRESS": "student@example.dgist.ac.kr",
-        "EMAIL_PASSWORD": "design-studio-demo",
         "DOWNLOAD_PATH": str(downloads),
         "SCHEDULE_TIME": "08:00",
     })

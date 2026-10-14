@@ -103,6 +103,21 @@ if args.data == "demo":
 
     demo_data.build(DEMO_ROOT, VERSION)
 
+    # 화면이 'LMS·메일 연결됨' 으로 보이게 비밀번호 칸을 채운다. 실행마다 새로 만드는 무작위 값이고
+    # 파일에도 코드에도 남지 않는다(CLAUDE.md 4). demo 는 바깥 연결이 막혀 있어 어디에도 쓰이지 않는다.
+    import secrets as _secrets
+
+    _DEMO_FILLER = _secrets.token_hex(8)
+    _real_read_config = web_ui.read_config
+
+    def _demo_read_config(workspace):  # type: ignore[no-untyped-def]
+        cfg = _real_read_config(workspace)
+        for _key in ("LMS_PASSWORD", "EMAIL_PASSWORD"):
+            cfg.setdefault(_key, _DEMO_FILLER)
+        return cfg
+
+    web_ui.read_config = _demo_read_config
+
 from ai import AIRunner  # noqa: E402
 from proposals import ProposalManager  # noqa: E402
 

@@ -266,7 +266,15 @@ class ProposalManager:
         meta["updatedAt"] = now_iso()
         self.save(meta)
 
-        proc = spawn(self._command(name, meta, followup), self._prompt(name, request_stem, followup), self.proj, self.proxy_env)
+        try:
+            proc = spawn(self._command(name, meta, followup), self._prompt(name, request_stem, followup), self.proj, self.proxy_env)
+        except OSError as exc:
+            # 띄우지도 못했으면 '만드는 중' 으로 남기지 않는다 (남기면 화면이 계속 돌고 '다시 시키기' 도 막힌다)
+            meta["status"] = "failed"
+            meta["error"] = f"claude 를 실행하지 못했어요 ({exc.strerror or exc}). Claude Code 설치나 STUDIO_CLAUDE 경로를 확인해 주세요."
+            meta["rounds"][-1].update(status="failed", finishedAt=now_iso())
+            self.save(meta)
+            return
         with self.lock:
             self.procs[name] = proc
         threading.Thread(target=self._pump, args=(name, proc), daemon=True).start()

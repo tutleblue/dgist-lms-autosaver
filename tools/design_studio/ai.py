@@ -89,6 +89,16 @@ class AIRunner:
             if proc and proc.poll() is None:
                 proc.terminate()
 
+    def _start(self, job: dict, args: list[str], prompt: str, cwd: Path) -> bool:
+        """claude 를 띄운다. 못 띄우면 작업을 '실패' 로 두고 이유를 남긴다 (화면이 그 이유를 보여 준다)."""
+        try:
+            job["proc"] = spawn(args, prompt, cwd, self.proxy_env)
+            return True
+        except OSError as exc:
+            job["status"] = "failed"
+            job["error"] = f"claude 를 실행하지 못했어요 ({exc.strerror or exc})"
+            return False
+
     # ---------- 추천 ----------
     def suggest(self, context: dict) -> dict:
         if self.current_suggest:
@@ -98,7 +108,8 @@ class AIRunner:
         prompt = SUGGEST_RULES + "\n지금 상황 (JSON):\n" + json.dumps(context, ensure_ascii=False, indent=1)[:24000]
         args = ["-p", "--output-format", "stream-json", "--verbose", "--include-partial-messages",
                 "--model", SUGGEST_MODEL, "--tools", "", "--max-turns", "1", "--permission-mode", "dontAsk"]
-        job["proc"] = spawn(args, prompt, self.scratch, self.proxy_env)
+        if not self._start(job, args, prompt, self.scratch):
+            return job
         threading.Thread(target=self._pump_suggest, args=(job,), daemon=True).start()
         return job
 
@@ -155,7 +166,8 @@ class AIRunner:
         prompt = FLOW_RULES + "\n알아볼 단추 (스튜디오가 모은 정보):\n" + json.dumps(target, ensure_ascii=False, indent=1)[:8000]
         args = ["-p", "--output-format", "json", "--model", FLOW_MODEL, "--max-turns", "14",
                 "--permission-mode", "dontAsk", "--allowedTools", "Read", "Grep", "Glob"]
-        job["proc"] = spawn(args, prompt, self.proj, self.proxy_env)
+        if not self._start(job, args, prompt, self.proj):
+            return job
         threading.Thread(target=self._pump_flow, args=(job,), daemon=True).start()
         return job
 
