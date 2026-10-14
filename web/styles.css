@@ -10720,3 +10720,30 @@ html.log-open .log-close { display: grid; flex: none; }
   .custom-frame .topbar > .topbar-mail { flex: 0 1 720px; min-width: 320px; margin: 0 auto; }
   .custom-frame .topbar > .topbar-actions { margin-left: 0; }
 }
+
+/* ===== 메일 작업 단추를 한 곳으로 (2026-10-14) =====
+   '읽음·삭제·안읽음을 하나에서 처리하면 되지, 왜 분산되고 중복되냐 — 선택할 때만 활성화'.
+   - 줄마다 마우스를 올리면 뜨던 읽음/휴지통 단추는 뺀다(휴지통 폴더의 '되돌리기'만 남김).
+   - 아래에 떠오르던 작업 막대는 없애고, 목록 머리줄이 고른 메일이 있을 때만 작업 줄로 바뀐다.
+   - 평소 머리줄: 전체 · 60통 · 안읽음 32 · [모두 읽음]. 고르면: 3통 선택 · 읽음 안읽음 | 답장 전달 | 삭제 · ×. */
+.mail-actionbar { display: none !important; }
+.email-list-row .list-actions:not(:has([data-act="restore"])) { display: none; }
+.email-list-row .list-actions [data-act="delete"] { display: none; }
+.email-list-row .list-actions:has([data-act="restore"]) [data-act="delete"] { display: inline-grid; }
+.mail-header-row {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  min-height: 44px;
+  background: var(--surface);
+}
+.mail-header-row .mail-selected-count,
+.mail-header-row .mail-actions,
+.mail-header-row .mail-unpick { display: none; }
+.mail-header-row.picking #emailsUpdatedAt,
+.mail-header-row.picking #markAllReadButton { display: none !important; }
+.mail-header-row.picking .mail-selected-count { display: inline; font-size: 12.5px; font-weight: 700; color: var(--accent-strong); white-space: nowrap; }
+.mail-header-row.picking .mail-actions { display: flex; flex-wrap: wrap; }
+.mail-header-row.picking .mail-unpick { display: grid; margin-left: auto; width: 30px; height: 30px; }
+.mail-header-row.picking .mail-unpick .icon { width: 14px; height: 14px; }
+.mail-header-row .mail-actions button { font-size: 13px; padding: 6px 10px; }

@@ -804,28 +804,15 @@
                       </div>
                     </div>
 
-                    <!-- 고른 메일이 있을 때만 아래에서 떠오르는 작업 막대 -->
+                    <!-- 예전 떠오르는 작업 막대. 단추는 목록 머리줄로 옮겼고(아래), 전체 선택 칸만 스크립트 호환으로 남긴다 -->
                     <div class="mail-actionbar" id="mailActionbar" hidden>
                       <label class="mail-selectall" title="전체 선택">
                         <input type="checkbox" id="mailSelectAll" />
-                        <span class="mail-selected-count" id="mailSelectedCount"></span>
                       </label>
-                      <div class="mail-actions" id="mailActions">
-                        <button type="button" data-bulk="read">읽음</button>
-                        <button type="button" data-bulk="unread">안읽음</button>
-                        <span class="mail-actions-sep"></span>
-                        <button type="button" data-bulk="reply">답장</button>
-                        <button type="button" data-bulk="forward">전달</button>
-                        <span class="mail-actions-sep"></span>
-                        <button type="button" class="danger" data-bulk="delete">삭제</button>
-                      </div>
-                      <button type="button" class="icon-button mail-unpick" id="mailClearPick" aria-label="선택 해제">
-                        <span class="icon" data-icon="x"></span>
-                      </button>
                     </div>
 
                     <!-- Gmail식 분류 탭 -->
-                    <div class="mail-tabs" id="mailTabs" role="tablist"></div>
+                    <div class="mail-tabs" id="mailTabs" role="tablist" hidden></div>
 
                     <div class="mail-scroll" id="mailScroll">
                       <div class="mail-header-row">
@@ -837,6 +824,21 @@
                         <button class="button compact ghost" id="markAllReadButton" type="button" hidden>
                           <span class="icon" data-icon="mailAllRead"></span>
                           모두 읽음
+                        </button>
+                        <!-- 읽음·안읽음·삭제를 한 곳에서: 메일을 고르면 이 줄이 작업 줄로 바뀐다
+                             (예전엔 줄마다 뜨는 단추 + 아래 떠오르는 막대 + '모두 읽음' 으로 흩어져 있었다) -->
+                        <span class="mail-selected-count" id="mailSelectedCount"></span>
+                        <div class="mail-actions" id="mailActions">
+                          <button type="button" data-bulk="read">읽음</button>
+                          <button type="button" data-bulk="unread">안읽음</button>
+                          <span class="mail-actions-sep"></span>
+                          <button type="button" data-bulk="reply">답장</button>
+                          <button type="button" data-bulk="forward">전달</button>
+                          <span class="mail-actions-sep"></span>
+                          <button type="button" class="danger" data-bulk="delete">삭제</button>
+                        </div>
+                        <button type="button" class="icon-button mail-unpick" id="mailClearPick" aria-label="선택 해제" title="선택 해제">
+                          <span class="icon" data-icon="x"></span>
                         </button>
                       </div>
 

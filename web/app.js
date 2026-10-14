@@ -2898,12 +2898,8 @@ function syncMailSelection() {
   const label = $("#mailSelectedCount");
   if (label) label.textContent = chosen.size ? `${chosen.size}통 선택` : "";
   // 작업 막대는 고른 게 있을 때만. 평소에는 자리를 차지하지 않는다.
-  const bar = $("#mailActionbar");
-  if (bar) {
-    const show = chosen.size > 0;
-    if (bar.hidden === show) bar.hidden = !show;
-    bar.classList.toggle("up", show);
-  }
+  // 고른 게 있으면 목록 머리줄이 작업 줄(읽음·안읽음·답장·전달·삭제)로 바뀐다
+  document.querySelector(".mail-header-row")?.classList.toggle("picking", chosen.size > 0);
   const total = document.querySelectorAll("#newsGrid [data-mail-id]").length;
   [$("#mailSelectAll"), $("#mailPickAll")].forEach((all) => {
     if (!all) return;
@@ -2932,15 +2928,10 @@ function renderEmails() {
   // 전체 메일로 세면 '중요 7'인데 눌러 보니 2통인 식으로 어긋난다.
   renderMailQuick(folderPool);
 
-  // 분류 탭 (받은 편지함에서만) — 탭 개수는 '가르기 전' 목록으로 센다
-  renderMailTabs(folderPool);
-  // 빠른 필터를 켰을 때는 탭으로 가르지 않는다.
-  // ('중요'를 눌렀는데 기본 탭에 머물면 기본 탭에는 중요 메일이 없어 0통이 된다)
-  // 빠른 필터나 분류를 골랐을 때는 탭으로 또 가르지 않는다.
-  // ('세미나·행사 12'를 눌렀는데 기본 탭에 걸려 4통만 보이면 숫자가 안 맞는다)
-  if (isInboxLike && !state.emailQuick && !state.emailFilter) {
-    folderPool = folderPool.filter((m) => mailInTab(m, state.emailTab));
-  }
+  // 기본 / LMS·공지 탭은 없앴다(2026-10-14, 사용자: '이거 없애줘'). 받은 편지함은 모든 메일을 보이고,
+  // LMS 메일만 보려면 왼쪽 '수업·LMS' 분류를 누른다. 탭이 남아 있으면 기본 탭이 LMS 메일을 숨기므로 거르기도 뺐다.
+  const tabs = $("#mailTabs");
+  if (tabs && !tabs.hidden) tabs.hidden = true;
 
   // 왼쪽 빠른 필터
   if (state.emailQuick === "unread") folderPool = folderPool.filter((m) => m.unread);
