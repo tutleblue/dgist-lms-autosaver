@@ -36,9 +36,10 @@ from urllib.parse import parse_qs, urlparse
 HERE = Path(__file__).resolve().parent
 PROJ = HERE.parent.parent
 REQUESTS_DIR = HERE / "requests"
-STATIC = {"studio.js": "application/javascript", "studio.css": "text/css"}
+STATIC = {"studio.js": "application/javascript", "studio.css": "text/css", "studio-fonts.css": "text/css"}
+FONTS = HERE / "fonts"
 
-parser = argparse.ArgumentParser(description="Daling 디자인 스튜디오")
+parser = argparse.ArgumentParser(description="디자인 스튜디오 (Daling 과 별개 앱)")
 parser.add_argument("--data", choices=["demo", "real"], default="demo",
                     help="demo: 지어낸 학생 데이터(기본) / real: 내 데이터 폴더를 읽기만")
 parser.add_argument("--port", type=int, default=int(os.environ.get("STUDIO_PORT", "8796")))
@@ -147,10 +148,12 @@ SHELL_HTML = """<!doctype html>
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Daling 디자인 스튜디오</title>
-  <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=daling" />
+  <title>디자인 스튜디오</title>
+  <!-- 스튜디오는 Daling 과 별개 앱이다. 탭 아이콘도 Daling 것이 아니라 스튜디오 것(브랜드 Dark·Orange) -->
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23141413'/%3E%3Cpath d='M9 22 L16 8 L23 22 M12 17 H20' stroke='%23d97757' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="/__studio/studio-fonts.css" />
   <style>
-    html, body { margin: 0; height: 100%; overflow: hidden; background: #141416; }
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #141413; }
     #app { position: fixed; top: 0; left: 0; width: 100%; height: 100%; border: 0; background: #faf9f5; }
     /* 패널(330px + 여백)을 붙이면 앱 칸이 그만큼 좁아진다 */
     html.dock-right #app { width: calc(100% - 354px); }
@@ -249,7 +252,8 @@ class StudioHandler(web_ui.DashboardHandler):
         if route in ("/", "/index.html"):
             html = (self._web_root() / "index.html").read_text(encoding="utf-8")
             # 진짜 화면에 편집 도구만 끼운다. app.js 다음에 불러야 화면이 다 그려진 뒤 붙는다(둘 다 defer 라 순서대로).
-            html = html.replace("</head>", '  <link rel="stylesheet" href="/__studio/studio.css" />\n  </head>', 1)
+            html = html.replace("</head>", '  <link rel="stylesheet" href="/__studio/studio-fonts.css" />\n'
+                                '  <link rel="stylesheet" href="/__studio/studio.css" />\n  </head>', 1)
             html = html.replace(
                 '<script src="/app.js" defer></script>',
                 '<script src="/app.js" defer></script>\n'
@@ -264,6 +268,11 @@ class StudioHandler(web_ui.DashboardHandler):
             if name in STATIC:
                 self._send_bytes((HERE / name).read_bytes(), STATIC[name] + "; charset=utf-8")
                 return
+            if name.startswith("fonts/") and name.endswith(".woff2"):
+                font = FONTS / Path(name).name
+                if font.exists():
+                    self._send_bytes(font.read_bytes(), "font/woff2")
+                    return
             if name == "proposals":
                 self.send_json({"ok": True, "items": PROPOSALS.list(), "claude": CLAUDE_OK})
                 return
