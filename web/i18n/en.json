@@ -1832,5 +1832,7 @@
  "메일 로그인 실패": "Mail sign-in failed",
  "메일 연결 오류": "Mail error",
  "메일 가져오는 중 · 누르면 멈춤": "Fetching mail · click to stop",
- "7일 안에 잡힌 행사·일정이 없어요": "No events in the next 7 days"
+ "7일 안에 잡힌 행사·일정이 없어요": "No events in the next 7 days",
+ "그래파이트": "Graphite",
+ "그래파이트 다크": "Graphite dark"
 }

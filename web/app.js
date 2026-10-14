@@ -1253,7 +1253,7 @@ function mailFrameDoc(html, showImages) {
   //   그래서 은은한 종이 카드 위에 올린다.
   const onPaper = mailOnPaper();
   const text = onPaper ? "#1f1e1d" : cs.getPropertyValue("--text").trim() || "#222";
-  const bg = onPaper ? MAIL_PAPER : "transparent";
+  const bg = onPaper ? mailPaperColor() : "transparent";
   // 본문 안의 그림은 /api/mail-image 로 온다. srcdoc 안에서도 그 주소를 찾게
   // 기준 주소를 박아 준다 (없으면 about:srcdoc 기준이라 그림이 다 깨진다).
   return `<!doctype html><html><head><meta charset="utf-8">
@@ -6873,8 +6873,11 @@ function bindEvents() {
 /* ===== 테마 =====
    누를 때마다 이 차례대로 넘어간다. */
 // '자동' 은 Windows 의 밝게/어둡게 설정을 따른다 (밝으면 기본, 어두우면 다크). 처음 쓰는 사람의 기본값.
+// 그래파이트(밝음·어두움)는 2026-10-14 새 기본 색. 예전 '기본'·'다크' 도 사용자 요청으로 고를 수 있게 남겼다.
 const THEMES = [
   { key: "auto", label: "자동", icon: "monitor" },
+  { key: "graphite", label: "그래파이트", icon: "layout" },
+  { key: "graphite-dark", label: "그래파이트 다크", icon: "moon" },
   { key: "claude", label: "기본", icon: "sparkle" },
   { key: "light", label: "화이트", icon: "sun" },
   { key: "navy", label: "남색", icon: "star" },
@@ -6885,7 +6888,8 @@ const systemDark = window.matchMedia("(prefers-color-scheme: dark)");
 
 /** 고른 테마(auto 포함) → 실제로 칠할 테마 */
 function resolveTheme(choice) {
-  if (choice === "auto") return systemDark.matches ? "dark" : "claude";
+  // 자동은 새 그래파이트 짝을 따른다
+  if (choice === "auto") return systemDark.matches ? "graphite-dark" : "graphite";
   return choice;
 }
 
@@ -10452,11 +10456,15 @@ function saveSavePlaceSoon() {
    밝은 테마에서는 메일 속 순백(#fff) 바탕을 걷어 내 읽기 화면 배경 위에 그린다.
    색을 넣은 칸(표 머리, 강조 상자)은 그대로 둔다. 어두운 테마는 종이 카드 위에 올린다. */
 const MAIL_PAPER = "#f7f5ef";
+const MAIL_PAPER_GRAPHITE = "#f5f5f7"; // 그래파이트 다크는 크림 대신 중립 종이
+function mailPaperColor() {
+  return document.documentElement.dataset.theme === "graphite-dark" ? MAIL_PAPER_GRAPHITE : MAIL_PAPER;
+}
 
 function mailOnPaper() {
   const theme = document.documentElement.dataset.theme || "";
   // 남색 테마는 밝은 테마가 되었다 (예전엔 어두운 남색 바탕)
-  return theme === "dark";
+  return theme === "dark" || theme === "graphite-dark";
 }
 
 function blendMailBackground(frame) {
@@ -10475,7 +10483,7 @@ function blendMailBackground(frame) {
       }
     }
     if (white.test(view.getComputedStyle(doc.body).backgroundColor)) {
-      doc.body.style.setProperty("background-color", mailOnPaper() ? MAIL_PAPER : "transparent", "important");
+      doc.body.style.setProperty("background-color", mailOnPaper() ? mailPaperColor() : "transparent", "important");
     }
   } catch (error) {
     /* 다른 출처 문서면 건드리지 않는다 */

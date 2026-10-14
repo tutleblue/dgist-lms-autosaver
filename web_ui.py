@@ -3017,7 +3017,7 @@ def get_course_announcements(workspace: UserWorkspace) -> dict[str, Any]:
     return {"updatedAt": (data or {}).get("updatedAt") if isinstance(data, dict) else None, "courses": out}
 
 
-UI_THEMES = ("auto", "claude", "light", "navy", "dark")
+UI_THEMES = ("auto", "graphite", "graphite-dark", "claude", "light", "navy", "dark")  # 그래파이트 두 개는 2026-10-14 추가
 
 
 def _window_chrome_call(action):
