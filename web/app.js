@@ -832,35 +832,101 @@ function renderUpcoming() {
   list.innerHTML = upcoming.map(deadlineRow).join("");
 }
 
+/* 다가오는 일정: 과제 마감은 바로 위 '다가오는 마감' 에 있으니 빼고, 7일 안의 세미나·학교 행사·학사일정·내 일정·
+   LMS 의 마감 아닌 일정(시험 등)을 보인다. 예전엔 LMS 캘린더를 그대로 옮겨 마감과 같은 줄이 두 번 떴다(2026-10-14). */
+const EVENT_KIND = {
+  event: ["세미나", "violet"],
+  school: ["학교 행사", "blue"],
+  academic: ["학사일정", "amber"],
+  mine: ["내 일정", "green"],
+  lms: ["LMS", "coral"],
+};
+const EVENT_DAYS_AHEAD = 7; // 대시보드 요약줄의 마감 기간(7일)과 맞춘다
+
+function upcomingEventItems() {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const until = today.getTime() + EVENT_DAYS_AHEAD * 86400000;
+  const norm = (t) => String(t || "").replace(/\s+/g, "").toLowerCase();
+  const deadlineNames = (state.deadlines.items || []).map((d) => norm(d.name)).filter((n) => n.length >= 4);
+  const isDeadline = (title) => {
+    const t = norm(title);
+    return deadlineNames.some((n) => t.includes(n) || n.includes(t));
+  };
+  const items = calendarItems().filter((it) => EVENT_KIND[it.kind]);
+  // LMS 캘린더 일정 중 과제 마감과 같은 것은 빼고 남은 것(시험·휴강 공지 등)만
+  (state.deadlines.events || []).forEach((ev) => {
+    if (!ev.start || isDeadline(ev.title)) return;
+    const dt = new Date(ev.start);
+    if (Number.isNaN(dt.getTime())) return;
+    items.push({ date: dt, title: ev.title, sub: [ev.calendarName, ev.location].filter(Boolean).join(" · "), kind: "lms" });
+  });
+  // 여러 날 학사일정(시험 기간 등)은 시작일 하나로
+  academicShown()
+    .forEach((e) => {
+      if (!e.end || e.end === e.start) return;
+      const dt = new Date(`${e.start}T00:00`);
+      if (Number.isNaN(dt.getTime())) return;
+      items.push({ date: dt, title: e.title, sub: `${e.start.slice(5).replace("-", "/")} ~ ${e.end.slice(5).replace("-", "/")}`, kind: "academic", allDay: true });
+    });
+  const seen = new Set();
+  return items
+    .filter((it) => {
+      const t = it.date.getTime();
+      return t >= today.getTime() && t < until;
+    })
+    .sort((a, b) => a.date - b.date)
+    .filter((it) => {
+      // 여러 날 행사는 날마다 하나씩 들어 있어 첫날만 남긴다
+      const key = `${it.kind}|${norm(it.title)}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0, 6);
+}
+
 function renderEvents() {
   const box = $("#eventsList");
-  const now = Date.now();
-  const events = (state.deadlines.events || [])
-    .filter((ev) => ev.start && new Date(ev.start).getTime() >= now - 3600000)
-    .sort((a, b) => new Date(a.start) - new Date(b.start))
-    .slice(0, 6);
-
-  if (!events.length) {
-    box.innerHTML = '<div class="empty-state"><strong>등록된 일정이 없습니다.</strong></div>';
+  if (!box) return;
+  const items = upcomingEventItems();
+  if (!items.length) {
+    box.innerHTML = `<div class="empty-state"><strong>7일 안에 잡힌 행사·일정이 없어요</strong></div>`;
     return;
   }
-
-  box.innerHTML = events
-    .map((ev) => {
-      const start = new Date(ev.start);
-      const sub = [ev.calendarName, ev.location].filter(Boolean).join(" · ");
+  const todayKey = new Date().toDateString();
+  box.innerHTML = items
+    .map((it) => {
+      const [label, tone] = EVENT_KIND[it.kind];
+      const d = it.date;
+      const day = d.toDateString() === todayKey ? "오늘" : `${d.getMonth() + 1}/${d.getDate()} (${NOW_WEEKDAY[d.getDay()]})`;
+      const time = it.allDay ? "" : `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+      // 꼬리표와 같은 말('학사일정')·'1/5일째' 는 아래 줄에서 뺀다
+      const sub = shortText(String(it.sub || "").replace(/^\d+\/\d+일째( · )?/, "").replace(/^학사일정( · )?/, ""), 56);
       return `
-        <div class="event-row">
-          <span class="event-date">${formatDue(start)}</span>
-          <div class="event-title">
-            ${escapeHtml(shortText(ev.title, 52))}
-            ${sub ? `<span class="event-sub">${escapeHtml(shortText(sub, 56))}</span>` : ""}
-          </div>
-        </div>
-      `;
+        <button type="button" class="event-row" ${it.mailId ? `data-mailid="${escapeHtml(String(it.mailId))}"` : "data-go-calendar"}>
+          <span class="event-date">${escapeHtml(day)}${time ? `<em>${time}</em>` : ""}</span>
+          <span class="event-title">
+            <span class="event-kind tone-${tone}">${escapeHtml(label)}</span>
+            ${escapeHtml(shortText(it.title, 52))}
+            ${sub ? `<span class="event-sub">${escapeHtml(sub)}</span>` : ""}
+          </span>
+        </button>`;
     })
     .join("");
 }
+
+$("#eventsList")?.addEventListener("click", (event) => {
+  const row = event.target.closest(".event-row");
+  if (!row) return;
+  const mail = row.dataset.mailid && (state.emails.emails || []).find((m) => String(m.id) === row.dataset.mailid);
+  if (mail) {
+    switchView("emails");
+    window.setTimeout(() => openEmailDetail(mail), 200);
+  } else {
+    switchView("calendar");
+  }
+});
 
 /* ===== 과제 마감 뷰 ===== */
 function queryMatcher() {
@@ -919,7 +985,7 @@ function renderDeadlines() {
   $("#deadlinesCount").textContent = `${rows.length}건`;
   const updated = state.deadlines.updatedAt;
   $("#deadlinesUpdatedAt").textContent = updated
-    ? `마지막 갱신 ${updated.replace("T", " ")} · 상단의 '새로고침'으로 다시 가져올 수 있습니다.`
+    ? `마지막 갱신 ${updated.replace("T", " ").slice(0, 16)}`
     : "아직 가져온 마감 정보가 없습니다. 상단의 '새로고침'을 눌러 주세요.";
 
   // 완료(제출)한 과제와 남은 과제를 나눠서 보여 준다
@@ -4411,7 +4477,8 @@ const RENDER_PARTS = [
   { key: "upcoming", views: ["dashboard"], render: renderUpcoming,
     of: (s) => sig(s.deadlines?.updatedAt, (s.deadlines?.items || []).length, (s.selection?.hiddenDeadlines || []).length) },
   { key: "events", views: ["dashboard"], render: renderEvents,
-    of: (s) => sig(s.emails?.updatedAt, (s.myEvents || []).length) },
+    of: (s) => sig(s.emails?.updatedAt, (s.myEvents || []).length, s.deadlines?.updatedAt, (s.academic || []).length,
+      (s.schoolEvents || []).length, s.academicUnderOnly, new Date().toDateString()) },
   { key: "deadlineFilters", views: ["deadlines"], render: renderDeadlineFilters,
     of: (s) => sig(s.deadlines?.updatedAt, (s.deadlines?.items || []).length) },
   { key: "deadlines", views: ["deadlines"], render: renderDeadlines,
@@ -4699,8 +4766,7 @@ function calendarItems() {
   // 학교 학사일정 (수강신청·성적확인 같은 것)
   // 하루짜리만 칸 안의 칩으로 넣는다.
   // 여러 날에 걸친 것은 calendarSpans()가 이어진 막대로 그린다.
-  (state.academic || [])
-    .filter((e) => !state.academicUnderOnly || e.kind !== "대학원")
+  academicShown()
     .forEach((e) => {
       const start = new Date(`${e.start}T00:00`);
       if (Number.isNaN(start.getTime())) return;
@@ -4806,9 +4872,56 @@ function renderCalendar() {
    날마다 같은 제목을 반복해 찍으면 달력이 지저분하다.
    다른 캘린더들처럼 시작일부터 종료일까지 하나의 막대로 잇는다.
    달력은 7칸 그리드라, 주가 바뀌는 지점에서 막대를 끊어 이어 붙인다. */
+/* 달력·대시보드에 보일 학사일정만 고른다 (2026-10-14 사용자: '쓸데없는 일정은 걸러 줘').
+   - 학생이 할 일이 없는 행정 기간은 뺀다: 사진변경신청·학적기본정정·강의계획서작성·성적입력·미완성적처리.
+     사진변경신청기간은 거의 한 해 내내 걸쳐 달력 맨 위를 늘 차지했다.
+   - '수업일수(2/4이후 ~ 3/4)' 같은 구간 막대는 빼고, 하루짜리 '수업일수 2/4선' 같은 날짜 표시만 남긴다.
+   - 대학·대학원(·공통)에 같은 이름·같은 날짜로 두 번 실린 것은 하나로. */
+const ACADEMIC_NOISE = /(사진\s*변경|학적\s*기본\s*정정|강의\s*계획서\s*작성|성적\s*입력|미완성적)/;
+function academicShown() {
+  const seen = new Set();
+  return (state.academic || []).filter((e) => {
+    if (state.academicUnderOnly && e.kind === "대학원") return false;
+    const title = String(e.title || "");
+    if (ACADEMIC_NOISE.test(title)) return false;
+    const span = (e.end || e.start) !== e.start;
+    if (span && /^수업일수\s*\(/.test(title)) return false;
+    const key = `${title.replace(/\s+/g, "")}|${e.start}|${e.end || e.start}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).filter((e, i, list) => {
+    // 같은 날짜에 같은 일을 다른 이름으로 두 번 싣는다('대학 및 대학원 중간시험' = '중간고사기간',
+    // '2학기 강의평가' = '강의평가기간'). 주제가 같으면 이름이 짧은 쪽 하나만 남긴다.
+    const t = academicTopic(e.title);
+    if (!t) return true;
+    const end = e.end || e.start;
+    return !list.some((o, j) => {
+      if (j === i || o.start !== e.start || (o.end || o.start) !== end || academicTopic(o.title) !== t) return false;
+      const a = String(e.title).length, b = String(o.title).length;
+      return b < a || (b === a && j < i);
+    });
+  });
+}
+// 순서가 중요하다: '수강신청 변경' 은 수강신청보다 수강변경으로 먼저 잡아야 한다
+const ACADEMIC_TOPICS = [
+  ["exam", /시험|고사/],
+  ["eval", /강의\s*평가/],
+  ["change", /수강\s*(신청\s*)?변경/],
+  ["enroll", /수강\s*신청/],
+  ["ap", /공동\s*AP/i],
+  ["drop", /수강\s*포기/],
+  ["grade", /성적\s*확인/],
+  ["grad", /졸업\s*신청/],
+  ["return", /복학/],
+];
+function academicTopic(title) {
+  const hit = ACADEMIC_TOPICS.find(([, re]) => re.test(String(title || "")));
+  return hit ? hit[0] : "";
+}
+
 function calendarSpans(year, month, startDow, daysInMonth) {
-  const events = (state.academic || [])
-    .filter((e) => !state.academicUnderOnly || e.kind !== "대학원")
+  const events = academicShown()
     .filter((e) => (e.end || e.start) !== e.start);
 
   const monthStart = new Date(year, month, 1);
@@ -7358,7 +7471,7 @@ function renderTimetable() {
   const hint = $("#timetableHint");
   if (hint) {
     hint.textContent = entries.length
-      ? `${ttSummaryText(entries)} · 칸을 눌러 수정하거나 빈 곳을 눌러 추가하세요.`
+      ? ttSummaryText(entries) // 사용법 안내는 뺐다: 흐린 부가 설명은 꼭 필요한 것만 (2026-10-14)
       : "빈 칸을 누르면 과목을 넣을 수 있어요.";
   }
 }
@@ -10381,7 +10494,12 @@ function renderMailRefreshAgo() {
   button.classList.toggle("spinning", Boolean(state.mailRefreshing));
   // 가져오는 동안에도 누를 수 있게 둔다: 누르면 메일 가져오기만 멈춘다(서버가 응답을 안 줄 때 빠져나갈 길)
   button.disabled = false;
-  button.title = stamp ? `메일 새로고침 (마지막: ${String(stamp).replace("T", " ").slice(0, 16)})` : "메일 새로고침";
+  // 단추에는 글을 안 붙이므로(상단 바), 가져오는 중이면 '누르면 멈춤' 을 도움말로 알린다
+  button.title = state.mailRefreshing
+    ? "메일 가져오는 중 · 누르면 멈춤"
+    : stamp
+      ? `메일 새로고침 (마지막: ${String(stamp).replace("T", " ").slice(0, 16)})`
+      : "메일 새로고침";
 }
 
 async function refreshMailNow() {
@@ -11834,6 +11952,8 @@ const STATUS_KIND_LABEL = { emails: "메일", deadlines: "마감", sync: "자료
 const STATUS_KIND_DOING = { emails: "새 메일 확인하는 중", deadlines: "과제 마감 확인하는 중", sync: "새 강의자료 받는 중" };
 const STATUS_KIND_NEXT = { emails: "새 메일 확인", deadlines: "과제 마감 확인", sync: "새 강의자료 확인" };
 
+// 상태판 제목은 사이드바 폭(약 9자)에 들어가게 짧게 쓴다. "메일 가져오기가 계속 실…" 로 잘렸다(2026-10-14).
+// 자세한 사정은 상태판에 올리면 보이는 도움말(tip)에 있다.
 function statusLights() {
   const cfg = state.config || {};
   const h = state.health || {};
@@ -11844,27 +11964,27 @@ function statusLights() {
   const since = (k) => (ok[k] ? agoText(ok[k]) : "아직 안 함");
 
   const lms = !cfg.lmsId || !cfg.hasLmsPassword
-    ? { tone: "off", why: "LMS 계정을 넣어 주세요" }
+    ? { tone: "off", why: "LMS 계정 필요" }
     : auth.sync || auth.deadlines
       ? { tone: "bad", why: "LMS 로그인 실패" }
       : (streak.sync || 0) >= 2 || (streak.deadlines || 0) >= 2
-        ? { tone: "warn", why: "LMS 가져오기가 계속 실패해요" }
+        ? { tone: "warn", why: "LMS 연결 오류" }
         : { tone: "ok", why: "" };
   lms.tip = `LMS · 자료 ${since("sync")} · 마감 ${since("deadlines")}`;
 
   const mail = !cfg.schoolEmail || !cfg.hasSchoolEmailPassword
-    ? { tone: "off", why: "학교 메일 계정을 넣어 주세요" }
+    ? { tone: "off", why: "메일 계정 필요" }
     : auth.emails
-      ? { tone: "bad", why: "학교 메일 로그인 실패" }
+      ? { tone: "bad", why: "메일 로그인 실패" }
       : (streak.emails || 0) >= 2
-        ? { tone: "warn", why: "메일 가져오기가 계속 실패해요" }
+        ? { tone: "warn", why: "메일 연결 오류" }
         : { tone: "ok", why: "" };
   mail.tip = `학교 메일 · ${since("emails")}`;
 
   const drive = cfg.driveUpload === false
     ? { tone: "off", why: "", tip: "Drive · 꺼 둠" }
     : !oauth.tokenUsable
-      ? { tone: "bad", why: "구글 로그인이 필요해요", tip: "Drive · 로그인 필요" }
+      ? { tone: "bad", why: "구글 로그인 필요", tip: "Drive · 로그인 필요" }
       : { tone: "ok", why: "", tip: "Drive · 연결됨" };
 
   return { lms, mail, drive };
@@ -13259,6 +13379,8 @@ $("#mailRailFold")?.addEventListener("click", () => setMailRailFolded(true, true
     const bar = document.querySelector(".topbar");
     const h = bar && bar.offsetHeight ? Math.min(bar.offsetHeight, 64) : 48;
     document.documentElement.style.setProperty("--winctl-h", `${h}px`);
+    // 설정 판은 상단 바 아래부터 덮는다(스크롤 막대가 창 끝까지 올라가지 않게)
+    if (bar && bar.offsetHeight) document.documentElement.style.setProperty("--topbar-h", `${bar.offsetHeight}px`);
   };
   const refresh = () =>
     api("/api/window")

@@ -316,7 +316,6 @@
                 <div class="panel-header">
                   <div>
                     <h2 id="noticeTitle">학교 공지</h2>
-                    <p>공식 홈페이지의 일반공지·보도자료·채용정보</p>
                   </div>
                 </div>
                 <div class="notice-list" id="noticeList"></div>
@@ -326,7 +325,6 @@
                 <div class="panel-header">
                   <div>
                     <h2 id="quicklinksTitle">학교 사이트 바로가기</h2>
-                    <p>자주 쓰는 DGIST 사이트를 기본 브라우저로 엽니다.</p>
                   </div>
                   <button class="button compact ghost" id="toggleQuicklinks" type="button">전체 보기</button>
                 </div>
@@ -494,7 +492,6 @@
                 <div class="panel-header">
                   <div>
                     <h2 id="upcomingTitle">다가오는 마감</h2>
-                    <p id="upcomingHint">미제출 과제 우선, 마감 임박 순</p>
                   </div>
                   <button class="button compact ghost" type="button" data-goto="deadlines">전체 보기</button>
                 </div>
@@ -505,7 +502,6 @@
                 <div class="panel-header">
                   <div>
                     <h2 id="eventsTitle">다가오는 일정</h2>
-                    <p>LMS 캘린더 · 오피스아워와 수업 일정</p>
                   </div>
                 </div>
                 <div id="eventsList"></div>
@@ -517,7 +513,6 @@
               <div class="hero-panel calendar-hero">
                 <div>
                   <h1 id="calendarTitle">캘린더</h1>
-                  <p>과제 마감과 메일 속 일정을 한눈에. 날짜를 누르면 그 날 일정을 봅니다.</p>
                 </div>
                 <div class="calendar-nav">
                   <button class="icon-button" id="calPrevButton" type="button" aria-label="이전 달">‹</button>
@@ -683,7 +678,6 @@
               <div class="hero-panel">
                 <div>
                   <h1>창고</h1>
-                  <p>가끔 꺼내 보는 것들. 셔틀 시간표와 FGLP 파견 지도.</p>
                 </div>
               </div>
 
@@ -1067,7 +1061,7 @@
               <div class="hero-panel course-hero">
                 <div>
                   <h1>강의</h1>
-                  <p>과목별 자료 현황을 보고, Drive 자동 업로드에 포함할 과목을 직접 선택합니다. 토글을 끄면 해당 과목은 다운로드와 업로드에서 제외됩니다.</p>
+                  <p>스위치를 끈 과목은 받지도 올리지도 않아요.</p>
                 </div>
                 <div class="course-hero-actions">
                   <button class="button compact ghost" id="restoreCoursesButton" type="button" hidden>
@@ -1105,7 +1099,6 @@
               <div class="hero-panel files-hero">
                 <div>
                   <h1>자료</h1>
-                  <p>LMS에서 받은 파일을 과목별로 찾고, 내 컴퓨터에 저장할 수 있습니다.</p>
                 </div>
                 <div class="files-hero-actions">
                   <button class="button primary" id="runButton" type="button">
@@ -1118,7 +1111,6 @@
                 <div class="panel-header">
                   <div>
                     <h2 id="filesTitle">전체 자료</h2>
-                    <p id="filesHint">강의별 파일과 동기화 상태</p>
                   </div>
                   <!-- 자료 도구줄: 늘 쓰는 것(보기·거르기)만 보이고,
                        고른 뒤에 하는 일은 고른 게 있을 때만 아래 막대로 나온다.
@@ -1293,7 +1285,6 @@
               <span class="st-tile coral"><span class="icon" data-icon="user"></span></span>
               <div>
                 <h3>연결된 계정</h3>
-                <p>앱이 나 대신 들어가서 자료와 메일을 가져옵니다.</p>
               </div>
               <button type="button" class="hint" data-hint="아이디·비밀번호는 암호화해서 내 컴퓨터에만 저장하고, 개발자를 포함해 어디로도 보내지 않습니다. 비밀번호 칸은 바꿀 때만 입력하세요.">?</button>
             </header>
@@ -1353,7 +1344,6 @@
               <span class="st-tile blue"><span class="icon" data-icon="folder"></span></span>
               <div>
                 <h3>강의자료 저장</h3>
-                <p>새 자료를 받으면 켜 둔 곳에 자동으로 넣습니다.</p>
               </div>
             </header>
 
@@ -1450,10 +1440,6 @@
                 <span class="icon" data-icon="sync"></span>지금 맞추기
               </button>
             </div>
-            <p class="st-foot-note">
-              <span class="icon" data-icon="check"></span>
-              <span>모두 꺼도 앱 안의 <b>자료</b> 화면에서는 항상 볼 수 있습니다. 내가 필기한 파일은 덮어쓰지 않습니다.</span>
-            </p>
 
             <!-- 저장 공간: 앱 크기와 강의자료 크기를 나눠 보인다 -->
             <div class="st-sub">
@@ -1473,7 +1459,6 @@
               <span class="st-tile green"><span class="icon" data-icon="sync"></span></span>
               <div>
                 <h3>자동으로 가져오기</h3>
-                <p>앱이 켜져 있는 동안 알아서 확인합니다.</p>
               </div>
             </header>
             <div class="st-auto">
@@ -1567,7 +1552,6 @@
               <span class="st-tile amber"><span class="icon" data-icon="calendar"></span></span>
               <div>
                 <h3>구글 캘린더</h3>
-                <p>메일에 있는 행사·마감을 내 캘린더에 넣습니다.</p>
               </div>
               <label class="toggle st-head-toggle" title="메일 일정 자동 등록">
                 <input type="checkbox" name="gcalSyncEnabled" id="gcalSyncEnabled" />
@@ -1618,7 +1602,7 @@
               <span class="st-tile blue"><span class="icon" data-icon="key"></span></span>
               <div>
                 <h3>추가 기능 켜기 <span class="st-optional">선택</span></h3>
-                <p>메일 요약·번역, 학교 공식 강좌 정보. 없어도 앱은 그대로 됩니다.</p>
+                <p>메일 요약·번역, 학교 공식 강좌 정보</p>
               </div>
               <span class="icon st-chev" data-icon="chevronDown"></span>
             </summary>
@@ -1661,7 +1645,6 @@
               <div class="st-list-row" id="langRow">
                 <div>
                   <strong>언어 · Language</strong>
-                  <span>메일·과목 이름 같은 자료는 원래 글자 그대로 보여요.</span>
                 </div>
                 <div class="st-seg" role="radiogroup" aria-label="Language">
                   <label><input type="radio" name="uiLang" value="ko" /><span data-no-i18n>한국어</span></label>
@@ -1682,21 +1665,18 @@
               <div class="st-list-row">
                 <div>
                   <strong>문의 · 오류 제보 · 아이디어</strong>
-                  <span>만든 사람에게 바로 메일로 보내요. 서식은 자동으로 채워져요.</span>
                 </div>
                 <button class="button compact" id="settingsFeedbackButton" type="button">보내기</button>
               </div>
               <div class="st-list-row">
                 <div>
                   <strong>자료가 빠진 것 같아요</strong>
-                  <span>LMS 전체를 처음부터 다시 훑습니다. 몇 분 걸려요.</span>
                 </div>
                 <button class="button compact" id="fullSyncButton" type="button">전체 다시 확인</button>
               </div>
               <div class="st-list-row">
                 <div>
                   <strong>다른 컴퓨터로 옮기기</strong>
-                  <span>계정·과목 선택·내 일정을 파일 하나로 저장하거나 불러옵니다.</span>
                 </div>
                 <div class="st-row-buttons">
                   <label class="check-row compact" title="비밀번호까지 파일에 넣습니다. 남에게 주지 마세요.">

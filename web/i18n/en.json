@@ -555,6 +555,12 @@
  "마우스로 파일을 끌어오세요.": "Drag files here.",
  "마지막 갱신 정보 없음 · 상단의 ‘새로고침’으로 LMS에서 다시 가져올 수 있습니다.": "No last-update info · use 'Refresh' at the top to fetch from LMS again.",
  "마지막 갱신 {0} · 상단의 '새로고침'으로 다시 가져올 수 있습니다.": "Last updated {0} · use 'Refresh all' at the top to fetch again.",
+ "마지막 갱신 {0}": "Last updated {0}",
+ "{0}에서 검색": "Search {0}",
+ "중요 표시": "Mark important",
+ "중요 해제": "Unmark important",
+ "메일 요약·번역, 학교 공식 강좌 정보": "Mail summaries and translation, official course info",
+ "스위치를 끈 과목은 받지도 올리지도 않아요.": "Courses you switch off are neither downloaded nor uploaded.",
  "마지막 동기화: {0}": "Last sync: {0}",
  "마지막 메일입니다.": "This is the last message.",
  "마지막 확인": "Last check",
@@ -1818,5 +1824,13 @@
  "이미지로 가져오기 · 에브리타임 시간표를 캡처해서 넣기": "Import from image · Add a screenshot of your Everytime timetable",
  "수업 없는 날": "No classes today",
  "문제가 생겼어요. 앱을 다시 켜 보고, 계속되면 설정 → 실행 로그를 확인해 주세요.": "Something went wrong. Restart the app, and if it keeps happening, check Settings → Activity log.",
- "나머지 {0}개 더 보기": "Show {0} more"
+ "나머지 {0}개 더 보기": "Show {0} more",
+ "LMS 계정 필요": "LMS account needed",
+ "LMS 연결 오류": "LMS error",
+ "구글 로그인 필요": "Google sign-in needed",
+ "메일 계정 필요": "Mail account needed",
+ "메일 로그인 실패": "Mail sign-in failed",
+ "메일 연결 오류": "Mail error",
+ "메일 가져오는 중 · 누르면 멈춤": "Fetching mail · click to stop",
+ "7일 안에 잡힌 행사·일정이 없어요": "No events in the next 7 days"
 }
