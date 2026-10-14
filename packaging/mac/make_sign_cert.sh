@@ -7,9 +7,10 @@
 #
 # 왜 필요한가
 #   ad-hoc 서명(codesign -s -)의 서명 요구 조건(designated requirement)은 'cdhash H"…"' 라 빌드마다 바뀐다.
-#   macOS 는 개인정보 보호 권한(TCC: 문서 폴더 접근 등)과 키체인 허락을 이 조건에 묶어 두므로 업데이트마다 다시 묻는다.
+#   macOS 는 개인정보 보호 권한(TCC: 문서 폴더 접근 등)을 이 조건에 묶어 두므로 업데이트마다 다시 묻는다.
 #   같은 인증서로 서명하면 조건이 'identifier "app.daling.desktop" and certificate root = H"<인증서 SHA-1>"' 로 고정된다.
-#   Gatekeeper 경고는 이걸로 없어지지 않는다(애플이 발급한 인증서 + 공증이어야 함). 그건 한 줄 설치가 피한다.
+#   키체인 허락은 이걸로 안 없어진다: 항목에 partition_id 'cdhash:<만든 빌드>' 가 따로 붙는다(2026-10-15 CI 실측).
+#   Gatekeeper 경고도 마찬가지(애플이 발급한 인증서 + 공증이어야 함). 그건 한 줄 설치가 피한다.
 #
 # 만든 뒤 (본인이 직접 — 비밀값은 다른 사람·도구가 대신 넣지 않는다)
 #   GitHub 저장소 → Settings → Secrets and variables → Actions → New repository secret
