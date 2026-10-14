@@ -18,6 +18,8 @@
     - 맥이면 앱 안 업데이트 도구(install.sh)가 묶였는지, AUTOSAVER_SMOKE_DOWNLOAD_URL 이 있으면 앱이 받은 파일에 격리 표시가 없는지
     - AUTOSAVER_SMOKE_KEYCHAIN=1 이면 점검용 계정으로 키체인(리눅스는 Secret Service) 쓰기·읽기·지우기
       (CI 는 맥은 임시 키체인, 리눅스는 dbus-run-session 안의 gnome-keyring 에서)
+    - 맥에서 AUTOSAVER_SMOKE_KEYCHAIN=write / read 면 그것만: 이 빌드가 남긴 항목을 '다음 빌드' 가 묻지 않고 읽는지
+      (mac.yml 이 같은 자리에 같은 인증서로 다시 서명한 앱을 놓고 read 로 부른다, mac_keychain.persist_test)
 """
 from __future__ import annotations
 
@@ -81,6 +83,19 @@ def run(app) -> int:
             results.append((False, name, f"{type(exc).__name__}: {exc}", time.monotonic() - started))
         ok, _name, detail, took = results[-1]
         print(f"[{'OK' if ok else 'FAIL'}] {name} ({took * 1000:.0f}ms) {detail}", flush=True)
+
+    phase = os.environ.get("AUTOSAVER_SMOKE_KEYCHAIN", "")
+    if sys.platform == "darwin" and phase in ("write", "read"):
+        # 키체인 허락이 다음 빌드로 이어지는지만 본다 (mac.yml '키체인 허락 유지 점검'). 다른 점검은 건너뜀
+        def keychain_persist():
+            import mac_keychain
+
+            return mac_keychain.persist_test(phase)
+
+        check(f"키체인 허락 유지 ({phase})", keychain_persist)
+        ok = results[-1][0]
+        print(f"SMOKE {'PASS' if ok else 'FAIL'} (키체인 {phase})", flush=True)
+        return 0 if ok else 1
 
     import web_ui
 

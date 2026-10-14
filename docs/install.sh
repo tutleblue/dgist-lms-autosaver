@@ -4,7 +4,7 @@
 #   curl -fsSL https://gudaling.dev/install.sh | sh
 #
 # 왜 이 스크립트를 쓰나
-#   맥 판은 ad-hoc 서명뿐이다(공증에는 유료 Apple 개발자 계정이 필요). 브라우저로 받은 DMG 에는 격리 표시
+#   맥 판은 공증이 없다(유료 Apple 개발자 계정이 필요, 서명은 사설 인증서나 ad-hoc). 브라우저로 받은 DMG 에는 격리 표시
 #   (com.apple.quarantine)가 붙고, Gatekeeper 는 그 표시가 있는 앱을 공증으로 확인하려다 막는다.
 #   curl 은 격리 표시를 붙이지 않는다. 그 대신 받은 파일이 GitHub 릴리스의 원본과 같은지 여기서 SHA-256 으로 확인한다.
 #   리눅스는 서명 검사가 없지만, 실행 권한·앱 목록 등록·업데이트를 한 번에 해 준다.
@@ -136,7 +136,7 @@ install_mac() {
   rm -rf "$dest/.Daling.app.new" "$dest/.Daling.app.old"
   ditto "$mnt/Daling.app" "$dest/.Daling.app.new"
   hdiutil detach "$mnt" -quiet >/dev/null 2>&1 || true
-  # 복사가 온전한지 (ad-hoc 서명도 파일마다 해시를 담고 있다)
+  # 복사가 온전한지 (사설 인증서·ad-hoc 서명도 파일마다 해시를 담고 있다)
   codesign --verify --deep --strict "$dest/.Daling.app.new" >/dev/null 2>&1 \
     || die "새 판의 서명 확인에 실패했어요. 다시 해 주세요." "the new copy failed its signature check. Please try again."
   if [ -e "$dest/Daling.app" ]; then

@@ -11,8 +11,9 @@ Windows 판(bungeoppang.spec)과 같은 화면·데이터를 넣고, Windows 전
   - 실행 파일 이름은 Daling (Contents/MacOS/Daling). 작업 프로세스도 이 파일에 --autosaver-job 을 붙여 띄운다.
   - 창은 pywebview 의 Cocoa(WKWebView). pyobjc 가 필요하다 (requirements-mac.txt).
   - 비밀 설정은 키체인(mac_keychain.py), 알림은 osascript (app.notify).
-  - 서명: PyInstaller 가 파일마다 ad-hoc 서명을 붙이고, mac.yml 이 묶은 뒤 앱 전체를 ad-hoc 으로 다시 서명한다.
-    공증(notarization)은 유료 Apple Developer 계정이 있어야 해서 하지 않는다.
+  - 서명: PyInstaller 가 파일마다 ad-hoc 서명을 붙이고, mac.yml 이 묶은 뒤 앱 전체를 사설 인증서(비밀이 없으면
+    ad-hoc)로 다시 서명한다 (packaging/mac/make_sign_cert.sh). 공증(notarization)은 유료 Apple Developer 계정이
+    있어야 해서 하지 않는다.
 """
 
 import re
