@@ -20,6 +20,9 @@ on:
 
 permissions:
   contents: read
+  id-token: write           # 빌드 출처 증명(Sigstore) 인증서 받기
+  attestations: write       # 빌드 출처 증명 저장
+  artifact-metadata: write  # 증명과 이어지는 파일 기록 (actions/attest v4)
 
 concurrency:
   group: mac-${{ github.ref }}
@@ -150,7 +153,13 @@ jobs:
         timeout-minutes: 5
         run: |
           mkdir -p logs
-          # 사용자 데이터 대신 빈 임시 폴더로: 화면 서버·화면 파일·작업 프로세스·node·Cocoa 모듈·인증서 (smoke_test.py)
+          # 사용자 데이터 대신 빈 임시 폴더로: 화면 서버·화면 파일·작업 프로세스·node·Cocoa 모듈·인증서·업데이트 도구 (smoke_test.py)
+          # 앱이 직접 받은 파일에 격리 표시가 붙지 않는지도 본다 (지금 릴리스의 작은 .sha256 파일로. 없으면 건너뜀)
+          REPO=tutleblue/dgist-lms-autosaver
+          TAG="$(curl -fsSIL -o /dev/null -w '%{url_effective}' "https://github.com/$REPO/releases/latest" | sed 's#.*/tag/##')" || TAG=""
+          URL="https://github.com/$REPO/releases/download/$TAG/daling-${TAG#v}-mac-arm64.dmg.sha256"
+          if [ -n "$TAG" ] && curl -fsSIL -o /dev/null "$URL"; then export AUTOSAVER_SMOKE_DOWNLOAD_URL="$URL"; fi
+          echo "AUTOSAVER_SMOKE_DOWNLOAD_URL=${AUTOSAVER_SMOKE_DOWNLOAD_URL:-없음}"
           dist/Daling.app/Contents/MacOS/Daling --autosaver-smoke 2>&1 | tee logs/smoke.log
 
       - name: 키체인 왕복 점검 (임시 키체인)
@@ -200,6 +209,59 @@ jobs:
           hdiutil detach "$MNT" > /dev/null || hdiutil detach -force "$MNT" > /dev/null
           shasum -a 256 "$DMG" | tee "$DMG.sha256"
           ls -lh "$DMG"
+
+      - name: 한 줄 설치·앱 안 업데이트 점검
+        # 사이트의 'curl -fsSL https://gudaling.dev/install.sh | sh' 와 같은 docs/install.sh 로
+        #  1) 지금 릴리스를 /Applications 에 깔고 (curl 은 격리 표시를 붙이지 않는다 → Gatekeeper 창 없음)
+        #  2) 그 앱을 켜 둔 채, 앱 안 업데이트(updater._start_mac_install)가 넘기는 환경 변수 그대로 이번 빌드 DMG 로 바꾼다
+        # 러너는 관리자 계정이라 /Applications 에 암호 없이 쓸 수 있다 (학생 맥 대부분과 같음)
+        timeout-minutes: 10
+        run: |
+          mkdir -p logs
+          APP=/Applications/Daling.app
+          V="${{ steps.ver.outputs.version }}"
+          health() {  # $1 초 안에 화면 서버가 뜨면 0
+            for _ in $(seq 1 "$1"); do
+              sleep 1
+              for p in $(seq 8765 8785); do
+                curl -fsS --max-time 1 "http://127.0.0.1:$p/healthz" 2>/dev/null | grep -q '"mode"' && { echo "port $p"; return 0; }
+              done
+            done
+            return 1
+          }
+          no_quarantine() {
+            if xattr -p com.apple.quarantine "$1" 2>/dev/null; then echo "::error::$1 에 격리 표시가 붙었습니다"; exit 1; fi
+          }
+
+          DALING_NO_OPEN=1 sh docs/install.sh 2>&1 | tee logs/install-oneline.log
+          test -d "$APP"
+          no_quarantine "$APP"
+          no_quarantine "$APP/Contents/MacOS/Daling"
+          codesign --verify --deep --strict "$APP"
+          echo "깐 판: $(defaults read "$APP/Contents/Info.plist" CFBundleShortVersionString)"
+          # Finder 처럼 띄운다. 격리 표시가 없으니 Gatekeeper 창 없이 떠야 한다
+          open "$APP"
+          health 40 || { echo "::error::한 줄 설치한 앱이 뜨지 않았습니다"; exit 1; }
+
+          cp "${{ steps.ver.outputs.dmg }}" "$RUNNER_TEMP/update.dmg"
+          DALING_DMG="$RUNNER_TEMP/update.dmg" DALING_DEST=/Applications DALING_UPDATE=1             sh docs/install.sh 2>&1 | tee logs/install-update.log
+          NEW="$(defaults read "$APP/Contents/Info.plist" CFBundleShortVersionString)"
+          echo "바꾼 판: $NEW"
+          [ "$NEW" = "$V" ] || { echo "::error::업데이트 뒤 판이 $NEW (기대 $V)"; exit 1; }
+          test ! -e /Applications/.Daling.app.new && test ! -e /Applications/.Daling.app.old
+          test ! -e "$RUNNER_TEMP/update.dmg"
+          no_quarantine "$APP"
+          codesign --verify --deep --strict "$APP"
+          health 40 || { echo "::error::업데이트한 앱이 다시 뜨지 않았습니다"; exit 1; }
+          pkill -f "Daling.app/Contents/MacOS/Daling" || true
+
+      - name: 빌드 출처 증명 (Sigstore)
+        # 맥 판은 공증이 없어(유료 Apple 개발자 계정 필요) 받은 DMG 가 진짜인지 macOS 가 확인해 주지 않는다.
+        # 대신 '이 저장소의 이 워크플로가 만든 파일' 임을 공개 기록에 남긴다 (공개 저장소는 무료).
+        # 확인: gh attestation verify daling-<버전>-mac-arm64.dmg -R tutleblue/dgist-lms-autosaver
+        uses: actions/attest@v4
+        with:
+          subject-path: ${{ steps.ver.outputs.dmg }}
 
       - name: DMG 보관
         uses: actions/upload-artifact@v4

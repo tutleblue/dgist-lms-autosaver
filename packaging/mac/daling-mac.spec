@@ -28,6 +28,8 @@ datas = [
     (str(PROJECT / "uni_photos.json"), "."),
     (str(PROJECT / "VERSION"), "."),
     (str(PROJECT / "config.example.py"), "."),
+    # 앱 안 업데이트가 받은 DMG 로 바꿔 끼울 때 쓴다 (updater._start_mac_install). 사이트의 한 줄 설치와 같은 파일
+    (str(PROJECT / "docs" / "install.sh"), "."),
 ]
 
 # 학사일정·개설강좌 씨앗 데이터 (없어도 돈다. 넣어 두면 처음 켰을 때 화면이 바로 찬다)

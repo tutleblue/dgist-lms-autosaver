@@ -76,9 +76,10 @@ AUTOSAVER_DATA_ROOT=C:/lms-autosaver AUTOSAVER_CONFIG_PATH=C:/lms-autosaver/conf
 17. EXE에서 작업 프로세스를 띄울 때 `sys.executable -c`를 쓰지 않습니다(창이 새로 뜸). `붕어빵.exe --autosaver-job <kind>`를 씁니다.
 18. `console=False` EXE는 `sys.stdout`이 없고 한국어 Windows 기본 인코딩은 cp949입니다. 작업 출력은 `_bind_worker_output`이 UTF-8로 잡습니다.
 19. PyInstaller 결과물에서 `pythonnet`의 `runtimes\*`를 지우지 않습니다(pywebview가 깨짐).
-20. 한글이 든 `.ps1`은 **UTF-8 BOM**으로 저장합니다. BOM이 없으면 PowerShell 5.1이 구문 오류를 냅니다.
+20. 한글이 든 `.ps1`은 **UTF-8 BOM**으로 저장합니다. BOM이 없으면 PowerShell 5.1이 구문 오류를 냅니다. **예외: `docs/install.ps1`은 BOM 없이** — `irm … | iex`가 BOM을 글자로 읽어 깨집니다(한글은 `docs/_headers`의 charset으로).
 21. 포트 8765는 다른 도구가 잡고 있을 수 있습니다. 앱은 빈 포트로 옮겨 뜨고(`app.start_server`), 서버는 `SO_EXCLUSIVEADDRUSE`로 혼자 잡습니다. **내가 띄우지 않은 프로세스는 끄지 않습니다.**
-22-1. **코드 서명**: `build_installer.ps1`이 사설 인증서(`CN=붕어빵 (jykim5215)`, 현재 사용자 `My` 저장소, 내보내기 불가)가 있으면 EXE·설치 파일·`unins000.exe`를 서명합니다(`packaging\sign_tools.ps1`). 2026-10-02 Defender가 서명·버전 정보 없는 EXE를 `Bearfoos.A!ml`로 오탐해 지운 뒤 넣었습니다. 루트 신뢰(`-Trust`)는 보안 설정이라 사용자가 직접 합니다. 배포용 공인 서명은 SignPath Foundation(무료, Apache-2.0 공개 조건)으로, 태그 `v<버전>`을 푸시하면 `.github/workflows/release.yml`이 CI에서 빌드·서명·릴리스합니다(`CODE_SIGNING.md`, `.signpath/`). CI용 패키지 판은 `requirements-build.txt`.
+22-1. **코드 서명**: `build_installer.ps1`이 사설 인증서(`CN=붕어빵 (jykim5215)`, 현재 사용자 `My` 저장소, 내보내기 불가)가 있으면 EXE·설치 파일·`unins000.exe`를 서명합니다(`packaging\sign_tools.ps1`). 2026-10-02 Defender가 서명·버전 정보 없는 EXE를 `Bearfoos.A!ml`로 오탐해 지운 뒤 넣었습니다. 루트 신뢰(`-Trust`)는 보안 설정이라 사용자가 직접 합니다. 배포용 공인 서명은 SignPath Foundation(무료, Apache-2.0 공개 조건)으로, 태그 `v<버전>`을 푸시하면 `.github/workflows/release.yml`이 CI에서 빌드·서명·릴리스합니다(`CODE_SIGNING.md`, `.signpath/`; SignPath 비밀이 없으면 건너뜀). CI용 패키지 판은 `requirements-build.txt`.
+22-2. **공인 서명이 생기기 전까지 경고 창은 한 줄 설치로 피합니다** (`docs/install.ps1`·`install.sh`, FEATURES.md '서명·한 줄 설치'). 릴리스에는 설치 파일마다 `<파일>.sha256`을 같이 올립니다(API 한도에 걸린 한 줄 설치가 씁니다). 맥 앱 안 업데이트도 묶은 `install.sh`로 바꿔 끼우므로, 이 파일을 고치면 `mac.yml`로 다시 점검합니다.
 22. 실행 파일 안의 파이썬 코드는 GitHub 파일 교체로 바뀌지 않습니다. 설치형 앱의 `updater.apply_update`는 막혀 있습니다.
 
 ### 화면 (web/)

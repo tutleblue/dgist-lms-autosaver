@@ -1740,6 +1740,7 @@
  "맥용 새 버전 파일이 아직 올라오지 않았어요": "The Mac version of this update hasn't been uploaded yet",
  "리눅스에서는 새 AppImage 를 내려받아 실행 권한을 주고 예전 파일과 바꾸면 돼요": "On Linux, download the new AppImage, make it executable and replace the old file to update",
  "리눅스용 새 버전 파일이 아직 올라오지 않았어요": "The Linux version of this update hasn't been uploaded yet",
+ "터미널에서 curl -fsSL https://gudaling.dev/install.sh | sh 를 다시 실행하면 새 버전으로 바뀌어요": "Run curl -fsSL https://gudaling.dev/install.sh | sh in a terminal again to update",
  "다운로드 폴더를 열지 못했어요 (xdg-open 없음)": "Couldn't open the download folder (xdg-open not found)",
  "{0}-{1}학기 기준": "as of term {0}-{1}",
  "다음 마감": "Next due",
@@ -1838,7 +1839,11 @@
  "윈도우 설정을 따라요 · 지금 {0} 화면": "Follows Windows · currently {0} mode",
  "자동으로 두면 윈도우의 밝은·어두운 모드를 따라가요": "Auto follows Windows light/dark mode",
  "테마": "Theme",
- "테마 다크 화이트 남색 색 화면": "theme dark white navy color display",
- "테마는 설정의 '화면'에서 골라. 기본·화이트·남색·다크가 있고, '자동'은 윈도우의 밝은·어두운 모드를 따라가.": "Pick a theme in Settings › Display: Default, White, Navy and Dark. 'Auto' follows Windows light/dark mode.",
- "화면": "Display"
+ "화면": "Display",
+ "그래파이트": "Graphite",
+ "그래파이트 다크": "Graphite dark",
+ "앱 보관함에서만 지움 · Drive·내 컴퓨터 사본은 남음 · 지난 학기 자료는 다시 못 받을 수 있음": "Removed from the app only · copies on Drive and this PC stay · past-term files may not be downloadable again",
+ "을 눌러야 적용": " to apply",
+ "테마는 설정의 '화면'에서 골라. 기본과 다크가 있고, '자동'은 윈도우의 밝은·어두운 모드를 따라가.": "Pick a theme in Settings › Display: Default and Dark. 'Auto' follows Windows light/dark mode.",
+ "테마 다크 색 화면": "theme dark color display"
 }

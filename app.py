@@ -19,6 +19,9 @@ import socket
 import sys
 import threading
 import time
+
+_APP_T0 = time.time()  # 켤 때 걸린 시간을 단계별로 재려고 (web_ui.BOOT, boot_times.json)
+
 import urllib.request
 from datetime import datetime
 from pathlib import Path
@@ -520,9 +523,21 @@ def next_due_job(workspace, minutes: dict[str, int], kinds=("emails", "deadlines
 
 
 def port_in_use(host: str, port: int) -> bool:
+    """그 포트를 누가 잡고 있나. 붙어 보지 않고 직접 잡아 본다(잡히면 빈 포트, 곧바로 놓는다).
+
+    예전엔 connect 로 확인했는데, Windows 는 닫힌 localhost 포트에 붙을 때 바로 거절하지 않고
+    제한 시간(0.4s)까지 기다린다(실측 400ms, WSAEWOULDBLOCK). 켤 때마다 후보 21개를 다 두드려
+    서버가 뜨기까지 9초가 걸렸다(2026-10-15 boot_times.json). 잡아 보기는 1ms 도 안 걸린다.
+    """
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        sock.settimeout(0.4)
-        return sock.connect_ex((host, port)) == 0
+        exclusive = getattr(socket, "SO_EXCLUSIVEADDRUSE", None)
+        if exclusive is not None:
+            sock.setsockopt(socket.SOL_SOCKET, exclusive, 1)
+        try:
+            sock.bind((host, port))
+        except OSError:
+            return True
+        return False
 
 
 def existing_dashboard(host: str, port: int) -> bool:
@@ -574,6 +589,50 @@ class ExclusiveHTTPServer(ThreadingHTTPServer):
             self.server_port = port
             return
         super().server_bind()
+
+
+def _process_started_at() -> float:
+    """이 프로세스가 만들어진 시각(epoch 초). 켤 때 걸린 시간을 실행 파일이 뜬 순간부터 재려고.
+
+    Windows 는 GetProcessTimes 로 실제 생성 시각을, 그 밖에는 이 모듈을 처음 불러온 시각을 쓴다.
+    """
+    if os.name == "nt":
+        try:
+            import ctypes
+            from ctypes import wintypes
+
+            created, exited, kernel, user = (wintypes.FILETIME() for _ in range(4))
+            handle = ctypes.windll.kernel32.GetCurrentProcess()
+            if ctypes.windll.kernel32.GetProcessTimes(
+                handle, ctypes.byref(created), ctypes.byref(exited), ctypes.byref(kernel), ctypes.byref(user)
+            ):
+                ticks = (created.dwHighDateTime << 32) | created.dwLowDateTime  # 1601-01-01 부터 100ns
+                return ticks / 10_000_000 - 11_644_473_600
+        except Exception:
+            pass
+    return _MODULE_T0
+
+
+_MODULE_T0 = time.time()
+
+
+def _prewarm_first_screen() -> None:
+    """창(WebView2)이 뜨는 1~2초 동안 첫 화면이 부를 무거운 것을 미리 불러 둔다.
+
+    2026-10-15 실측(새로 켠 서버): 첫 화면 API 가 처음 불릴 때만 무거웠다 —
+    /api/status 445ms(시간표 모듈 0.21s·구글 토큰 확인 0.19s 를 처음 불러옴), /api/course-staff 130ms,
+    /api/emails 80ms. 창이 뜨기를 기다리는 동안 같은 일을 먼저 해 두면 첫 화면이 그만큼 빨리 찬다.
+    요청 처리와 같은 함수를 부를 뿐이라(동시 요청도 원래 이렇게 겹친다) 결과는 같다.
+    """
+    try:
+        workspace = web_ui.workspace_for_user("local")
+        for warm in (web_ui.get_status, web_ui.get_emails, web_ui.get_course_staff, web_ui.safe_public_config):
+            try:
+                warm(workspace)
+            except Exception:
+                pass
+    except Exception:
+        pass
 
 
 def start_server() -> ThreadingHTTPServer | None:
@@ -823,6 +882,7 @@ def run_linux_window(webview, server, url: str) -> None:
 
 
 def main() -> None:
+    _marks = {"appStart": _APP_T0, "webUiImported": _MODULE_T0, "main": time.time()}
     set_app_user_model_id()  # 창을 만들기 전에 (작업표시줄 아이콘 반영의 핵심)
     if sys.platform.startswith("linux"):
         # Qt 를 부르기 전에: Qt(PyQt6) 고르기·필요할 때만 크로미움 샌드박스 끄기(linux_support.prepare_qt 설명),
@@ -833,6 +893,7 @@ def main() -> None:
         linux_support.register_system_browser()
     import webview
 
+    _marks["webviewImported"] = time.time()
     try:
         server = start_server()
     except RuntimeError as exc:
@@ -864,6 +925,9 @@ def main() -> None:
 
     # 이 프로세스가 서버 주인일 때만 스케줄러/알림 가동 (창만 띄운 경우 제외)
     if server is not None:
+        # 켤 때 걸린 시간 기록용 (web_ui /api/boot-done → boot_times.json)
+        web_ui.BOOT.update(start=_process_started_at(), server=time.time(), **_marks)
+        threading.Thread(target=_prewarm_first_screen, daemon=True).start()
         threading.Thread(target=scheduler_loop, daemon=True).start()
 
         # 켤 때마다 띄우던 '48시간 마감 요약' 은 없앴다. 마감 알림(하루·3시간·1시간 전)이 대신한다.

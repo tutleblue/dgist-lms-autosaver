@@ -6,10 +6,9 @@ window.__STUDIO_APP__ = {
     emails: "메일함", storage: "서랍", settings: "설정",
   },
   // 기본 테마는 data-theme 이 없는 상태다
+  // 앱에서 고를 수 있는 테마만 (2026-10-15 자동·기본·다크로 줄임. 화이트·남색·그래파이트는 색 정의만 남아 있다)
   themes: [
     { key: "claude", label: "기본", selector: ":root:not([data-theme])" },
-    { key: "light", label: "화이트", selector: ':root[data-theme="light"]' },
-    { key: "navy", label: "남색", selector: ':root[data-theme="navy"]' },
     { key: "dark", label: "다크", selector: ':root[data-theme="dark"]' },
   ],
   darkThemes: ["dark"],

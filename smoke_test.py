@@ -15,6 +15,7 @@
     - 작업 프로세스(`--autosaver-job smoke`)가 창 없이 뜨고 출력·데이터 경로가 이어지는지
     - Playwright 드라이버(node)가 실행되는지, 맥이면 AppKit·WebKit·인증서 묶음
     - 리눅스면 PyQt6·QtWebEngine(창은 만들지 않음)·QtWebEngineProcess·인증서 묶음, 키링 대신 쓰는 0600 파일 길
+    - 맥이면 앱 안 업데이트 도구(install.sh)가 묶였는지, AUTOSAVER_SMOKE_DOWNLOAD_URL 이 있으면 앱이 받은 파일에 격리 표시가 없는지
     - AUTOSAVER_SMOKE_KEYCHAIN=1 이면 점검용 계정으로 키체인(리눅스는 Secret Service) 쓰기·읽기·지우기
       (CI 는 맥은 임시 키체인, 리눅스는 dbus-run-session 안의 gnome-keyring 에서)
 """
@@ -252,8 +253,44 @@ def run(app) -> int:
                 raise RuntimeError(f"인증서가 비어 있음 (SSL_CERT_FILE={os.environ.get('SSL_CERT_FILE')})")
             return f"CA {stats['x509_ca']}개"
 
+        def update_tool():
+            # 앱 안 업데이트가 쓰는 install.sh 가 묶였는지, 앱이 받은 파일에 격리 표시를 붙이도록 설정돼 있지 않은지
+            # (LSFileQuarantineEnabled 가 켜져 있으면 받은 DMG 의 앱도 Gatekeeper 에 다시 막힌다)
+            import updater
+            from Foundation import NSBundle
+
+            if not updater.MAC_INSTALLER.is_file():
+                raise RuntimeError(f"install.sh 없음: {updater.MAC_INSTALLER}")
+            proc = subprocess.run(["/bin/sh", "-n", str(updater.MAC_INSTALLER)], capture_output=True, text=True, timeout=20)
+            if proc.returncode != 0:
+                raise RuntimeError(f"install.sh 문법 오류: {proc.stderr.strip()[-300:]}")
+            info = NSBundle.mainBundle().infoDictionary() or {}
+            if info.get("LSFileQuarantineEnabled"):
+                raise RuntimeError("Info.plist 에 LSFileQuarantineEnabled 가 켜져 있음")
+            if getattr(sys, "frozen", False) and not updater._mac_self_install():
+                raise RuntimeError("앱 안 업데이트가 꺼져 있음 (_mac_self_install)")
+            return f"install.sh {updater.MAC_INSTALLER.stat().st_size}바이트 · 받는 곳 {updater._mac_dest(updater._mac_bundle()) or '(기본)'}"
+
         check("Cocoa·WebKit 모듈", cocoa_modules)
         check("SSL 인증서 묶음", certificates)
+        check("앱 안 업데이트 도구", update_tool)
+
+        url = os.environ.get("AUTOSAVER_SMOKE_DOWNLOAD_URL", "")
+        if url:
+            def download_no_quarantine():
+                # 앱이 직접 받은 파일에 com.apple.quarantine 이 붙지 않는지 (CI 가 릴리스의 작은 파일 주소를 넘긴다)
+                import tempfile
+
+                import updater
+
+                dest = Path(tempfile.mkdtemp(prefix="daling-dl-")) / url.rsplit("/", 1)[-1]
+                digest = updater._download(url, dest, 0)
+                attr = subprocess.run(["xattr", "-p", "com.apple.quarantine", str(dest)], capture_output=True, text=True)
+                if attr.returncode == 0:
+                    raise RuntimeError(f"격리 표시가 붙음: {attr.stdout.strip()}")
+                return f"{dest.name} {dest.stat().st_size}바이트 · 격리 표시 없음 · sha256 {digest[:12]}…"
+
+            check("받은 파일 격리 표시", download_no_quarantine)
 
         if os.environ.get("AUTOSAVER_SMOKE_KEYCHAIN") == "1":
             def keychain():

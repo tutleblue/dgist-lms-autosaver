@@ -467,7 +467,7 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 | 리눅스 앱 (AppImage·tar.gz) | GitHub Actions `.github/workflows/linux.yml` → `daling-<버전>-linux-x86_64.AppImage`·`.tar.gz` 아티팩트 (아래 '리눅스 판') |
 | 설치본 점검 | `<실행 파일> --autosaver-smoke` (창 없이, 빈 임시 데이터 폴더로. `smoke_test.py`) |
 
-설치 파일(Inno Setup)은 관리자 권한 없이 사용자 폴더에 설치하고, WebView2가 없으면 부트스트래퍼를 실행하고, .NET 4.7.2 미만이면 안내 후 중단합니다. zip 배포에서 생기던 "인터넷에서 받은 파일" 차단 문제를 피하려고 설치 파일로 바꿨습니다. 서명이 없어서 처음 실행 때 SmartScreen이 뜹니다.
+설치 파일(Inno Setup)은 관리자 권한 없이 사용자 폴더에 설치하고, WebView2가 없으면 부트스트래퍼를 실행하고, .NET 4.7.2 미만이면 안내 후 중단합니다. zip 배포에서 생기던 "인터넷에서 받은 파일" 차단 문제를 피하려고 설치 파일로 바꿨습니다. 공인 서명이 없어서 브라우저로 받으면 처음 실행 때 SmartScreen이 뜹니다. 사이트의 한 줄 설치는 이 창 없이 깝니다 (아래 '서명·한 줄 설치'). `build_installer.ps1` 은 설치 파일 옆에 `<설치 파일>.sha256` 도 만듭니다 — 릴리스에 같이 올립니다.
 
 설치 용량 약 167MB 중 88MB는 Playwright의 `node.exe`라 줄일 수 없습니다.
 
@@ -481,7 +481,7 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 - 삼성 노트 넣기는 PDF만, 파일당 약 5.5초 (삼성 노트 자체 저장 시간)
 - 설치형 앱의 자가 업데이트는 막혀 있음. 새 설치 파일로 배포해야 함
 - GitHub에 올리지 않은 커밋과 변경이 많음 (`git status`로 확인). 푸시·릴리스는 사용자가 `gh auth login` 후 요청할 때
-- 코드 서명 없음 (SmartScreen 경고)
+- 공인 코드 서명 없음: 브라우저로 받으면 SmartScreen(Windows)·Gatekeeper(맥) 경고. 한 줄 설치로 피하지만 Windows 스마트 앱 컨트롤은 못 피함 ('서명·한 줄 설치')
 
 
 ### 공휴일·명절 인사 (`app.js`)
@@ -708,13 +708,13 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 
 ## macOS 판 (2026-10-12)
 - 빌드는 GitHub Actions 에서만(개발 PC 가 Windows): `.github/workflows/mac.yml` — `build/mac` 브랜치 푸시 또는 수동 실행, macos-latest(arm64)·Python 3.13·`requirements-mac.txt` → `packaging/mac/daling-mac.spec` → `dist/Daling.app` → ad-hoc 서명 → `--autosaver-smoke` → 실제 앱 25초 띄워 `/healthz`·스크린샷 → `daling-<버전>-mac-arm64.dmg`(+ `.sha256`). 릴리스는 만들지 않는다.
-- 공증 없음(유료 Apple Developer 계정 필요). 받은 사람은 처음 한 번 '시스템 설정 → 개인정보 보호 및 보안 → 그래도 열기'.
+- 공증 없음(유료 Apple Developer 계정 필요). 브라우저로 받은 DMG 는 처음 한 번 '시스템 설정 → 개인정보 보호 및 보안 → 그래도 열기'(macOS 15 부터 Control-클릭 → 열기 는 안 통함). 한 줄 설치(`curl -fsSL https://gudaling.dev/install.sh | sh`)는 격리 표시가 안 붙어 이 창이 없다 ('서명·한 줄 설치').
 - 비밀 설정: 맥은 DPAPI 가 없어 예전엔 config.json 에 평문이었다. 이제 로그인 키체인(서비스 `Daling`, 계정 `settings`, {키: 값} JSON 한 항목)에 두고 config.json 에는 `keychain:<키>` 만. `mac_keychain.py`(Security.framework 를 ctypes 로, 비밀번호가 명령줄에 안 실림). `web_ui.dpapi_protect/unprotect` 와 `runtime_config._load_config` 둘 다 푼다. 항목을 하나로 둔 까닭: ad-hoc 서명은 새 버전마다 서명 해시가 바뀌어 키체인 접근을 다시 묻는데, 항목이 다섯이면 다섯 번 묻는다. 키체인이 거절하면 DPAPI 실패와 같이 평문을 남기고 다음 저장 때 다시 넣는다.
 - 알림·오류 상자: `osascript`(`app.notify`, `_osascript`). 글은 스크립트에 끼우지 않고 `on run argv` 인자로 넘긴다. 알림 센터에는 '스크립트 편집기' 로 보여 제목 줄에 Daling 을 넣는다.
 - SSL: 묶은 파이썬의 OpenSSL 은 빌드한 맥의 인증서 경로를 본다 → `app.py` 가 `SSL_CERT_FILE` 을 certifi 로(작업 프로세스도 물려받음). Windows 는 시스템 저장소를 읽어 필요 없다.
 - 경로: 데이터 `~/.lms-autosaver`, LMS 브라우저 `~/Library/Caches/ms-playwright`(`browser_ready` 가 맥 실행 파일 이름도 본다), Playwright `node` 는 `Contents/Resources` 에 데이터로 묶여 실행 권한을 확인한다.
 - 창: 첫 크기는 `NSScreen.visibleFrame`(메뉴 막대·Dock 제외)에 맞추고 자리는 pywebview 가 가운데로. 삼성 노트는 없음(`is_available` False → 버튼 숨김).
-- 업데이트: 릴리스의 `daling-<버전>-mac-arm64.dmg` 만 본다. '지금 업데이트' 는 설치 대신 그 주소를 브라우저로 연다(`/api/update/open-download`, 주소는 updater 가 고른 것만).
+- 업데이트: 릴리스의 `daling-<버전>-mac-arm64.dmg` 만 본다. (2026-10-15~) '지금 업데이트' 는 Windows 처럼 앱이 직접 받아 GitHub digest 로 확인하고, 앱에 묶은 `install.sh`(= `docs/install.sh`)를 따로 띄운 뒤 앱이 꺼진다. install.sh 는 앱이 다 꺼지기를 기다려 DMG 의 앱을 지금 앱이 있는 폴더에 바꿔 끼우고(새 판 복사 → 서명 확인 → 이름만 바꾸기) 다시 켠다. 기록은 `~/.lms-autosaver/update-mac.log`. 예전처럼 브라우저로 받으면 업데이트마다 격리 표시 때문에 '그래도 열기' 를 또 눌러야 했다. 앱이 urllib 로 받은 파일에는 격리 표시가 없다(Info.plist 에 `LSFileQuarantineEnabled` 없음, 샌드박스 아님 — `--autosaver-smoke` 가 확인). DMG 안에서 켰거나(/Volumes) 옮기지 않고 켠(AppTranslocation) 앱은 /Applications(못 쓰면 ~/Applications)에 깐다.
 - 아이콘: `packaging/mac/Daling.icns` ← `python scripts/make_icons.py --mac` (애플 격자: 1024 안 824 네모).
 - 점검 `--autosaver-smoke`: 빈 임시 데이터 폴더로 화면 서버(빈 포트)·화면 파일·가벼운 /api·작업 프로세스(`--autosaver-job smoke`)·node·(맥) Cocoa 모듈·인증서, `AUTOSAVER_SMOKE_KEYCHAIN=1` 이면 점검용 계정으로 키체인 왕복. Windows 소스에서도 돈다(13개 통과).
 - 맥에서 HTTPServer 의 `getfqdn` 역조회를 건너뛴다(`ExclusiveHTTPServer.server_bind`). 첫 CI 실행에서 '로컬 네트워크의 기기 찾기 허용?' 창이 떴고 서버가 15초 늦게 떴다. 건너뛰고 나서 창이 없어지고 1초 만에 뜬다.
@@ -726,8 +726,35 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 - 시스템 프로그램(`xdg-open`·`notify-send`·브라우저)에는 묶음의 `LD_LIBRARY_PATH`·Qt 설정을 뺀 환경을 준다(PyInstaller 안내). 알림은 `notify-send`(인자로 넘김, 셸 없음). 인증서는 시스템 CA 묶음.
 - 경로: 데이터 `~/.lms-autosaver`, LMS 브라우저 `~/.cache/ms-playwright`(XDG_CACHE_HOME), 문서 폴더는 `user-dirs.dirs`(예: `~/문서`). `node` 실행 권한은 CI 에서 준다(AppImage 안은 읽기 전용). 크로미움이 시스템 라이브러리가 없어 못 뜨면 배포판별 설치 명령을 한 줄로 알린다(`browser_setup.explain_launch_failure`). `browser_ready` 가 리눅스 `chrome-headless-shell` 도 본다(예전엔 못 알아봤다).
 - 묶음에서 뺀 시스템 라이브러리(C++ 런타임·GLib·글꼴·D-Bus·NSS·GTK·CUPS 인쇄 플러그인): 새 배포판의 Mesa·GIO·fontconfig 가 우리 22.04 판을 끌어오지 않게. 24.04·Fedora 에서 문제가 나면 CI 로그 `ldd.txt`·`bundled-libs.txt` 를 본다.
-- 업데이트: 맥처럼 설치하지 않고 릴리스의 `daling-<버전>-linux-x86_64.AppImage` 주소를 연다(`manualUrl`). `/api/restart` 는 `.AppImage` 파일을 다시 띄운다.
+- 업데이트: 설치하지 않고 릴리스의 `daling-<버전>-linux-x86_64.AppImage` 주소를 연다(`manualUrl`). tar.gz·한 줄 설치판(`APPIMAGE` 없음)에는 AppImage 를 권하지 않고 한 줄 설치 명령을 다시 돌리라고만 한다(`LINUX_SCRIPT_NOTE`). `/api/restart` 는 `.AppImage` 파일을 다시 띄운다.
 - 아이콘: `packaging/linux/daling-128/256/512.png` ← `python scripts/make_icons.py --linux`. 한글 입력은 PyQt6 휠에 든 ibus 플러그인만(fcitx5·kime 는 안 될 수 있다).
+
+## 서명·한 줄 설치 (2026-10-15)
+공인 코드 서명을 무료로 바로 받을 길이 없어서(아래 표), 경고 창이 뜨는 원인인 '인터넷에서 받음' 표시를 붙이지 않는 길로 깔게 했다.
+- 명령 (사이트 내려받기 아래 '경고 창 없이 한 줄로 설치'):
+  - Windows: `irm https://gudaling.dev/install.ps1 | iex` (PowerShell 창에. Win+R 에 넣지 않게 안내 — ClickFix 악성 수법과 같은 모양이라 탐지 규칙에 걸릴 수 있다)
+  - Mac·Linux: `curl -fsSL https://gudaling.dev/install.sh | sh`
+- 원본: `docs/install.ps1`·`docs/install.sh`. 사이트 배포(`npx wrangler pages deploy docs --project-name daling-app --branch main`)로 나간다. `docs/_headers` 가 두 파일을 `text/plain; charset=utf-8`·`no-cache` 로 내보낸다.
+- 둘 다 GitHub 릴리스에서 이 컴퓨터용 파일을 받아 SHA-256 을 맞춰 본 뒤에만 깐다. 확인값은 API 의 자산 digest, API 한도(로그인 없이 같은 IP 에서 시간당 60번 — 2026-10-15 이 PC 에서 60/60 다 써서 실제로 걸림)에 걸리면 `/releases/latest` 태그로 이름을 맞추고 함께 올린 `<파일>.sha256` 으로 확인한다. 그래서 **릴리스에는 설치 파일마다 `.sha256` 을 같이 올린다** (Windows 것은 `build_installer.ps1` 이 만든다).
+- Windows (`install.ps1`):
+  - PowerShell(5.1·7)·curl.exe·WebClient 로 받은 파일에는 MOTW(Zone.Identifier)가 없다(이 PC 실측: MOTW=False). SmartScreen 앱 평판 검사는 MOTW 가 있는 파일에만 돈다 → 'PC 보호' 창 없음. 설치 창(개인정보 안내·바로가기)은 그대로 띄운다. 57MB 받기·확인 약 11초(실측).
+  - 이 파일은 **BOM 없는 UTF-8** (규칙 20 의 예외): 5.1 의 `irm | iex` 는 BOM 을 글자로 읽어 첫 줄이 깨지고, charset 이 없으면 한글이 Latin-1 로 깨진다(둘 다 실측). 깨지면 영어 안내로 바꾼다('가'.Length 검사). 지역 형식이나 표시 언어가 한국어면 한국어.
+  - Defender 는 그대로 검사한다(예전 `Bearfoos.A!ml` 같은 오탐은 못 막음 → microsoft.com/wdsi/filesubmission 에 '소프트웨어 개발자'로 제출). 스마트 앱 컨트롤(SAC)이 켜진 PC 는 받은 길과 상관없이 서명 없는 exe·dll·pyd 를 막고 앱별 예외도 없다 → 스크립트가 SAC 상태(`Get-MpComputerStatus`)를 보고 미리 알린다.
+- 맥 (`install.sh`): curl 은 격리 표시(com.apple.quarantine)를 붙이지 않고, Gatekeeper 의 공증 검사는 격리 표시가 있을 때만 돈다 → ad-hoc 서명 앱이 창 없이 뜬다(XProtect 검사는 그대로). DMG 를 붙여 `ditto` 로 옆에 복사 → `codesign --verify --deep --strict` → 예전 판은 이름만 바꿔 치우고 새 판을 넣는다. 켜져 있으면 닫고, 끝나면 연다. 앱 안 업데이트도 이 파일을 쓴다(위 'macOS 판'). 관리 대상(MDM) 맥은 막힐 수 있다.
+- 리눅스 (`install.sh`): 서명 검사가 없다. tar.gz 를 `~/.cache` 에 풀어(페도라 /tmp 는 메모리) 그 안의 `install.sh` 로 `~/.local/opt/daling`·앱 목록·`~/.local/bin/daling` 에 깐다.
+- CI 점검: `mac.yml` '한 줄 설치·앱 안 업데이트 점검'(릴리스판 설치 → 격리 표시 없음·서명·실행 확인 → 켜 둔 채 이번 빌드 DMG 로 바꾸기 → 판·실행 확인), `--autosaver-smoke` 의 '앱 안 업데이트 도구'·'받은 파일 격리 표시', `linux.yml` '한 줄 설치 점검'.
+- 빌드 출처 증명: `mac.yml`·`linux.yml`·`release.yml` 이 `actions/attest@v4`(Sigstore, 공개 저장소 무료)로 만든 파일을 기록한다. 확인 `gh attestation verify <파일> -R tutleblue/dgist-lms-autosaver` (gh 로그인 필요). 이 PC 에서 만든 Windows 설치 파일은 기록이 없다. 경고 창을 없애 주지는 않는다.
+- `release.yml`: SignPath 비밀(`SIGNPATH_API_TOKEN`·`SIGNPATH_ORGANIZATION_ID`)이 없으면 `check` 작업이 빌드를 건너뛴다(예전엔 태그마다 1시간 기다리다 실패할 판이라 손으로 취소). 있으면 서명 → `.sha256` → 출처 증명 → 릴리스가 이미 있으면 거기에 올린다.
+- 무료 공인 서명 현황 (2026-10-15 조사):
+
+| 길 | 비용 | 걸리는 시간 | 메모 |
+|---|---|---|---|
+| SignPath Foundation (Windows) | 무료 | 심사 수 주~2달, 승인 뒤에도 밀림 | 2026 거절 사례가 '사용자층이 아직 없음'. 이 저장소(별 0)는 지금은 어렵다. 받아도 게시자는 'SignPath Foundation', SmartScreen 평판은 쌓여야 함. `release.yml`·`.signpath/` 준비됨 |
+| OSSign (Windows) | 무료 | — | 신청 잠정 중단, 저장소 6개월 이상 활동 필요 |
+| Microsoft Store MSIX | 무료(개인 등록 2025-09~) | 1~2주 | Microsoft 가 서명 → Store 설치는 SmartScreen·SAC 모두 통과. MSIX 포장·심사(로그인 앱은 시험 계정 요구)가 필요 |
+| Azure Artifact Signing | 월 $9.99~ | — | 개인은 미국·캐나다만 |
+| Certum 오픈소스 인증서 | 약 €49 | 며칠 | 유료, 품절 |
+| Apple 공증 (맥) | 연 $99 | — | 무료 Apple 계정으로는 불가. Homebrew 는 `--no-quarantine` 을 없앴고(5.0) Gatekeeper 를 못 넘는 cask 를 2026-09-01 에 막았다 |
 
 ## 영어 화면의 학사일정 (2026-10-12)
 - 학사일정 이름은 학교 데이터라 번역표에 없어 영어 화면에서도 한국어였다. `acadTitleEn` 이 낱말표(`ACAD_TERMS`)로 옮긴다: '대학 및 대학원' 머리는 빼고, '대학원' 은 'Grad:', 'YYYY학년도 N학기' 는 'Spring/Fall YYYY', 계절학기는 'Summer/Winter session YYYY', "('26.8월 졸업생)" 은 "(Aug '26 grads)", 뒤의 'D-52' 는 그대로. `tr` 안에서 표·틀 다음에 부르며, 다 옮겨 한글이 하나도 안 남을 때만 쓴다(메일 제목은 그대로). 2026 학사일정 38개 이름 모두 옮겨짐.
@@ -835,5 +862,16 @@ Apple HIG·WCAG 기준 검토(디자인 스튜디오 가짜 데이터에서 계�
   - '전체 자료' 는 대시보드에서 뺐다(`#metricsStage .metric-card[data-peek=files]` 숨김. 자료 화면에 있다).
   - 아이콘 타일도 뺐다. 시선은 지금 막대(현재 수업·남은 시간)에 모은다.
 - **로그인·연결 끊김**: 사이드바 맨 아래 상태 카드에만 보이던 'bad' 상태를 어느 화면에서든 본문 맨 위 한 줄(`#authBanner`)로 알린다. 단추는 '다시 로그인'(설정 › 연결된 계정)과 '나중에'(같은 문제일 때만 접음)다.
-- **테마 단추**: 상단 막대의 테마 넘기기 단추를 없앴다. 테마는 설정 › 화면(`#stLook`)에서 고르고, 바로 바뀐다(`ui-prefs` 저장). 첫 실행 소개의 테마 단계와 검색 명령 '테마 바꾸기' 도 그쪽으로 간다.
+- **테마 단추**: 상단 막대의 테마 넘기기 단추를 없앴다. 테마(자동·기본·다크)는 설정 › 화면(`#stLook`)에서 고르고, 바로 바뀐다(`ui-prefs` 저장). 첫 실행 소개의 테마 단계와 검색 명령 '테마 바꾸기' 도 그쪽으로 간다.
 - **날짜 제목 옆 로고 그림(`.hero-spark`)**: 없앴다. 앱 안에서 로고를 되풀이하지 않는다.
+
+- 그래파이트 테마(2026-10-14): 사용자가 시안 넷 중 고른 '그래파이트 바탕 + 더스티 블루 포인트'(글꼴은 그대로). `[data-theme="graphite"]`(#f2f2f7 바탕·흰 카드·accent #4f6f9a)와 `graphite-dark`(#000 바탕·#1c1c1e 카드·accent #6e8cb8, 글씨용 accent-strong #a9bedc). '자동'은 이 둘을 따른다. 예전 '기본'(크림+코랄)·'다크' 는 요청대로 그대로 고를 수 있다. 서버 `UI_THEMES` 에도 두 키를 넣어야 저장된다. 그래파이트 다크의 메일 종이는 #f5f5f7.
+- 테마 줄이기(2026-10-15): 고르는 목록은 자동·기본·다크 셋만(자동 = 기본↔다크). 화이트·남색·그래파이트는 목록에서 빼고 색 정의는 남겼다. 저장된 값이 빠진 테마면 applyTheme 이 자동으로 돌린다.
+- 보낸 메일 받는 사람(2026-10-15): 보낸·임시보관 메일은 읽기 화면 머리에 '받는 사람 · 이름' 과 주소, 목록 줄에 '→ 이름'. 메일 자료의 toName/toEmail 을 쓴다(첫 받는 사람).
+
+## 켜는 속도 (2026-10-15)
+- **가장 큰 원인(9초)**: `app.start_server` 가 이미 켜진 Daling 을 찾으려 후보 포트 21개(8765~8785)에 connect 했는데, Windows 는 닫힌 localhost 포트 연결을 거절하지 않고 제한 시간 0.4s 까지 기다린다(WSAEWOULDBLOCK). 21×0.4 ≈ 8.4s 가 켤 때마다 들었다(boot_times.json: serverReady 9.0s). `port_in_use` 를 '직접 잡아 보기'(SO_EXCLUSIVEADDRUSE bind)로 바꿔 21개 1.7ms. 쓰는 중인 포트만 `/healthz` 로 Daling 인지 본다.
+- 측정(새로 켠 서버): 첫 화면이 기다리는 API 중 `/api/config` 가 처음에만 1.0s — Drive 맨 위 폴더 이름 하나 읽으려 `drive_uploader` 를 불러와 google.auth 까지 올라왔다. 이름은 `folder_layout.DRIVE_ROOT_FOLDER` 로 옮겨 9ms.
+- 남은 첫 호출 비용(`/api/status` 445ms: 시간표 모듈 0.21s·구글 토큰 확인 0.19s, course-staff 130ms, emails 80ms)은 `app._prewarm_first_screen` 이 서버를 띄우자마자 뒤에서 미리 해 둔다(창=WebView2 가 뜨는 1~2초 동안). 실측 676ms → 50ms.
+- 켤 때 상단 버전 글자용 GitHub 확인(`/api/update/check`)은 3초 뒤로 미뤘다(첫 화면 요청과 연결을 다투지 않게).
+- 기록: 화면이 첫 새로고침을 마치면 `/api/boot-done` → `boot_times.json`(최근 30번: serverReady·pageRequested·firstScreen, 실행 파일 생성 시각 기준 초). '느리다' 는 신고가 오면 이 기록부터 본다.

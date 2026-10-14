@@ -1253,7 +1253,7 @@ function mailFrameDoc(html, showImages) {
   //   그래서 은은한 종이 카드 위에 올린다.
   const onPaper = mailOnPaper();
   const text = onPaper ? "#1f1e1d" : cs.getPropertyValue("--text").trim() || "#222";
-  const bg = onPaper ? MAIL_PAPER : "transparent";
+  const bg = onPaper ? mailPaperColor() : "transparent";
   // 본문 안의 그림은 /api/mail-image 로 온다. srcdoc 안에서도 그 주소를 찾게
   // 기준 주소를 박아 준다 (없으면 about:srcdoc 기준이라 그림이 다 깨진다).
   return `<!doctype html><html><head><meta charset="utf-8">
@@ -1385,10 +1385,13 @@ function openEmailDetail(mail) {
   chip.textContent = mail.category || "기타";
   $("#readSubject").textContent = mail.subject;
   const date = mail.date ? formatEmailDate(mail.date) : "";
-  const sender = mail.fromName || mail.fromEmail || "";
-  $("#readSender").textContent = sender;
+  // 보낸·임시보관 메일은 보낸 사람이 늘 '나' 라, 받는 사람을 보인다 (2026-10-15 '누구한테 보냈는지 안 보인다')
+  const outgoing = (mail.folder === "sent" || mail.folder === "draft") && (mail.toName || mail.toEmail);
+  const sender = outgoing ? mail.toName || mail.toEmail : mail.fromName || mail.fromEmail || "";
+  const senderAddr = outgoing ? mail.toEmail || "" : mail.fromEmail || "";
+  $("#readSender").textContent = outgoing ? `받는 사람 · ${sender}` : sender;
   // 이름이 곧 주소면 두 번 쓰지 않는다
-  $("#readAddress").textContent = sender === mail.fromEmail ? "" : mail.fromEmail || "";
+  $("#readAddress").textContent = sender === senderAddr ? "" : senderAddr;
   // 이번 학기에 무슨 과목 몇 분반을 맡은 분인지 (개설강좌 담당교수 + 내 과목 조교)
   {
     const box = $("#readAddress");
@@ -3165,7 +3168,11 @@ function emailListRow(mail) {
       <div class="list-main">
         <div class="list-head">
           <span class="list-folder-tag">${escapeHtml(MAIL_FOLDER_TAG[mail.folder] || "메일")}</span>
-          <span class="list-from">${escapeHtml(shortText(mail.fromName || mail.fromEmail, 24))}</span>
+          <span class="list-from">${
+            (mail.folder === "sent" || mail.folder === "draft") && (mail.toName || mail.toEmail)
+              ? `→ ${escapeHtml(shortText(mail.toName || mail.toEmail, 22))}`
+              : escapeHtml(shortText(mail.fromName || mail.fromEmail, 24))
+          }</span>
           ${mail.folder === "sent" || mail.folder === "draft" ? "" : coursePersonTagHtml(mail.fromEmail)}
           <span class="list-when">
             ${hasFiles ? iconHtml("paperclip", "list-clip") : ""}
@@ -6874,11 +6881,12 @@ function bindEvents() {
 /* ===== 테마 =====
    누를 때마다 이 차례대로 넘어간다. */
 // '자동' 은 Windows 의 밝게/어둡게 설정을 따른다 (밝으면 기본, 어두우면 다크). 처음 쓰는 사람의 기본값.
+// 테마는 자동·기본·다크 셋만 (2026-10-15 사용자: '테마가 너무 많다, 예전 기본과 다크만').
+// 화이트·남색·그래파이트(밝음/어두움)는 목록에서 뺐다. 색 정의는 styles.css 에 남아 있어 다시 넣을 수 있다.
+// 예전에 뺀 테마를 저장해 둔 사람은 applyTheme 이 목록에 없다고 보고 '자동' 으로 돌린다.
 const THEMES = [
   { key: "auto", label: "자동", icon: "monitor" },
   { key: "claude", label: "기본", icon: "sparkle" },
-  { key: "light", label: "화이트", icon: "sun" },
-  { key: "navy", label: "남색", icon: "star" },
   { key: "dark", label: "다크", icon: "moon" },
 ];
 
@@ -7254,7 +7262,7 @@ async function renderStorage() {
              </p>`
           : ""
       }
-      <p class="st-clean-note">앱 보관함에서만 지웁니다. 드라이브와 내 컴퓨터 사본은 그대로 남습니다. 지난 학기 자료는 LMS가 막아 두어 다시 받지 못할 수 있어요.</p>
+      <p class="st-clean-note">앱 보관함에서만 지움 · Drive·내 컴퓨터 사본은 남음 · 지난 학기 자료는 다시 못 받을 수 있음</p>
       <div class="storage-actions">
         <button class="button compact danger" id="cleanupStorageButton" type="button" disabled>선택 항목 정리</button>
       </div>
@@ -9734,7 +9742,10 @@ function renderNowBar() {
 }
 
 installIcons();
-api("/api/update/check").then(r=>{const e=$("#aboutVersion"); if(e) e.textContent=`버전 ${r.current||"?"}`;}).catch(()=>{});
+// 버전 글자(숨은 칸)만 채우는 GitHub 확인이라 첫 화면 요청들과 연결을 다투지 않게 3초 뒤로 미룬다 (켤 때 빨리 뜨게, 2026-10-15)
+window.setTimeout(() => {
+  api("/api/update/check").then(r=>{const e=$("#aboutVersion"); if(e) e.textContent=`버전 ${r.current||"?"}`;}).catch(()=>{});
+}, 3000);
 bindEvents();
 bindInterestChips();
 initTheme();
@@ -9758,7 +9769,8 @@ const navList = document.querySelector(".nav-list");
 if (navList && window.ResizeObserver) new ResizeObserver(moveNavPill).observe(navList);
 // 시계라 1초마다. 상태 계산은 가볍고, 값이 그대로면 DOM을 건드리지 않는다.
 window.setInterval(renderNowBar, 1000);
-refreshAll();
+// 첫 새로고침이 끝나 첫 화면이 다 찼으면 서버에 알린다 → 켤 때 걸린 시간이 boot_times.json 에 남는다
+refreshAll().then(() => api("/api/boot-done", { method: "POST", body: "{}" })).catch(() => {});
 loadWhatsNew();
 maybeStartTour();
 api("/api/samsung-notes/job")
@@ -10482,11 +10494,15 @@ function saveSavePlaceSoon() {
    밝은 테마에서는 메일 속 순백(#fff) 바탕을 걷어 내 읽기 화면 배경 위에 그린다.
    색을 넣은 칸(표 머리, 강조 상자)은 그대로 둔다. 어두운 테마는 종이 카드 위에 올린다. */
 const MAIL_PAPER = "#f7f5ef";
+const MAIL_PAPER_GRAPHITE = "#f5f5f7"; // 그래파이트 다크는 크림 대신 중립 종이
+function mailPaperColor() {
+  return document.documentElement.dataset.theme === "graphite-dark" ? MAIL_PAPER_GRAPHITE : MAIL_PAPER;
+}
 
 function mailOnPaper() {
   const theme = document.documentElement.dataset.theme || "";
   // 남색 테마는 밝은 테마가 되었다 (예전엔 어두운 남색 바탕)
-  return theme === "dark";
+  return theme === "dark" || theme === "graphite-dark";
 }
 
 function blendMailBackground(frame) {
@@ -10505,7 +10521,7 @@ function blendMailBackground(frame) {
       }
     }
     if (white.test(view.getComputedStyle(doc.body).backgroundColor)) {
-      doc.body.style.setProperty("background-color", mailOnPaper() ? MAIL_PAPER : "transparent", "important");
+      doc.body.style.setProperty("background-color", mailOnPaper() ? mailPaperColor() : "transparent", "important");
     }
   } catch (error) {
     /* 다른 출처 문서면 건드리지 않는다 */
@@ -11124,7 +11140,7 @@ const TOUR_STEPS = [
     targets: ["#stLook"],
     pose: "shy",
     title: "옷 갈아입기",
-    text: "테마는 설정의 '화면'에서 골라. 기본·화이트·남색·다크가 있고, '자동'은 윈도우의 밝은·어두운 모드를 따라가.",
+    text: "테마는 설정의 '화면'에서 골라. 기본과 다크가 있고, '자동'은 윈도우의 밝은·어두운 모드를 따라가.",
   },
   {
     chapter: "편하게 쓰기",
@@ -11664,7 +11680,7 @@ function buildSearchResults(query) {
   });
   [
     ["지금 새로고침", "새로고침 동기화 가져오기", () => $("#refreshAllButton")?.click()],
-    ["테마 바꾸기", "테마 다크 화이트 남색 색 화면", () => openSettingsAt("stLook")],
+    ["테마 바꾸기", "테마 다크 색 화면", () => openSettingsAt("stLook")],
     // 작성 창은 메일함 안의 칸이라 먼저 메일함으로 간 뒤 연다
     ["메일 쓰기", "메일쓰기 보내기 작성 새메일", () => {
       switchView("emails");

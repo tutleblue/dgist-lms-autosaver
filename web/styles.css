@@ -94,16 +94,77 @@
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.2), 0 6px 20px -8px rgba(0, 0, 0, 0.35);
 }
 
+/* ===== 그래파이트 테마 (2026-10-14 사용자가 고른 시안) =====
+   애플 기본 앱처럼 차가운 연회색 바탕 + 흰 카드, 포인트는 채도를 낮춘 더스티 블루 하나. 글꼴은 그대로.
+   2026-10-15 사용자가 '테마가 너무 많다' 해서 고르는 목록에서는 뺐다(app.js THEMES). 다시 넣을 때 쓰려고 색만 남긴다. */
+[data-theme="graphite"] {
+  --bg: #f2f2f7;
+  --bg-deep: #e9e9ee;
+  --surface: #ffffff;
+  --surface-soft: #f7f7fa;
+  --border: #e3e3e8;
+  --border-strong: #cdcdd3;
+  --text: #1d1d1f;
+  --text-soft: #4a4a50;
+  --text-faint: #86868b;
+  --accent: #4f6f9a;
+  --accent-strong: #34507a;
+  --accent-soft: #e5ecf5;
+  --blue: #3f7f8c;
+  --blue-soft: #e3f0f1;
+  --shadow: 0 1px 2px rgba(29, 29, 31, 0.04), 0 10px 28px -12px rgba(29, 29, 31, 0.10);
+}
+
+/* 그래파이트 다크: 애플 다크처럼 검정 바탕 + 회색 카드. 단추 바탕(accent)은 흰 글씨가 읽히는 중간 밝기,
+   글씨로 쓰는 accent-strong 은 밝게. */
+[data-theme="graphite-dark"] {
+  --bg: #000000;
+  --bg-deep: #121214;
+  --surface: #1c1c1e;
+  --surface-soft: #252527;
+  --border: #2c2c2e;
+  --border-strong: #3a3a3c;
+  --text: #f5f5f7;
+  --text-soft: #c7c7cc;
+  --text-faint: #98989d;
+  --accent: #6e8cb8;
+  --accent-strong: #a9bedc;
+  --accent-soft: #1d2633;
+  --green: #8fb58f;
+  --green-soft: #2d392d;
+  --amber: #d2a44a;
+  --amber-soft: #3d3424;
+  --violet: #b59cf0;
+  --violet-soft: #332c47;
+  --red: #e08585;
+  --red-soft: #442a2a;
+  --blue: #7fb8c2;
+  --blue-soft: #1f3236;
+  --bp-bg: #f3edde;
+  --bp-body: #f7be3c;
+  --bp-hi: #fcd882;
+  --bp-line: #2b2826;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.2), 0 6px 20px -8px rgba(0, 0, 0, 0.35);
+}
+
 [data-theme="dark"] .toast {
   background: #faf9f5;
   color: #1f1e1d;
+}
+[data-theme="graphite-dark"] .toast {
+  background: #f5f5f7;
+  color: #1d1d1f;
 }
 
 [data-theme="dark"] .topbar {
   background: rgba(38, 38, 36, 0.92);
 }
+[data-theme="graphite-dark"] .topbar {
+  background: rgba(18, 18, 20, 0.92);
+}
 
-[data-theme="dark"] .check-item.ready .check-icon {
+[data-theme="dark"] .check-item.ready .check-icon,
+[data-theme="graphite-dark"] .check-item.ready .check-icon {
   background: var(--surface);
 }
 
@@ -3499,8 +3560,8 @@ tbody tr:hover {
   bottom: 26px;
   left: 50%;
   transform: translate(-50%, 16px);
-  background: #232120;
-  color: #faf9f5;
+  background: #1d1d1f;
+  color: #f5f5f7;
   border-radius: 999px;
   padding: 11px 22px;
   font-size: 13.5px;
@@ -7060,7 +7121,8 @@ body.dash-dragging-now * { cursor: grabbing !important; }
   /* 흑백 지도라 테마 색에 맞춰 은은하게 */
   opacity: 0.5;
 }
-[data-theme="dark"] .wm-img { filter: invert(1); opacity: 0.28; }
+[data-theme="dark"] .wm-img,
+[data-theme="graphite-dark"] .wm-img { filter: invert(1); opacity: 0.28; }
 
 /* 핀의 기준점 = 점의 한가운데.
    예전에는 '점 + 이름표' 덩어리 전체의 가운데를 좌표에 맞췄다. 이름표는 평소
@@ -7871,6 +7933,7 @@ a:hover { color: var(--accent); }
   border: 1px solid var(--border);
   background: #f7f5ef;
 }
+[data-theme="graphite-dark"] .read-html.on-paper { background: #f5f5f7; }
 
 /* ===== 셔틀: 노선 안내, 시간표 기준 ===== */
 .bus-note { font-size: 11px; color: var(--text-faint); margin-left: auto; }

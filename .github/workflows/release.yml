@@ -22,11 +22,36 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write   # 릴리스 만들기
-  actions: read     # SignPath 가 아티팩트를 내려받음
+  contents: write      # 릴리스 만들기
+  actions: read        # SignPath 가 아티팩트를 내려받음
+  id-token: write      # 빌드 출처 증명(Sigstore) 인증서 받기
+  attestations: write  # 빌드 출처 증명 저장
+  artifact-metadata: write  # 증명과 이어지는 파일 기록 (actions/attest v4)
 
 jobs:
+  # SignPath 가 아직 없으면(신청 전·심사 중) 빌드를 건너뛴다. 예전에는 태그를 올릴 때마다 서명 단계에서
+  # 1시간을 기다리다 실패할 판이라 매번 손으로 취소했다(2026-10-12~14, v1.12.21~27).
+  # 그동안 Windows 설치 파일은 이 PC 에서 build_installer.ps1 로 만들어 올린다.
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      signpath: ${{ steps.c.outputs.signpath }}
+    steps:
+      - id: c
+        env:
+          TOKEN_SET: ${{ secrets.SIGNPATH_API_TOKEN != '' }}
+          ORG_SET: ${{ vars.SIGNPATH_ORGANIZATION_ID != '' }}
+        run: |
+          if [ "$TOKEN_SET" = true ] && [ "$ORG_SET" = true ]; then
+            echo "signpath=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "signpath=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::SignPath 설정(secrets.SIGNPATH_API_TOKEN, vars.SIGNPATH_ORGANIZATION_ID)이 없어 서명 빌드를 건너뜁니다"
+          fi
+
   build:
+    needs: check
+    if: needs.check.outputs.signpath == 'true'
     runs-on: windows-latest
     timeout-minutes: 180
     env:
@@ -125,7 +150,7 @@ jobs:
           wait-for-completion-timeout-in-seconds: 3600
           output-artifact-directory: signed-setup
 
-      - name: 서명 확인
+      - name: 서명 확인·확인값
         shell: pwsh
         run: |
           Get-ChildItem signed-setup -Recurse -Filter *.exe | ForEach-Object {
@@ -133,12 +158,28 @@ jobs:
             "$($_.Name): $($s.Status) / $($s.SignerCertificate.Subject)"
             if ($s.Status -ne "Valid") { throw "설치 파일 서명이 유효하지 않습니다" }
           }
+          # 서명하면 파일이 바뀌므로 확인값은 여기서 다시 만든다 (build_installer.ps1 과 같은 형식).
+          # 한 줄 설치(docs/install.ps1)가 GitHub API 한도에 걸리면 이것으로 확인한다.
+          $setup = Get-ChildItem signed-setup -Recurse -Filter *-setup.exe | Select-Object -First 1
+          $hash = (Get-FileHash $setup.FullName -Algorithm SHA256).Hash.ToLower()
+          [IO.File]::WriteAllText("$($setup.FullName).sha256", "$hash  $($setup.Name)`n", (New-Object Text.UTF8Encoding $false))
+
+      - name: 빌드 출처 증명 (Sigstore)
+        # 이 저장소의 이 워크플로가 만든 파일임을 공개 기록에 남긴다 (공개 저장소는 무료).
+        # 받은 사람 확인: gh attestation verify <파일> -R tutleblue/dgist-lms-autosaver
+        uses: actions/attest@v4
+        with:
+          subject-path: |
+            signed-setup/**/*-setup.exe
+            dist/붕어빵/붕어빵.exe
 
       - name: 서명된 설치 파일 보관
         uses: actions/upload-artifact@v4
         with:
           name: signed-setup
-          path: signed-setup/**/*.exe
+          path: |
+            signed-setup/**/*.exe
+            signed-setup/**/*.sha256
 
       - name: GitHub 릴리스
         if: startsWith(github.ref, 'refs/tags/v')
@@ -147,5 +188,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $setup = Get-ChildItem signed-setup -Recurse -Filter *-setup.exe | Select-Object -First 1
-          # 앱의 업데이트 확인(updater.py)이 이 이름(bungeoppang-<버전>-win-x64-setup.exe)을 찾는다
-          gh release create "${{ github.ref_name }}" $setup.FullName --title "붕어빵 ${{ github.ref_name }}" --generate-notes
+          # 앱의 업데이트 확인(updater.py)이 이 이름(bungeoppang-<버전>-win-x64-setup.exe)을 찾는다.
+          # 맥·리눅스 파일을 먼저 올려 릴리스가 이미 있으면 거기에 붙인다
+          gh release view "${{ github.ref_name }}" *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload "${{ github.ref_name }}" $setup.FullName "$($setup.FullName).sha256" --clobber
+          } else {
+            gh release create "${{ github.ref_name }}" $setup.FullName "$($setup.FullName).sha256" --title "Daling $('${{ github.ref_name }}'.TrimStart('v'))" --generate-notes
+          }
