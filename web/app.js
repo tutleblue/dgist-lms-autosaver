@@ -472,6 +472,12 @@ window.addEventListener("error", (event) => {
   reportError(event.error || event.message, `${(event.filename || "").split("/").pop()}:${event.lineno}`);
 });
 window.addEventListener("unhandledrejection", (event) => {
+  // 화면 전환 애니메이션 중에 다른 메뉴를 빨리 누르면 브라우저가 앞 전환을 건너뛰며 AbortError 를 낸다.
+  // 화면은 제대로 바뀌므로 오류가 아니다. 예전엔 '문제가 생겼어요' 알림이 떴다.
+  if (event.reason && event.reason.name === "AbortError") {
+    event.preventDefault();
+    return;
+  }
   reportError(event.reason, "요청 처리 중");
 });
 
@@ -8268,7 +8274,7 @@ function nowStatus(at, entries, semester) {
   // 공휴일에는 시간표가 있어도 수업이 없다. 예전엔 추석 연휴에도 '수업 중'이라고 떴다.
   const special = specialDay(at);
   if (special?.holiday) {
-    return { detail: { today: [], left: 0 }, state: "holiday", title: special.holiday, sub: special.title };
+    return { detail: { today: [], left: 0 }, state: "holiday", title: special.holiday, sub: "수업 없는 날" };
   }
 
   if (!entries || !entries.length) {
@@ -8276,7 +8282,7 @@ function nowStatus(at, entries, semester) {
   }
   // 토요일에 수업이 있으면 주말로 치지 않는다.
   if (day === 6 || (day === 5 && !today.length)) {
-    return { state: "weekend", title: "주말", sub: "푹 쉬어요" };
+    return { state: "weekend", title: "주말", sub: "" };
   }
 
   const live = today.find((e) => minutes >= ttMinutes(e.start) && minutes < ttMinutes(e.end));
@@ -8316,8 +8322,9 @@ function nowStatus(at, entries, semester) {
     };
   }
 
-  if (today.length) return { detail, state: "done", title: "오늘 수업 끝", sub: "고생했어요" };
-  return { detail, state: "free", title: "오늘 수업 없음", sub: "여유로운 하루" };
+  // '고생했어요·여유로운 하루·푹 쉬어요' 같은 덧붙임 말은 뺐다. 사용자가 '없어도 된다' 고 했다(2026-10-14).
+  if (today.length) return { detail, state: "done", title: "오늘 수업 끝", sub: "" };
+  return { detail, state: "free", title: "오늘 수업 없음", sub: "" };
 }
 
 /* 휴대폰에서는 사이드바가 아래쪽 탭바로 바뀌고 로고 자리가 사라진다.
@@ -8335,6 +8342,10 @@ function placeNowBar() {
     target.insertBefore(bar, NOW_MOBILE.matches ? topbar.firstChild : null);
   }
   bar.classList.toggle("nowbar-compact", NOW_MOBILE.matches);
+  if (NOW_MOBILE.matches && bar.classList.contains("nowbar-open")) {
+    bar.classList.remove("nowbar-open");
+    $("#nowToggle")?.setAttribute("aria-expanded", "false");
+  }
 }
 
 /** 펼쳤을 때 보이는 세부 내용. 접혀 있으면 그리지 않는다. */
@@ -9476,6 +9487,14 @@ function bindNowBar() {
   const toggle = $("#nowToggle");
   if (!bar || !toggle) return;
   toggle.addEventListener("click", () => {
+    // 상단 바의 작은 시계는 누르면 초가 옆으로 펼쳐진다(세부 내용 상자는 열지 않는다).
+    // 상자까지 열면 상단 바가 화면 반을 덮었다(2026-10-14 사용자 스크린샷).
+    if (bar.classList.contains("nowbar-compact")) {
+      const open = !bar.classList.contains("show-sec");
+      bar.classList.toggle("show-sec", open);
+      toggle.setAttribute("aria-expanded", String(open));
+      return;
+    }
     const open = !bar.classList.contains("nowbar-open");
     bar.classList.toggle("nowbar-open", open);
     toggle.setAttribute("aria-expanded", String(open));
@@ -9536,11 +9555,7 @@ function renderNowBar() {
   }
   state.dayKey = dayKey;
   const info = nowStatus(at, state.timetable, state.semester);
-  // 시험 기간에는 수업 중·직전이 아닐 때 아래 줄을 응원 한 줄로 바꾼다 (주말·공강·수업 끝 등)
-  if (!["class", "soon"].includes(info.state)) {
-    const exam = examSeason(at);
-    if (exam) info.sub = exam.short;
-  }
+  // 시험 기간 응원 한 줄('밥 꼭 챙겨 먹어요')로 아래 줄을 바꾸던 것은 뺐다. 사용자가 '없어도 된다' 고 했다(2026-10-14).
   if (bar.dataset.state !== info.state) bar.dataset.state = info.state;
   bar.dataset.tone = info.tone || "";
 
@@ -13210,4 +13225,69 @@ $("#mailRailFold")?.addEventListener("click", () => setMailRailFolded(true, true
     applyMailLayout();
     saveMailLayout();
   });
+})();
+
+/* ===== 창 제목 줄 = 상단 바 (Spotify 처럼) =====
+   설치 앱은 회색 기본 제목 줄을 없앤다(window_chrome.py). 그러면 상단 바 빈 곳을 끌어 창을 옮기고(두 번 누르면 최대화),
+   오른쪽 끝 단추로 최소화·최대화·닫기를 한다. 개발 서버(브라우저)에서는 custom=false 라 아무것도 안 바뀐다. */
+(function bindWindowChrome() {
+  const box = $("#winControls");
+  if (!box) return;
+  const maxBtn = $("#winMax");
+  const paintMax = (maximized) => {
+    // Segoe 아이콘: E922 최대화, E923 이전 크기로
+    maxBtn.innerHTML = maximized ? "&#xE923;" : "&#xE922;";
+    const label = maximized ? tr("이전 크기로") : tr("최대화");
+    maxBtn.title = label;
+    maxBtn.setAttribute("aria-label", label);
+    document.documentElement.classList.toggle("win-maximized", !!maximized);
+  };
+  // 단추 높이를 상단 바 첫 줄에 맞춘다 (상단 바 높이는 화면 폭마다 다르다)
+  const fitHeight = () => {
+    const bar = document.querySelector(".topbar");
+    const h = bar && bar.offsetHeight ? Math.min(bar.offsetHeight, 64) : 48;
+    document.documentElement.style.setProperty("--winctl-h", `${h}px`);
+  };
+  const refresh = () =>
+    api("/api/window")
+      .then((st) => paintMax(st.maximized))
+      .catch(() => {});
+  api("/api/window")
+    .then((st) => {
+      if (!st || !st.custom) return;
+      document.documentElement.classList.add("custom-frame");
+      box.hidden = false;
+      paintMax(st.maximized);
+      fitHeight();
+      let timer = 0;
+      window.addEventListener("resize", () => {
+        clearTimeout(timer);
+        timer = setTimeout(() => {
+          fitHeight();
+          refresh();
+        }, 120);
+      });
+      box.addEventListener("click", (event) => {
+        const btn = event.target.closest("[data-win]");
+        if (!btn) return;
+        api("/api/window", { method: "POST", body: JSON.stringify({ action: btn.dataset.win }) })
+          .then((st) => paintMax(st.maximized))
+          .catch(() => {});
+      });
+    })
+    .catch(() => {});
+})();
+
+// 제목 줄 모드에서는 동기화 시각 글을 숨기므로, 같은 글을 새로고침 단추의 풍선 도움말로 옮겨 둔다
+(function mirrorLastSync() {
+  const src = $("#lastSync");
+  const btn = $("#refreshAllButton");
+  if (!src || !btn) return;
+  const base = btn.title;
+  const sync = () => {
+    const text = (src.textContent || "").trim();
+    btn.title = text ? `${text}\n${base}` : base;
+  };
+  new MutationObserver(sync).observe(src, { childList: true, characterData: true, subtree: true });
+  sync();
 })();

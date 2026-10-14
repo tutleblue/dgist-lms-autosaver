@@ -6,7 +6,7 @@
 - 127.0.0.1:8765에 대시보드 서버를 백그라운드 스레드로 띄운 뒤
   네이티브 창(WebView2)으로 감쌉니다.
 - 이미 앱이 떠 있어 포트가 사용 중이면 새 서버를 띄우지 않고
-  기존 서버에 창만 하나 더 엽니다. (중복 실행해도 안전)
+  이미 떠 있는 창을 앞으로 가져옵니다. 그 창을 못 찾을 때만 기존 서버에 창을 하나 더 엽니다.
 - 창을 닫으면 이 프로세스가 띄운 서버도 함께 종료됩니다.
 
 실행:
@@ -872,7 +872,21 @@ def main() -> None:
     if sys.platform.startswith("linux"):
         run_linux_window(webview, server, url)
         return
+    # 회색 기본 제목 줄을 없애고 앱 상단 바를 제목 줄로 쓴다 (window_chrome 설명 참고). 윈도우 전용:
+    # window_chrome 은 맨 위에서 ctypes.wintypes 를 불러오는데, 맥 파이썬에서는 그 import 가 실패할 수 있어
+    # 맥 판이 켜지자마자 죽을 수 있다. 맥에서는 아예 불러오지 않는다.
+    window_chrome = None
+    if os.name == "nt":
+        import window_chrome
+
+    # 이미 켜져 있으면 창을 하나 더 열지 않고 그 창을 앞으로 가져온다
+    if server is None and window_chrome and window_chrome.focus_existing(WINDOW_TITLE):
+        return
     width, height, x, y = initial_window_size()
+
+    if window_chrome:
+        window_chrome.enable_webview_drag_regions()
+        window_chrome.install_async(WINDOW_TITLE)
     webview.create_window(
         WINDOW_TITLE,
         url,

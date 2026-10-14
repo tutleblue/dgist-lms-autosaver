@@ -747,3 +747,21 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
   Google Calendar 는 호출 한도도 403(이유 `rateLimitExceeded`·`userRateLimitExceeded`·`dailyLimitExceeded`·`quotaExceeded`, 새 형식 `RESOURCE_EXHAUSTED`)으로 돌려주므로 `_error_reasons` 로 응답 본문의 이유를 읽어 가른다(1.12.26).
 - `_calendar_lock(token_path)`: 캘린더 찾기·만들기·`gcal_calendars.json` 기록을 한 번에 하나만(메일 일정·학사일정 동시 동기화 때 기록이 지워졌다). 자물쇠는 기록 파일(사용자)마다 따로라 공유 웹 모드에서 다른 사용자끼리는 기다리지 않는다(1.12.26).
 - 학사일정 낱말표는 `web/i18n/en.json` 의 `_academic` 한 곳에만 둔다(app.js 하드코딩 제거, 중복 18개 정리). `i18nCompile` 이 `ACAD_TERMS` 를 채운다.
+
+## 창 제목 줄 = 상단 바 (2026-10-14)
+
+- `window_chrome.py`: WinForms 테두리는 그대로 두고 `WM_NCCALCSIZE` 에서 제목 줄 높이만 클라이언트로 돌려 회색 제목 줄을 없앤다(크기 조절·Aero 스냅·그림자 유지). `frameless=True` 는 이것들이 다 사라져 쓰지 않았다.
+- 끌기: WebView2 `IsNonClientRegionSupportEnabled` 를 첫 페이지 전에 켜고 CSS `app-region: drag`(상단 바·사이드바 빈 곳). 두 번 누르면 최대화·화면 끝 스냅도 진짜 제목 줄처럼 된다.
+- 단추: `#winControls`(Segoe Fluent 아이콘) → `GET/POST /api/window {action: minimize|maximize|close}`. 개발 서버는 `custom:false` 라 화면이 그대로다.
+- 최대화 뒤 복원하면 WinForms 가 없앤 제목 줄 높이를 다시 더해 창이 29px씩 길어졌다(820→849→878). `WM_SIZE` 로 최대화 직전 크기를 기억했다가 복원 직후 크기만 되돌린다.
+- 화면: `html.custom-frame` 에서 넓은 창은 검색창 가운데(Spotify), 상단 바·사이드바 바탕을 이어 붙이고 본문 왼쪽 위를 둥글게. 메일함에도 상단 바를 둔다(창 단추가 읽기 도구를 덮었다).
+
+## 단추 교통정리 (2026-10-14)
+
+- 같은 줄 단추는 36px·세로 가운데. 메일 쓰기 칸은 `70px 52px 1fr auto` 고정 열이라 받는사람·참조·제목 입력칸 시작점이 같다(예전 242·218·242px).
+- 메일 목록 마우스 올림 단추(안읽음·휴지통)가 별을 덮어 별을 못 눌렀다 → 별 왼쪽에 띄운다.
+- '모두 접기' 는 화면 편집 중에만, 시간표 '이미지로 가져오기' 는 아이콘만.
+- 화면 전환 중 빠르게 누를 때 나던 `AbortError: Transition was skipped` 가 '문제가 생겼어요' 알림으로 뜨던 것 막음.
+- 좁은 창(≤1100px) 상단 시계는 시:분·날짜만 두고, 누르면 초가 옆으로 펼쳐진다(`.show-sec`, 세부 상자는 열지 않음 — 열면 상단 바가 화면 반을 덮었다). 나우바의 덧붙임 말(고생했어요·푹 쉬어요·시험 응원 한 줄)은 뺐다.
+- 메일함 검색 줄: 폴더 이름 제목은 폴더 칸을 접었거나 좁을 때만, 새로고침은 아이콘만(시각은 도움말).
+- 두 번째로 켜면 창을 또 열지 않고 떠 있는 창을 앞으로(`window_chrome.focus_existing`). 예전 두 번째 창은 회색 제목 줄과 앱 창 단추가 겹쳤고, 그 단추가 첫 창을 닫았다.

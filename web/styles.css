@@ -10415,3 +10415,190 @@ body.mail-resizing iframe { pointer-events: none; } /* 끄는 중 본문 iframe 
   display: inline-block; min-width: 30px; margin-right: 6px;
   font-size: 10.5px; font-weight: 700; color: var(--accent-strong);
 }
+
+/* ===== 창 제목 줄 = 상단 바 (설치 앱, html.custom-frame) =====
+   기본 제목 줄을 없앴으므로 상단 바 빈 곳이 창 끌기 자리다(app-region: drag, WebView2 가 진짜 제목 줄처럼 다룬다).
+   단추·입력칸 위는 눌러야 하므로 끌기에서 뺀다. 창 단추는 오른쪽 위에 고정하고 상단 바는 그만큼 비워 둔다. */
+:root { --winctl-w: 138px; --winctl-h: 48px; }
+.custom-frame .topbar {
+  -webkit-app-region: drag;
+  app-region: drag;
+  padding-right: calc(var(--winctl-w) + 12px);
+}
+.custom-frame .topbar :is(button, input, a, label, select, kbd, .search-wrap, .search-pop, .top-progress, .sync-pill, .nowbar-compact) {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+/* 왼쪽 메뉴의 빈 곳(위 여백)으로도 끌 수 있게 */
+.custom-frame .sidebar { -webkit-app-region: drag; app-region: drag; }
+.custom-frame .sidebar > * { -webkit-app-region: no-drag; app-region: no-drag; }
+
+.win-controls {
+  position: fixed;
+  top: 0;
+  right: 0;
+  height: var(--winctl-h);
+  display: flex;
+  z-index: 2147483000; /* 소개·대화 상자 위에서도 닫을 수 있게 */
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+.win-btn {
+  width: 46px;
+  height: 100%;
+  border: none;
+  background: transparent;
+  color: var(--text-soft);
+  font: 10px/1 "Segoe Fluent Icons", "Segoe MDL2 Assets";
+  cursor: default;
+  transition: background 0.12s, color 0.12s;
+}
+.win-btn:hover { background: color-mix(in srgb, var(--text) 9%, transparent); color: var(--text); }
+.win-btn:active { background: color-mix(in srgb, var(--text) 15%, transparent); }
+.win-btn.close:hover { background: #c42b1c; color: #fff; }
+.win-btn.close:active { background: #b5281a; color: #fff; }
+.win-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+/* 넓은 화면: Spotify 처럼 검색창을 가운데로, 상단 바를 조금 낮게 */
+@media (min-width: 1101px) {
+  .custom-frame .topbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 520px) minmax(0, 1fr);
+    padding-top: 10px;
+    padding-bottom: 10px;
+  }
+  .custom-frame .topbar .nav-arrows { justify-self: start; }
+  .custom-frame .topbar .search-wrap { max-width: none; width: 100%; }
+  .custom-frame .topbar .topbar-actions { justify-self: end; margin-left: 0; }
+}
+/* 제목 줄이 된 상단 바는 왼쪽 메뉴와 같은 바탕으로 이어 붙여, 창 위·왼쪽이 한 틀처럼 보이게 한다 (Spotify 의 검은 틀) */
+.custom-frame .topbar { background: var(--bg-deep); border-bottom-color: transparent; }
+.custom-frame .sidebar { border-right-color: transparent; }
+.custom-frame .workspace { border-top-left-radius: 14px; background: var(--bg); box-shadow: inset 1px 1px 0 var(--border); }
+.custom-frame .main { background: var(--bg-deep); }
+.custom-frame .workspace { flex: 1 0 auto; }
+/* 상단 바를 깔끔하게: '마지막 확인 3분 전 · 메일 4분 전' 글은 새로고침 단추에 올리면 보이게(title) 하고 줄에서는 뺀다 */
+@media (min-width: 1101px) {
+  .custom-frame .topbar .last-sync { display: none; }
+}
+
+/* 메일함(mail-focus)은 원래 상단 바를 숨기고 화면을 꽉 채웠다. 제목 줄이 없으면 창을 끌 곳이 없고
+   창 단추가 메일 읽기 도구(별·답장·삭제)를 덮어서, 제목 줄 모드에서는 메일함에도 상단 바를 둔다.
+   전역 검색은 메일함 자체 검색과 겹치므로 빼고, 메일 머리의 ←/→ 도 상단 바와 겹쳐 뺀다. */
+@media (min-width: 761px) {
+  .custom-frame .app-shell.mail-focus .topbar { display: flex; flex: none; }
+  .custom-frame .app-shell.mail-focus .topbar .search-wrap { visibility: hidden; }
+  .custom-frame .app-shell.mail-focus .main { height: 100vh; display: flex; flex-direction: column; }
+  .custom-frame .app-shell.mail-focus .workspace { flex: 1 1 auto; min-height: 0; height: auto; grid-template-rows: minmax(0, 1fr); }
+  .custom-frame .app-shell.mail-focus .content-column,
+  .custom-frame .app-shell.mail-focus #view-emails { height: 100%; min-height: 0; }
+  .custom-frame .mail-nav { display: none; }
+}
+@media (min-width: 1101px) {
+  .custom-frame .app-shell.mail-focus .topbar { display: grid; }
+}
+/* 메일함에서는 새로고침 단추가 숨겨져 빈 알약 껍데기만 남았다 */
+.custom-frame .sync-pill:not(:has(> :not([hidden]):not([style*="none"]))) { display: none; }
+.custom-frame .app-shell.mail-focus .sync-pill { display: none; }
+
+/* ===== 상단 바의 작은 시계 (1100px 이하) =====
+   좁은 창에서 '오늘 수업 끝 · 밥 꼭 챙겨 먹어요' 까지 끼워 넣어 글이 겹치고, 누르면 펼쳐져 상단 바가 화면 반을 덮었다.
+   사용자: '모든 비율에 같은 정보를 띄우려 하지 마, 초시계나 잘 나오게'. 좁을 때는 시:분:초와 날짜만 둔다. */
+.topbar .nowbar-compact { flex: none; width: auto; padding: 6px 14px; }
+.nowbar-compact .nowbar-live,
+.nowbar-compact .nowbar-track,
+.nowbar-compact .nowbar-detail { display: none !important; }
+/* 누르면 초가 옆으로 스르르 펼쳐진다 (사용자: '초시계는 원래 누르면 나오는 거였잖아, 확장되는 느낌으로') */
+.nowbar-compact .nowbar-face { cursor: pointer; }
+.nowbar-compact .nowbar-sec {
+  display: inline-block;
+  max-width: 0;
+  overflow: hidden;
+  opacity: 0;
+  font-size: 0.8em;
+  vertical-align: baseline;
+  transition: max-width 0.32s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.22s ease;
+}
+.nowbar-compact.show-sec .nowbar-sec { max-width: 2.4em; opacity: 0.6; }
+.nowbar-compact .nowbar-time { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.nowbar-compact .nowbar-date { white-space: nowrap; }
+
+/* ===== 단추 교통정리 (2026-10-14) =====
+   '메일 보내기만 해도 수평이 안 맞고, 단추끼리 겹친다' 는 말을 듣고 모든 화면의 단추를 재서 고쳤다.
+   기준: 한 줄에 같이 서는 단추는 높이 36px, 세로 가운데 정렬. */
+
+/* 메일 쓰기: 받는사람(개별)·참조(+)·제목(중요) 의 입력칸 시작점이 242·218·242px 로 달랐다.
+   옵션 칸 너비를 고정하고, 입력칸·주소찾기는 늘 같은 칸에 넣는다. 첨부 칸도 입력칸 줄에 맞춘다. */
+.cfield { grid-template-columns: 70px 52px minmax(0, 1fr) auto; }
+.cfield > .cfield-label { grid-column: 1; }
+.cfield > .cfield-opt,
+.cfield > .cfield-plus { grid-column: 2; justify-self: start; }
+.cfield > .cfield-body { grid-column: 3; }
+.cfield > .cfield-find { grid-column: 4; height: 38px; padding: 0 12px; }
+.cfield-body > input { height: 38px; box-sizing: border-box; }
+.cfield-plus { width: 26px; height: 26px; }
+.cfield.cfield-attach { grid-template-columns: 70px 52px minmax(0, 1fr) auto; }
+.cfield.cfield-attach > .cfield-body { grid-column: 3 / -1; }
+/* 주소찾기가 없는 줄(제목)은 입력칸을 끝까지 */
+.cfield > .cfield-body:last-child { grid-column: 3 / -1; }
+
+/* 메일 쓰기 위 막대: 뒤로(34)·보내기(37)·미리보기·임시저장(36)·버리기(34) → 모두 36 */
+.compose-bar { align-items: center; }
+.compose-bar > :is(button, .button, .icon-button) { height: 36px; box-sizing: border-box; }
+.compose-bar > .icon-button:not(.back-button) { width: 36px; }
+
+/* 캘린더 ‹ 오늘 › : 34 / 36 / 34 → 36 */
+.calendar-nav { align-items: center; }
+.calendar-nav .icon-button { width: 36px; height: 36px; }
+
+/* 메일 목록 위: 새로고침(30)·정렬(34) → 34 */
+.mail-topbar { align-items: center; }
+.mail-topbar .mail-refresh { height: 34px; box-sizing: border-box; }
+
+/* 대시보드 카드 머리: '전체 보기'(36) 와 접기 단추(26) 가 위로 붙어 5px 어긋났다.
+   머리 전체를 가운데 정렬하면 두 줄 제목과 단추가 어긋나므로 접기 단추만 내린다. */
+.panel-header:has(> .button) > .fold-toggle { margin-top: 5px; }
+
+/* 아이콘 레일(761~1100px): '문의 · 제보' 와 상태판이 4px 겹쳤다 */
+@media (min-width: 761px) and (max-width: 1100px) {
+  .whats-new { margin-bottom: 0; }
+}
+
+/* 휴대폰 폭 제목 줄 모드: 상단 바가 스크롤에 밀려 올라가면 창 단추가 본문 위에 떠 있었다 */
+@media (max-width: 760px) {
+  .custom-frame .topbar { position: sticky; top: 0; z-index: 30; }
+}
+
+/* 메일 목록: 마우스를 올리면 뜨는 안읽음·휴지통 단추가 오른쪽 끝의 별(중요)을 덮어, 올린 채로는 별을 누를 수 없었다.
+   별이 오른쪽에 있는 넓은 배치에서는 단추를 별 왼쪽에 띄운다. 좁은 배치(별이 왼쪽 기둥)는 그대로. */
+.email-list-row .list-actions { right: 36px; }
+@container maillist (max-width: 560px) {
+  .email-list-row .list-actions { right: 8px; }
+}
+@media (min-width: 761px) and (max-width: 1100px) {
+  .app-shell.mail-focus .whats-new { margin-bottom: 0; }
+}
+
+/* 대시보드 머리: '모두 접기' 는 카드마다 접기 단추가 있어 겹친다. 화면 편집 중에만 보인다 */
+#view-dashboard:not(.dash-editing) #dashFoldAll { display: none; }
+/* 시간표 '이미지로 가져오기' 는 아이콘만 */
+.timetable-actions { align-items: center; }
+.timetable-actions .tt-import-icon { width: 36px; height: 36px; }
+
+/* ===== 메일함 검색 줄 정리 =====
+   '받은 편…' 제목 · '4분 전 업데이트' · 검색 · 정렬 · 보기 단추가 한 줄에 몰려 제목이 잘리고 검색칸이 눌렸다.
+   - 폴더 이름은 왼쪽 폴더 칸에 이미 표시되므로, 폴더 칸을 접었을 때만 제목을 보인다.
+   - 새로고침은 아이콘만(마지막 시각은 올리면 보이는 도움말). 가져오는 중일 때만 글을 붙인다. */
+.mail-app:not(.rail-folded) #mailFolderTitle { display: none; }
+.mail-refresh:not(.spinning) .mail-refresh-ago { display: none; }
+.mail-refresh:not(.spinning) { width: 34px; padding: 0; justify-content: center; }
+.mail-topbar .email-search { flex: 1 1 auto; min-width: 0; }
+/* 좁은 메일함은 폴더 칸이 서랍으로 들어가 보이지 않으므로 제목을 다시 보인다 */
+@container mailapp (max-width: 860px) {
+  .mail-app:not(.rail-folded) #mailFolderTitle { display: block; }
+}
+@media (max-width: 760px) {
+  .mail-app:not(.rail-folded) #mailFolderTitle { display: block; }
+}
+/* 메일함(mail-focus)은 초를 통째로 숨기는 규칙이 있어, 상단 바 시계에서는 되살린다 */
+.app-shell.mail-focus .nowbar-compact .nowbar-sec { display: inline-block; }

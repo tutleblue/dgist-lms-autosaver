@@ -3015,6 +3015,17 @@ def get_course_announcements(workspace: UserWorkspace) -> dict[str, Any]:
 UI_THEMES = ("auto", "claude", "light", "navy", "dark")
 
 
+def _window_chrome_call(action):
+    """창 제목 줄을 앱이 그리는지(custom)와 최대화 여부. 개발 서버(브라우저)에서는 custom=False."""
+    try:
+        import window_chrome
+    except Exception:
+        return {"custom": False, "maximized": False}
+    if action in ("minimize", "maximize", "close"):
+        return window_chrome.command(action)
+    return window_chrome.state()
+
+
 def get_ui_prefs(workspace: UserWorkspace) -> dict[str, Any]:
     """화면 취향(테마). 앱 창의 브라우저 저장소는 끌 때마다 지워져, 거기 두면 켤 때마다 기본 테마로 돌아갔다."""
     data = read_json(workspace.root / "ui_prefs.json", {})
@@ -4423,6 +4434,9 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         if route == "/api/ui-prefs":
             self.send_json(get_ui_prefs(workspace))
             return
+        if route == "/api/window":
+            self.send_json(_window_chrome_call(None))
+            return
         if route == "/api/course-announcements":
             self.send_json(get_course_announcements(workspace))
             return
@@ -5474,6 +5488,11 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             return
         if route == "/api/tutorial/done":
             self.send_json(mark_tutorial_done(workspace, self.read_body_json()))
+            return
+        if route == "/api/window":
+            # 앱 상단 바의 최소화·최대화·닫기 단추
+            action = str((self.read_body_json() or {}).get("action") or "")
+            self.send_json(_window_chrome_call(action))
             return
         if route == "/api/ui-prefs":
             try:

@@ -8,6 +8,12 @@
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
+    <!-- 창 단추: 기본 제목 줄을 없앤 설치 앱에서만 보인다 (window_chrome.py). 상단 바가 제목 줄 역할을 한다 -->
+    <div class="win-controls" id="winControls" hidden>
+      <button type="button" class="win-btn" data-win="minimize" title="최소화" aria-label="최소화">&#xE921;</button>
+      <button type="button" class="win-btn" data-win="maximize" id="winMax" title="최대화" aria-label="최대화">&#xE922;</button>
+      <button type="button" class="win-btn close" data-win="close" title="닫기" aria-label="닫기">&#xE8BB;</button>
+    </div>
     <div class="app-shell">
       <aside class="sidebar" aria-label="주요 메뉴">
         <div class="brand">
@@ -373,9 +379,9 @@
                       <input type="checkbox" id="timetableSat" />
                       <span>토요일</span>
                     </label>
-                    <button class="button compact ghost" id="timetableImportImage" type="button" title="에브리타임 시간표를 캡처해서 넣기">
+                    <!-- 한 학기에 한 번 쓰는 단추라 글씨 없이 아이콘만 (단추 교통정리, 2026-10-14) -->
+                    <button class="icon-button tt-import-icon" id="timetableImportImage" type="button" title="이미지로 가져오기 · 에브리타임 시간표를 캡처해서 넣기" aria-label="이미지로 가져오기">
                       <span class="icon" data-icon="file"></span>
-                      이미지로 가져오기
                     </button>
                     <button class="button compact ghost" id="timetableFromCatalog" type="button" title="과목을 찾아 넣거나 직접 고칩니다">
                       <span class="icon" data-icon="edit"></span>

@@ -1811,5 +1811,10 @@
  "폴더 정리 방식 설명": "About folder layouts",
  "폴더 정리 방식 설명 보기": "Show folder layout explanation",
  "폴더를 열지 않고 과목 자료를 한눈에 봐요. 파일 이름은 LMS 그대로예요.": "See all course files at a glance without opening folders. File names stay as on LMS.",
- "하위 폴더 없이 파일만": "Files only, no subfolders"
+ "하위 폴더 없이 파일만": "Files only, no subfolders",
+ "이전 크기로": "Restore Down",
+ "최대화": "Maximize",
+ "최소화": "Minimize",
+ "이미지로 가져오기 · 에브리타임 시간표를 캡처해서 넣기": "Import from image · Add a screenshot of your Everytime timetable",
+ "수업 없는 날": "No classes today"
 }
