@@ -10862,3 +10862,23 @@ html.log-open .log-close { display: grid; flex: none; }
 .win-btn { width: 40px; height: 32px; border-radius: 8px; }
 .win-btn:focus { outline: none; }
 .win-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* ===== 스크롤은 상단 바 아래 본문에서만 (2026-10-14) =====
+   문서 전체가 스크롤되어 스크롤 막대 자리가 창 오른쪽 끝을 맨 위(창 단추 옆)부터 맨 아래까지 차지했다
+   ('스크롤 막대가 왜 창 끝까지 있냐'). Spotify 처럼 창은 고정하고 상단 바 아래 본문(.workspace)만 스크롤한다.
+   제목 줄 모드(설치 앱)에서만 적용한다. 창 전체 스크롤에 기대는 코드(window.scrollTo 등)는 없다. */
+html.custom-frame,
+html.custom-frame body { height: 100%; overflow: hidden; }
+.custom-frame .app-shell { height: 100vh; min-height: 0; }
+.custom-frame .main { height: 100vh; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
+.custom-frame .topbar { position: relative; flex: none; }
+.custom-frame .workspace { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+/* 메일함: 줄 높이를 정하지 않은 grid 라 폴더 칸 내용(802px)만큼 줄이 늘어 본문 칸(739px)보다 63px 넘쳤다.
+   본문만 스크롤하게 되자 바깥까지 두 겹으로 스크롤됐다 → 줄을 칸 높이에 묶고 폴더 칸은 자기 안에서 스크롤 */
+@container mailapp (min-width: 861px) {
+  .mail-app { grid-template-rows: minmax(0, 1fr); }
+  .mail-rail { min-height: 0; overflow-y: auto; }
+}
+.custom-frame .app-shell.mail-focus .workspace { overflow: hidden; }
+/* 설정은 창 맨 위부터 덮는 판(position:fixed; top:0)이라 막대가 다시 창 끝까지 올라갔다 → 상단 바 아래부터 */
+.custom-frame #view-settings { top: var(--topbar-h, 61px); }

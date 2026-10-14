@@ -13334,6 +13334,8 @@ $("#mailRailFold")?.addEventListener("click", () => setMailRailFolded(true, true
     const bar = document.querySelector(".topbar");
     const h = bar && bar.offsetHeight ? Math.min(bar.offsetHeight, 64) : 48;
     document.documentElement.style.setProperty("--winctl-h", `${h}px`);
+    // 설정 판은 상단 바 아래부터 덮는다(스크롤 막대가 창 끝까지 올라가지 않게)
+    if (bar && bar.offsetHeight) document.documentElement.style.setProperty("--topbar-h", `${bar.offsetHeight}px`);
   };
   const refresh = () =>
     api("/api/window")
