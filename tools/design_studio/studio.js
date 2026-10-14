@@ -654,7 +654,7 @@
       }
       const conflicts = (p.applyReport || {}).conflicts || [];
       if (p.status === "ready" && conflicts.length) {
-        body = `<p class="err">반영하려 했지만 이 파일들은 시안을 만든 뒤 진짜 화면에서도 같은 곳이 바뀌어 합치지 못했어요: ${esc(conflicts.join(", "))}. 나머지는 반영했어요. Claude Code 에 "시안 ${esc(p.name)} 충돌 정리해 줘" 라고 해 주세요.</p>` + body;
+        body = `<p class="err">반영하려 했지만 이 파일들은 시안을 만든 뒤 진짜 화면에서도 같은 곳이 바뀌어 합치지 못했어요: ${esc(conflicts.join(", "))}. 반만 바뀌지 않게 아무 파일도 바꾸지 않았어요. Claude Code 에 "시안 ${esc(p.name)} 충돌 정리해 줘" 라고 해 주세요.</p>` + body;
       }
       return `<div class="prop ${viewing ? "viewing" : ""}">
         <div class="phead2"><b>${esc(p.title || p.name)}</b><span class="st st-${tone}">${label}</span></div>
@@ -726,7 +726,7 @@
       if (!res.ok) return toast(res.message || "반영하지 못했어요");
       const r = res.report;
       const n = r.applied.length + r.merged.length;
-      if (r.conflicts.length) toast(`${n}개 반영, ${r.conflicts.length}개는 합치지 못했어요 (시안 탭 참고)`);
+      if (r.conflicts.length) toast(`${r.conflicts.length}개 파일이 겹쳐서 아무것도 반영하지 않았어요 (시안 탭 참고)`);
       else return setCtx("", `반영했어요 (${n}개 파일). 지금 보이는 것이 진짜 화면이에요.`);
       return refreshProposals();
     }
@@ -2046,12 +2046,47 @@
   }
 
   /* ---------- 불러오기·임시 저장 ---------- */
+  /* 저장본·임시본은 파일에서 온다. 화면에 innerHTML 로 그리는 번호·id·종류와 <style> 에 들어가는 값을 여기서 한 번 거른다.
+     처음엔 그대로 믿어서, 저장본의 댓글 번호에 <img onerror> 를 넣으면 핀을 그리는 순간 실행됐다(검토에서 재현). */
+  const CSS_BAD = /[{};<\\]|\/\*|url\(|@import|expression\(/i;
+  const SEL_BAD = /[{};<]|\/\*/;
+  const safeId = (v, p) => (/^[\w-]{1,64}$/.test(v) ? v : uid(p));
+  const num = (v) => (Number.isFinite(+v) ? +v : 0);
+  function cleanChange(c) {
+    if (!c || typeof c !== "object") return null;
+    c.id = safeId(c.id, "c");
+    if ("count" in c) c.count = num(c.count);
+    if (c.type === "token") {
+      if (!/^--[\w-]+$/.test(c.name || "") || !/^[\w-]+$/.test(c.theme || "") || CSS_BAD.test(String(c.to ?? ""))) return null;
+    } else if (c.type === "style") {
+      if (!c.selector || SEL_BAD.test(c.selector) || !/^[a-z-]+$/.test(c.prop || "") || CSS_BAD.test(String(c.to ?? ""))) return null;
+    } else if (!["text", "move", "flow"].includes(c.type)) return null;
+    if (c.type !== "token") {
+      if (!c.target || typeof c.target !== "object") return null;
+      if (!Array.isArray(c.target.rules)) c.target.rules = [];
+    }
+    if (c.type === "move" && !(c.ref && typeof c.ref === "object" && c.parent && typeof c.parent === "object")) return null;
+    if (c.type === "flow" && !Array.isArray(c.steps)) c.steps = [];
+    return c;
+  }
+  function cleanComment(c) {
+    if (!c || typeof c !== "object" || !c.anchor || typeof c.anchor !== "object") return null;
+    c.id = safeId(c.id, "m");
+    c.n = Math.round(num(c.n));
+    if (!KINDS.some((k) => k[0] === c.kind)) c.kind = KINDS[0][0];
+    if (c.region) c.region = { x: num(c.region.x), y: num(c.region.y), w: num(c.region.w), h: num(c.region.h) };
+    c.at = { x: num(c.at?.x), y: num(c.at?.y) };
+    return c;
+  }
   function hydrate(data) {
     [...cur().changes].reverse().filter(isDom).forEach(revertDom);
-    S.variants = (data.variants || []).map((v) => ({ id: v.id || uid("v"), name: v.name, changes: v.changes || [] }));
+    S.variants = (Array.isArray(data.variants) ? data.variants : []).map((v) => ({
+      id: safeId(v?.id, "v"), name: String(v?.name || ""),
+      changes: (Array.isArray(v?.changes) ? v.changes : []).map(cleanChange).filter(Boolean),
+    }));
     if (!S.variants.length) S.variants = [newVariant("조합 A")];
-    S.active = Math.min(+data.chosen || 0, S.variants.length - 1);
-    S.comments = data.comments || [];
+    S.active = Math.max(0, Math.min(Math.round(num(data.chosen)), S.variants.length - 1));
+    S.comments = (Array.isArray(data.comments) ? data.comments : []).map(cleanComment).filter(Boolean);
     S.title = data.title || "";
     S.note = data.note || "";
     S.freedom = data.freedom || "refine";

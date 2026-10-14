@@ -121,5 +121,5 @@ Playwright 를 못 쓰면 스튜디오를 띄워 `/?load=<이름>&view=<화면>&
 
 사용자가 Claude Code 에서 시안을 다룰 때 (스튜디오 밖):
 - "시안 <이름> 반영해 줘" → 스튜디오의 '이대로 반영' 과 같다. `proposals/<이름>/meta.json` 상태가 `ready` 인지 보고, 바뀐 파일마다 진짜 `web/` 가 `base/` 와 같으면 복사, 다르면 `git merge-file` 로 합친다. 반영 전 파일은 `before-apply/` 에 남긴다.
-- "시안 <이름> 충돌 정리해 줘" → `meta.json` 의 `applyReport.conflicts` 파일을 `base/`·시안 `web/`·진짜 `web/` 세 벌을 보고 손으로 합친다.
+- "시안 <이름> 충돌 정리해 줘" → `meta.json` 의 `applyReport.conflicts` 파일을 `base/`·시안 `web/`·진짜 `web/` 세 벌을 보고 손으로 합친다. 충돌이 하나라도 있으면 반영은 아무 파일도 쓰지 않으니(전부 아니면 전무), 충돌 파일을 합친 뒤 나머지 파일도 함께 옮긴다.
 - 반영한 뒤에는 B-4(확인·설치 파일 여부 묻기)를 따른다.

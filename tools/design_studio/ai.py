@@ -20,7 +20,7 @@ import time
 import uuid
 from pathlib import Path
 
-from claude_cli import spawn
+from claude_cli import spawn, kill_tree
 
 SUGGEST_MODEL = os.environ.get("STUDIO_AI_MODEL", "haiku")
 FLOW_MODEL = os.environ.get("STUDIO_FLOW_MODEL", "sonnet")
@@ -55,13 +55,29 @@ steps 는 사용자 눈에 보이는 순서대로 2~8개. 서버 호출은 run, 
 """
 
 
+# 추천 값은 <style> 에 그대로 들어간다. '}' 로 규칙을 닫고 새 규칙을 열거나 url() 로 바깥에 요청을 보내지 못하게
+# 이름·속성은 모양을, 값·선택자는 위험한 글자를 본다 (검토에서 지적: 'red} * {background:url(...)' 가 그대로 들어갔다).
+_CSS_BAD = re.compile(r"[{};<\\]|/\*|url\(|@import|expression\(", re.I)
+_SEL_BAD = re.compile(r"[{};<]|/\*")  # 선택자는 '>'(자식)·'\'(이스케이프)를 쓸 수 있다
+
+
+def _safe_css_change(c: dict) -> bool:
+    to = str(c.get("to") or "")
+    if not to or _CSS_BAD.search(to):
+        return False
+    if c.get("type") == "token":
+        return bool(re.fullmatch(r"--[\w-]+", str(c.get("name") or "")))
+    sel = str(c.get("selector") or "")
+    return bool(sel) and not _SEL_BAD.search(sel) and bool(re.fullmatch(r"[a-z-]+", str(c.get("prop") or "")))
+
+
 class AIRunner:
     def __init__(self, proj: Path, proxy_env: dict | None):
         self.proj = proj
         self.proxy_env = proxy_env or {}
         self.jobs: dict[str, dict] = {}
         self.lock = threading.Lock()
-        self.scratch = Path(tempfile.mkdtemp(prefix="daling-studio-ai-"))
+        self._scratch: Path | None = None  # 처음 추천할 때 만든다 (사진용 서버마다 빈 폴더가 쌓이지 않게)
         self.current_suggest: str | None = None
 
     # ---------- 공통 ----------
@@ -87,7 +103,7 @@ class AIRunner:
             job["status"] = "cancelled"
             proc = job.get("proc")
             if proc and proc.poll() is None:
-                proc.terminate()
+                kill_tree(proc)
 
     def _start(self, job: dict, args: list[str], prompt: str, cwd: Path) -> bool:
         """claude 를 띄운다. 못 띄우면 작업을 '실패' 로 두고 이유를 남긴다 (화면이 그 이유를 보여 준다)."""
@@ -108,7 +124,9 @@ class AIRunner:
         prompt = SUGGEST_RULES + "\n지금 상황 (JSON):\n" + json.dumps(context, ensure_ascii=False, indent=1)[:24000]
         args = ["-p", "--output-format", "stream-json", "--verbose", "--include-partial-messages",
                 "--model", SUGGEST_MODEL, "--tools", "", "--max-turns", "1", "--permission-mode", "dontAsk"]
-        if not self._start(job, args, prompt, self.scratch):
+        if self._scratch is None:
+            self._scratch = Path(tempfile.mkdtemp(prefix="daling-studio-ai-"))
+        if not self._start(job, args, prompt, self._scratch):
             return job
         threading.Thread(target=self._pump_suggest, args=(job,), daemon=True).start()
         return job
@@ -121,7 +139,8 @@ class AIRunner:
             item = json.loads(line)
         except json.JSONDecodeError:
             return
-        changes = [c for c in item.get("changes") or [] if isinstance(c, dict) and c.get("type") in ("style", "token")]
+        changes = [c for c in item.get("changes") or [] if isinstance(c, dict) and c.get("type") in ("style", "token")
+                   and _safe_css_change(c)]
         if not changes or not item.get("title"):
             return
         item["changes"] = changes[:6]

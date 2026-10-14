@@ -28,7 +28,7 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 
-from claude_cli import find_claude, spawn
+from claude_cli import find_claude, kill_tree, spawn
 
 TEXT_EXT = {".html", ".js", ".css", ".json", ".svg", ".txt", ".md"}
 ACTIVE = {"running", "queued"}
@@ -91,7 +91,15 @@ class ProposalManager:
         path = self._meta_path(meta["name"])
         tmp = path.with_suffix(".tmp")
         tmp.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
-        os.replace(tmp, path)
+        # Windows 에서는 화면이 1~2초마다 읽는 중이거나 백신이 열어 둔 파일로 바꿔치기하면 PermissionError 가 난다. 잠깐 뒤 다시.
+        for attempt in range(10):
+            try:
+                os.replace(tmp, path)
+                return
+            except PermissionError:
+                if attempt == 9:
+                    raise
+                time.sleep(0.05 * (attempt + 1))
 
     def _mark_orphans(self) -> None:
         # 서버가 꺼질 때 돌던 작업은 이어 갈 수 없다. '멈춤' 으로 바꿔 두면 화면에서 다시 시킬 수 있다.
@@ -181,14 +189,22 @@ class ProposalManager:
         return meta
 
     def revise(self, name: str, request_stem: str) -> dict:
-        meta = self.load(name)
-        if not meta:
-            raise ValueError("그런 시안이 없어요.")
-        if meta.get("status") in ACTIVE:
-            raise ValueError("Claude 가 아직 고치는 중이에요.")
-        if meta.get("status") in ("applied", "discarded"):
-            raise ValueError("이미 반영했거나 버린 시안이에요.")
-        self.run(name, request_stem, followup=bool(meta.get("rounds")))
+        # 확인과 '대기' 표시를 한 번에 한다. 두 번 누르면 같은 세션에 --resume 이 둘 붙을 수 있었다.
+        with self.lock:
+            meta = self.load(name)
+            if not meta:
+                raise ValueError("그런 시안이 없어요.")
+            if meta.get("status") in ACTIVE:
+                raise ValueError("Claude 가 아직 고치는 중이에요.")
+            if meta.get("status") in ("applied", "discarded"):
+                raise ValueError("이미 반영했거나 버린 시안이에요.")
+            proc = self.procs.get(name)
+            if proc and proc.poll() is None:
+                raise ValueError("멈추는 중이에요. 잠시 뒤 다시 눌러 주세요.")
+            meta["status"] = "queued"
+            self.save(meta)
+        # 지난 회차가 세션을 못 만들고 끝났으면(실행 실패·곧바로 멈춤) 이어 할 대화가 없다. 새 대화로 시작한다.
+        self.run(name, request_stem, followup=bool(meta.get("rounds")) and bool(meta.get("sessionStarted")))
         return meta
 
     def _prompt(self, name: str, request_stem: str, followup: bool) -> str:
@@ -235,7 +251,8 @@ class ProposalManager:
             f"Bash({py} tools/design_studio/snapshot.py *)",
             "Bash(python tools/design_studio/snapshot.py *)",
             "Bash(python3 tools/design_studio/snapshot.py *)",
-            "Bash(node --check *)",
+            # 정확한 파일 하나만. 'node --check *' 는 --require ./x.js 로 아무 코드나 돌릴 수 있었다(검토에서 재현).
+            f"Bash(node --check {rel_web}/app.js)",
         ]
         # 진짜 web/ 는 어떤 모드에서도 못 고치게 (deny 가 allow 보다 먼저 본다).
         # '/web/**' 는 작업 폴더(저장소) 기준이다. './web/**' 로 쓰면 깊이와 상관없이 모든 web/ 에 맞아
@@ -277,9 +294,25 @@ class ProposalManager:
             return
         with self.lock:
             self.procs[name] = proc
-        threading.Thread(target=self._pump, args=(name, proc), daemon=True).start()
+        threading.Thread(target=self._pump, args=(name, proc, len(meta["rounds"]) - 1), daemon=True).start()
 
-    def _pump(self, name: str, proc: subprocess.Popen) -> None:
+    def _pump(self, name: str, proc: subprocess.Popen, round_idx: int) -> None:
+        try:
+            self._pump_inner(name, proc, round_idx)
+        except Exception as exc:  # noqa: BLE001 — 여기서 죽으면 시안이 '만드는 중' 에 영영 남고 claude 출력도 막힌다
+            kill_tree(proc)
+            with self.lock:
+                if self.procs.get(name) is proc:
+                    self.procs.pop(name, None)
+                meta = self.load(name)
+                if meta and meta.get("status") in ACTIVE:
+                    meta.update(status="failed", error=f"진행 기록을 저장하지 못해 멈췄어요 ({exc}). '더 고쳐 줘' 로 다시 시킬 수 있어요.")
+                    try:
+                        self.save(meta)
+                    except OSError:
+                        pass
+
+    def _pump_inner(self, name: str, proc: subprocess.Popen, round_idx: int) -> None:
         result: dict = {}
         tail: list[str] = []
         for raw in proc.stdout:
@@ -294,17 +327,33 @@ class ProposalManager:
             notes = self._describe(ev)
             if ev.get("type") == "result":
                 result = ev
+            if ev.get("type") == "system" and ev.get("subtype") == "init":
+                # 세션이 실제로 생겼다. 이게 없으면 다음 회차에 --resume 할 대화가 없다.
+                with self.lock:
+                    meta = self.load(name)
+                    if meta and not meta.get("sessionStarted"):
+                        meta["sessionStarted"] = True
+                        self.save(meta)
             if notes:
                 with self.lock:
                     meta = self.load(name)
+                    if not meta:  # 버려서 폴더가 옮겨졌다
+                        continue
                     meta["activity"] = ((meta.get("activity") or []) + notes)[-200:]
                     meta["updatedAt"] = now_iso()
                     self.save(meta)
         proc.wait()
         with self.lock:
-            self.procs.pop(name, None)
+            if self.procs.get(name) is proc:  # 다음 회차가 이미 붙었으면 그것을 지우지 않는다
+                self.procs.pop(name, None)
             meta = self.load(name)
-            rnd = meta["rounds"][-1]
+            if not meta or meta.get("status") == "discarded":
+                return
+            rnd = meta["rounds"][round_idx]
+            if round_idx != len(meta["rounds"]) - 1:  # 늦게 끝난 지난 회차: 그 회차 기록만 고친다
+                rnd.update(finishedAt=now_iso(), status="cancelled")
+                self.save(meta)
+                return
             rnd["finishedAt"] = now_iso()
             cost = float(result.get("total_cost_usd") or 0)
             rnd["cost"] = cost
@@ -364,7 +413,7 @@ class ProposalManager:
                 meta["error"] = "멈췄어요. '더 고쳐 줘' 로 이어서 시킬 수 있어요."
                 self.save(meta)
         if proc and proc.poll() is None:
-            proc.terminate()
+            kill_tree(proc)
 
     # ---------- 반영·버리기 ----------
     def apply(self, name: str) -> dict:
@@ -376,6 +425,9 @@ class ProposalManager:
         d = self.dir(name)
         backup = d / "before-apply"
         report = {"applied": [], "merged": [], "conflicts": [], "unchanged": [], "at": now_iso()}
+        # 1) 먼저 파일마다 쓸 내용을 다 정한다. 하나라도 충돌하면 아무것도 쓰지 않는다.
+        #    처음엔 바로바로 써서, 충돌이 하나 있으면 web/ 가 반만 바뀐 채로 남았다(검토에서 재현).
+        plan: list[tuple[str, Path, bytes, str]] = []
         for item in self.changed_files(name):
             rel = item["file"]
             base_f, mine_f, real_f = d / "base" / rel, d / "web" / rel, self.web_root / rel
@@ -383,32 +435,33 @@ class ProposalManager:
             real = _read(real_f) if real_f.exists() else None
             if real == mine:
                 report["unchanged"].append(rel)
-                continue
-            if real is not None:
-                (backup / rel).parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(real_f, backup / rel)
-            if real is None or real == base:
-                real_f.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(mine_f, real_f)
-                report["applied"].append(rel)
-                continue
-            # 시안을 만든 뒤 진짜 web/ 도 바뀌었다 → 양쪽 변경을 합친다 (git merge-file: 저장소가 아니어도 파일 셋으로 된다)
-            merged = self._merge(real_f, base_f, mine_f)
-            if merged is None:
-                report["conflicts"].append(rel)
+            elif real is None or real == base:
+                plan.append((rel, real_f, mine_f.read_bytes(), "applied"))
             else:
-                real_f.write_text(merged, encoding="utf-8")
-                report["merged"].append(rel)
-        meta["applyReport"] = report
+                # 시안을 만든 뒤 진짜 web/ 도 바뀌었다 → 양쪽 변경을 합친다 (git merge-file: 저장소가 아니어도 파일 셋으로 된다)
+                merged = self._merge(real_f, base_f, mine_f)
+                if merged is None:
+                    report["conflicts"].append(rel)
+                else:
+                    plan.append((rel, real_f, merged, "merged"))
+        # 2) 충돌이 없을 때만 백업하고 쓴다. 바이트 그대로 쓴다 — 글자로 쓰면 Windows 의 CRLF 파일이 \r\r\n 이 됐다.
         if not report["conflicts"]:
+            for rel, real_f, body, kind in plan:
+                if real_f.exists() and not (backup / rel).exists():  # 첫 원본을 덮지 않는다
+                    (backup / rel).parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(real_f, backup / rel)
+                real_f.parent.mkdir(parents=True, exist_ok=True)
+                real_f.write_bytes(body)
+                report[kind].append(rel)
             meta["status"] = "applied"
             self._close_requests(meta, report)
+        meta["applyReport"] = report
         meta["updatedAt"] = now_iso()
         self.save(meta)
         return report
 
     @staticmethod
-    def _merge(real: Path, base: Path, mine: Path) -> str | None:
+    def _merge(real: Path, base: Path, mine: Path) -> bytes | None:
         git = shutil.which("git")
         if not git:
             return None
@@ -416,7 +469,7 @@ class ProposalManager:
                              capture_output=True, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
         if res.returncode != 0:  # 0 = 충돌 없음, 양수 = 충돌 수, 음수 = 오류
             return None
-        return res.stdout.decode("utf-8")
+        return res.stdout
 
     def _close_requests(self, meta: dict, report: dict) -> None:
         """반영한 요청 저장본에 결과를 덧붙이고 applied/ 로 옮긴다 (지우지 않는다)."""

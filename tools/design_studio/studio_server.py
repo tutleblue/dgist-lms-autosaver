@@ -55,8 +55,27 @@ ORIGINAL_PROXY_ENV = {k: os.environ[k] for k in _PROXY_KEYS if k in os.environ}
 sys.path.insert(0, str(PROJ))
 os.chdir(PROJ)
 os.environ["AUTOSAVER_OPEN_BROWSER"] = "0"
+
+def _sweep_old_temp() -> None:
+    # 가짜 데이터·AI 임시 폴더는 서버가 끝날 때 지운다. 하지만 snapshot.py 가 끄는 사진용 서버나 Windows 의 강제 종료는
+    # 정리할 틈이 없어서, 띄울 때마다 이틀 넘은 것을 함께 치운다 (검토에서 지적: 확인할 때마다 한 쌍씩 쌓였다).
+    import shutil
+    import time
+    cutoff = time.time() - 2 * 86400
+    for d in Path(tempfile.gettempdir()).glob("daling-studio-*"):
+        try:
+            if d.is_dir() and d.stat().st_mtime < cutoff:
+                shutil.rmtree(d, ignore_errors=True)
+        except OSError:
+            pass
+
+
+_sweep_old_temp()
 if args.data == "demo":
     DEMO_ROOT = Path(tempfile.mkdtemp(prefix="daling-studio-"))
+    import atexit
+    import shutil
+    atexit.register(shutil.rmtree, DEMO_ROOT, ignore_errors=True)
     # web_ui 는 AUTOSAVER_ROOT, 작업 프로세스 쪽(runtime_config)은 AUTOSAVER_DATA_ROOT 를 본다. 둘 다 임시 폴더로.
     os.environ["AUTOSAVER_ROOT"] = str(DEMO_ROOT)
     os.environ["AUTOSAVER_DATA_ROOT"] = str(DEMO_ROOT)
@@ -321,10 +340,25 @@ class StudioHandler(web_ui.DashboardHandler):
             return
         super()._do_GET()
 
+    def end_headers(self) -> None:
+        # 남의 페이지가 스튜디오를 iframe 으로 감싸지 못하게 (바깥 틀이 같은 출처의 /?frame=1 을 싣는 것만 된다)
+        self.send_header("X-Frame-Options", "SAMEORIGIN")
+        super().end_headers()
+
     def _do_POST(self) -> None:  # noqa: N802
         if self.reject_bad_host():
             return
+        # 앱 서버와 같은 CSRF 검사. 처음엔 빠져 있어서, 아무 웹사이트나 text/plain 으로 /__studio/save·proposal/start 를
+        # 보내 Claude 에게 일을 시킬 수 있었다(검토에서 지적). 스튜디오와 앱 화면은 모두 application/json 으로 보낸다.
+        if not self.csrf_ok():
+            self.send_json({"ok": False, "message": "잘못된 요청이에요 (Content-Type: application/json 필요)."},
+                           HTTPStatus.FORBIDDEN)
+            return
         route = urlparse(self.path).path
+        if args.snapshot and route.startswith("/__studio/"):
+            # 사진용 서버는 Claude 가 고친 시안 화면을 띄운다. 그 화면의 스크립트가 저장·시안 반영·AI 를 부르지 못하게
+            self.send_json({"ok": False, "message": "사진용 서버에서는 하지 않아요."}, HTTPStatus.FORBIDDEN)
+            return
         if route == "/__studio/save":
             self._save_request()
             return
@@ -427,6 +461,8 @@ def main() -> None:
         print(f"가짜 데이터 폴더: {DEMO_ROOT}", flush=True)
     if not args.no_open:
         threading.Timer(0.6, lambda: webbrowser.open(url)).start()
+    import signal
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))  # snapshot.py 의 terminate() 에도 임시 폴더를 치우고 끝나게
     try:
         server.serve_forever()
     except KeyboardInterrupt:

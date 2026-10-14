@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import subprocess
 import sys
 import time
@@ -23,6 +24,9 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 REQUESTS = HERE / "requests"
+# 화면 이름·태그는 파일 이름이 된다. Claude 가 인자로 넘기므로 경로가 되지 못하게 모양을 정해 둔다
+# (검토에서 지적: --views C:/anywhere/x 가 저장소 밖에 사진을 썼다).
+SAFE_NAME = re.compile(r"[A-Za-z0-9_-]{1,40}")
 
 
 def find_request(name: str) -> Path:
@@ -64,6 +68,14 @@ def main() -> None:
     ap.add_argument("--port", type=int, default=8890)
     ap.add_argument("--web", default="", help="다른 화면 폴더로 찍기 (시안: tools/design_studio/proposals/<이름>/web)")
     args = ap.parse_args()
+    if args.tag and not SAFE_NAME.fullmatch(args.tag):
+        sys.exit("--tag 는 영문·숫자·-·_ 만 써요.")
+    if args.web:
+        # 시안 폴더나 진짜 web/ 만 찍는다. 다른 폴더를 화면으로 띄우지 않게
+        web = Path(args.web).resolve()
+        allowed = (HERE / "proposals").resolve(), (HERE.parent.parent / "web").resolve()
+        if not any(web == a or a in web.parents for a in allowed):
+            sys.exit("--web 은 tools/design_studio/proposals/<이름>/web 이나 web/ 만 돼요.")
 
     path = find_request(args.name)
     data = json.loads(path.read_text(encoding="utf-8"))
@@ -79,6 +91,9 @@ def main() -> None:
             seen.append((c.get("target") or {}).get("view", ""))
         seen.append(data.get("view", "dashboard"))
         views = [v for i, v in enumerate(seen) if v and v not in seen[:i]]
+    views = [v for v in views if SAFE_NAME.fullmatch(v)]
+    if not views:
+        sys.exit("찍을 화면 이름이 없어요 (영문·숫자·-·_ 만 써요).")
     theme = args.theme or data.get("theme") or "claude"
     vp = data.get("viewport") or {}
     width = args.width or int(vp.get("w") or 1440)
@@ -97,6 +112,8 @@ def main() -> None:
         with sync_playwright() as p:
             browser = p.chromium.launch()
             ctx = browser.new_context(viewport={"width": width, "height": height}, locale="ko-KR")
+            # 시안 화면의 스크립트는 Claude 가 고친 것이다. 이 스튜디오 서버 말고는 어디에도 요청을 못 보내게 막는다.
+            ctx.route("**/*", lambda route: route.continue_() if route.request.url.startswith(base) else route.abort())
             page = ctx.new_page()
             errors: list[str] = []
             page.on("pageerror", lambda e: errors.append(str(e)))

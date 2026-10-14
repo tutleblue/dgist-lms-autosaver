@@ -42,3 +42,15 @@ def spawn(args: list[str], prompt: str, cwd: Path, proxy_env: dict | None) -> su
     except OSError:
         pass
     return proc
+
+
+def kill_tree(proc: subprocess.Popen) -> None:
+    """claude 를 멈춘다. Windows 의 npm claude.cmd 는 cmd.exe → node 로 뜨므로 terminate() 는 cmd.exe 만 끄고
+    node 는 계속 고치고 돈을 쓴다(검토에서 지적). 자식까지 함께 끈다."""
+    if proc.poll() is not None:
+        return
+    if os.name == "nt":
+        subprocess.run(["taskkill", "/T", "/F", "/PID", str(proc.pid)], capture_output=True,
+                       creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    else:
+        proc.terminate()
