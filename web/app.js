@@ -26,6 +26,8 @@ const icons = {
   eye: '<svg viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>',
   file: '<svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/></svg>',
   mail: '<svg viewBox="0 0 24 24"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-10 6L2 7"/></svg>',
+  // 문의·제보 단추: 편지 모양이면 접은 사이드바에서 메일함과 헷갈렸다 → 말풍선
+  feedback: '<svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M13 8H7"/><path d="M17 12H7"/></svg>',
   moon: '<svg viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>',
   sun: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.9 4.9 1.4 1.4"/><path d="m17.7 17.7 1.4 1.4"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.3 17.7-1.4 1.4"/><path d="m19.1 4.9-1.4 1.4"/></svg>',
   sparkle: '<svg viewBox="0 0 24 24"><path d="M12 3v3"/><path d="M12 18v3"/><path d="M3 12h3"/><path d="M18 12h3"/><path d="m5.6 5.6 2.1 2.1"/><path d="m16.3 16.3 2.1 2.1"/><path d="m5.6 18.4 2.1-2.1"/><path d="m16.3 7.7 2.1-2.1"/></svg>',
@@ -8453,7 +8455,7 @@ function openMoreSheet() {
     on: item.classList.contains("active"),
   }));
   const extras = [
-    { id: "feedbackButton", icon: "mail", label: "문의 · 제보" },
+    { id: "feedbackButton", icon: "feedback", label: "Feedback" },
     { id: "whatsNewButton", icon: "sparkle", label: "업데이트 내용" },
   ].filter((x) => $(`#${x.id}`));
   sheet.innerHTML = `
@@ -10999,7 +11001,7 @@ const TOUR_STEPS = [
     targets: ["#feedbackButton", "#whatsNewButton"],
     pose: "bow",
     title: "궁금하거나 고장 나면",
-    text: "'문의 · 제보'를 누르면 받는 사람과 서식이 채워진 메일이 열려. 새 버전이 나오면 이 근처에 '새 업데이트'가 떠.",
+    text: "'Feedback'을 누르면 받는 사람과 서식이 채워진 메일이 열려. 새 버전이 나오면 이 근처에 '새 업데이트'가 떠.",
   },
   {
     chapter: "끝",

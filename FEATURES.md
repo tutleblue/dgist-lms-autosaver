@@ -619,7 +619,7 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 
 ### 문의 · 오류 제보 · 아이디어 (`app.js` openFeedback)
 
-- 사이드바 '문의 · 제보'(#feedbackButton)·설정 › 앱 '보내기'. 종류를 고르면 메일 쓰기가 받는 사람 `FEEDBACK_TO`(tutleblue12@gmail.com)·제목 `[붕어빵 종류] `·본문 서식으로 열린다.
+- 사이드바 'Feedback'(#feedbackButton, 한국어 화면도 영어, 말풍선 아이콘 — 편지 모양은 접은 사이드바에서 메일함과 헷갈렸다)·설정 › 앱 '보내기'. 종류를 고르면 메일 쓰기가 받는 사람 `FEEDBACK_TO`(tutleblue12@gmail.com)·제목 `[붕어빵 종류] `·본문 서식으로 열린다.
 - 본문 아래 앱 정보(`/api/diagnostics`: 버전·Windows·파이썬·설치판 여부, 화면 크기·테마는 화면에서). 오류 제보에는 사흘 안의 `server_errors.log` 마지막 한 건과 마지막 실패 작업을 붙인다. 메일 주소·비밀번호는 넣지 않는다.
 
 ### 과목별 교수·조교 (`lms_crawler.fetch_course_staff`, `web_ui.get_course_staff`)
