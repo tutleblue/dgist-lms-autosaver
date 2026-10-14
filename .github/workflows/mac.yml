@@ -271,7 +271,8 @@ jobs:
       - name: 키체인 허락 유지 점검 (다음 빌드 흉내)
         # 새 판을 깔아도 키체인 허락을 다시 묻지 않는지 잰다. 이번 빌드(A)로 점검 항목을 남기고, 같은 자리에
         # '다음 빌드'(B: 판 번호만 바꿔 같은 신원으로 다시 서명 → cdhash 는 다름)를 놓은 뒤 묻는 창 없이 읽어 본다.
-        #  - 대조군 ad-hoc: B 가 못 읽어야 정상 (이 점검이 '다시 묻기' 를 잡는다는 증거)
+        #  - 양성 대조군 same: A 가 쓰고 A 가 그대로 읽는다 → 읽어야 정상 (묻는 창을 막은 읽기 자체가 되는지)
+        #  - 음성 대조군 ad-hoc: B 가 못 읽어야 정상 (이 점검이 '다시 묻기' 를 잡는다는 증거)
         #  - 사설 인증서: B 가 읽어야 목표 달성. 애플 포럼(developer.apple.com/forums/thread/98484)에 애플 CA 가 아닌
         #    인증서로 서명한 앱도 업데이트 뒤 partition_id 에 새 cdhash 가 붙으며 다시 물었다는 글이 있어 실제로 잰다.
         # 러너의 임시 키체인은 사용자 로그인 키체인과 다를 수 있어, 실패해도 DMG 는 만든다 (단계 요약·로그로 본다).
@@ -302,8 +303,9 @@ jobs:
           }
           cdhash() { codesign -dvvv "$1" 2>&1 | sed -n 's/^CDHash=//p'; }
           dreq() { codesign -d -r- "$1" 2>&1 | sed -n 's/^#* *designated => //p'; }
-          persist() {  # $1 이름, $2 서명 신원('-' = ad-hoc). 0 = 다음 빌드가 묻지 않고 읽음, 1 = 못 읽음(다시 물어야 함)
-            local name=$1 id=$2 kc="daling-persist-$1.keychain" app="$RUNNER_TEMP/kc-$1/Daling.app" rc cd_a cd_b dr_a dr_b
+          persist() {  # $1 이름, $2 서명 신원('-' = ad-hoc), $3 next(다음 빌드로 바꿔 읽기)|same(그대로 읽기)
+            # 0 = 묻지 않고 읽음, 1 = 못 읽음(다시 물어야 함)
+            local name=$1 id=$2 mode=$3 kc="daling-persist-$1.keychain" app="$RUNNER_TEMP/kc-$1/Daling.app" rc cd_a cd_b dr_a dr_b
             local kc_args=()
             if [ "$id" != "-" ] && [ -n "$SIGN_KC" ]; then kc_args=(--keychain "$SIGN_KC"); fi
             rm -rf "$RUNNER_TEMP/kc-$name" && mkdir -p "$RUNNER_TEMP/kc-$name" && ditto dist/Daling.app "$app" || return 2
@@ -319,11 +321,15 @@ jobs:
             limited 90 env AUTOSAVER_SMOKE_KEYCHAIN=write "$app/Contents/MacOS/Daling" --autosaver-smoke
             rc=$?
             if [ "$rc" = 0 ]; then
-              plutil -replace CFBundleVersion -string "persist-next" "$app/Contents/Info.plist"
-              codesign --force --timestamp=none "${kc_args[@]}" --sign "$id" "$app" >> "$LOG" 2>&1
+              # 항목의 접근 목록: 믿는 앱(요구 조건)과 partition_id(무엇으로 묶였나). 비밀 값은 찍지 않는다(-d 없음)
+              limited 30 security dump-keychain -a "$kc"
+              if [ "$mode" = next ]; then
+                plutil -replace CFBundleVersion -string "persist-next" "$app/Contents/Info.plist"
+                codesign --force --timestamp=none "${kc_args[@]}" --sign "$id" "$app" >> "$LOG" 2>&1
+              fi
               cd_b="$(cdhash "$app")"; dr_b="$(dreq "$app")"
-              echo "== $name B(읽기) cdhash=$cd_b dr=$dr_b ($([ "$dr_a" = "$dr_b" ] && echo 'DR 같음' || echo 'DR 바뀜'))" >> "$LOG"
-              if [ -z "$cd_b" ] || [ "$cd_a" = "$cd_b" ]; then
+              echo "== $name B(읽기, $mode) cdhash=$cd_b dr=$dr_b ($([ "$dr_a" = "$dr_b" ] && echo 'DR 같음' || echo 'DR 바뀜'))" >> "$LOG"
+              if [ "$mode" = next ] && { [ -z "$cd_b" ] || [ "$cd_a" = "$cd_b" ]; }; then
                 echo "cdhash 가 안 바뀌어 '다음 빌드' 가 아닙니다" >> "$LOG"
                 rc=3
               else
@@ -348,22 +354,29 @@ jobs:
               *) echo "점검 준비 실패" ;;
             esac
           }
-          persist adhoc -
+          persist same "$IDENTITY" same
+          SAME=$?
+          persist adhoc - next
           ADHOC=$?
           CERT=""
           if [ "$IDENTITY" != "-" ]; then
-            persist cert "$IDENTITY"
+            persist cert "$IDENTITY" next
             CERT=$?
           fi
           cat "$LOG"
           {
             echo "### 키체인 허락 유지 (다음 빌드가 묻지 않고 읽는가)"
-            echo "| 서명 | 결과 |"
+            echo "| 경우 | 결과 |"
             echo "|---|---|"
-            echo "| ad-hoc (대조군, 못 읽어야 정상) | $(verdict "$ADHOC") |"
-            [ -n "$CERT" ] && echo "| 사설 인증서 | $(verdict "$CERT") |"
+            echo "| 같은 빌드 그대로 (양성 대조군, 읽어야 정상) | $(verdict "$SAME") |"
+            echo "| ad-hoc 다음 빌드 (음성 대조군, 못 읽어야 정상) | $(verdict "$ADHOC") |"
+            [ -n "$CERT" ] && echo "| 사설 인증서 다음 빌드 | $(verdict "$CERT") |"
           } >> "$GITHUB_STEP_SUMMARY"
-          echo "ad-hoc: $(verdict "$ADHOC")${CERT:+ · 사설 인증서: $(verdict "$CERT")}"
+          echo "같은 빌드: $(verdict "$SAME") · ad-hoc: $(verdict "$ADHOC")${CERT:+ · 사설 인증서: $(verdict "$CERT")}"
+          if [ "$SAME" != 0 ]; then
+            echo "::error::같은 빌드도 묻는 창을 막고는 못 읽습니다 — 점검 방법이 이 러너에서 안 맞아 결과를 믿을 수 없습니다"
+            exit 1
+          fi
           if [ "$ADHOC" = 0 ]; then
             echo "::warning::ad-hoc 다음 빌드도 묻지 않고 읽었습니다 — 이 러너에서는 '다시 묻기' 를 못 잡는 것일 수 있어 결과를 믿기 어렵습니다"
           fi
