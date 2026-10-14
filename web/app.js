@@ -1385,10 +1385,13 @@ function openEmailDetail(mail) {
   chip.textContent = mail.category || "기타";
   $("#readSubject").textContent = mail.subject;
   const date = mail.date ? formatEmailDate(mail.date) : "";
-  const sender = mail.fromName || mail.fromEmail || "";
-  $("#readSender").textContent = sender;
+  // 보낸·임시보관 메일은 보낸 사람이 늘 '나' 라, 받는 사람을 보인다 (2026-10-15 '누구한테 보냈는지 안 보인다')
+  const outgoing = (mail.folder === "sent" || mail.folder === "draft") && (mail.toName || mail.toEmail);
+  const sender = outgoing ? mail.toName || mail.toEmail : mail.fromName || mail.fromEmail || "";
+  const senderAddr = outgoing ? mail.toEmail || "" : mail.fromEmail || "";
+  $("#readSender").textContent = outgoing ? `받는 사람 · ${sender}` : sender;
   // 이름이 곧 주소면 두 번 쓰지 않는다
-  $("#readAddress").textContent = sender === mail.fromEmail ? "" : mail.fromEmail || "";
+  $("#readAddress").textContent = sender === senderAddr ? "" : senderAddr;
   // 이번 학기에 무슨 과목 몇 분반을 맡은 분인지 (개설강좌 담당교수 + 내 과목 조교)
   {
     const box = $("#readAddress");
@@ -3165,7 +3168,11 @@ function emailListRow(mail) {
       <div class="list-main">
         <div class="list-head">
           <span class="list-folder-tag">${escapeHtml(MAIL_FOLDER_TAG[mail.folder] || "메일")}</span>
-          <span class="list-from">${escapeHtml(shortText(mail.fromName || mail.fromEmail, 24))}</span>
+          <span class="list-from">${
+            (mail.folder === "sent" || mail.folder === "draft") && (mail.toName || mail.toEmail)
+              ? `→ ${escapeHtml(shortText(mail.toName || mail.toEmail, 22))}`
+              : escapeHtml(shortText(mail.fromName || mail.fromEmail, 24))
+          }</span>
           ${mail.folder === "sent" || mail.folder === "draft" ? "" : coursePersonTagHtml(mail.fromEmail)}
           <span class="list-when">
             ${hasFiles ? iconHtml("paperclip", "list-clip") : ""}
@@ -6873,14 +6880,12 @@ function bindEvents() {
 /* ===== 테마 =====
    누를 때마다 이 차례대로 넘어간다. */
 // '자동' 은 Windows 의 밝게/어둡게 설정을 따른다 (밝으면 기본, 어두우면 다크). 처음 쓰는 사람의 기본값.
-// 그래파이트(밝음·어두움)는 2026-10-14 새 기본 색. 예전 '기본'·'다크' 도 사용자 요청으로 고를 수 있게 남겼다.
+// 테마는 자동·기본·다크 셋만 (2026-10-15 사용자: '테마가 너무 많다, 예전 기본과 다크만').
+// 화이트·남색·그래파이트(밝음/어두움)는 목록에서 뺐다. 색 정의는 styles.css 에 남아 있어 다시 넣을 수 있다.
+// 예전에 뺀 테마를 저장해 둔 사람은 applyTheme 이 목록에 없다고 보고 '자동' 으로 돌린다.
 const THEMES = [
   { key: "auto", label: "자동", icon: "monitor" },
-  { key: "graphite", label: "그래파이트", icon: "layout" },
-  { key: "graphite-dark", label: "그래파이트 다크", icon: "moon" },
   { key: "claude", label: "기본", icon: "sparkle" },
-  { key: "light", label: "화이트", icon: "sun" },
-  { key: "navy", label: "남색", icon: "star" },
   { key: "dark", label: "다크", icon: "moon" },
 ];
 
@@ -6888,8 +6893,7 @@ const systemDark = window.matchMedia("(prefers-color-scheme: dark)");
 
 /** 고른 테마(auto 포함) → 실제로 칠할 테마 */
 function resolveTheme(choice) {
-  // 자동은 새 그래파이트 짝을 따른다
-  if (choice === "auto") return systemDark.matches ? "graphite-dark" : "graphite";
+  if (choice === "auto") return systemDark.matches ? "dark" : "claude";
   return choice;
 }
 
@@ -7235,7 +7239,7 @@ async function renderStorage() {
              </p>`
           : ""
       }
-      <p class="st-clean-note">앱 보관함에서만 지웁니다. 드라이브와 내 컴퓨터 사본은 그대로 남습니다. 지난 학기 자료는 LMS가 막아 두어 다시 받지 못할 수 있어요.</p>
+      <p class="st-clean-note">앱 보관함에서만 지움 · Drive·내 컴퓨터 사본은 남음 · 지난 학기 자료는 다시 못 받을 수 있음</p>
       <div class="storage-actions">
         <button class="button compact danger" id="cleanupStorageButton" type="button" disabled>선택 항목 정리</button>
       </div>
