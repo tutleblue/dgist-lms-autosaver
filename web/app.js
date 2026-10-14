@@ -862,8 +862,7 @@ function upcomingEventItems() {
     items.push({ date: dt, title: ev.title, sub: [ev.calendarName, ev.location].filter(Boolean).join(" · "), kind: "lms" });
   });
   // 여러 날 학사일정(시험 기간 등)은 시작일 하나로
-  (state.academic || [])
-    .filter((e) => !state.academicUnderOnly || e.kind !== "대학원")
+  academicShown()
     .forEach((e) => {
       if (!e.end || e.end === e.start) return;
       const dt = new Date(`${e.start}T00:00`);
@@ -4767,8 +4766,7 @@ function calendarItems() {
   // 학교 학사일정 (수강신청·성적확인 같은 것)
   // 하루짜리만 칸 안의 칩으로 넣는다.
   // 여러 날에 걸친 것은 calendarSpans()가 이어진 막대로 그린다.
-  (state.academic || [])
-    .filter((e) => !state.academicUnderOnly || e.kind !== "대학원")
+  academicShown()
     .forEach((e) => {
       const start = new Date(`${e.start}T00:00`);
       if (Number.isNaN(start.getTime())) return;
@@ -4874,9 +4872,56 @@ function renderCalendar() {
    날마다 같은 제목을 반복해 찍으면 달력이 지저분하다.
    다른 캘린더들처럼 시작일부터 종료일까지 하나의 막대로 잇는다.
    달력은 7칸 그리드라, 주가 바뀌는 지점에서 막대를 끊어 이어 붙인다. */
+/* 달력·대시보드에 보일 학사일정만 고른다 (2026-10-14 사용자: '쓸데없는 일정은 걸러 줘').
+   - 학생이 할 일이 없는 행정 기간은 뺀다: 사진변경신청·학적기본정정·강의계획서작성·성적입력·미완성적처리.
+     사진변경신청기간은 거의 한 해 내내 걸쳐 달력 맨 위를 늘 차지했다.
+   - '수업일수(2/4이후 ~ 3/4)' 같은 구간 막대는 빼고, 하루짜리 '수업일수 2/4선' 같은 날짜 표시만 남긴다.
+   - 대학·대학원(·공통)에 같은 이름·같은 날짜로 두 번 실린 것은 하나로. */
+const ACADEMIC_NOISE = /(사진\s*변경|학적\s*기본\s*정정|강의\s*계획서\s*작성|성적\s*입력|미완성적)/;
+function academicShown() {
+  const seen = new Set();
+  return (state.academic || []).filter((e) => {
+    if (state.academicUnderOnly && e.kind === "대학원") return false;
+    const title = String(e.title || "");
+    if (ACADEMIC_NOISE.test(title)) return false;
+    const span = (e.end || e.start) !== e.start;
+    if (span && /^수업일수\s*\(/.test(title)) return false;
+    const key = `${title.replace(/\s+/g, "")}|${e.start}|${e.end || e.start}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).filter((e, i, list) => {
+    // 같은 날짜에 같은 일을 다른 이름으로 두 번 싣는다('대학 및 대학원 중간시험' = '중간고사기간',
+    // '2학기 강의평가' = '강의평가기간'). 주제가 같으면 이름이 짧은 쪽 하나만 남긴다.
+    const t = academicTopic(e.title);
+    if (!t) return true;
+    const end = e.end || e.start;
+    return !list.some((o, j) => {
+      if (j === i || o.start !== e.start || (o.end || o.start) !== end || academicTopic(o.title) !== t) return false;
+      const a = String(e.title).length, b = String(o.title).length;
+      return b < a || (b === a && j < i);
+    });
+  });
+}
+// 순서가 중요하다: '수강신청 변경' 은 수강신청보다 수강변경으로 먼저 잡아야 한다
+const ACADEMIC_TOPICS = [
+  ["exam", /시험|고사/],
+  ["eval", /강의\s*평가/],
+  ["change", /수강\s*(신청\s*)?변경/],
+  ["enroll", /수강\s*신청/],
+  ["ap", /공동\s*AP/i],
+  ["drop", /수강\s*포기/],
+  ["grade", /성적\s*확인/],
+  ["grad", /졸업\s*신청/],
+  ["return", /복학/],
+];
+function academicTopic(title) {
+  const hit = ACADEMIC_TOPICS.find(([, re]) => re.test(String(title || "")));
+  return hit ? hit[0] : "";
+}
+
 function calendarSpans(year, month, startDow, daysInMonth) {
-  const events = (state.academic || [])
-    .filter((e) => !state.academicUnderOnly || e.kind !== "대학원")
+  const events = academicShown()
     .filter((e) => (e.end || e.start) !== e.start);
 
   const monthStart = new Date(year, month, 1);
