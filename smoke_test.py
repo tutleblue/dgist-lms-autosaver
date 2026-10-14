@@ -14,6 +14,7 @@
     - 화면 서버를 빈 포트(0)에 띄워 /healthz, /, /app.js, 가벼운 /api 몇 개를 GET
     - 작업 프로세스(`--autosaver-job smoke`)가 창 없이 뜨고 출력·데이터 경로가 이어지는지
     - Playwright 드라이버(node)가 실행되는지, 맥이면 AppKit·WebKit·인증서 묶음
+    - Windows Store 판(MSIX)이면 업데이트를 Store 에 맡기는지, 작업 프로세스가 같은 패키지 안에서 도는지
     - 리눅스면 PyQt6·QtWebEngine(창은 만들지 않음)·QtWebEngineProcess·인증서 묶음, 키링 대신 쓰는 0600 파일 길
     - 맥이면 앱 안 업데이트 도구(install.sh)가 묶였는지, AUTOSAVER_SMOKE_DOWNLOAD_URL 이 있으면 앱이 받은 파일에 격리 표시가 없는지
     - AUTOSAVER_SMOKE_KEYCHAIN=1 이면 점검용 계정으로 키체인(리눅스는 Secret Service) 쓰기·읽기·지우기
@@ -223,6 +224,12 @@ def run(app) -> int:
         want = os.environ.get("AUTOSAVER_SMOKE_ROOT", "")
         if want and want not in out:
             raise RuntimeError(f"데이터 경로가 안 이어짐: {out.strip()[-200:]}")
+        import runtime_config
+
+        package = runtime_config.msix_package_full_name()
+        if package and f"package={package}" not in out:
+            # 패키지 밖에서 돌면 AppData 에 쓴 것(LMS 브라우저 등)을 앱 본체와 다르게 본다
+            raise RuntimeError(f"작업 프로세스가 패키지 밖에서 돎: {out.strip()[-200:]}")
         return out.strip().splitlines()[-1]
 
     check("작업 프로세스 (--autosaver-job smoke)", worker)
@@ -243,6 +250,24 @@ def run(app) -> int:
         return f"{command[:2]} · 브라우저 {'있음' if browser_setup.browser_ready() else '없음'}"
 
     check("Playwright 드라이버", playwright_driver)
+
+    if os.name == "nt":
+        import runtime_config
+
+        if runtime_config.is_msix():
+            def store_update():
+                # Store 판(MSIX, packaging/msix)은 GitHub 설치 파일을 돌리지 않는다. 네트워크 없이 바로 답해야 한다
+                import updater
+
+                res = updater.check_update()
+                if res.get("store") is not True or res.get("updateAvailable"):
+                    raise RuntimeError(f"Store 판인데 GitHub 업데이트를 봄: {res}")
+                applied = updater.apply_update()
+                if applied.get("ok") is not False or applied.get("store") is not True:
+                    raise RuntimeError(f"Store 판인데 설치를 하려 함: {applied}")
+                return runtime_config.msix_app_user_model_id()
+
+            check("MSIX: 업데이트는 Store 에", store_update)
 
     if sys.platform == "darwin":
         def cocoa_modules():

@@ -30,6 +30,10 @@ node --check web\app.js
 powershell -ExecutionPolicy Bypass -File packaging\build_installer.ps1
 powershell -ExecutionPolicy Bypass -File packaging\build_installer.ps1 -Install
 
+# Microsoft Store 판(MSIX) 만들기 / 시험 설치·패키지 안 점검 / Store 제출판 (FEATURES.md 'Microsoft Store 판')
+powershell -ExecutionPolicy Bypass -File packaging\msix\build_msix.ps1 -Build
+powershell -ExecutionPolicy Bypass -File packaging\msix\build_msix.ps1 -Install -Smoke
+
 # 설치된 앱이 떠 있는 포트 찾기 (8765가 막혀 있으면 8766~8785)
 Get-NetTCPConnection -OwningProcess (Get-Process 붕어빵).Id -State Listen
 ```

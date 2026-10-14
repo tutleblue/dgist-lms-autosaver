@@ -12115,6 +12115,8 @@ async function checkForUpdate(manual = false) {
   const ready = Boolean(d.ok && d.updateAvailable);
   if (status) {
     if (!d.ok) status.textContent = d.message || "확인하지 못했어요";
+    // Store 판(MSIX): 새 버전은 Microsoft Store 가 깐다. GitHub 은 묻지 않는다 (updater.check_update)
+    else if (d.store) status.textContent = `Microsoft Store가 새 버전을 알아서 설치해요 (v${d.current})`;
     else if (ready) status.textContent = `v${d.latest} 이 나왔어요${d.size ? ` · ${Math.round(d.size / 1048576)}MB` : ""}`;
     else status.textContent = `최신 버전이에요 (v${d.current})`;
   }

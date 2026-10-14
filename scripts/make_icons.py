@@ -8,6 +8,7 @@
     python scripts/make_icons.py      (시스템 파이썬의 Pillow. 앱에는 필요 없다)
     python scripts/make_icons.py --mac   맥 앱 아이콘(packaging/mac/Daling.icns)만 다시 만든다
     python scripts/make_icons.py --linux 리눅스 아이콘(packaging/linux/daling-128·256·512.png)만 다시 만든다
+    python scripts/make_icons.py --msix  Store 판(MSIX) 로고(packaging/msix/Assets)만 다시 만든다
 
 - 맥 아이콘(.icns)은 Windows 처럼 타일을 꽉 채우면 Dock 에서 다른 앱보다 한 치수 크게 보인다.
   애플 격자(1024 안에 824 네모, 둘레 100 여백)대로 여백을 두고 같은 타일을 얹는다.
@@ -148,10 +149,60 @@ def save_linux_pngs(mask: Image.Image) -> list[Path]:
     return out
 
 
+MSIX_DIR = ROOT / "packaging" / "msix" / "Assets"
+MSIX_SCALES = (100, 125, 150, 200, 400)
+# 작업 표시줄·시작 메뉴·알림이 고르는 크기 (Square44x44Logo.targetsize-N). 'altform-unplated' 는 Windows 가 바탕판을
+# 깔지 않고 그대로 쓰는 판 — 없으면 작업 표시줄 아이콘 둘레에 색 네모가 생긴다. 타일이 이미 크림 바탕이라 같은 그림을 쓴다.
+MSIX_TARGET_SIZES = (16, 20, 24, 30, 32, 36, 40, 48, 60, 64, 72, 80, 96, 256)
+
+
+def _msix_canvas(width: int, height: int, mask: Image.Image, share: float) -> Image.Image:
+    """투명 캔버스 가운데에 타일(높이의 share 만큼). 시작 타일·넓은 타일·시작 화면용."""
+    side = max(16, round(min(width, height) * share))
+    canvas = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    canvas.alpha_composite(tile(side, mask), ((width - side) // 2, (height - side) // 2))
+    return canvas
+
+
+def save_msix_assets(mask: Image.Image) -> list[Path]:
+    """Store 판(packaging/msix/AppxManifest.xml)의 로고. build_msix.ps1 이 makepri 로 배율·크기 판을 묶는다.
+
+    CI 에는 원본 그림이 없을 수 있어 만든 파일을 저장소에 둔다 (맥·리눅스와 같이).
+    """
+    MSIX_DIR.mkdir(parents=True, exist_ok=True)
+    out: list[Path] = []
+
+    def save(img: Image.Image, name: str) -> None:
+        path = MSIX_DIR / name
+        img.save(path, optimize=True)
+        out.append(path)
+
+    for scale in MSIX_SCALES:
+        k = scale / 100
+        # 앱 목록·설치 창 (StoreLogo 50, Square44x44Logo 44): 타일을 꽉 채운다 (.ico 와 같은 모양)
+        save(tile(round(50 * k), mask), f"StoreLogo.scale-{scale}.png")
+        save(tile(round(44 * k), mask), f"Square44x44Logo.scale-{scale}.png")
+        # Windows 10 시작 타일은 아래에 이름이 붙으므로 둘레를 비운다
+        save(_msix_canvas(round(150 * k), round(150 * k), mask, 0.62), f"Square150x150Logo.scale-{scale}.png")
+        save(_msix_canvas(round(310 * k), round(150 * k), mask, 0.62), f"Wide310x150Logo.scale-{scale}.png")
+        # 시작 화면 그림: 데스크톱 앱에는 안 보이지만 매니페스트에 꼭 있어야 한다
+        save(_msix_canvas(round(620 * k), round(300 * k), mask, 0.42), f"SplashScreen.scale-{scale}.png")
+    for size in MSIX_TARGET_SIZES:
+        img = tile(size, mask)
+        save(img, f"Square44x44Logo.targetsize-{size}.png")
+        save(img, f"Square44x44Logo.targetsize-{size}_altform-unplated.png")
+        save(img, f"Square44x44Logo.targetsize-{size}_altform-lightunplated.png")
+    return out
+
+
 def main() -> None:
     import sys
 
     mask = load_mask()
+    if "--msix" in sys.argv[1:]:
+        paths = save_msix_assets(mask)
+        print(f"packaging/msix/Assets 에 {len(paths)}개를 만들었습니다.")
+        return
     if "--mac" in sys.argv[1:]:
         save_mac_icns(mask)
         print(f"{MAC_ICNS.relative_to(ROOT)} 를 만들었습니다.")
@@ -187,7 +238,9 @@ def main() -> None:
     mark.putalpha(mask)
     mark.resize((240, 240), Image.LANCZOS).save(WEB / "img" / "daling-mark.png")
     save_mac_icns(mask)
-    print("app.png, app.ico, app-logo-120.png, favicon.svg, img/daling-mark.png, packaging/mac/Daling.icns 를 만들었습니다.")
+    save_msix_assets(mask)
+    print("app.png, app.ico, app-logo-120.png, favicon.svg, img/daling-mark.png, packaging/mac/Daling.icns, "
+          "packaging/msix/Assets 를 만들었습니다.")
 
 
 if __name__ == "__main__":

@@ -53,7 +53,19 @@ LINUX_MANUAL_NOTE = "리눅스에서는 새 AppImage 를 내려받아 실행 권
 # tar.gz·한 줄 설치(~/.local/opt/daling)로 깐 사람에게 AppImage 를 권하면 둘이 생긴다. 같은 명령을 다시 돌리면 바뀐다
 LINUX_SCRIPT_NOTE = "터미널에서 curl -fsSL https://gudaling.dev/install.sh | sh 를 다시 실행하면 새 버전으로 바뀌어요"
 LINUX_MISSING_NOTE = "리눅스용 새 버전 파일이 아직 올라오지 않았어요"
+# Microsoft Store 판(MSIX, packaging/msix): 새 버전은 Store 가 받아 바꾼다. 여기서 GitHub 설치 파일을 돌리면
+# Store 판과 따로 노는 두 번째 Daling(Inno 설치본)이 깔린다. 그래서 GitHub 에 묻지도, 받지도 않는다.
+STORE_NOTE = "Microsoft Store가 새 버전을 알아서 설치해요"
 _last_manual_url = ""
+
+
+def _store_edition() -> bool:
+    try:
+        import runtime_config
+
+        return runtime_config.is_msix()
+    except Exception:
+        return False
 
 
 def _mac_self_install() -> bool:
@@ -142,6 +154,10 @@ def _release_notes(body: str) -> list[str]:
 def check_update() -> dict:
     global _last_manual_url
     current = local_version()
+    if _store_edition():
+        # 화면(app.js checkForUpdate)은 store 면 '새 버전' 알약·'지금 업데이트' 를 띄우지 않고 이 안내만 보인다
+        return {"ok": True, "current": current, "latest": current, "updateAvailable": False,
+                "store": True, "canInstall": False, "message": STORE_NOTE, "repo": REPO}
     try:
         release = _get_json(LATEST_RELEASE_API)
     except urllib.error.HTTPError as exc:
@@ -359,6 +375,8 @@ def _start_mac_install(dmg: Path) -> None:
 
 def apply_update(on_ready_to_exit=None) -> dict:
     """설치형 앱: 최신 설치 파일을 받아 확인한 뒤 설치를 시작한다(뒤에서 돈다)."""
+    if _store_edition():
+        return {"ok": False, "store": True, "message": STORE_NOTE}
     if _manual_platform():
         # 리눅스(와 소스로 돌리는 맥)는 설치 파일을 돌리지 않는다. 화면은 open_manual_download 를 부른다.
         return {"ok": False, "manual": True, "message": _manual_note()}

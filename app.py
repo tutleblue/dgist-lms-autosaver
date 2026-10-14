@@ -90,6 +90,12 @@ def set_app_user_model_id() -> None:
     """
     if os.name != "nt":
         return
+    import runtime_config
+
+    if runtime_config.is_msix():
+        # Store 판(MSIX)은 패키지가 앱 ID(<패키지 패밀리>!Daling)를 정해 준다. 여기서 우리 ID 를 붙이면 작업 표시줄이
+        # 창을 시작 메뉴의 Daling 과 다른 앱으로 묶는다.
+        return
     try:
         import ctypes
 
@@ -174,9 +180,12 @@ def notify(title: str, message: str) -> None:
         return
     try:
         from winotify import Notification
+        import runtime_config
 
         toast = Notification(
-            app_id=WINDOW_TITLE,
+            # Store 판(MSIX)에서는 알림을 띄우는 PowerShell 도 패키지 신원을 물려받는다. 'Daling' 으로도 뜨지만(2026-10-15 실측)
+            # 패키지 앱 ID 로 띄워야 알림이 시작 메뉴의 Store 판 Daling 과 같은 앱으로 묶인다
+            app_id=runtime_config.msix_app_user_model_id() or WINDOW_TITLE,
             title=title,
             msg=message[:200],
             icon=str(APP_ICON) if APP_ICON.exists() else "",
@@ -747,7 +756,8 @@ def run_worker(job: str) -> int:
             # 데이터 경로를 물려받는지' 만 본다. 화면(start_task)에서는 부를 수 없는 이름이다.
             import runtime_config
 
-            print(f"smoke-worker ok data={runtime_config.AUTOSAVER_DATA_ROOT}")
+            # package: Store 판(MSIX)이면 작업 프로세스도 같은 패키지 안에서 도는지 (AppData 가상화를 같이 봐야 한다)
+            print(f"smoke-worker ok data={runtime_config.AUTOSAVER_DATA_ROOT} package={runtime_config.msix_package_full_name() or '-'}")
         else:
             print(f"알 수 없는 작업입니다: {job}")
             return 1

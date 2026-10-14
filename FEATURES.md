@@ -465,7 +465,8 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 | 이 PC에 설치 | `packaging\build_installer.ps1 -Install` |
 | 맥 앱 (DMG) | GitHub Actions `.github/workflows/mac.yml` → `daling-<버전>-mac-arm64.dmg` 아티팩트 (아래 'macOS 판') |
 | 리눅스 앱 (AppImage·tar.gz) | GitHub Actions `.github/workflows/linux.yml` → `daling-<버전>-linux-x86_64.AppImage`·`.tar.gz` 아티팩트 (아래 '리눅스 판') |
-| 설치본 점검 | `<실행 파일> --autosaver-smoke` (창 없이, 빈 임시 데이터 폴더로. `smoke_test.py`) |
+| Microsoft Store 판 (MSIX) | `packaging\msix\build_msix.ps1` → `packaging\out\daling-<버전>-win-x64.msix`(시험판)·`-store.msix`(제출판) (아래 'Microsoft Store 판') |
+| 설치본 점검 | `<실행 파일> --autosaver-smoke` (창 없이, 빈 임시 데이터 폴더로. `smoke_test.py`). Store 판은 `daling.exe --autosaver-smoke` |
 
 설치 파일(Inno Setup)은 관리자 권한 없이 사용자 폴더에 설치하고, WebView2가 없으면 부트스트래퍼를 실행하고, .NET 4.7.2 미만이면 안내 후 중단합니다. zip 배포에서 생기던 "인터넷에서 받은 파일" 차단 문제를 피하려고 설치 파일로 바꿨습니다. 공인 서명이 없어서 브라우저로 받으면 처음 실행 때 SmartScreen이 뜹니다. 사이트의 한 줄 설치는 이 창 없이 깝니다 (아래 '서명·한 줄 설치'). `build_installer.ps1` 은 설치 파일 옆에 `<설치 파일>.sha256` 도 만듭니다 — 릴리스에 같이 올립니다.
 
@@ -481,7 +482,7 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 - 삼성 노트 넣기는 PDF만, 파일당 약 5.5초 (삼성 노트 자체 저장 시간)
 - 설치형 앱의 자가 업데이트는 막혀 있음. 새 설치 파일로 배포해야 함
 - GitHub에 올리지 않은 커밋과 변경이 많음 (`git status`로 확인). 푸시·릴리스는 사용자가 `gh auth login` 후 요청할 때
-- 공인 코드 서명 없음: 브라우저로 받으면 SmartScreen(Windows)·Gatekeeper(맥) 경고. 한 줄 설치로 피하지만 Windows 스마트 앱 컨트롤은 못 피함 ('서명·한 줄 설치')
+- 공인 코드 서명 없음: 브라우저로 받으면 SmartScreen(Windows)·Gatekeeper(맥) 경고. 한 줄 설치로 피하지만 Windows 스마트 앱 컨트롤은 못 피함 ('서명·한 줄 설치'). Microsoft Store 판은 포장까지 준비됨, 등록·제출은 사용자가 ('Microsoft Store 판')
 
 
 ### 공휴일·명절 인사 (`app.js`)
@@ -757,10 +758,67 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 |---|---|---|---|
 | SignPath Foundation (Windows) | 무료 | 심사 수 주~2달, 승인 뒤에도 밀림 | 2026 거절 사례가 '사용자층이 아직 없음'. 이 저장소(별 0)는 지금은 어렵다. 받아도 게시자는 'SignPath Foundation', SmartScreen 평판은 쌓여야 함. `release.yml`·`.signpath/` 준비됨 |
 | OSSign (Windows) | 무료 | — | 신청 잠정 중단, 저장소 6개월 이상 활동 필요 |
-| Microsoft Store MSIX | 무료(개인 등록 2025-09~) | 1~2주 | Microsoft 가 서명 → Store 설치는 SmartScreen·SAC 모두 통과. MSIX 포장·심사(로그인 앱은 시험 계정 요구)가 필요 |
+| Microsoft Store MSIX | 무료(개인 등록 2025-09~) | 1~2주 | Microsoft 가 서명 → Store 설치는 SmartScreen·SAC 모두 통과. 포장은 준비됨(`packaging\msix`), 심사(로그인 앱은 시험 계정 요구)가 남음 — 아래 'Microsoft Store 판' |
 | Azure Artifact Signing | 월 $9.99~ | — | 개인은 미국·캐나다만 |
 | Certum 오픈소스 인증서 | 약 €49 | 며칠 | 유료, 품절 |
 | Apple 공증 (맥) | 연 $99 | — | 무료 Apple 계정으로는 불가. Homebrew 는 `--no-quarantine` 을 없앴고(5.0) Gatekeeper 를 못 넘는 cask 를 2026-09-01 에 막았다 |
+
+## Microsoft Store 판 (MSIX, 2026-10-15)
+무료로 지금 받을 수 있는 공인 서명은 Store 뿐이다(위 표). Store 에서 받은 MSIX 는 Microsoft 가 다시 서명하므로 SmartScreen('PC 보호')·스마트 앱 컨트롤(SAC)·S 모드(Store 앱만 허용)에 막히지 않는다. EXE·MSI 를 그대로 내는 길(정책 10.2.9)은 공인 인증서 서명이 있어야 해서 안 된다.
+- 만들기: `packaging\msix\build_msix.ps1` — [1/6] `dist\붕어빵`(없거나 `-Build` 면 `build_installer.ps1 -Stage exe`) → [2/6] `build\msix\layout` 에 복사 + 매니페스트 → [3/6] `resources.pri` → [4/6] MakeAppx → [5/6] 서명 → [6/6] `-Install`(·`-Smoke`). `-Uninstall` 은 시험판 지우기.
+  - 시험판 `packaging\out\daling-<버전>-win-x64.msix`: 이름 `jykim5215.Daling`, 게시자 = 사설 인증서 주체(`CN=붕어빵 (jykim5215), O=jykim5215`), 사설 서명. 73.8MB(Inno 설치 파일 57MB 보다 큼: MSIX 는 파일마다 따로 압축).
+  - 제출판 `-Store -IdentityName … -Publisher … -PublisherDisplayName …` → `…-store.msix`: Partner Center 값으로, 서명 안 함(Store 가 서명). 가짜 값으로 묶기까지 확인.
+  - 도구: Windows SDK 가 없으면 Microsoft 의 NuGet 패키지 `Microsoft.Windows.SDK.BuildTools` 10.0.26100.4654(22MB)를 `build\msix-tools` 에 한 번 받아 MakeAppx·MakePri·SignTool 을 쓴다. 셋 다 Microsoft 서명인지 확인한다(SDK 전체 설치는 관리자 권한이 든다).
+  - 판 번호: `VERSION` 1.12.28 → 1.12.28.0 (Store 는 넷째 자리를 자기가 쓰므로 0).
+- 매니페스트 틀 `packaging\msix\AppxManifest.xml`: `runFullTrust`(보통 Win32 앱), `windows.startupTask`(꺼짐), 실행 별칭 `daling.exe`, 최소 Windows 10 2004(19041), 언어 ko-KR·en-US. 실행 파일 이름은 `붕어빵.exe` 그대로(MakeAppx 가 받아 줌).
+- 로고: `python scripts/make_icons.py --msix` → `packaging\msix\Assets`(배율 5벌 + 작업 표시줄 크기 14벌 × 바탕판 없는 판). 이름만으로는 Windows 가 배율 판을 못 고르므로 build 가 makepri 로 `resources.pri`(후보 96개)를 만든다 — 없으면 작업 표시줄·시작 메뉴 아이콘이 빈다. `_internal` 수천 개는 색인하지 않게 매니페스트+Assets 만 따로 놓고 만든다.
+- 이 PC 시험 설치: MSIX 설치는 시스템 서비스가 서명을 보므로 '현재 사용자' 신뢰로는 안 되고(실측 0x800B0109 '루트 인증서는 신뢰할 수 있어야'), **사용자가 직접** 관리자 PowerShell 에서 한 번 `Import-Certificate -FilePath packaging\bungeoppang-codesign.cer -CertStoreLocation Cert:\LocalMachine\TrustedPeople`. (보안 설정이라 대신 하지 않는다. 되돌리기: 인증서 관리자에서 '신뢰할 수 있는 사람'의 붕어빵 인증서 삭제)
+
+### MSIX 안에서 달라지는 것
+2026-10-15 이 PC 실측 (`jykim5215.Daling_1.12.28.0_x64__mm60x010zk88p`, 설치 위치 `C:\Program Files\WindowsApps\…`):
+- `daling.exe --autosaver-smoke` **14개 통과**. 작업 프로세스가 같은 패키지 이름으로 돎(`package=` 일치), node 실행, 업데이트는 Store 로.
+- `%LOCALAPPDATA%` **바로 아래에 새로 만든 폴더**: 패키지 안에서 만들면 `…\Packages\<패밀리>\LocalCache\Local` 로 가고 밖에서 안 보인다. 반대로 **설치 뒤에 밖에서 만든 바로 아래 폴더는 패키지 안에서 아예 안 보인다**(폴더 2개로 확인. 같은 EXE 를 패키지 밖에서 돌리면 보임). 설치 전부터 있던 `ms-playwright` 는 보인다.
+- **이미 있던 하위 폴더**(`Programs\붕어빵`, 삼성 노트 `LocalState`, `Temp`): 밖에서 만든 파일이 보이고, 안에서 새로 만든 파일·고친 내용이 진짜 자리에 그대로 간다 → 삼성 노트 DB·백업·저널도 진짜 자리에 쓰인다(실제 DB 에는 쓰지 않고 같은 성격의 폴더로 확인). 홈 폴더·`Temp` 도 진짜 자리.
+- 알림: 패키지 안에서 앱 ID 'Daling' 과 패키지 앱 ID 둘 다 알림 기록에 남았다(둘 다 뜸). 패키지 앱 ID 를 쓰는 까닭은 시작 메뉴의 Daling 과 같은 앱으로 묶기 위해서.
+- 창: `daling.exe` 로 켜면 서버가 0.8초 만에 뜨고(`/healthz`), 패키지 안 `붕어빵.exe` 의 'Daling' 창(1320×812)에 WebView2 로 대시보드가 그려진다(제목 줄 없는 모양까지 같음).
+- 따로 된 데이터로 띄워 볼 때는 `AUTOSAVER_ROOT`(web_ui) 와 `AUTOSAVER_DATA_ROOT`·`AUTOSAVER_CONFIG_PATH`(작업 프로세스)를 **모두** 바꿔야 한다. `AUTOSAVER_DATA_ROOT` 만 바꿨더니 화면은 실제 `C:\lms-autosaver` 를 읽었다(41초 만에 껐고 `boot_times.json`·`notices.json` 만 쓰임. 예약 작업은 켜고 45초 쉰 뒤라 돌지 않음). 실행 별칭은 부른 쪽의 환경 변수를 물려준다.
+- 확인 못 한 것: 작업 표시줄·시작 메뉴 아이콘 모양, 알림 클릭, 시작 시 자동 실행 켜기, SAC 켠 PC, 실제 LMS 동기화(Store 판으로 로그인).
+
+| 무엇 | Inno 설치판 | Store 판(MSIX) | 대응 |
+|---|---|---|---|
+| 설치 폴더 | `%LOCALAPPDATA%\Programs\붕어빵` | `C:\Program Files\WindowsApps\<패키지>` 읽기 전용 | 앱이 설치 폴더에 쓰는 곳 없음(코드 확인: `PROJECT_ROOT` 는 읽기만) |
+| 데이터 `C:\lms-autosaver` | 그대로 | 그대로 (AppData 밖은 가상화 안 함) | 두 판이 같은 데이터를 나눠 쓴다. 앱을 지워도 남음 |
+| `%LOCALAPPDATA%` 에 새로 만드는 파일·폴더 | 그대로 | 패키지 전용 자리(`…\Packages\<패밀리>\LocalCache\Local`)로 돌려지고, 앱과 그 자식 프로세스에게만 원래 자리로 보인다. 이미 있는 파일 고치기는 진짜 자리에 | LMS 브라우저(`ms-playwright`)는 설치 전부터 진짜 자리에 있었으면 그것을 쓰고, 없으면 패키지 안에 받는다(앱을 지우면 같이 지워짐). 설치 뒤 Inno 판이 받은 것은 Store 판이 못 본다(실측, 아래) |
+| HKCU 쓰기 | 그대로 | 앱 전용 사본 | 앱은 레지스트리에 쓰지 않는다(winreg 없음) |
+| 시작 시 자동 실행 | 설치 때 고르면 시작프로그램 폴더 바로 가기 | 바로 가기를 만들어도 가상화돼 탐색기가 못 본다 → `StartupTask`(기본 꺼짐) | 켜기: 설정 › 앱 › 시작 프로그램(또는 작업 관리자 › 시작 앱)에서 Daling |
+| 작업 프로세스 | `붕어빵.exe --autosaver-job` | 같음. 자식 프로세스(작업·node·크로미움·알림 PowerShell)가 패키지 신원을 물려받는다 | `--autosaver-smoke` 가 작업 프로세스의 패키지 이름이 같은지 본다 |
+| 앱 안 업데이트 | GitHub 설치 파일을 받아 조용히 설치 | 끔. 돌리면 Store 판과 따로 노는 Inno 판이 하나 더 깔린다 | `runtime_config.is_msix()` → `updater` 가 GitHub 에 묻지 않고 'Microsoft Store가 새 버전을 알아서 설치해요'. 새 버전은 Store 가 깐다 |
+| 작업 표시줄 앱 ID | `DGIST.Bungeoppang.App` 을 붙임 | 패키지가 정함(`<패밀리>!Daling`) | 패키지 안이면 `SetCurrentProcessExplicitAppUserModelID` 를 부르지 않는다(붙이면 창이 시작 메뉴의 Daling 과 다른 앱으로 묶인다) |
+| 알림 | winotify 앱 ID 'Daling' | 패키지 앱 ID 로 | `app.notify` 가 `msix_app_user_model_id()` 를 쓴다 |
+| WebView2 | 없으면 설치 파일이 깔아 줌 | MSIX 는 설치 프로그램을 못 돌린다 | Windows 11 은 기본 포함, 10 도 Edge 업데이트로 대부분 있음. 없으면 창 대신 기본 브라우저로 연다(`app.run_in_browser`) |
+| 명령 줄 | 실행 파일 경로 | 실행 별칭 `daling.exe` (`%LOCALAPPDATA%\Microsoft\WindowsApps`) | 점검: `daling.exe --autosaver-smoke` |
+- 개발 서버에서 Store 판 화면 보기: `.claude/launch.json` 의 `autosaver-src-store`(8793, `AUTOSAVER_PRETEND_MSIX=1`). 설정 › 앱 › 새 버전 칸에 'Microsoft Store가 새 버전을 알아서 설치해요 (v1.12.28)', 새 버전 알약·'지금 업데이트' 없음 확인(콘솔 오류 0).
+- 남은 위험(제출 전에 볼 것):
+  - **LMS 브라우저는 서명이 없다**: Playwright 가 처음 쓸 때 받는 `chrome-headless-shell.exe`·dll 이 서명 없음(이 PC 실측 NotSigned). 패키지 밖에서 받은 파일이라 Store 서명이 덮지 않아 SAC 가 켜진 PC 에서는 Store 판도 LMS 동기화가 막힐 수 있고, 정책 10.2.2(실행 코드 내려받기)에 걸릴 수도 있다. 대안: 모든 Windows 에 있는 Microsoft 서명 Edge 를 Playwright `channel="msedge"` 로 쓰기(270MB 받기도 없어짐). 묶은 `node.exe` 는 OpenJS Foundation 서명(Valid).
+  - 삼성 노트 정리(`organize_notes`)는 다른 앱(삼성 노트)의 DB 를 직접 고친다. 심사에서 '다른 앱 데이터 변경'으로 볼 수 있다. PDF 보내기(WinRT Launcher)는 지원되는 방법.
+
+### Store 제출 절차 (계정 등록·제출은 사용자가 직접)
+1. **개인 개발자 등록(무료)**: storedeveloper.microsoft.com → 'Get started for free' → 개인(Individual) 선택, 개인 Microsoft 계정으로 로그인 → 휴대폰으로 정부 발급 신분증 원본 + 셀카 촬영(밝은 곳). 2025-09 부터 개인은 무료·카드 불필요, 회사 계정은 $99.
+2. Partner Center › 앱 및 게임 › 새 제품 › MSIX 또는 PWA 앱 → 이름 예약('Daling'. 이미 쓰이면 'Daling for DGIST' 등 — 보이는 이름 `DisplayName` 도 같이 바꿔 묶는다).
+3. 제품 관리 › 제품 ID 에서 `Package/Identity/Name`·`Package/Identity/Publisher`·`Package/Properties/PublisherDisplayName` 을 복사 → `build_msix.ps1 -Build -Store -IdentityName … -Publisher … -PublisherDisplayName …` → `packaging\out\daling-<버전>-win-x64-store.msix` 를 패키지 칸에 올린다.
+4. 제출 칸:
+   - 가격·사용 가능: 무료, 시장은 대한민국(또는 전체).
+   - 속성: 범주 '교육'(또는 '생산성'), **개인정보처리방침 URL `https://gudaling.dev/privacy`** (정책 10.5.1: 아이디·비밀번호·메일을 다루므로 필수. 2026-10-15 열림 확인), 지원 주소(GitHub issues 또는 tutleblue12@gmail.com).
+   - 연령 등급: IARC 설문. 폭력·도박 없음, 사용자끼리 대화하는 기능은 없음(학교 메일 보내기는 이용자 본인 계정의 메일 앱 기능)으로 답한다.
+   - 스토어 목록(한국어·영어): 설명, 스크린샷 1장 이상(1366×768 이상, 개인정보 없는 화면 — 디자인 스튜디오 연습용 앱 화면을 쓰면 안전), 짧은 설명.
+   - **제한된 기능 `runFullTrust` 사유** (영어로):
+     > Daling is a classic Win32 desktop app (Python, packaged with PyInstaller) that shows its UI in WebView2 served from a local 127.0.0.1 server. It starts its own helper processes (붕어빵.exe --autosaver-job) and Playwright's bundled Node.js driver to sign in to the university LMS in a headless browser, saves course files to the user's own folders (C:\lms-autosaver, Documents) and can hand PDFs to Samsung Notes. These need full-trust desktop execution; the app cannot run in an AppContainer.
+   - **인증 참고 사항(Notes for certification) — 정책 10.3.1** ('로그인이 필요하면 쓸 수 있는 시험 계정을 주라'): DGIST 계정은 학교가 재학생에게만 발급하는 SSO 계정이라 심사용으로 만들 수 없고, 이용자 계정을 넘기는 것은 학교 규정 위반이다. 대응:
+     - 지금 쓸 수 있는 것: 로그인 없이 되는 기능(학사일정·학교 공지·셔틀·FGLP·개설강좌 시간표)을 적고, 로그인 기능(LMS 자료·마감·학교 메일)은 화면 녹화 영상(YouTube 일부 공개) 주소로 보여 준다. 예시:
+       > Login is optional. Without an account you can test: academic calendar, school notices, shuttle timetable, FGLP list and course timetable (public data). LMS/mail features need a DGIST student account issued only by the university (SSO), which we cannot create for testers; a screen recording of those features is at <영상 주소>. No account is needed to launch or navigate the app.
+     - 권장(후속 작업): 앱에 '체험 데이터로 둘러보기' 를 넣어 가짜 과목·자료·마감·메일로 모든 화면을 볼 수 있게 하고, 참고 사항에 켜는 법을 적는다. 시험 계정 없이 심사를 통과하는 가장 확실한 길.
+5. 심사는 보통 1~3일. 통과하면 Store 주소가 생긴다 → 사이트 내려받기에 'Microsoft Store 에서 받기' 를 더할 수 있다.
+6. 새 버전: `VERSION`·changelog 를 올리고 같은 명령으로 새 `-store.msix` 를 만들어 '업데이트' 제출. Store 가 이용자 PC 에서 자동으로 바꾼다(앱 안 업데이트는 꺼져 있음).
 
 ## 영어 화면의 학사일정 (2026-10-12)
 - 학사일정 이름은 학교 데이터라 번역표에 없어 영어 화면에서도 한국어였다. `acadTitleEn` 이 낱말표(`ACAD_TERMS`)로 옮긴다: '대학 및 대학원' 머리는 빼고, '대학원' 은 'Grad:', 'YYYY학년도 N학기' 는 'Spring/Fall YYYY', 계절학기는 'Summer/Winter session YYYY', "('26.8월 졸업생)" 은 "(Aug '26 grads)", 뒤의 'D-52' 는 그대로. `tr` 안에서 표·틀 다음에 부르며, 다 옮겨 한글이 하나도 안 남을 때만 쓴다(메일 제목은 그대로). 2026 학사일정 38개 이름 모두 옮겨짐.
