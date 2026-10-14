@@ -26,7 +26,7 @@ node --check web\app.js
 .venv\Scripts\python.exe scripts\dev_server.py
 #   Claude 데스크톱 앱에서는 .claude/launch.json 의 "autosaver-src" 로 preview_start
 
-# 디자인 스튜디오 (/design-studio 스킬, 도구는 공개 저장소 tutleblue/claude-code-designtool → ~/.claude/design-studio/tool)
+# 디자인 스튜디오 (/tutleblue-design-studio 스킬, 도구는 공개 저장소 tutleblue/claude-code-designtool → ~/.claude/design-studio/tool)
 .venv\Scripts\python.exe $env:USERPROFILE\.claude\design-studio\tool\run_studio.py --project .     # Daling 개인화: .claude/design-studio/
 
 # 설치 파일 만들기 / 만들고 이 PC에 설치·실행
@@ -123,7 +123,7 @@ AUTOSAVER_DATA_ROOT=C:/lms-autosaver AUTOSAVER_CONFIG_PATH=C:/lms-autosaver/conf
 | 메일 화면 | `app.js` `renderEmails`, `emailListRow`, `renderMailBody`, `mailFrameDoc` |
 | 폴더 나무 | `app.js` `renderFolderView`, `buildFolderTree`, `folderTreeHtml` |
 | 삼성 노트 | `samsung_notes.import_pdfs` |
-| 디자인 요청 반영 | `.design-studio/requests/*.md` → `/design-studio` 스킬 (도구의 `skill/GUIDE.md` 3절) |
+| 디자인 요청 반영 | `.design-studio/requests/*.md` → `/tutleblue-design-studio` 스킬 (도구의 `skill/GUIDE.md` 3절) |
 
 ## 5. 알아 두면 시간을 아끼는 사실
 

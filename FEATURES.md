@@ -789,7 +789,7 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 
 앱과 똑같이 생긴 연습용 복제 앱에서 화면을 직접 만지고 댓글을 달아 저장하면 Claude Code 가 실제 코드에 옮긴다. 도구 본체는 공개 저장소 `tutleblue/claude-code-designtool` 에 있고(2026-10-14 Daling 에서 분리), 이 저장소에는 **Daling 개인화**만 둔다. 설치 파일에는 들어가지 않는다.
 
-- 쓰는 법: Claude Code 에서 `/design-studio`(시작 스킬 `.claude/skills/design-studio/SKILL.md`) → 도구를 `~/.claude/design-studio/tool` 로 받고 그 안의 `skill/GUIDE.md` 를 따른다.
+- 쓰는 법: Claude Code 에서 `/tutleblue-design-studio`(시작 스킬 `.claude/skills/tutleblue-design-studio/SKILL.md`) → 도구를 `~/.claude/design-studio/tool` 로 받고 그 안의 `skill/GUIDE.md` 를 따른다.
 - 열기: `.venv\Scripts\python.exe %USERPROFILE%\.claude\design-studio\tool\run_studio.py --project .` (8796, 가짜 데이터) / `--mode real` (내 데이터, 쓰기 막음). 점검: `… run_studio.py doctor --project .`
 - 개인화(`.claude/design-studio/`):
   - `studio.app.json`: 런처·요청 규칙(가짜 답 기본, 임시 폴더 안에서 끝나는 POST 만 통과, 바깥 서버 GET 은 빈 답, 메일 원본은 막음)
