@@ -10,7 +10,8 @@
 (() => {
   "use strict";
   const INFO = window.__STUDIO__ || {};
-  const DRAFT_KEY = "daling-studio-draft-v1";
+  // 시안을 보며 단 댓글과 원래 화면에서 단 댓글은 따로 이어 한다
+  const DRAFT_KEY = "daling-studio-draft-v1" + (INFO.ctx ? `:${INFO.ctx}` : "");
   const PARAMS = new URLSearchParams(location.search);
 
   // '지금 열려 있음·골라짐' 같은 상태 이름표는 모양 범위를 정할 때 빼야 같은 모양을 모두 잡는다
@@ -36,12 +37,6 @@
     ["로고", [["--bp-bg", "로고 바탕"], ["--bp-body", "로고 몸통"], ["--bp-hi", "로고 밝은 곳"], ["--bp-line", "로고 선"]]],
   ];
   const SIZE_TOKENS = [["--radius", "큰 모서리", 0, 32], ["--radius-sm", "작은 모서리", 0, 24]];
-  const SWATCH_TOKENS = ["--accent", "--accent-strong", "--accent-soft", "--text", "--text-soft", "--surface",
-    "--surface-soft", "--bg", "--border"];
-  const ACCENT_PRESETS = [
-    ["코랄", "#c0674a"], ["주황", "#d9822b"], ["빨강", "#c2413b"], ["분홍", "#c94f7c"], ["보라", "#7651c2"],
-    ["남색", "#3e63a6"], ["파랑", "#2f7bd8"], ["청록", "#2c8c8c"], ["초록", "#4f7a55"], ["먹색", "#3a3a38"],
-  ];
   const SHADOWS = [
     ["그대로", ""], ["없음", "none"], ["약하게", "0 1px 2px rgba(0,0,0,.06)"], ["앱 기본", "var(--shadow)"],
     ["강하게", "0 14px 34px -12px rgba(0,0,0,.30)"],
@@ -72,8 +67,26 @@
     collapsed: false,
     clean: PARAMS.get("clean") === "1",
     savedAs: "",
+    proposals: [], // 시안 목록 (서버에서 2.5초마다)
+    drag: null, // 고른 요소를 직접 끌어 옮기는 중
+    justDragged: false,
+    demoing: false, // 동작 흐름·추천 시연 중 (앱이 누르기를 그대로 받는다)
+    flow: null, // 고른 단추의 동작 흐름 편집본 { path, steps, before, summary, where, job }
+    ai: { status: "idle", open: false, job: null, items: [], idx: 0, ask: "", lastAt: 0, auto: loadPref("ai-auto", true) },
   };
   const cur = () => S.variants[S.active];
+  function loadPref(key, fallback) {
+    try {
+      const v = localStorage.getItem(`daling-studio-${key}`);
+      return v == null ? fallback : JSON.parse(v);
+    } catch {
+      return fallback;
+    }
+  }
+  function savePref(key, value) {
+    try { localStorage.setItem(`daling-studio-${key}`, JSON.stringify(value)); } catch { /* 이번 창에서만 기억 */ }
+  }
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
   /* ---------- 작은 도구 ---------- */
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -85,6 +98,8 @@
   const viewLabel = (v) => VIEW_LABEL[v] || v;
   const rootVar = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
   const px = (v) => Math.round(parseFloat(v) || 0);
+  // 패널은 바깥 틀 문서에 있어 앱의 색 토큰(var(--accent))이 거기선 안 풀린다. 앱 문서에서 값을 읽어 넘긴다.
+  const resolveColor = (v) => String(v).replace(/var\((--[\w-]+)\)/g, (_, name) => rootVar(name) || "transparent");
 
   const colorCtx = document.createElement("canvas").getContext("2d");
   function toHex(color) {
@@ -190,7 +205,7 @@
     RULES = [];
     const walk = (rules, media) => {
       for (const r of rules) {
-        if (r.selectorText) RULES.push({ sel: r.selectorText, media });
+        if (r.selectorText) RULES.push({ sel: r.selectorText, media, rule: r });
         else if (r.cssRules) walk(r.cssRules, r.conditionText || (r.media && r.media.mediaText) || media);
       }
     };
@@ -211,6 +226,16 @@
       if (!out.includes(text)) out.push(text);
     }
     return out.slice(-8);
+  }
+  function matchedRuleTexts(el, max = 6) {
+    const out = [];
+    for (const r of cssRules()) {
+      if (r.sel.split(",").every((part) => UNIVERSAL.test(part))) continue;
+      let ok = false;
+      try { ok = el.matches(r.sel); } catch { ok = false; }
+      if (ok) out.push((r.media ? `@media ${r.media} { ` : "") + r.rule.cssText.slice(0, 420) + (r.media ? " }" : ""));
+    }
+    return out.slice(-max);
   }
   function textOf(el) {
     const t = el.innerText || el.value || el.getAttribute("aria-label") || el.title || el.alt || "";
@@ -460,17 +485,28 @@
       <div class="hover" hidden><span class="tag"></span></div>
       <div class="selbox" hidden>
         <span class="tag"></span>
-        <button class="grip" title="끌어서 순서 바꾸기">⠿ 옮기기</button>
-        <span class="resize" title="끌어서 크기 바꾸기"></span>
+        <button class="grip" title="끌어서 형제 사이 순서 바꾸기">⠿ 순서</button>
+        <button class="scopechip" title="누르면 '같은 모양 모두' ↔ '이것만'"></button>
+        <span class="resize" title="끌어서 크기 바꾸기 (글자는 글자 크기, 아이콘은 비율대로, 상자는 너비·높이 · Ctrl: 상자처럼)"></span>
       </div>
       <div class="dropline" hidden></div>
       <div class="drag-rect" hidden></div>
       <div class="pins"></div>
+      <div class="busy" hidden><span class="spin2"></span><span class="busytext"></span></div>
     </div>`;
   root.innerHTML = `
     <style>${STUDIO_CSS()}</style>
     <div class="bar"></div>
     <aside class="panel"></aside>
+    <div class="ai"></div>
+    <div class="picker" hidden>
+      <div class="ptitle"></div>
+      <div class="sv"><i class="knob"></i></div>
+      <div class="hue"><i class="knob"></i></div>
+      <div class="prow"><span class="pfrom" title="처음 색 (누르면 되돌리기)" data-pick-from></span><span class="pv"></span>
+        <input class="phex" maxlength="7" spellcheck="false"><button data-pick-eye title="화면 어디서든 색 따오기 (앱 밖도)">스포이트</button></div>
+      <div class="prow end"><button data-pick-close>다 됐어요</button></div>
+    </div>
     <div class="pop" hidden></div>
     <div class="modal" hidden></div>
     <div class="toast" hidden></div>`;
@@ -481,6 +517,7 @@
   function render() {
     renderBar();
     renderPanel();
+    renderAi();
     scheduleDraw();
   }
 
@@ -504,12 +541,26 @@
         <button class="icon" data-act="variant-dup" title="지금 조합을 복사해 새 조합 만들기">＋</button>
       </div>
       <div class="grp">
-        <button class="save" data-act="save">저장해서 Claude에게</button>
+        <button class="save" data-act="save">${INFO.ctx ? "이 시안 더 고쳐 달라기" : "저장해서 Claude에게"}</button>
         <button class="icon" data-act="toggle-panel" title="패널 접기/펴기">${S.collapsed ? "◧" : "◨"}</button>
       </div>
+      ${ctxPill()}
       <div class="hint">${esc(hintText())}</div>`;
   }
+  function ctxPill() {
+    if (INFO.ctx) {
+      return `<div class="grp ctx"><span class="ctxlabel">시안 보는 중</span>
+        <button data-prop-act="original" data-name="${esc(INFO.ctx)}" title="진짜 web/ 화면으로">원래</button>
+        <button class="on" disabled>시안</button></div>`;
+    }
+    const ready = S.proposals.filter((p) => p.status === "ready");
+    const running = S.proposals.filter((p) => p.status === "running" || p.status === "queued");
+    if (running.length) return `<div class="grp ctx"><button data-tab-go="proposals"><span class="spin"></span>Claude 가 시안을 만드는 중</button></div>`;
+    if (ready.length) return `<div class="grp ctx"><button data-prop-act="view" data-name="${esc(ready[0].name)}">시안 ${ready.length}개 보기</button></div>`;
+    return "";
+  }
   function hintText() {
+    if (INFO.ctx && S.mode === "browse") return "Claude 가 만든 시안이에요 · 마음에 안 드는 곳에 댓글을 달고 '더 고쳐 달라기', 좋으면 시안 탭에서 '이대로 반영'";
     if (S.mode === "select") return "누르면 골라져요 · 두 번 누르면 글자 고치기 · ↑ 바깥 상자 · Alt+누르기는 앱이 그대로 받아요";
     if (S.mode === "comment") return "누르면 그 자리에, 끌면 그 영역에 댓글 · Alt+누르기는 앱이 그대로 받아요";
     return `앱처럼 눌러서 화면을 옮겨 다녀요 · ${INFO.mode === "real" ? "내 데이터(읽기만)" : "연습용 가짜 데이터"} · 실제로는 아무것도 보내지 않아요`;
@@ -547,7 +598,7 @@
         <div class="brand">디자인 스튜디오 <small>${INFO.mode === "real" ? "내 데이터 · 읽기만" : "연습용"} · v${esc(INFO.version || "")}</small></div>
         <button class="icon" data-act="swap-side" title="패널을 반대쪽으로">⇄</button>
       </header>
-      <nav>${tab("palette", "색·테마")}${tab("element", "요소")}${tab("comments", "댓글", S.comments.length)}${tab("changes", "바뀐 것", cur().changes.length)}</nav>
+      <nav>${tab("palette", "색·테마")}${tab("element", "요소")}${tab("comments", "댓글", S.comments.length)}${tab("changes", "바뀐 것", cur().changes.length)}${tab("proposals", "시안", S.proposals.filter((p) => !["applied", "discarded"].includes(p.status)).length || null)}</nav>
       <div class="body">${panelBody()}</div>`;
     if (S.tab === "changes") fillSaved();
   }
@@ -555,7 +606,131 @@
     if (S.tab === "palette") return paletteHtml();
     if (S.tab === "element") return elementHtml();
     if (S.tab === "comments") return commentsHtml();
+    if (S.tab === "proposals") return proposalsHtml();
     return changesHtml();
+  }
+
+  /* ----- 시안: 요청 → Claude 가 복사본에 고침 → 보고 → 반영 / 더 고쳐 줘 / 버리기 ----- */
+  const PROP_STATUS = {
+    queued: ["기다리는 중", "run"], running: ["만드는 중", "run"], ready: ["다 됨", "ok"], failed: ["실패", "bad"],
+    cancelled: ["멈춤", "bad"], applied: ["반영함", "done"], discarded: ["버림", "done"],
+  };
+  function proposalsHtml() {
+    const intro = INFO.claude
+      ? `<p class="small">저장할 때 <b>저장하고 시안 만들기</b>를 누르면 Claude 가 진짜 화면 파일은 그대로 두고 복사본(시안)에만 고쳐요. 시안을 보고 반영할지 정하세요.</p>`
+      : `<p class="small">이 컴퓨터에서 <code>claude</code> 명령을 못 찾아 시안을 자동으로 만들 수 없어요. Claude Code 를 설치하면 여기서 바로 시안을 받아 볼 수 있어요. 지금은 저장본을 Claude Code 에 직접 넘겨 주세요.</p>`;
+    if (!S.proposals.length) return `<div class="empty">${intro}</div>`;
+    return intro + S.proposals.map((p) => {
+      const [label, tone] = PROP_STATUS[p.status] || [p.status, "run"];
+      const rounds = p.rounds || [];
+      const last = rounds[rounds.length - 1] || {};
+      const viewing = INFO.ctx === p.name;
+      const btn = (act, text, cls = "") => `<button class="${cls}" data-prop-act="${act}" data-name="${esc(p.name)}">${text}</button>`;
+      let body = "";
+      if (p.status === "running" || p.status === "queued") {
+        body = `<div class="act">${(p.activity || []).slice(-8).map((a) => `<div>${esc(a)}</div>`).join("")}</div>
+          <div class="pacts2">${btn("cancel", "멈추기")}</div>`;
+      } else if (p.status === "ready") {
+        body = `${last.result ? `<div class="res">${mdLite(last.result)}</div>` : ""}
+          ${(p.changed || []).length ? `<div class="files">${p.changed.map((f) => `<span><code>${esc(f.file)}</code> <i class="plus">+${f.plus}</i> <i class="minus">−${f.minus}</i></span>`).join("")}</div>` : `<p class="small">바뀐 파일이 없어요.</p>`}
+          <div class="pacts2">${viewing ? btn("original", "원래 보기") : btn("view", "시안 보기", "primary")}${btn("diff", "코드 보기")}</div>
+          <div class="pacts2">${btn("apply", "이대로 반영", "good")}${btn("revise", "더 고쳐 줘")}${btn("discard", "버리기", "danger")}</div>`;
+      } else if (p.status === "failed" || p.status === "cancelled") {
+        body = `<p class="err">${esc(p.error || "")}</p>${last.result ? `<div class="res">${mdLite(last.result)}</div>` : ""}
+          <div class="act">${(p.activity || []).slice(-4).map((a) => `<div>${esc(a)}</div>`).join("")}</div>
+          <div class="pacts2">${(p.changed || []).length ? btn("view", "지금까지 된 것 보기") : ""}${btn("revise", "다시 시키기")}${btn("discard", "버리기", "danger")}</div>`;
+      } else if (p.status === "applied") {
+        const r = p.applyReport || {};
+        body = `<p class="small">진짜 화면 파일에 반영했어요: ${esc([...(r.applied || []), ...(r.merged || [])].join(", ") || "-")}</p>
+          <p class="small">설치된 앱에 넣으려면 설치 파일을 다시 만들어야 해요 (Claude Code 에 "설치 파일 만들어 줘").</p>`;
+      }
+      const conflicts = (p.applyReport || {}).conflicts || [];
+      if (p.status === "ready" && conflicts.length) {
+        body = `<p class="err">반영하려 했지만 이 파일들은 시안을 만든 뒤 진짜 화면에서도 같은 곳이 바뀌어 합치지 못했어요: ${esc(conflicts.join(", "))}. 나머지는 반영했어요. Claude Code 에 "시안 ${esc(p.name)} 충돌 정리해 줘" 라고 해 주세요.</p>` + body;
+      }
+      return `<div class="prop ${viewing ? "viewing" : ""}">
+        <div class="phead2"><b>${esc(p.title || p.name)}</b><span class="st st-${tone}">${label}</span></div>
+        <div class="meta">${rounds.length}회차 · ${esc(String(p.updatedAt || "").slice(5, 16).replace("T", " "))}${p.cost ? ` · 약 $${(+p.cost).toFixed(2)}` : ""}${viewing ? " · <b>지금 보는 중</b>" : ""}</div>
+        ${body}</div>`;
+    }).join("");
+  }
+  // Claude 설명의 **굵게**·`코드` 만 살린다 (글자는 먼저 이스케이프해서 HTML 이 끼어들 수 없다)
+  const mdLite = (text) => esc(text)
+    .replace(/\*\*([^*\n]+)\*\*/g, "<b>$1</b>")
+    .replace(/`([^`\n]+)`/g, "<code>$1</code>");
+  function setCtx(name, hint = "") {
+    // 화면 폴더는 쿠키로 고른다 (studio_server._context). 앱만 다시 불러오면 바깥 틀·패널은 그대로 다시 붙는다.
+    document.cookie = name ? `studio_web=${encodeURIComponent(name)}; path=/; SameSite=Lax` : "studio_web=; path=/; max-age=0; SameSite=Lax";
+    try { if (hint) sessionStorage.setItem("daling-studio-hint", hint); } catch { /* 안내만 못 보인다 */ }
+    location.reload();
+  }
+  let propSig = "";
+  async function refreshProposals() {
+    let res;
+    try {
+      res = await fetch("/__studio/proposals").then((r) => r.json());
+    } catch {
+      return;
+    }
+    const before = new Map(S.proposals.map((p) => [p.name, p.status]));
+    S.proposals = res.items || [];
+    for (const p of S.proposals) {
+      if (before.get(p.name) === "running" && p.status === "ready") toast(`시안이 다 됐어요: ${p.title || p.name} — 시안 탭에서 보세요`);
+      if (before.get(p.name) === "running" && p.status === "failed") toast(`시안 만들기가 실패했어요: ${p.title || p.name}`);
+    }
+    const sig = JSON.stringify(S.proposals.map((p) => [p.name, p.status, (p.activity || []).length, (p.rounds || []).length]));
+    if (sig === propSig) return;
+    propSig = sig;
+    renderBar();
+    const typing = root.activeElement && root.activeElement.matches("input, select, textarea");
+    if (!typing) renderPanel();
+    else refreshCounts();
+  }
+  async function proposalAction(act, name) {
+    const post = (path, body) => fetch(`/__studio/proposal/${path}`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+    }).then((r) => r.json());
+    const p = S.proposals.find((x) => x.name === name) || { name };
+    if (act === "view") return setCtx(name);
+    if (act === "original") return setCtx("");
+    if (act === "diff") {
+      const res = await fetch(`/__studio/proposal-diff?name=${encodeURIComponent(name)}`).then((r) => r.json());
+      const m = $(".modal");
+      m.innerHTML = `<div class="card wide"><h3>바뀐 코드 — ${esc(p.title || name)}</h3>
+        <pre class="diff">${(res.diff || "(바뀐 것 없음)").split("\n").map((l) => `<span class="${l.startsWith("+") ? "a" : l.startsWith("-") ? "d" : l.startsWith("@@") ? "h" : ""}">${esc(l)}</span>`).join("\n")}</pre>
+        <div class="macts"><button data-modal="close">닫기</button></div></div>`;
+      m.hidden = false;
+      return;
+    }
+    if (act === "cancel") {
+      await post("cancel", { name });
+      return refreshProposals();
+    }
+    if (act === "discard") {
+      if (!confirm("이 시안을 버릴까요? 진짜 화면 파일은 그대로예요. (시안 폴더는 proposals/_discarded 로 옮겨 둬요)")) return;
+      await post("discard", { name });
+      if (INFO.ctx === name) return setCtx("");
+      return refreshProposals();
+    }
+    if (act === "apply") {
+      if (!confirm("이 시안을 진짜 화면 파일(web/)에 반영할까요?\n반영 전 파일은 시안 폴더의 before-apply/ 에 남겨 둬요.")) return;
+      const res = await post("apply", { name });
+      if (!res.ok) return toast(res.message || "반영하지 못했어요");
+      const r = res.report;
+      const n = r.applied.length + r.merged.length;
+      if (r.conflicts.length) toast(`${n}개 반영, ${r.conflicts.length}개는 합치지 못했어요 (시안 탭 참고)`);
+      else return setCtx("", `반영했어요 (${n}개 파일). 지금 보이는 것이 진짜 화면이에요.`);
+      return refreshProposals();
+    }
+    if (act === "revise") {
+      if (INFO.ctx !== name) {
+        return setCtx(name, "시안 위에서 고칠 곳에 댓글을 달거나 직접 바꾼 뒤 '이 시안 더 고쳐 달라기' 를 누르세요.");
+      }
+      if (!S.comments.length && !cur().changes.length) {
+        return toast("시안 위에 댓글을 달거나 직접 바꾼 뒤 '이 시안 더 고쳐 달라기' 를 누르세요");
+      }
+      return openSaveModal();
+    }
   }
 
   function paletteHtml() {
@@ -564,7 +739,7 @@
     const row = ([name, label]) => {
       const v = rootVar(name);
       return `<label class="tok ${changed.has(name) ? "changed" : ""}">
-        <input type="color" data-token="${name}" value="${toHex(v)}">
+        <button class="swatch" data-pick="token" data-key="${name}" style="--c:${esc(v)}" title="그라데이션 판에서 고르기"></button>
         <span class="tname">${label}<code>${name}</code></span>
         <span class="tval">${esc(v)}</span>
         ${changed.has(name) ? `<button class="mini" data-token-reset="${name}" title="원래대로">↺</button>` : ""}
@@ -576,11 +751,10 @@
         <div class="seg">${THEMES.map((t) => `<button data-theme-set="${t.key}" class="${theme === t.key ? "on" : ""}">${t.label}</button>`).join("")}</div>
       </section>
       <section>
-        <h4>강조색 빠른 조합 <small>진한·옅은 강조도 함께 맞춰요</small></h4>
-        <div class="presets">
-          ${ACCENT_PRESETS.map(([n, c]) => `<button class="sw" style="--c:${c}" data-accent="${c}" title="${n} ${c}"></button>`).join("")}
-          <label class="sw custom" title="직접 고르기"><input type="color" data-accent-pick value="${toHex(rootVar("--accent"))}">＋</label>
-        </div>
+        <h4>강조색 한 번에 <small>진한·옅은 강조도 함께 맞춰요</small></h4>
+        <div class="accentrow"><button class="swatch big" data-pick="accent" data-key="--accent" style="--c:${esc(rootVar("--accent"))}" title="그라데이션 판에서 고르기"></button>
+          <span class="small">눌러서 판에서 고르거나, 판의 스포이트로 화면 어디서든 색을 따와요</span></div>
+        <button data-eyecopy>스포이트로 색 따서 복사</button>
       </section>
       ${TOKEN_GROUPS.map(([g, rows]) => `<section><h4>${g}</h4>${rows.map(row).join("")}</section>`).join("")}
       <section>
@@ -612,8 +786,8 @@
     const reset = (p) => (has(p) ? `<button class="mini" data-style-reset="${p}" title="원래대로">↺</button>` : "");
     const color = (prop, label) => `
       <div class="ctl color ${has(prop) ? "changed" : ""}"><span>${label}${isClear(cs.getPropertyValue(prop)) ? "<code>투명</code>" : ""}</span>
-        <input type="color" data-style="${prop}" value="${toHex(cs.getPropertyValue(prop))}" class="${isClear(cs.getPropertyValue(prop)) ? "clear" : ""}">
-        <span class="chips">${SWATCH_TOKENS.slice(0, 9).map((t) => `<button class="chip" style="--c:var(${t})" data-style-val="${prop}|var(${t})" title="var(${t})"></button>`).join("")}</span>
+        <button class="swatch ${isClear(cs.getPropertyValue(prop)) ? "clear" : ""}" data-pick="style" data-key="${prop}" style="--c:${esc(cs.getPropertyValue(prop))}" title="그라데이션 판에서 고르기"></button>
+        <code class="hexv">${esc(isClear(cs.getPropertyValue(prop)) ? "투명" : toHex(cs.getPropertyValue(prop)))}</code>
         ${reset(prop)}</div>`;
     const range = (prop, label, min, max, step = 1, unit = "px") => {
       const raw = cs.getPropertyValue(prop);
@@ -663,6 +837,7 @@
           <input type="number" data-size="height" placeholder="자동" value="${has("height") ? px(cs.height) : ""}">px
           ${reset("width")}${has("height") ? `<button class="mini" data-style-reset="height">↺</button>` : ""}</div>
       </section>
+      ${flowHtml(el)}
       <section class="acts">
         <button data-act="move-prev">↑ 앞으로</button>
         <button data-act="move-next">↓ 뒤로</button>
@@ -694,11 +869,12 @@
     const line = (c) => {
       let what = "";
       if (c.type === "token") what = `<b>${esc(c.name)}</b> <small>${esc(themeLabel(c.theme))} 테마</small>`;
-      if (c.type === "style") what = `<b>${esc(c.prop)}</b> <small>${esc(c.selector)} · ${c.count || "?"}곳</small>`;
+      if (c.type === "style") what = `<b>${esc(c.prop === "translate" ? "위치 옮김" : c.prop)}</b> <small>${esc(c.selector)} · ${c.count || "?"}곳${c.by === "ai" ? " · AI 추천" : ""}</small>`;
+      if (c.type === "flow") what = `<b>동작 흐름</b> <small>${esc(c.target.label)} · ${c.steps.length}단계</small>`;
       if (c.type === "text") what = `<b>글자</b> <small>${esc(c.target.label)}</small>`;
       if (c.type === "move") what = `<b>순서</b> <small>${esc(c.target.label)} → ${esc(c.ref.label)} ${c.where === "before" ? "앞" : "뒤"}</small>`;
-      const val = c.type === "move" ? "" : `<span class="from">${esc(String(c.from).slice(0, 40))}</span> → <span class="to">${esc(String(c.to).slice(0, 40))}</span>`;
-      const sw = /^#|^rgb|^var\(/.test(c.to) && c.type !== "text" ? `<i class="dot" style="--c:${esc(c.to)}"></i>` : "";
+      const val = c.type === "move" || c.type === "flow" ? "" : `<span class="from">${esc(String(c.from).slice(0, 40))}</span> → <span class="to">${esc(String(c.to).slice(0, 40))}</span>`;
+      const sw = /^#|^rgb|^var\(/.test(c.to) && c.type !== "text" ? `<i class="dot" style="--c:${esc(resolveColor(c.to))}"></i>` : "";
       return `<div class="chg">${sw}<div><div>${what}</div><div class="vals">${val}</div></div><button class="mini" data-chg-del="${c.id}" title="이것만 빼기">✕</button></div>`;
     };
     return `
@@ -757,12 +933,25 @@
       const again = resolve({ path: S.sel.path });
       if (again) S.sel.el = again;
     }
-    const showSel = S.mode === "select" && S.sel && S.sel.el.isConnected && !S.clean;
+    const showSel = S.mode === "select" && S.sel && S.sel.el.isConnected && !S.clean && !S.demoing;
     ov.sel.hidden = !showSel;
     if (showSel) {
       const r = S.sel.el.getBoundingClientRect();
       place(ov.sel, r);
-      ov.sel.querySelector(".tag").textContent = `${shortLabel(S.sel.el)}  ${Math.round(r.width)}×${Math.round(r.height)}`;
+      ov.sel.querySelector(".tag").textContent = S.drag && S.drag.moved
+        ? `${S.drag.label}`
+        : `${shortLabel(S.sel.el)}  ${Math.round(r.width)}×${Math.round(r.height)}`;
+      // 화면 끝까지 닿는 요소는 모서리 손잡이가 화면 밖(패널 밑)으로 나간다. 보이는 안쪽으로 당겨 둔다.
+      const handle = ov.sel.querySelector(".resize");
+      handle.style.right = `${Math.max(-7, r.right - innerWidth + 10)}px`;
+      handle.style.bottom = `${Math.max(-7, r.bottom - innerHeight + 10)}px`;
+      const only = S.scope === cssPath(S.sel.el);
+      ov.sel.querySelector(".scopechip").textContent = only ? "이것만" : `같은 모양 ${countOf(S.scope)}곳 함께`;
+    }
+    const view = viewKey();
+    if (view !== S.lastView) {
+      S.lastView = view;
+      aiAutoSoon("view");
     }
     drawPins();
   }
@@ -809,7 +998,29 @@
   }
   let pressStart = null;
   function onPointerEvent(e) {
-    if (S.mode === "browse" || fromStudio(e) || e.altKey) return;
+    if (S.pickInApp && !fromStudio(e)) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      if (e.type === "click" && e.target instanceof Element) {
+        const done = S.pickInApp;
+        S.pickInApp = null;
+        done(colorAt(e.target));
+      }
+      return;
+    }
+    if (S.demoing || fromStudio(e) || e.altKey) return;
+    if (S.mode === "browse") {
+      // 동작 흐름을 바꿔 둔 단추는 둘러보기에서 누르면 바꾼 흐름대로 시연한다 (앱의 원래 동작 대신)
+      if (e.type === "click") {
+        const f = flowFor(e.target);
+        if (f) {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          playFlow(f.steps);
+        }
+      }
+      return;
+    }
     if (S.editing && S.editing.contains(e.target)) return;
     e.preventDefault();
     e.stopPropagation();
@@ -818,7 +1029,24 @@
     const t = appTarget(e);
     if (!t) return;
     if (S.mode === "select") {
-      if (e.type === "click") selectEl(t);
+      // 고른 요소를 누른 채 끌면 그 자리에서 자유롭게 옮긴다 (CSS translate → 저장본에서는 '이만큼 옮기고 싶다')
+      if (e.type === "pointerdown" && S.sel && S.sel.el.contains(t)) {
+        const [bx, by] = parseTranslate(S.sel.el);
+        S.drag = { x: e.clientX, y: e.clientY, bx, by, moved: false, key: uid("k"), label: "" };
+      }
+      if (e.type === "pointerup" && S.drag) {
+        S.justDragged = S.drag.moved;
+        S.drag = null;
+        if (S.justDragged) renderPanel();
+        scheduleDraw();
+      }
+      if (e.type === "click") {
+        if (S.justDragged) {
+          S.justDragged = false;
+          return;
+        }
+        selectEl(t);
+      }
       if (e.type === "dblclick") startTextEdit(t);
     } else if (S.mode === "comment") {
       if (e.type === "pointerdown") pressStart = { x: e.clientX, y: e.clientY, t };
@@ -835,7 +1063,19 @@
   ["pointerdown", "pointerup", "mousedown", "mouseup", "click", "dblclick", "contextmenu", "auxclick", "submit"].forEach((t) =>
     window.addEventListener(t, onPointerEvent, true));
   window.addEventListener("pointermove", (e) => {
-    if (S.mode === "browse" || fromStudio(e)) return;
+    if (S.mode === "browse" || fromStudio(e) || S.demoing) return;
+    if (S.drag && S.sel) {
+      let dx = e.clientX - S.drag.x, dy = e.clientY - S.drag.y;
+      if (!S.drag.moved && Math.hypot(dx, dy) < 4) return;
+      if (e.shiftKey) (Math.abs(dx) > Math.abs(dy) ? (dy = 0) : (dx = 0)); // Shift: 가로나 세로로만
+      if (!S.drag.moved) ensureMovable(S.sel.el);
+      S.drag.moved = true;
+      S.editKey = S.drag.key;
+      const tx = Math.round(S.drag.bx + dx), ty = Math.round(S.drag.by + dy);
+      S.drag.label = `→ ${tx}, ${ty}px`;
+      setStyle("translate", `${tx}px ${ty}px`);
+      return;
+    }
     if (pressStart && S.mode === "comment") {
       const x = Math.min(pressStart.x, e.clientX), y = Math.min(pressStart.y, e.clientY);
       const w = Math.abs(e.clientX - pressStart.x), h = Math.abs(e.clientY - pressStart.y);
@@ -851,9 +1091,23 @@
     }
   }, true);
 
+  // 글자 조각(<span> 같은 인라인 요소)은 CSS 이동(translate)이 먹지 않는다. 옮길 때 inline-block 으로 함께 바꾼다.
+  function ensureMovable(el) {
+    if (getComputedStyle(el).display !== "inline") return;
+    S.editKey = null;
+    setStyle("display", "inline-block");
+  }
+  function parseTranslate(el) {
+    const t = getComputedStyle(el).translate;
+    if (!t || t === "none") return [0, 0];
+    const [x, y] = t.split(" ").map((v) => parseFloat(v) || 0);
+    return [x || 0, y || 0];
+  }
   function selectEl(el) {
     S.sel = { el, path: cssPath(el) };
     S.scope = (scopeOptions(el)[0] || {}).sel;
+    S.flow = null;
+    aiAutoSoon("select");
     S.tab = "element";
     S.editKey = null;
     S.collapsed = false;
@@ -970,26 +1224,53 @@
     grip.addEventListener("pointerup", up);
   });
 
-  /* ----- 크기 (모서리 끌기) ----- */
+  /* ----- 크기 (모서리 끌기) -----
+     글자는 글자 크기를, 아이콘·그림은 비율 그대로 크기를, 상자는 너비·높이를 바꾼다. Ctrl 을 누르면 무엇이든 상자처럼. */
+  function sizeKind(el) {
+    if (el.matches("svg, img, .icon, [data-icon]") || (el.children.length === 1 && el.firstElementChild.matches("svg, img") && !textOf(el))) return "icon";
+    // 아이콘·그림 자식은 빼고 본다 ('로고 + 날짜' 같은 제목 줄은 글자로 다뤄야 한다)
+    const blockKid = [...el.children].some((c) => !c.matches("svg, img, .icon, [data-icon]") &&
+      ["block", "flex", "grid", "table", "list-item"].includes(getComputedStyle(c).display));
+    // 플렉스 줄 안의 자식은 모두 block 으로 계산된다. '아이콘 + 글자 하나' 처럼 글자 자식이 하나뿐이면 글자로 본다.
+    const kids = [...el.children].filter((c) => !c.matches("svg, img, .icon, [data-icon], br"));
+    const oneText = kids.length <= 1 && kids.every((c) => [...c.children].every((g) => g.matches("svg, img, .icon, br, b, i, em, strong, span")));
+    if (textOf(el) && (!blockKid || oneText)) return "text";
+    return "box";
+  }
   $o(".resize").addEventListener("pointerdown", (e) => {
     if (!S.sel) return;
     e.preventDefault();
     const el = S.sel.el;
     const r0 = el.getBoundingClientRect();
+    const fs0 = parseFloat(getComputedStyle(el).fontSize) || 14;
     const sx = e.clientX, sy = e.clientY;
     const handle = e.currentTarget;
     handle.setPointerCapture(e.pointerId);
-    S.editKey = uid("k");
-    const wKey = S.editKey, hKey = uid("k");
+    const keys = { w: uid("k"), h: uid("k"), f: uid("k") };
+    const kind0 = sizeKind(el);
     const move = (ev) => {
-      // 너비만 바꾸려면 Shift, 높이만 바꾸려면 Ctrl 을 누른 채 끈다
-      if (!ev.ctrlKey) {
-        S.editKey = wKey;
-        setStyle("width", `${Math.max(16, Math.round(r0.width + ev.clientX - sx))}px`);
-      }
-      if (!ev.shiftKey) {
-        S.editKey = hKey;
-        setStyle("height", `${Math.max(12, Math.round(r0.height + ev.clientY - sy))}px`);
+      const dx = ev.clientX - sx, dy = ev.clientY - sy;
+      const kind = ev.ctrlKey ? "box" : kind0;
+      if (kind === "text") {
+        S.editKey = keys.f;
+        const ratio = Math.max(0.3, (r0.height + dy) / Math.max(1, r0.height));
+        setStyle("font-size", `${Math.max(8, Math.round(fs0 * ratio))}px`);
+      } else if (kind === "icon") {
+        const size = Math.max(8, Math.round(Math.max(r0.width + dx, r0.height + dy)));
+        S.editKey = keys.w;
+        setStyle("width", `${size}px`);
+        S.editKey = keys.h;
+        setStyle("height", `${size}px`);
+      } else {
+        // 너비만 바꾸려면 Shift, 높이만 바꾸려면 Alt
+        if (!ev.altKey) {
+          S.editKey = keys.w;
+          setStyle("width", `${Math.max(16, Math.round(r0.width + dx))}px`);
+        }
+        if (!ev.shiftKey) {
+          S.editKey = keys.h;
+          setStyle("height", `${Math.max(12, Math.round(r0.height + dy))}px`);
+        }
       }
     };
     const up = () => {
@@ -1000,6 +1281,14 @@
     };
     handle.addEventListener("pointermove", move);
     handle.addEventListener("pointerup", up);
+  });
+  $o(".scopechip").addEventListener("click", () => {
+    if (!S.sel) return;
+    const path = cssPath(S.sel.el);
+    S.scope = S.scope === path ? (scopeOptions(S.sel.el)[0] || {}).sel : path;
+    S.editKey = null;
+    renderPanel();
+    scheduleDraw();
   });
 
   /* ----- 댓글 ----- */
@@ -1085,6 +1374,477 @@
     render();
   }
 
+  /* ---------- 색 고르기: 그라데이션 판 + 스포이트 ----------
+     단색 견본은 두지 않는다(사용자 결정). 판에서 끌어 고르고, 스포이트로 화면 어디서든(앱 밖 다른 창·그림도) 색을 따온다.
+     스포이트는 브라우저의 EyeDropper(크롬·엣지). 없는 브라우저는 앱 안에서 누른 곳의 색을 가져온다. */
+  function hexToHsv(hex) {
+    const n = parseInt(hex.slice(1), 16);
+    const r = ((n >> 16) & 255) / 255, g = ((n >> 8) & 255) / 255, b = (n & 255) / 255;
+    const max = Math.max(r, g, b), d = max - Math.min(r, g, b);
+    let h = 0;
+    if (d) h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+    return [(h * 60 + 360) % 360, max ? d / max : 0, max];
+  }
+  function hsvToHex(h, s, v) {
+    const f = (n) => {
+      const k = (n + h / 60) % 6;
+      return Math.round(255 * (v - v * s * Math.max(0, Math.min(k, 4 - k, 1)))).toString(16).padStart(2, "0");
+    };
+    return `#${f(5)}${f(3)}${f(1)}`;
+  }
+  let picker = null; // { kind, key, h, s, v, from }
+  function currentColorOf(kind, key) {
+    if (kind === "style" && S.sel) return getComputedStyle(S.sel.el).getPropertyValue(key);
+    return rootVar(key);
+  }
+  function openPicker(btn, kind, key) {
+    const from = toHex(currentColorOf(kind, key));
+    const [h, s, v] = hexToHsv(from);
+    picker = { kind, key, h, s, v, from };
+    S.editKey = uid("k"); // 판을 끄는 동안 바뀐 값은 한 줄로 합친다
+    const box = $(".picker");
+    const r = btn.getBoundingClientRect();
+    box.hidden = false;
+    box.style.left = `${Math.max(8, Math.min(TOP.innerWidth - 248, r.left - 200))}px`;
+    box.style.top = `${Math.max(8, Math.min(TOP.innerHeight - box.offsetHeight - 8, r.bottom + 6))}px`;
+    box.querySelector(".ptitle").textContent = kind === "accent" ? "강조색 (진한·옅은 강조 함께)" : kind === "token" ? key : `${key} · ${shortLabel(S.sel.el)}`;
+    paintPicker();
+  }
+  function closePicker() {
+    picker = null;
+    $(".picker").hidden = true;
+    S.editKey = null;
+    renderPanel();
+  }
+  function paintPicker() {
+    const box = $(".picker");
+    const hex = hsvToHex(picker.h, picker.s, picker.v);
+    box.querySelector(".sv").style.setProperty("--hue", `hsl(${picker.h} 100% 50%)`);
+    const k1 = box.querySelector(".sv .knob");
+    k1.style.left = `${picker.s * 100}%`;
+    k1.style.top = `${(1 - picker.v) * 100}%`;
+    box.querySelector(".hue .knob").style.left = `${(picker.h / 360) * 100}%`;
+    box.querySelector(".pv").style.background = hex;
+    box.querySelector(".pfrom").style.background = picker.from;
+    const input = box.querySelector(".phex");
+    if (root.activeElement !== input) input.value = hex;
+  }
+  function pickColor(hex) {
+    if (!picker) return;
+    if (picker.kind === "token") setToken(picker.key, hex);
+    else if (picker.kind === "accent") setAccent(hex);
+    else setStyle(picker.key, hex);
+  }
+  function setFromHex(hex) {
+    if (!/^#[0-9a-f]{6}$/i.test(hex)) return;
+    [picker.h, picker.s, picker.v] = hexToHsv(hex.toLowerCase());
+    paintPicker();
+    pickColor(hex.toLowerCase());
+  }
+  async function eyedrop() {
+    const ED = TOP.EyeDropper || window.EyeDropper;
+    if (ED) {
+      try {
+        return toHex((await new ED().open()).sRGBHex);
+      } catch {
+        return null; // Esc 로 그만둠
+      }
+    }
+    toast("이 브라우저는 앱 밖 색 따기를 못 해요 (크롬·엣지는 돼요). 앱에서 색을 딸 곳을 누르세요");
+    return new Promise((resolve) => (S.pickInApp = resolve));
+  }
+  function colorAt(el) {
+    // 누른 곳의 '보이는' 바탕색: 투명이면 바깥 상자로 올라간다
+    for (let n = el; n && n.nodeType === 1; n = n.parentElement) {
+      const bg = getComputedStyle(n).backgroundColor;
+      if (!isClear(bg)) return toHex(bg);
+    }
+    return toHex(getComputedStyle(document.body).backgroundColor);
+  }
+  function wirePicker() {
+    const box = $(".picker");
+    const drag = (area, fn) => area.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      area.setPointerCapture(e.pointerId);
+      const move = (ev) => {
+        const r = area.getBoundingClientRect();
+        fn(Math.min(1, Math.max(0, (ev.clientX - r.left) / r.width)), Math.min(1, Math.max(0, (ev.clientY - r.top) / r.height)));
+        paintPicker();
+        pickColor(hsvToHex(picker.h, picker.s, picker.v));
+      };
+      move(e);
+      area.addEventListener("pointermove", move);
+      area.addEventListener("pointerup", () => area.removeEventListener("pointermove", move), { once: true });
+    });
+    drag(box.querySelector(".sv"), (x, y) => { picker.s = x; picker.v = 1 - y; });
+    drag(box.querySelector(".hue"), (x) => { picker.h = x * 360; });
+    box.querySelector(".phex").addEventListener("input", (e) => setFromHex(e.target.value.trim()));
+    box.querySelector("[data-pick-eye]").addEventListener("click", async () => {
+      const hex = await eyedrop();
+      if (hex && picker) setFromHex(hex);
+    });
+    box.querySelector("[data-pick-from]").addEventListener("click", () => picker && setFromHex(picker.from));
+    box.querySelector("[data-pick-close]").addEventListener("click", closePicker);
+  }
+
+  /* ---------- 동작 흐름: 단추를 누르면 무엇을 하는지 단계로 짜고, 복제 앱에서 시연한다 ---------- */
+  const FLOW_KINDS = {
+    nav: { label: "화면 이동", ph: "" },
+    confirm: { label: "확인 창", ph: "예: 지금 동기화할까요?" },
+    toast: { label: "알림", ph: "예: 동기화를 시작했어요" },
+    loading: { label: "진행 표시", ph: "예: 자료 받는 중… (2초)" },
+    run: { label: "작업 실행", ph: "예: LMS 동기화" },
+    open: { label: "창 열기", ph: "예: 설정 창" },
+    note: { label: "메모", ph: "자유롭게 적기" },
+  };
+  const CLICKABLE = "button, a[href], [role=button], [data-view], [data-act], [data-action], summary, label, input[type=checkbox], input[type=radio], select";
+  function flowTarget(el) {
+    const t = el.closest(CLICKABLE);
+    return t && !t.closest("#__daling-studio-ov") ? t : null;
+  }
+  function guessFlow(btn) {
+    if (btn.dataset.view) return { summary: `'${viewLabel(btn.dataset.view)}' 화면으로 이동`, steps: [{ kind: "nav", view: btn.dataset.view }] };
+    if (btn.tagName === "A") return { summary: `링크 열기 (${btn.getAttribute("href")})`, steps: [{ kind: "open", text: btn.getAttribute("href") }] };
+    return { summary: "", steps: [] };
+  }
+  function flowFor(node) {
+    if (!(node instanceof Element)) return null;
+    return [...cur().changes].reverse().find((c) => {
+      if (c.type !== "flow") return false;
+      const el = resolve(c.target, c._el);
+      c._el = el;
+      return el && el.contains(node);
+    }) || null;
+  }
+  function ensureFlow(btn) {
+    const path = cssPath(btn);
+    if (S.flow && S.flow.path === path) return S.flow;
+    const saved = [...cur().changes].reverse().find((c) => c.type === "flow" && c.target.path === path);
+    const guess = guessFlow(btn);
+    S.flow = saved
+      ? { path, steps: clean(saved.steps), before: saved.before || [], summary: saved.summary || "", where: saved.where || "", job: null }
+      : { path, steps: clean(guess.steps), before: clean(guess.steps), summary: guess.summary, where: "", job: null };
+    return S.flow;
+  }
+  function flowHtml(el) {
+    const btn = flowTarget(el);
+    if (!btn) return "";
+    const f = ensureFlow(btn);
+    const viewOpts = (v) => Object.entries(VIEW_LABEL).map(([k, l]) => `<option value="${k}" ${k === v ? "selected" : ""}>${l}</option>`).join("");
+    const step = (st, i) => `<li class="step" draggable="true" data-step="${i}">
+        <span class="sgrip" title="끌어서 순서 바꾸기">⠿</span><b>${i + 1}</b>
+        <select data-step-kind="${i}">${Object.entries(FLOW_KINDS).map(([k, v]) => `<option value="${k}" ${k === st.kind ? "selected" : ""}>${v.label}</option>`).join("")}</select>
+        <button class="mini" data-flow-del="${i}" title="빼기">✕</button>
+        ${st.kind === "nav" ? `<select data-step-view="${i}">${viewOpts(st.view)}</select>` : `<input data-step-text="${i}" value="${esc(st.text || "")}" placeholder="${esc(FLOW_KINDS[st.kind]?.ph || "")}">`}</li>`;
+    const aiBusy = f.job && f.job.status === "running";
+    const saved = cur().changes.some((c) => c.type === "flow" && c.target.path === f.path);
+    return `<section class="flowbox"><h4>동작 <small>누르면 일어나는 일 · ${esc(shortLabel(btn))}</small></h4>
+      <div class="flowsrc">${f.summary ? `지금: ${esc(f.summary)}` : "지금 하는 일은 코드에서 알아봐야 해요"}
+        ${INFO.claude ? `<button data-flow-ai ${aiBusy ? "disabled" : ""}>${aiBusy ? "알아보는 중…" : "AI 에게 알아보기"}</button>` : ""}
+        ${f.where ? `<div class="small">코드: <code>${esc(f.where)}</code></div>` : ""}</div>
+      ${f.job && f.job.status === "failed" ? `<p class="err">${esc(f.job.error || "못 알아냈어요")}</p>` : ""}
+      <ol class="flow">${f.steps.map(step).join("") || `<li class="small">단계가 없어요. 아래에서 더해 흐름을 짜 보세요.</li>`}</ol>
+      <div class="flowadd">${Object.entries(FLOW_KINDS).map(([k, v]) => `<button data-flow-add="${k}">＋${v.label}</button>`).join("")}</div>
+      <div class="pacts2"><button class="primary" data-flow-play>▶ 시연</button>
+        ${f.before.length ? `<button data-flow-play-before>지금 동작 시연</button><button data-flow-reset>처음대로</button>` : ""}
+        <button data-flow-save>${saved ? "흐름 다시 담기" : "이 흐름으로 바꾸기"}</button></div>
+      <p class="small">담아 두면 둘러보기(V)에서 이 단추를 눌렀을 때 바꾼 흐름대로 시연돼요.</p></section>`;
+  }
+  function showAppToast(text) {
+    if (typeof showToast === "function") showToast(text);
+    else toast(text);
+  }
+  async function showBusy(text, ms) {
+    const b = $o(".busy");
+    b.querySelector(".busytext").textContent = text || "처리하는 중…";
+    b.hidden = false;
+    await sleep(ms);
+    b.hidden = true;
+  }
+  async function playFlow(steps) {
+    if (S.demoing) return;
+    S.demoing = true;
+    scheduleDraw();
+    try {
+      for (const st of steps) {
+        const text = (st.text || "").trim();
+        if (st.kind === "nav" && typeof switchView === "function") {
+          switchView(st.view || "dashboard");
+          await sleep(800);
+        } else if (st.kind === "confirm") {
+          const ok = typeof appDialog === "function"
+            ? await appDialog({ title: "확인", icon: "help", message: text || "계속할까요?" })
+            : confirm(text || "계속할까요?");
+          if (ok !== true) {
+            showAppToast("취소하면 여기서 멈춰요");
+            break;
+          }
+        } else if (st.kind === "loading") {
+          const sec = parseFloat((text.match(/(\d+(?:\.\d+)?)\s*초/) || [])[1]) || 1.6;
+          await showBusy(text.replace(/\(?\d+(?:\.\d+)?\s*초\)?/, "").trim(), sec * 1000);
+        } else if (st.kind === "run") {
+          showAppToast(`▶ ${text || "작업"} (시연이라 실제로는 하지 않아요)`);
+          await sleep(1500);
+        } else if (st.kind === "open") {
+          if (typeof appDialog === "function") await appDialog({ title: text || "창", message: "(시연) 여기에 이 창이 열려요." });
+          else await sleep(800);
+        } else {
+          showAppToast(text || "…");
+          await sleep(1500);
+        }
+      }
+    } finally {
+      S.demoing = false;
+      scheduleDraw();
+    }
+  }
+  async function askFlowAI() {
+    const btn = S.sel && flowTarget(S.sel.el);
+    if (!btn) return;
+    const f = ensureFlow(btn);
+    const target = {
+      label: shortLabel(btn), text: textOf(btn), id: btn.id, classes: [...btn.classList], data: { ...btn.dataset },
+      html: btn.outerHTML.slice(0, 700), view: viewKey(), parent: shortLabel(btn.parentElement || btn),
+    };
+    const res = await fetch("/__studio/ai/flow", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ target }),
+    }).then((r) => r.json()).catch(() => ({ ok: false }));
+    if (!res.ok) return toast(res.message || "AI 를 부르지 못했어요");
+    f.job = { id: res.id, status: "running" };
+    renderPanel();
+    for (let i = 0; i < 200 && f.job.status === "running"; i++) {
+      await sleep(1500);
+      const j = await fetch(`/__studio/ai-job?id=${res.id}`).then((r) => r.json()).catch(() => null);
+      if (!j) continue;
+      f.job = { id: res.id, status: j.status, error: j.error };
+      if (j.status === "done" && j.result) {
+        f.before = (j.result.steps || []).map((x) => ({ kind: FLOW_KINDS[x.kind] ? x.kind : "note", text: x.text || "", view: x.view }));
+        f.summary = j.result.summary || f.summary;
+        f.where = j.result.where || "";
+        // 아직 손대지 않았으면 알아낸 흐름을 편집본으로 깔아 준다
+        if (!cur().changes.some((c) => c.type === "flow" && c.target.path === f.path)) f.steps = clean(f.before);
+      }
+    }
+    if (S.flow === f) renderPanel();
+  }
+  function saveFlow() {
+    const btn = S.sel && flowTarget(S.sel.el);
+    if (!btn || !S.flow) return;
+    const f = S.flow;
+    cur().changes.filter((c) => c.type === "flow" && c.target.path === f.path).forEach((c) => removeChange(c.id));
+    S.editKey = null;
+    commit({ type: "flow", target: describe(btn, f.path), before: clean(f.before), summary: f.summary, where: f.where,
+      steps: clean(f.steps), _el: btn });
+    toast("흐름을 담았어요. 둘러보기(V)에서 그 단추를 눌러 보세요");
+  }
+
+  /* ---------- AI 추천: 왼쪽 아래 작은 카드가 "이건 어때요?" 하며 바로 미리 보여 준다 ---------- */
+  const previewStyle = document.createElement("style");
+  previewStyle.id = "__studio-preview";
+  document.head.appendChild(previewStyle);
+  function screenOutline() {
+    const main = document.querySelector("main, .main, .content, .app-shell") || document.body;
+    const out = [];
+    const walk = (node, depth) => {
+      for (const c of node.children) {
+        if (out.length >= 45 || c === ovHost) continue;
+        const r = c.getBoundingClientRect();
+        if (r.width < 60 || r.height < 14 || r.bottom < 0 || r.top > innerHeight) continue;
+        if (goodClasses(c).length || c.id) out.push({ el: shortLabel(c), text: textOf(c).slice(0, 36), size: `${Math.round(r.width)}×${Math.round(r.height)}`, depth });
+        if (depth < 3) walk(c, depth + 1);
+      }
+    };
+    walk(main, 0);
+    return out;
+  }
+  function elemInfo(el, sel) {
+    const cs = getComputedStyle(el);
+    const keys = ["display", "font-size", "font-weight", "color", "background-color", "padding", "margin", "gap",
+      "border-radius", "box-shadow", "line-height", "letter-spacing", "width", "height"];
+    return {
+      selector: sel, path: cssPath(el), label: shortLabel(el), text: textOf(el), size: describe(el).size,
+      styles: Object.fromEntries(keys.map((k) => [k, cs.getPropertyValue(k)])),
+      rules: matchedRuleTexts(el),
+      children: [...el.children].slice(0, 10).map((c) => `${shortLabel(c)} “${textOf(c).slice(0, 24)}”`),
+      parent: el.parentElement ? shortLabel(el.parentElement) : "",
+    };
+  }
+  function aiContext(focusSelected) {
+    const ctx = {
+      view: viewKey(), viewLabel: viewLabel(viewKey()), theme: themeLabel(themeKey()),
+      viewport: { w: innerWidth, h: innerHeight }, ask: S.ai.ask || "",
+      tokens: Object.fromEntries(TOKEN_GROUPS.flatMap((g) => g[1]).map(([n]) => [n, rootVar(n)])),
+      screen: screenOutline(),
+      userChanges: cur().changes.slice(-12).map((c) => ({ type: c.type, where: c.selector || c.name || (c.target && c.target.label), prop: c.prop, to: c.to })),
+      comments: S.comments.slice(-8).map((c) => ({ kind: kindLabel(c.kind), text: c.text, where: c.anchor.label })),
+    };
+    if (focusSelected && S.sel && S.sel.el.isConnected) ctx.selected = elemInfo(S.sel.el, S.scope);
+    return ctx;
+  }
+  let aiTimer = 0;
+  function aiAutoSoon(why) {
+    if (!INFO.claude || !S.ai.auto || S.clean) return;
+    clearTimeout(aiTimer);
+    aiTimer = setTimeout(() => {
+      // 너무 자주 부르지 않는다: 30초에 한 번, 제안을 보고 있거나 댓글을 쓰는 중이면 쉬기
+      if (S.ai.status === "thinking" || S.ai.status === "show" || !$(".pop").hidden || !$(".modal").hidden) return;
+      if (Date.now() - S.ai.lastAt < 30000) return;
+      askAI(why === "select");
+    }, why === "select" ? 1600 : 2600);
+  }
+  async function askAI(focusSelected) {
+    clearPreview();
+    S.ai = { ...S.ai, status: "thinking", items: [], idx: 0, error: "", lastAt: Date.now(), focus: !!focusSelected };
+    renderAi();
+    const res = await fetch("/__studio/ai/suggest", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ context: aiContext(focusSelected) }),
+    }).then((r) => r.json()).catch(() => ({ ok: false }));
+    if (!res.ok) {
+      S.ai.status = "error";
+      S.ai.error = res.message || "AI 를 부르지 못했어요";
+      return renderAi();
+    }
+    const id = (S.ai.job = res.id);
+    while (S.ai.job === id) {
+      await sleep(700);
+      const j = await fetch(`/__studio/ai-job?id=${id}`).then((r) => r.json()).catch(() => null);
+      if (!j || S.ai.job !== id) break;
+      const fresh = j.items.length > S.ai.items.length;
+      S.ai.items = j.items;
+      S.ai.jobStatus = j.status;
+      if (fresh && S.ai.status === "thinking") {
+        S.ai.status = "show";
+        S.ai.idx = 0;
+        renderAi(true);
+        demoSuggestion(S.ai.items[0]);
+      } else if (fresh) {
+        renderAi();
+      }
+      if (j.status !== "running") {
+        if (!S.ai.items.length) {
+          S.ai.status = "error";
+          S.ai.error = j.error || "이번엔 제안할 것을 못 찾았어요";
+        }
+        renderAi();
+        break;
+      }
+    }
+  }
+  function suggestionCss(item) {
+    const blocks = [];
+    for (const c of item.changes || []) {
+      if (c.type === "token" && /^--[\w-]+$/.test(c.name || "")) blocks.push(`${themeSelector(themeKey())} { ${c.name}: ${c.to} !important; }`);
+      if (c.type === "style" && countOf(c.selector) && /^[a-z-]+$/.test(c.prop || "")) blocks.push(`${c.selector} { ${c.prop}: ${c.to} !important; }`);
+    }
+    return blocks.join("\n");
+  }
+  function clearPreview() {
+    previewStyle.textContent = "";
+    document.querySelectorAll(".__studio-sparkle").forEach((n) => n.classList.remove("__studio-sparkle"));
+  }
+  async function demoSuggestion(item) {
+    if (!item) return;
+    const css = suggestionCss(item);
+    const sel = item.focus && countOf(item.focus) ? item.focus : ((item.changes || []).find((c) => c.selector && countOf(c.selector)) || {}).selector;
+    let targets = [];
+    try { targets = sel ? [...document.querySelectorAll(sel)].slice(0, 6) : []; } catch { targets = []; }
+    if (targets[0]) {
+      const r = targets[0].getBoundingClientRect();
+      if (r.bottom < 0 || r.top > innerHeight) targets[0].scrollIntoView({ block: "center", behavior: "smooth" });
+    }
+    const token = (S.ai.demoToken = uid("d"));
+    // 뾰로롱: 바뀔 곳이 반짝이고, 바뀐 모습 → 원래 → 바뀐 모습으로 한 번 보여 준 뒤 바뀐 채로 둔다
+    targets.forEach((t) => t.classList.add("__studio-sparkle"));
+    previewStyle.textContent = css;
+    await sleep(1400);
+    if (S.ai.demoToken !== token) return;
+    previewStyle.textContent = "";
+    await sleep(650);
+    if (S.ai.demoToken !== token) return;
+    previewStyle.textContent = css;
+    await sleep(900);
+    targets.forEach((t) => t.classList.remove("__studio-sparkle"));
+  }
+  function acceptSuggestion(item) {
+    clearPreview();
+    S.group = uid("g");
+    for (const c of item.changes || []) {
+      S.editKey = null;
+      if (c.type === "token") {
+        const prev = cur().changes.find((x) => x.type === "token" && x.theme === themeKey() && x.name === c.name);
+        commit({ type: "token", theme: themeKey(), name: c.name, from: prev ? prev.from : rootVar(c.name), to: c.to, by: "ai" });
+      } else if (c.type === "style" && countOf(c.selector)) {
+        const el = document.querySelector(c.selector);
+        const prev = cur().changes.find((x) => x.type === "style" && x.selector === c.selector && x.prop === c.prop);
+        commit({ type: "style", selector: c.selector, prop: c.prop, from: prev ? prev.from : getComputedStyle(el).getPropertyValue(c.prop).trim(),
+          to: c.to, target: describe(el, c.selector), count: countOf(c.selector), by: "ai", why: item.title });
+      }
+    }
+    S.group = null;
+    toast(`담았어요: ${item.title} (Ctrl+Z 로 되돌리기)`);
+    nextSuggestion();
+  }
+  function nextSuggestion() {
+    clearPreview();
+    S.ai.idx += 1;
+    if (S.ai.idx < S.ai.items.length) {
+      renderAi(true);
+      demoSuggestion(S.ai.items[S.ai.idx]);
+    } else {
+      S.ai.status = S.ai.jobStatus === "running" ? "thinking" : "done";
+      renderAi();
+    }
+  }
+  function closeAi() {
+    clearPreview();
+    S.ai.demoToken = null;
+    if (S.ai.job && S.ai.status === "thinking") {
+      fetch("/__studio/ai/cancel", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: S.ai.job }) });
+    }
+    S.ai.job = null;
+    S.ai.status = "idle";
+    S.ai.open = false;
+    renderAi();
+  }
+  function renderAi(pop = false) {
+    const box = $(".ai");
+    if (!box) return;
+    box.hidden = S.clean || !INFO.claude;
+    if (box.hidden) return;
+    const o = toTop(0, 0);
+    box.style.left = `${o.x + 14}px`;
+    const a = S.ai;
+    let inner = "";
+    if (a.status === "thinking") {
+      inner = `<div class="ai-head"><span class="spark">✨</span><b>생각하는 중</b><span class="dots"><i></i><i></i><i></i></span>
+        <button class="mini" data-ai="close" title="그만">✕</button></div>
+        <p class="small">${a.focus ? "고른 요소" : `${esc(viewLabel(viewKey()))} 화면`}을 보고 있어요</p>`;
+    } else if (a.status === "show" && a.items[a.idx]) {
+      const it = a.items[a.idx];
+      inner = `<div class="ai-head"><span class="spark">✨</span><b>이건 어때요?</b><span class="cnt">${a.idx + 1}/${a.items.length}${a.jobStatus === "running" ? "+" : ""}</span>
+          <button class="mini" data-ai="close" title="닫기">✕</button></div>
+        <div class="ai-title">${esc(it.title)}</div>
+        <div class="ai-why">${esc(it.why || "")}</div>
+        <div class="ai-chg">${(it.changes || []).map((c) => `<code>${esc(c.type === "token" ? c.name : `${c.selector} ${c.prop}`)}</code> → ${esc(String(c.to).slice(0, 28))}`).join("<br>")}</div>
+        <div class="pacts2"><button class="primary" data-ai="accept">담기</button><button data-ai="replay">▶ 다시 시연</button><button data-ai="next">다음</button></div>`;
+    } else if (a.status === "error" || a.status === "done") {
+      inner = `<div class="ai-head"><span class="spark">✨</span><b>${a.status === "done" ? "추천을 다 봤어요" : "추천을 못 받았어요"}</b><button class="mini" data-ai="close">✕</button></div>
+        ${a.error ? `<p class="small">${esc(a.error)}</p>` : ""}
+        <div class="pacts2"><button data-ai="ask-screen">이 화면 다시</button>${S.sel ? `<button data-ai="ask-sel">고른 것</button>` : ""}</div>`;
+    } else if (a.open) {
+      inner = `<div class="ai-head"><span class="spark">✨</span><b>AI 추천</b><button class="mini" data-ai="close">✕</button></div>
+        <input class="wide" data-ai-ask value="${esc(a.ask)}" placeholder="바라는 느낌 (예: 더 차분하게, 카드 정리)">
+        <div class="pacts2"><button class="primary" data-ai="ask-screen">이 화면 추천</button>${S.sel ? `<button data-ai="ask-sel">고른 것 추천</button>` : ""}</div>
+        <label class="chk"><input type="checkbox" data-ai-auto ${a.auto ? "checked" : ""}> 고르거나 화면을 옮기면 알아서 추천 (30초에 한 번)</label>`;
+    } else {
+      box.classList.remove("open");
+      box.innerHTML = `<button class="ai-pill" data-ai="open" title="AI 추천">✨ <span>AI 추천</span>${a.auto ? `<i class="on"></i>` : ""}</button>`;
+      return;
+    }
+    box.classList.add("open"); // 펼친 카드는 아래 도구 막대 위로 올린다 (겹치지 않게)
+    box.innerHTML = `<div class="ai-card ${pop ? "pop" : ""}">${pop ? `<span class="burst">${"<i>✦</i>".repeat(7)}</span>` : ""}${inner}</div>`;
+  }
+
   /* ---------- 저장 ---------- */
   const clean = (o) => JSON.parse(JSON.stringify(o, (k, v) => (k.startsWith("_") ? undefined : v)));
   function snapshot() {
@@ -1095,6 +1855,7 @@
       note: S.note,
       freedom: S.freedom,
       app: { version: INFO.version, data: INFO.mode },
+      proposal: INFO.ctx || null, // 시안 위에서 만든 요청이면 그 시안 이름 (선택자·규칙이 시안 기준)
       // 앱이 실제로 그려진 크기 (패널을 붙이면 iframe 이 좁아져 이 값도 줄어든다 — 그 너비의 진짜 배치다)
       viewport: { w: innerWidth, h: innerHeight, dpr: devicePixelRatio },
       theme: themeKey(),
@@ -1149,6 +1910,21 @@
         });
         L.push("");
       }
+      if (styles.some((c) => c.prop === "translate")) {
+        L.push("> `translate` 는 '이만큼 옮기고 싶다' 는 뜻이다. 소스에서는 translate 대신 margin·gap·정렬·배치(grid/flex 순서)로 자연스럽게 옮긴다.", "");
+      }
+      const flows = ch.filter((c) => c.type === "flow");
+      if (flows.length) {
+        L.push("### 동작 흐름 (단추를 누르면)", "");
+        const stepLine = (st, i) => `${i + 1}. [${(FLOW_KINDS[st.kind] || {}).label || st.kind}] ${st.kind === "nav" ? `'${viewLabel(st.view)}' 화면으로` : st.text || ""}`;
+        flows.forEach((c) => {
+          L.push(`- ${viewLabel(c.target.view)} \`${c.target.label}\`${c.target.text ? ` “${c.target.text.slice(0, 30)}”` : ""} — 선택자 \`${c.target.path}\``);
+          if (c.before && c.before.length) L.push(`  - 지금${c.where ? ` (${c.where})` : ""}:`, ...c.before.map((st, i) => `    ${stepLine(st, i)}`));
+          else if (c.summary) L.push(`  - 지금: ${c.summary}`);
+          L.push("  - 바라는 흐름:", ...c.steps.map((st, i) => `    ${stepLine(st, i)}`));
+        });
+        L.push("");
+      }
       const texts = ch.filter((c) => c.type === "text");
       if (texts.length) {
         L.push("### 글자", "");
@@ -1172,7 +1948,7 @@
     const m = $(".modal");
     const total = S.variants.reduce((n, v) => n + v.changes.length, 0);
     m.innerHTML = `<div class="card">
-      <h3>저장해서 Claude 에게 넘기기</h3>
+      <h3>${INFO.ctx ? "이 시안을 더 고쳐 달라고 하기" : "저장해서 Claude 에게 넘기기"}</h3>
       <p class="small">댓글 ${S.comments.length}개 · 바꾼 것 ${total}개 (조합 ${S.variants.length}개)</p>
       <label>한 줄 제목<input data-f="title" value="${esc(S.title)}" placeholder="예: 대시보드 카드 정리, 강조색 남색으로"></label>
       <label>전체 메모<textarea data-f="note" rows="3" placeholder="전체적으로 바라는 느낌이 있으면 적어 주세요">${esc(S.note)}</textarea></label>
@@ -1181,12 +1957,16 @@
         <button data-freedom="refine" class="${S.freedom === "refine" ? "on" : ""}">뜻을 살려 더 다듬어 줘</button>
         <button data-freedom="exact" class="${S.freedom === "exact" ? "on" : ""}">적은 그대로만</button>
       </div>
-      <div class="macts"><button data-modal="close">닫기</button><button class="primary" data-modal="save">저장</button></div>
+      <div class="macts"><button data-modal="close">닫기</button>${
+        !INFO.claude ? `<button class="primary" data-modal="save">저장</button>`
+        : INFO.ctx ? `<button class="primary" data-modal="save-revise">저장하고 다시 고치기</button>`
+        : `<button data-modal="save">저장만</button><button class="primary" data-modal="save-propose">저장하고 시안 만들기</button>`}</div>
+      ${INFO.claude && !INFO.ctx ? `<p class="small">시안: Claude 가 진짜 화면 파일은 그대로 두고 복사본에 고쳐요. 다 되면 원래·시안을 오가며 보고 반영할지 정해요.</p>` : ""}
       <div class="result" hidden></div></div>`;
     m.hidden = false;
     m.querySelector("[data-f=title]").focus();
   }
-  async function doSave() {
+  async function doSave(next = "") {
     const m = $(".modal");
     S.title = m.querySelector("[data-f=title]").value.trim();
     S.note = m.querySelector("[data-f=note]").value.trim();
@@ -1205,6 +1985,32 @@
       S.dirty = false;
       clearTimeout(draftTimer);
       try { localStorage.removeItem(DRAFT_KEY); } catch { /* 없어도 된다 */ }
+      if (next) {
+        const body = next === "revise" ? { name: INFO.ctx, request: res.name } : { request: res.name, title: S.title };
+        const started = await fetch(`/__studio/proposal/${next === "revise" ? "revise" : "start"}`, {
+          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+        }).then((r) => r.json());
+        if (!started.ok) throw new Error(started.message || "시안을 시작하지 못했어요");
+        // 이번 요청은 Claude 에게 넘어갔다. 화면에 얹어 둔 변경·댓글은 비우고 시안 탭에서 진행을 본다.
+        [...cur().changes].reverse().filter(isDom).forEach(revertDom);
+        S.variants = [newVariant("조합 A")];
+        S.active = 0;
+        S.comments = [];
+        S.title = "";
+        S.note = "";
+        S.undo = [];
+        S.redo = [];
+        applyCss();
+        $(".modal").hidden = true;
+        S.mode = "browse";
+        document.documentElement.classList.remove("__studio-picking");
+        S.tab = "proposals";
+        S.collapsed = false;
+        await refreshProposals();
+        render();
+        toast(next === "revise" ? "Claude 가 시안을 다시 고치기 시작했어요" : "Claude 가 시안을 만들기 시작했어요. 몇 분 걸려요");
+        return;
+      }
       const say = `디자인 스튜디오 저장본 ${res.name} 반영해 줘`;
       out.innerHTML = `<p>저장했어요: <code>tools/design_studio/requests/${esc(res.name)}.md</code></p>
         <p>Claude Code 에 이렇게 말하세요:</p><div class="say"><code>${esc(say)}</code><button data-copy="${esc(say)}">복사</button></div>
@@ -1212,7 +2018,7 @@
         <button data-copy-md>내용 복사 (마크다운)</button>`;
       out._md = md;
     } catch (err) {
-      out.innerHTML = `<p>서버에 저장하지 못했어요 (${esc(err.message)}). 내용을 복사해 Claude 에게 붙여 넣으세요.</p><button data-copy-md>내용 복사 (마크다운)</button>`;
+      out.innerHTML = `<p>${S.savedAs && next ? "저장은 했는데 시안을 시작하지 못했어요" : "서버에 저장하지 못했어요"} (${esc(err.message)}). 내용을 복사해 Claude 에게 붙여 넣으세요.</p><button data-copy-md>내용 복사 (마크다운)</button>`;
       out._md = md;
     }
   }
@@ -1287,18 +2093,13 @@
       else document.documentElement.dataset.theme = d.themeSet;
       return setTimeout(renderPanel, 30);
     }
-    if (d.accent) {
-      S.editKey = uid("k");
-      return setAccent(d.accent);
+    if (d.pick) return openPicker(b, d.pick, d.key);
+    if (b.hasAttribute("data-eyecopy")) {
+      return eyedrop().then((hex) => hex && copy(hex).then(() => toast(`${hex} 를 복사했어요`)));
     }
     if (d.tokenReset) {
       cur().changes.filter((c) => c.type === "token" && c.theme === themeKey() && c.name === d.tokenReset).forEach((c) => removeChange(c.id));
       return;
-    }
-    if (d.styleVal) {
-      const [prop, val] = d.styleVal.split("|");
-      S.editKey = null;
-      return setStyle(prop, val);
     }
     if (d.styleReset) return resetStyle(d.styleReset);
     if (d.crumb) {
@@ -1307,6 +2108,35 @@
       return selectEl(el);
     }
     if (d.chgDel) return removeChange(d.chgDel);
+    if (b.hasAttribute("data-flow-ai")) return askFlowAI();
+    if (d.flowAdd && S.flow) {
+      S.flow.steps.push(d.flowAdd === "nav" ? { kind: "nav", view: viewKey() } : { kind: d.flowAdd, text: "" });
+      return renderPanel();
+    }
+    if (d.flowDel && S.flow) {
+      S.flow.steps.splice(+d.flowDel, 1);
+      return renderPanel();
+    }
+    if (b.hasAttribute("data-flow-play") && S.flow) return playFlow(S.flow.steps);
+    if (b.hasAttribute("data-flow-play-before") && S.flow) return playFlow(S.flow.before);
+    if (b.hasAttribute("data-flow-reset") && S.flow) {
+      S.flow.steps = clean(S.flow.before);
+      return renderPanel();
+    }
+    if (b.hasAttribute("data-flow-save")) return saveFlow();
+    if (d.ai) {
+      const a = d.ai;
+      if (a === "open") {
+        S.ai.open = true;
+        return renderAi();
+      }
+      if (a === "close") return closeAi();
+      if (a === "ask-screen") return askAI(false);
+      if (a === "ask-sel") return askAI(true);
+      if (a === "accept") return acceptSuggestion(S.ai.items[S.ai.idx]);
+      if (a === "next") return nextSuggestion();
+      if (a === "replay") return demoSuggestion(S.ai.items[S.ai.idx]);
+    }
     if (d.cmtGo) {
       const c = S.comments.find((x) => x.id === d.cmtGo);
       if (c.anchor.view !== viewKey() && typeof switchView === "function") switchView(c.anchor.view);
@@ -1338,6 +2168,14 @@
     if (d.pop) return closePop(d.pop === "ok");
     if (d.modal === "close") return ($(".modal").hidden = true);
     if (d.modal === "save") return doSave();
+    if (d.modal === "save-propose") return doSave("propose");
+    if (d.modal === "save-revise") return doSave("revise");
+    if (d.propAct) return proposalAction(d.propAct, d.name);
+    if (d.tabGo) {
+      S.tab = d.tabGo;
+      S.collapsed = false;
+      return render();
+    }
     if (d.freedom) {
       S.freedom = d.freedom;
       b.parentElement.querySelectorAll("button").forEach((x) => x.classList.toggle("on", x === b));
@@ -1399,29 +2237,63 @@
   }
   root.addEventListener("click", onStudioClick);
   ovRoot.addEventListener("click", onStudioClick);
+  let stepDrag = -1;
+  root.addEventListener("dragstart", (e) => {
+    const li = e.target.closest && e.target.closest("li.step");
+    if (!li) return;
+    stepDrag = +li.dataset.step;
+    e.dataTransfer.effectAllowed = "move";
+    li.classList.add("dragging");
+  });
+  root.addEventListener("dragover", (e) => {
+    const li = e.target.closest && e.target.closest("li.step");
+    if (stepDrag < 0 || !li) return;
+    e.preventDefault();
+    root.querySelectorAll("li.step").forEach((n) => n.classList.toggle("over", n === li));
+  });
+  root.addEventListener("drop", (e) => {
+    const li = e.target.closest && e.target.closest("li.step");
+    if (stepDrag < 0 || !li || !S.flow) return;
+    e.preventDefault();
+    const to = +li.dataset.step;
+    const [moved] = S.flow.steps.splice(stepDrag, 1);
+    S.flow.steps.splice(to, 0, moved);
+    stepDrag = -1;
+    renderPanel();
+  });
+  root.addEventListener("dragend", () => {
+    stepDrag = -1;
+    root.querySelectorAll("li.step").forEach((n) => n.classList.remove("over", "dragging"));
+  });
   // 조절 막대·색 고르기: 누르기 시작할 때 새 '편집 묶음' 을 연다 (끄는 동안 바뀐 값은 한 줄로 합친다)
+  // 색 판 안의 칸은 판을 연 순간의 묶음을 그대로 쓴다 (끌기·16진수 입력이 한 줄로 합쳐지게)
   root.addEventListener("pointerdown", (e) => {
-    if (e.target.matches("input, select")) S.editKey = uid("k");
+    if (e.target.matches("input, select") && !e.target.closest(".picker")) S.editKey = uid("k");
   });
   root.addEventListener("focusin", (e) => {
-    if (e.target.matches("input, select")) S.editKey = uid("k");
+    if (e.target.matches("input, select") && !e.target.closest(".picker")) S.editKey = uid("k");
   });
   root.addEventListener("input", (e) => {
     const t = e.target;
     const d = t.dataset;
-    if (d.token) return setToken(d.token, t.value);
-    if (t.hasAttribute("data-accent-pick")) return setAccent(t.value);
     if (d.tokenPx) {
       t.nextElementSibling.textContent = `${t.value}px`;
       return setToken(d.tokenPx, `${t.value}px`);
     }
-    if (d.style) return setStyle(d.style, t.value);
     if (d.styleRange) {
       const val = d.unit ? `${t.value}${d.unit}` : t.value;
       t.nextElementSibling.textContent = val;
       return setStyle(d.styleRange, val);
     }
     if (d.size) return t.value ? setStyle(d.size, `${t.value}px`) : resetStyle(d.size);
+    if (d.stepText != null && S.flow) {
+      S.flow.steps[+d.stepText].text = t.value;
+      return;
+    }
+    if (t.hasAttribute("data-ai-ask")) {
+      S.ai.ask = t.value;
+      return;
+    }
     if (t.hasAttribute("data-variant-name")) {
       cur().name = t.value.trim() || cur().name;
       renderBar();
@@ -1430,6 +2302,21 @@
   });
   root.addEventListener("change", (e) => {
     const t = e.target;
+    if (t.dataset.stepKind != null && S.flow) {
+      const st = S.flow.steps[+t.dataset.stepKind];
+      st.kind = t.value;
+      if (st.kind === "nav" && !st.view) st.view = viewKey();
+      return renderPanel();
+    }
+    if (t.dataset.stepView != null && S.flow) {
+      S.flow.steps[+t.dataset.stepView].view = t.value;
+      return;
+    }
+    if (t.hasAttribute("data-ai-auto")) {
+      S.ai.auto = t.checked;
+      savePref("ai-auto", S.ai.auto);
+      return renderAi();
+    }
     if (t.hasAttribute("data-scope")) {
       S.scope = t.value;
       S.editKey = null;
@@ -1442,7 +2329,9 @@
     }
     S.editKey = null;
     // 조절을 마쳤다(색 고르는 창 닫힘·막대 놓음). 이제 '바뀜' 표시를 다시 그려도 된다.
-    if (!t.hasAttribute("data-variant-name")) renderPanel();
+    // 글 입력칸(흐름 단계·조합 이름)은 다시 그리지 않는다: 칸을 떠나며 다음 단추를 누르는 순간 패널이 바뀌어 그 누르기가 사라졌다.
+    const d = t.dataset;
+    if (d.styleRange || d.styleSelect || d.tokenPx || d.size) renderPanel();
   });
 
   /* ---------- 단축키 ---------- */
@@ -1475,7 +2364,11 @@
     const k = e.key.toLowerCase();
     if ((e.ctrlKey || e.metaKey) && k === "z") return handled(), e.shiftKey ? redo() : undo();
     if ((e.ctrlKey || e.metaKey) && k === "y") return handled(), redo();
-    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.ctrlKey || e.metaKey || e.altKey) {
+      if (!(S.mode === "select" && S.sel && e.shiftKey && /^arrow/.test(k))) return;
+    }
+    if (!e.shiftKey) S.nudgeKey = null;
+    if (k === "escape" && picker) return handled(), closePicker();
     if (k === "escape") {
       if (!$(".pop").hidden) return handled(), closePop(false);
       if (!$(".modal").hidden) return handled(), ($(".modal").hidden = true);
@@ -1494,6 +2387,15 @@
       return handled(), render();
     }
     if (/^[1-9]$/.test(k) && S.variants[+k - 1]) return handled(), switchVariant(+k - 1);
+    if (S.mode === "select" && S.sel && e.shiftKey && /^arrow/.test(k)) {
+      const step = e.ctrlKey || e.metaKey ? 10 : 1;
+      const [bx, by] = parseTranslate(S.sel.el);
+      const dx = k === "arrowleft" ? -step : k === "arrowright" ? step : 0;
+      const dy = k === "arrowup" ? -step : k === "arrowdown" ? step : 0;
+      if (!S.nudgeKey) ensureMovable(S.sel.el);
+      S.editKey = S.nudgeKey || (S.nudgeKey = uid("k"));
+      return handled(), setStyle("translate", `${bx + dx}px ${by + dy}px`);
+    }
     if (S.mode === "select" && S.sel) {
       if (k === "arrowup" && S.sel.el.parentElement && S.sel.el.parentElement !== document.body) return handled(), selectEl(S.sel.el.parentElement);
       if (k === "arrowdown" && S.sel.el.firstElementChild) return handled(), selectEl(S.sel.el.firstElementChild);
@@ -1501,7 +2403,17 @@
     }
   }
   window.addEventListener("keydown", onKey, true);
-  if (IN_SHELL) TOP.addEventListener("keydown", onKey, true);
+  // 시안·원래를 오가면 iframe(앱)만 새로 뜬다. 바깥 틀에 건 처리기는 예전 앱 것이 남으니, 앱이 사라졌으면 스스로 뗀다.
+  function onTopKey(e) {
+    if (!ovHost.isConnected) return TOP.removeEventListener("keydown", onTopKey, true);
+    onKey(e);
+  }
+  function onTopResize() {
+    if (!ovHost.isConnected) return TOP.removeEventListener("resize", onTopResize);
+    renderPanel();
+    renderAi();
+  }
+  if (IN_SHELL) TOP.addEventListener("keydown", onTopKey, true);
 
   /* ---------- 알림 ---------- */
   let toastTimer = 0;
@@ -1515,8 +2427,20 @@
 
   /* ---------- 시작 ---------- */
   document.body.appendChild(ovHost);
+  wirePicker();
+  TOP.document.querySelectorAll("#__daling-studio").forEach((n) => n.remove());
   TOP.document.body.appendChild(host);
-  if (IN_SHELL) TOP.addEventListener("resize", () => renderPanel());
+  if (IN_SHELL) TOP.addEventListener("resize", onTopResize);
+  refreshProposals();
+  setInterval(refreshProposals, 2500);
+  try {
+    const hint = sessionStorage.getItem("daling-studio-hint");
+    if (hint) {
+      sessionStorage.removeItem("daling-studio-hint");
+      setTimeout(() => toast(hint), 1200);
+    }
+  } catch { /* 안내만 못 보인다 */ }
+  if (INFO.ctx) S.tab = "proposals";
   render();
   (async () => {
     // 앱이 첫 화면을 다 그린 뒤에 불러와야 글자·순서 변경이 제자리를 찾는다
@@ -1548,7 +2472,7 @@
       * { box-sizing: border-box; }
       [hidden] { display: none !important; }
       button, input, select, textarea { font: inherit; color: inherit; }
-      .ov, .bar, .panel, .pop, .modal, .toast {
+      .ov, .bar, .panel, .pop, .modal, .toast, .picker, .ai {
         font: 12.5px/1.45 -apple-system, "Segoe UI", "Malgun Gothic", "Apple SD Gothic Neo", system-ui, sans-serif;
         --s-bg: #1c1c1f; --s-bg2: #26262b; --s-bg3: #303037; --s-line: #3a3a42; --s-text: #f1f1f4; --s-soft: #a8a8b3;
         --s-acc: #7c5cff; --s-acc2: #a593ff; --s-warn: #ff8a65;
@@ -1564,6 +2488,12 @@
       .grip { pointer-events: auto; position: absolute; left: -2px; top: -22px; height: 20px; border: 0; border-radius: 4px; background: #fff; color: #222;
               font-size: 11px; padding: 0 6px; cursor: grab; box-shadow: 0 1px 4px rgba(0,0,0,.3); }
       .grip:active { cursor: grabbing; }
+      /* 범위 칩은 아래 왼쪽: 좁은 요소(접힌 사이드바 단추 60px)에서 위쪽 '⠿ 순서' 손잡이를 덮었다 */
+      .scopechip { pointer-events: auto; position: absolute; left: -2px; bottom: -22px; height: 20px; border: 0; border-radius: 4px; background: #fff; color: #333;
+              font-size: 11px; padding: 0 7px; cursor: pointer; box-shadow: 0 1px 4px rgba(0,0,0,.3); white-space: nowrap; }
+      .busy { position: fixed; left: 50%; top: 42%; transform: translate(-50%, -50%); display: flex; gap: 10px; align-items: center; padding: 14px 18px;
+              background: rgba(28,28,31,.92); color: #fff; border-radius: 12px; font: 13px system-ui, sans-serif; box-shadow: 0 10px 30px rgba(0,0,0,.3); }
+      .spin2 { width: 16px; height: 16px; border: 2px solid #fff4; border-top-color: #fff; border-radius: 50%; animation: s-spin 0.8s linear infinite; }
       .resize { pointer-events: auto; position: absolute; right: -7px; bottom: -7px; width: 14px; height: 14px; background: #fff; border: 2px solid var(--s-acc);
                 border-radius: 3px; cursor: nwse-resize; }
       .dropline { background: var(--s-acc); border-radius: 2px; box-shadow: 0 0 0 2px rgba(255,255,255,.8); }
@@ -1602,7 +2532,7 @@
       .brand { font-weight: 700; font-size: 13px; }
       .brand small { display: block; font-weight: 400; color: var(--s-soft); font-size: 11px; }
       nav { display: flex; gap: 2px; padding: 0 8px 8px; border-bottom: 1px solid var(--s-line); }
-      .tab { flex: 1; border: 0; background: transparent; color: var(--s-soft); padding: 6px 4px; border-radius: 7px; cursor: pointer; }
+      .tab { flex: 1; border: 0; background: transparent; color: var(--s-soft); padding: 6px 2px; border-radius: 7px; cursor: pointer; white-space: nowrap; font-size: 12px; }
       .tab.on { background: var(--s-bg3); color: var(--s-text); font-weight: 600; }
       .tab i, h4 i { font-style: normal; font-size: 10px; background: var(--s-acc); color: #fff; border-radius: 8px; padding: 0 5px; }
       .body { flex: 1; overflow: auto; padding: 4px 12px 16px; }
@@ -1615,8 +2545,8 @@
       .empty { padding: 14px 2px; color: var(--s-soft); }
       .empty b { color: var(--s-text); }
       /* :where 로 감싸 우선순위를 0 으로 둔다. 그래야 .tab·.mini 같은 개별 단추 모양이 이긴다. */
-      :where(.panel, .pop, .modal) button { cursor: pointer; border: 1px solid var(--s-line); background: var(--s-bg2); border-radius: 7px; padding: 5px 9px; }
-      :where(.panel, .pop, .modal) button:hover { border-color: #55555f; }
+      :where(.panel, .pop, .modal, .picker, .ai) button { cursor: pointer; border: 1px solid var(--s-line); background: var(--s-bg2); border-radius: 7px; padding: 5px 9px; }
+      :where(.panel, .pop, .modal, .picker, .ai) button:hover { border-color: #55555f; }
       button.primary { background: var(--s-acc) !important; border-color: var(--s-acc) !important; color: #fff; font-weight: 600; }
       button.danger { color: var(--s-warn); margin-top: 8px; }
       .icon { border: 0; background: transparent; color: var(--s-soft); cursor: pointer; font-size: 14px; }
@@ -1624,15 +2554,28 @@
       .seg { display: flex; gap: 3px; background: var(--s-bg2); padding: 3px; border-radius: 9px; }
       .seg button { flex: 1; border: 0 !important; background: transparent !important; color: var(--s-soft); padding: 5px 4px !important; border-radius: 7px !important; }
       .seg button.on { background: var(--s-bg3) !important; color: var(--s-text); font-weight: 600; }
-      .presets { display: flex; flex-wrap: wrap; gap: 6px; }
-      .sw { width: 24px; height: 24px; border-radius: 50%; border: 2px solid #fff3; background: var(--c); cursor: pointer; padding: 0; position: relative;
-            display: inline-grid; place-items: center; color: #fff; font-size: 13px; }
-      .sw:hover { transform: scale(1.12); }
-      .sw.custom { background: conic-gradient(#f66, #fd5, #6d6, #5cf, #a6f, #f66); overflow: hidden; }
-      .sw.custom input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+      .swatch { width: 26px; height: 22px; border: 1px solid var(--s-line) !important; border-radius: 5px !important; padding: 0 !important;
+                background: var(--c) !important; cursor: pointer; }
+      .swatch.big { width: 42px; height: 30px; }
+      .swatch.clear { background: repeating-conic-gradient(#888 0 25%, #ccc 0 50%) 0 0 / 8px 8px !important; }
+      .accentrow { display: flex; gap: 10px; align-items: center; margin-bottom: 8px; }
+      .hexv { color: var(--s-soft); }
+      .picker { position: fixed; z-index: 2147483006; width: 240px; background: var(--s-bg); border: 1px solid var(--s-line); border-radius: 12px;
+                padding: 10px; box-shadow: 0 14px 40px rgba(0,0,0,.5); display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
+      .ptitle { font: 11px ui-monospace, monospace; color: var(--s-soft); }
+      .sv { position: relative; height: 150px; border-radius: 8px; cursor: crosshair; touch-action: none;
+            background: linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, var(--hue)); }
+      .hue { position: relative; height: 14px; border-radius: 7px; cursor: ew-resize; touch-action: none;
+             background: linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00); }
+      .sv .knob, .hue .knob { position: absolute; width: 14px; height: 14px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 0 1px #0008;
+                              transform: translate(-50%, -50%); pointer-events: none; }
+      .hue .knob { top: 50%; }
+      .prow { display: flex; gap: 6px; align-items: center; } .prow.end { justify-content: flex-end; }
+      .pfrom, .pv { width: 22px; height: 22px; border-radius: 6px; border: 1px solid var(--s-line); flex: none; }
+      .pfrom { cursor: pointer; }
+      .phex { flex: 1; width: 0; min-width: 0; background: var(--s-bg2); border: 1px solid var(--s-line); border-radius: 6px; padding: 4px 6px; font: 12px ui-monospace, monospace; }
       .tok { display: grid; grid-template-columns: 26px 1fr auto auto; gap: 8px; align-items: center; padding: 3px 4px; border-radius: 7px; }
       .tok.changed, .ctl.changed { background: rgba(124,92,255,.14); }
-      .tok input[type=color], .ctl input[type=color] { width: 26px; height: 22px; border: 1px solid var(--s-line); border-radius: 5px; padding: 0; background: none; cursor: pointer; }
       .tname code { display: block; color: var(--s-soft); font-size: 10px; }
       .tval { font: 10.5px ui-monospace, monospace; color: var(--s-soft); }
       .ctl { display: grid; grid-template-columns: 74px 1fr auto auto; gap: 6px; align-items: center; padding: 3px 4px; border-radius: 7px; min-height: 30px; }
@@ -1645,10 +2588,6 @@
       .ctl.size { grid-template-columns: 74px auto auto auto auto auto auto; justify-content: start; }
       .size input { width: 64px; }
       select.wide, input.wide { width: 100%; }
-      .chips { display: flex; gap: 3px; overflow: hidden; }
-      input.clear { background: repeating-conic-gradient(#888 0 25%, #ccc 0 50%) 0 0 / 8px 8px !important; }
-      .chip { width: 14px; height: 14px; border-radius: 4px; border: 1px solid #fff3; background: var(--c); padding: 0; cursor: pointer; }
-      .chip:hover { transform: scale(1.25); }
       .crumbs { display: flex; flex-wrap: wrap; gap: 2px; align-items: center; padding: 8px 0 4px; }
       .crumbs button { border: 0 !important; background: transparent; color: var(--s-soft); padding: 2px 4px !important; font: 11px ui-monospace, monospace; border-radius: 4px; }
       .crumbs button.on { background: var(--s-acc) !important; color: #fff; }
@@ -1703,6 +2642,66 @@
       .result p { margin: 4px 0; }
       .say { display: flex; gap: 6px; align-items: center; background: var(--s-bg2); border-radius: 8px; padding: 6px 8px; margin: 4px 0; }
       .say code { flex: 1; color: var(--s-text); font-size: 12px; }
+      .flowbox .flowsrc { color: var(--s-soft); display: grid; gap: 6px; margin-bottom: 6px; }
+      .flowbox .flowsrc button { justify-self: start; }
+      ol.flow { list-style: none; margin: 6px 0; padding: 0; display: grid; gap: 4px; }
+      /* 단계 글이 길어 잘리지 않게: 위 줄은 [끌기·번호·종류·빼기], 아래 줄은 글칸을 통째로 */
+      li.step > input, li.step > select[data-step-view] { grid-column: 1 / -1; }
+      li.step { display: grid; grid-template-columns: 14px 16px 1fr auto; gap: 4px 6px; align-items: center; background: var(--s-bg2); border: 1px solid var(--s-line);
+                border-radius: 8px; padding: 4px 6px; }
+      li.step.over { border-color: var(--s-acc); } li.step.dragging { opacity: .4; }
+      li.step b { color: var(--s-acc2); font-size: 11px; } .sgrip { cursor: grab; color: var(--s-soft); }
+      li.step select, li.step input { background: var(--s-bg); border: 1px solid var(--s-line); border-radius: 6px; padding: 3px 5px; min-width: 0; }
+      .flowadd { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0; }
+      .flowadd button { padding: 2px 7px !important; font-size: 11px; }
+      .ai { position: fixed; bottom: 16px; z-index: 2147483002; }
+      .ai.open { bottom: 104px; }
+      .ai-pill { border: 1px solid var(--s-line); background: var(--s-bg); color: var(--s-text); border-radius: 999px; padding: 7px 12px; cursor: pointer;
+                 box-shadow: 0 6px 20px rgba(0,0,0,.3); display: flex; gap: 6px; align-items: center; font-weight: 600; }
+      .ai-pill i.on { width: 7px; height: 7px; border-radius: 50%; background: #7ee2a0; box-shadow: 0 0 6px #7ee2a0; }
+      .ai-card { position: relative; width: 290px; background: var(--s-bg); border: 1px solid var(--s-line); border-radius: 14px; padding: 10px 12px;
+                 box-shadow: 0 12px 34px rgba(0,0,0,.4); display: grid; gap: 6px; }
+      .ai-card.pop { animation: ai-pop .45s cubic-bezier(.2,1.6,.4,1); }
+      @keyframes ai-pop { 0% { transform: scale(.6) translateY(16px); opacity: 0; } 100% { transform: none; opacity: 1; } }
+      .ai-head { display: flex; align-items: center; gap: 6px; }
+      .ai-head b { flex: 1; } .ai-head .cnt { color: var(--s-soft); font-size: 11px; }
+      .spark { display: inline-block; animation: twinkle 1.6s ease-in-out infinite; }
+      @keyframes twinkle { 50% { transform: scale(1.25) rotate(12deg); filter: brightness(1.4); } }
+      .dots { display: inline-flex; gap: 3px; } .dots i { width: 4px; height: 4px; border-radius: 50%; background: var(--s-acc2); animation: dot 1s infinite; }
+      .dots i:nth-child(2) { animation-delay: .15s; } .dots i:nth-child(3) { animation-delay: .3s; }
+      @keyframes dot { 50% { transform: translateY(-4px); opacity: .4; } }
+      .ai-title { font-weight: 700; font-size: 13.5px; } .ai-why { color: var(--s-soft); }
+      .ai-chg { font-size: 11px; color: var(--s-soft); background: #151518; border-radius: 6px; padding: 6px 8px; max-height: 92px; overflow: auto; }
+      .burst { position: absolute; left: 22px; top: 18px; pointer-events: none; }
+      .burst i { position: absolute; font-style: normal; color: #ffd479; font-size: 12px; opacity: 0; animation: burst .9s ease-out forwards; }
+      .burst i:nth-child(1) { --dx: -34px; --dy: -30px; } .burst i:nth-child(2) { --dx: 0px; --dy: -42px; animation-delay: .05s; }
+      .burst i:nth-child(3) { --dx: 36px; --dy: -28px; animation-delay: .1s; } .burst i:nth-child(4) { --dx: 46px; --dy: 4px; animation-delay: .04s; }
+      .burst i:nth-child(5) { --dx: -44px; --dy: 6px; animation-delay: .08s; } .burst i:nth-child(6) { --dx: 20px; --dy: -50px; color: #a593ff; animation-delay: .12s; }
+      .burst i:nth-child(7) { --dx: -18px; --dy: -46px; color: #9be3a8; animation-delay: .02s; }
+      @keyframes burst { 0% { transform: translate(0,0) scale(.4); opacity: 1; } 100% { transform: translate(var(--dx), var(--dy)) scale(1.1) rotate(90deg); opacity: 0; } }
+      .ctx { align-items: center; }
+      .ctxlabel { color: var(--s-soft); font-size: 11px; padding: 0 6px; }
+      .ctx button[disabled] { cursor: default; }
+      .spin { display: inline-block; width: 10px; height: 10px; margin-right: 6px; border: 2px solid #fff4; border-top-color: #fff; border-radius: 50%; animation: s-spin 0.8s linear infinite; vertical-align: -1px; }
+      @keyframes s-spin { to { transform: rotate(360deg); } }
+      .prop { border: 1px solid var(--s-line); border-radius: 10px; padding: 10px; margin: 10px 0; background: var(--s-bg2); }
+      .prop.viewing { border-color: var(--s-acc); }
+      .phead2 { display: flex; justify-content: space-between; gap: 8px; align-items: center; }
+      .st { font-size: 10.5px; padding: 1px 7px; border-radius: 6px; background: var(--s-bg3); white-space: nowrap; }
+      .st-run { color: #ffd479; } .st-ok { color: #9be3a8; } .st-bad { color: #ffb199; } .st-done { color: var(--s-soft); }
+      .prop .meta { color: var(--s-soft); font-size: 11px; margin: 3px 0 6px; }
+      .act { font: 11px/1.5 ui-monospace, Consolas, monospace; color: var(--s-soft); background: #151518; border-radius: 6px; padding: 6px 8px; max-height: 160px; overflow: auto; }
+      .act div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .res { white-space: pre-wrap; background: #151518; border-radius: 6px; padding: 8px; margin: 6px 0; max-height: 220px; overflow: auto; }
+      .files { display: flex; flex-wrap: wrap; gap: 4px 10px; margin: 6px 0; font-size: 11px; }
+      .files i { font-style: normal; } .plus { color: #9be3a8; } .minus { color: #ffb199; }
+      .pacts2 { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
+      .pacts2 button.danger { margin-top: 0; }
+      button.good { background: #2f7a45 !important; border-color: #2f7a45 !important; color: #fff; font-weight: 600; }
+      .err { color: #ffb199; margin: 6px 0; }
+      .modal .card.wide { width: min(900px, calc(100vw - 32px)); max-height: calc(100vh - 48px); }
+      pre.diff { margin: 0; overflow: auto; max-height: calc(100vh - 180px); background: #151518; border-radius: 8px; padding: 10px; font: 11.5px/1.5 ui-monospace, Consolas, monospace; white-space: pre; }
+      pre.diff .a { color: #9be3a8; } pre.diff .d { color: #ffb199; } pre.diff .h { color: var(--s-acc2); }
       .toast { position: fixed; left: 50%; bottom: 96px; transform: translateX(-50%); z-index: 2147483005; background: #fff; color: #1c1c1f; padding: 8px 14px;
                border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.3); max-width: calc(100vw - 32px); }
     `;

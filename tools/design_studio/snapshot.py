@@ -2,6 +2,7 @@ r"""디자인 스튜디오 저장본을 '지금 화면' 과 '요청한 화면' �
 
     .venv\Scripts\python.exe tools\design_studio\snapshot.py <저장본 이름>              (반영 전: now + target)
     .venv\Scripts\python.exe tools\design_studio\snapshot.py <저장본 이름> --tag after  (반영 뒤: 지금 소스로 다시)
+    ... snapshot.py <이름> --web tools/design_studio/proposals/<이름>/web --tag proposal      (시안 폴더로 찍기)
     옵션: --views dashboard,emails  --theme dark  --width 1440 --height 900
 
 - now    : 지금 소스 그대로 (스튜디오 도구는 감춤)
@@ -35,9 +36,10 @@ def find_request(name: str) -> Path:
     sys.exit(f"저장본을 못 찾았어요: {name}")
 
 
-def start_server(port: int) -> tuple[subprocess.Popen, str]:
+def start_server(port: int, web: str = "") -> tuple[subprocess.Popen, str]:
+    extra = ["--web", web] if web else []
     proc = subprocess.Popen(
-        [sys.executable, "-X", "utf8", str(HERE / "studio_server.py"), "--no-open", "--port", str(port)],
+        [sys.executable, "-X", "utf8", str(HERE / "studio_server.py"), "--no-open", "--snapshot", "--port", str(port), *extra],
         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8",
     )
     deadline = time.time() + 30
@@ -60,6 +62,7 @@ def main() -> None:
     ap.add_argument("--width", type=int, default=0)
     ap.add_argument("--height", type=int, default=0)
     ap.add_argument("--port", type=int, default=8890)
+    ap.add_argument("--web", default="", help="다른 화면 폴더로 찍기 (시안: tools/design_studio/proposals/<이름>/web)")
     args = ap.parse_args()
 
     path = find_request(args.name)
@@ -88,7 +91,7 @@ def main() -> None:
 
     from playwright.sync_api import sync_playwright
 
-    proc, base = start_server(args.port)
+    proc, base = start_server(args.port, args.web)
     saved = []
     try:
         with sync_playwright() as p:

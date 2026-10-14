@@ -24,3 +24,13 @@ html.__studio-picking * {
   0%, 40% { outline: 3px solid #ff8a65; outline-offset: 3px; }
   100% { outline: 3px solid transparent; outline-offset: 8px; }
 }
+
+/* AI 추천 시연: 바뀔 곳이 반짝인다 */
+.__studio-sparkle {
+  animation: __studio-sparkle 1.2s ease-in-out 2;
+}
+
+@keyframes __studio-sparkle {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 212, 121, 0); }
+  50% { box-shadow: 0 0 0 4px rgba(255, 212, 121, 0.85), 0 0 22px 6px rgba(165, 147, 255, 0.45); }
+}

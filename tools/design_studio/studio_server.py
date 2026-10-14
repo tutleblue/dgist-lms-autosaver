@@ -43,7 +43,13 @@ parser.add_argument("--data", choices=["demo", "real"], default="demo",
                     help="demo: 지어낸 학생 데이터(기본) / real: 내 데이터 폴더를 읽기만")
 parser.add_argument("--port", type=int, default=int(os.environ.get("STUDIO_PORT", "8796")))
 parser.add_argument("--no-open", action="store_true", help="브라우저를 자동으로 열지 않음")
+parser.add_argument("--web", default="", help="다른 화면 폴더로 띄우기 (시안 사진 찍을 때: proposals/<이름>/web)")
+parser.add_argument("--snapshot", action="store_true", help="snapshot.py 가 사진 찍으려고 띄운 서버 (시안은 다루지 않는다)")
 args = parser.parse_args()
+
+# 시안을 만드는 claude 는 바깥(Anthropic API)에 나가야 한다. demo 가 아래에서 지우는 프록시 설정을 먼저 적어 둔다.
+_PROXY_KEYS = ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY", "http_proxy", "https_proxy", "all_proxy", "no_proxy")
+ORIGINAL_PROXY_ENV = {k: os.environ[k] for k in _PROXY_KEYS if k in os.environ}
 
 sys.path.insert(0, str(PROJ))
 os.chdir(PROJ)
@@ -95,6 +101,19 @@ if args.data == "demo":
     import demo_data  # noqa: E402
 
     demo_data.build(DEMO_ROOT, VERSION)
+
+from ai import AIRunner  # noqa: E402
+from proposals import ProposalManager  # noqa: E402
+
+DEFAULT_WEB = Path(args.web).resolve() if args.web else web_ui.WEB_ROOT
+# 시안을 볼 때는 쿠키(studio_web=<시안 이름>)로 화면 폴더를 바꾼다. 앱이 /app.js·/styles.css 처럼
+# 절대 경로로 불러서 경로 앞붙이기로는 못 나누고, 다른 포트로 띄우면 바깥 틀과 출처가 달라져 패널을 못 붙인다.
+# 사진용 서버는 시안을 건드리지 않는다. 처음엔 이것도 '서버가 꺼져 멈춘 작업' 정리를 해서, Claude 가 시안을
+# 확인하려고 snapshot.py 를 돌리는 순간 아직 돌고 있는 시안이 '실패' 로 바뀌었다 (2026-10-14 실측).
+PROPOSALS = ProposalManager(PROJ, HERE, web_ui.WEB_ROOT, HERE / "requests", ORIGINAL_PROXY_ENV,
+                            manage=not args.snapshot)
+CLAUDE_OK = bool(PROPOSALS.claude_path())
+AI = AIRunner(PROJ, ORIGINAL_PROXY_ENV)
 
 # demo 모드에서 진짜로 처리해도 되는 POST: 임시 폴더 안의 파일만 바꾸고 바깥과 말하지 않는다
 DEMO_LOCAL_POSTS = {
@@ -180,6 +199,32 @@ def list_requests() -> list[dict]:
 
 
 class StudioHandler(web_ui.DashboardHandler):
+    def _context(self) -> str:
+        """지금 보는 시안 이름 (없으면 '' = 진짜 web/)."""
+        for part in (self.headers.get("Cookie") or "").split(";"):
+            key, _, value = part.strip().partition("=")
+            if key == "studio_web" and value and PROPOSALS.web_dir(value).exists():
+                return Path(value).name
+        return ""
+
+    def _web_root(self) -> Path:
+        ctx = self._context()
+        return PROPOSALS.web_dir(ctx) if ctx else DEFAULT_WEB
+
+    def translate_path(self, path: str) -> str:
+        from urllib.parse import unquote
+
+        route = unquote(urlparse(path).path)
+        root = self._web_root().resolve()
+        rel = "index.html" if route == "/" else route.lstrip("/")
+        for base in (root, web_ui.WEB_ROOT.resolve()):  # 시안에는 글자 파일만 있다. 그림 등은 진짜 web/ 에서
+            candidate = (base / rel).resolve()
+            if candidate != base and base not in candidate.parents:
+                return str(base / "__forbidden__")
+            if candidate.exists():
+                return str(candidate)
+        return str(root / rel)
+
     def _send_bytes(self, body: bytes, ctype: str) -> None:
         self.send_response(HTTPStatus.OK)
         self.send_header("Content-Type", ctype)
@@ -202,13 +247,13 @@ class StudioHandler(web_ui.DashboardHandler):
                              "text/html; charset=utf-8")
             return
         if route in ("/", "/index.html"):
-            html = (web_ui.WEB_ROOT / "index.html").read_text(encoding="utf-8")
+            html = (self._web_root() / "index.html").read_text(encoding="utf-8")
             # 진짜 화면에 편집 도구만 끼운다. app.js 다음에 불러야 화면이 다 그려진 뒤 붙는다(둘 다 defer 라 순서대로).
             html = html.replace("</head>", '  <link rel="stylesheet" href="/__studio/studio.css" />\n  </head>', 1)
             html = html.replace(
                 '<script src="/app.js" defer></script>',
                 '<script src="/app.js" defer></script>\n'
-                f'    <script>window.__STUDIO__ = {json.dumps({"mode": args.data, "version": VERSION})};</script>\n'
+                f'    <script>window.__STUDIO__ = {json.dumps({"mode": args.data, "version": VERSION, "ctx": self._context(), "claude": CLAUDE_OK})};</script>\n'
                 '    <script src="/__studio/studio.js" defer></script>',
                 1,
             )
@@ -218,6 +263,16 @@ class StudioHandler(web_ui.DashboardHandler):
             name = route[len("/__studio/"):]
             if name in STATIC:
                 self._send_bytes((HERE / name).read_bytes(), STATIC[name] + "; charset=utf-8")
+                return
+            if name == "proposals":
+                self.send_json({"ok": True, "items": PROPOSALS.list(), "claude": CLAUDE_OK})
+                return
+            if name == "proposal-diff":
+                self.send_json({"ok": True, "diff": PROPOSALS.diff(params.get("name", [""])[0])})
+                return
+            if name == "ai-job":
+                job = AI.public(params.get("id", [""])[0])
+                self.send_json(job or {"ok": False, "status": "gone"})
                 return
             if name == "requests":
                 self.send_json({"ok": True, "items": list_requests(), "dir": str(REQUESTS_DIR)})
@@ -249,6 +304,24 @@ class StudioHandler(web_ui.DashboardHandler):
         if route == "/__studio/save":
             self._save_request()
             return
+        if route.startswith("/__studio/ai/"):
+            payload = self.read_body_json()
+            action = route.rsplit("/", 1)[-1]
+            if not CLAUDE_OK:
+                self.send_json({"ok": False, "message": "이 컴퓨터에서 claude 명령을 못 찾았어요."}, HTTPStatus.BAD_REQUEST)
+            elif action == "suggest":
+                self.send_json({"ok": True, "id": AI.suggest(payload.get("context") or {})["id"]})
+            elif action == "flow":
+                self.send_json({"ok": True, "id": AI.flow(payload.get("target") or {})["id"]})
+            elif action == "cancel":
+                AI.cancel(str(payload.get("id") or ""))
+                self.send_json({"ok": True})
+            else:
+                self.send_json({"ok": False}, HTTPStatus.NOT_FOUND)
+            return
+        if route.startswith("/__studio/proposal/"):
+            self._proposal_action(route.rsplit("/", 1)[-1])
+            return
         if args.data == "demo" and route in DEMO_LOCAL_POSTS:
             super()._do_POST()
             return
@@ -270,6 +343,35 @@ class StudioHandler(web_ui.DashboardHandler):
         (REQUESTS_DIR / f"{stem}.json").write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
         (REQUESTS_DIR / f"{stem}.md").write_text(markdown, encoding="utf-8")
         self.send_json({"ok": True, "name": stem, "path": str(REQUESTS_DIR / f"{stem}.md")})
+
+
+    def _proposal_action(self, action: str) -> None:
+        payload = self.read_body_json()
+        name = Path(str(payload.get("name") or "")).name
+        request = Path(str(payload.get("request") or "")).name
+        try:
+            if action == "start":
+                if not (REQUESTS_DIR / f"{request}.json").exists():
+                    raise ValueError("저장본을 못 찾았어요.")
+                meta = PROPOSALS.create(request, str(payload.get("title") or ""))
+                self.send_json({"ok": True, "name": meta["name"]})
+            elif action == "revise":
+                if not (REQUESTS_DIR / f"{request}.json").exists():
+                    raise ValueError("저장본을 못 찾았어요.")
+                PROPOSALS.revise(name, request)
+                self.send_json({"ok": True, "name": name})
+            elif action == "cancel":
+                PROPOSALS.cancel(name)
+                self.send_json({"ok": True})
+            elif action == "apply":
+                self.send_json({"ok": True, "report": PROPOSALS.apply(name)})
+            elif action == "discard":
+                PROPOSALS.discard(name)
+                self.send_json({"ok": True})
+            else:
+                self.send_json({"ok": False, "message": "모르는 요청이에요."}, HTTPStatus.NOT_FOUND)
+        except ValueError as exc:
+            self.send_json({"ok": False, "message": str(exc)}, HTTPStatus.BAD_REQUEST)
 
 
 class ExclusiveServer(ThreadingHTTPServer):
@@ -296,6 +398,7 @@ def main() -> None:
     url = f"http://127.0.0.1:{server.server_address[1]}/"
     print(f"디자인 스튜디오 ({args.data}) : {url}", flush=True)
     print(f"저장 위치: {REQUESTS_DIR}", flush=True)
+    print(f"시안 만들기(claude): {PROPOSALS.claude_path() or '없음 — 저장본을 직접 Claude Code 에 넘겨 주세요'}", flush=True)
     if args.data == "demo":
         print(f"가짜 데이터 폴더: {DEMO_ROOT}", flush=True)
     if not args.no_open:
