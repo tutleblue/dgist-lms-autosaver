@@ -10707,3 +10707,16 @@ html.log-open .log-close { display: grid; flex: none; }
   .custom-frame .topbar .topbar-mail { grid-column: 2; }
 }
 .custom-frame .app-shell.mail-focus .mail-app:not(.rail-folded) .mail-topbar.emptied { display: none; }
+
+/* ===== 넓은 창 상단 바: 겹침 없애기 (2026-10-14) =====
+   3칸 grid(1fr | 520px | 1fr)라 오른쪽 단추('전체 새로고침'처럼 글이 길어지면)가 칸보다 넓을 때 왼쪽으로 넘쳐
+   검색창 위에 겹쳤다(사용자 스크린샷). flex 로 바꿔 검색창이 남는 자리만큼 줄어들게 하고, 좌우 auto 여백으로 가운데에 둔다. */
+@media (min-width: 1101px) {
+  .custom-frame .topbar,
+  .custom-frame .app-shell.mail-focus .topbar { display: flex; }
+  .custom-frame .topbar > .nav-arrows,
+  .custom-frame .topbar > .topbar-actions { flex: none; }
+  .custom-frame .topbar > .search-wrap:not(.email-search) { flex: 0 1 520px; min-width: 200px; margin: 0 auto; width: auto; }
+  .custom-frame .topbar > .topbar-mail { flex: 0 1 720px; min-width: 320px; margin: 0 auto; }
+  .custom-frame .topbar > .topbar-actions { margin-left: 0; }
+}
