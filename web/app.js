@@ -9712,7 +9712,10 @@ function renderNowBar() {
 }
 
 installIcons();
-api("/api/update/check").then(r=>{const e=$("#aboutVersion"); if(e) e.textContent=`버전 ${r.current||"?"}`;}).catch(()=>{});
+// 버전 글자(숨은 칸)만 채우는 GitHub 확인이라 첫 화면 요청들과 연결을 다투지 않게 3초 뒤로 미룬다 (켤 때 빨리 뜨게, 2026-10-15)
+window.setTimeout(() => {
+  api("/api/update/check").then(r=>{const e=$("#aboutVersion"); if(e) e.textContent=`버전 ${r.current||"?"}`;}).catch(()=>{});
+}, 3000);
 bindEvents();
 bindInterestChips();
 initTheme();
@@ -9736,7 +9739,8 @@ const navList = document.querySelector(".nav-list");
 if (navList && window.ResizeObserver) new ResizeObserver(moveNavPill).observe(navList);
 // 시계라 1초마다. 상태 계산은 가볍고, 값이 그대로면 DOM을 건드리지 않는다.
 window.setInterval(renderNowBar, 1000);
-refreshAll();
+// 첫 새로고침이 끝나 첫 화면이 다 찼으면 서버에 알린다 → 켤 때 걸린 시간이 boot_times.json 에 남는다
+refreshAll().then(() => api("/api/boot-done", { method: "POST", body: "{}" })).catch(() => {});
 loadWhatsNew();
 maybeStartTour();
 api("/api/samsung-notes/job")

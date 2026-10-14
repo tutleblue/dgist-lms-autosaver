@@ -2265,6 +2265,38 @@ def import_settings(workspace: UserWorkspace, payload: dict[str, Any]) -> dict[s
     return {"ok": True, "restored": restored, "message": f"{', '.join(restored)}을(를) 복원했습니다."}
 
 
+# 켤 때 걸린 시간 (app.main 이 start·server 를 채운다). 개발 서버에서는 비어 있어 기록하지 않는다.
+BOOT: dict[str, float] = {}
+
+
+def record_boot_done(workspace: UserWorkspace) -> dict[str, Any]:
+    """첫 화면이 다 찼다고 화면이 알려 오면, 실행 파일이 뜬 때부터 걸린 시간을 boot_times.json 에 남긴다(최근 30번).
+
+    '앱이 켜지는 데 오래 걸린다' 를 다시 들었을 때 추측하지 않고 이 기록으로 본다.
+    """
+    start = BOOT.get("start")
+    if not start or BOOT.get("done"):
+        return {"ok": True, "recorded": False}
+    BOOT["done"] = time.time()
+    entry = {
+        "at": now_iso(),
+        "version": (PROJECT_ROOT / "VERSION").read_text(encoding="utf-8").strip() if (PROJECT_ROOT / "VERSION").exists() else "",
+        # 단계: 파이썬이 app.py 에 닿음 → web_ui 불러옴 → main → pywebview 불러옴 → 서버 → 창이 첫 화면 요청 → 첫 화면 다 참
+        **{k: round(BOOT[k] - start, 2) for k in ("appStart", "webUiImported", "main", "webviewImported") if BOOT.get(k)},
+        "serverReady": round(BOOT.get("server", start) - start, 2),
+        "pageRequested": round(BOOT.get("page", start) - start, 2) if BOOT.get("page") else None,
+        "firstScreen": round(BOOT["done"] - start, 2),
+    }
+    path = workspace.root / "boot_times.json"
+    rows = read_json(path, [])
+    rows = (rows if isinstance(rows, list) else [])[-29:] + [entry]
+    try:
+        atomic_write_text(path, json.dumps(rows, ensure_ascii=False, indent=1), encoding="utf-8")
+    except OSError:
+        pass
+    return {"ok": True, "recorded": True, **entry}
+
+
 def get_health(workspace: UserWorkspace) -> dict[str, Any]:
     """마지막 성공 시각과 최근 실패를 알려 준다 (조용한 실패 방지)."""
     data = read_json(workspace.health_path, {})
@@ -2520,19 +2552,16 @@ def pick_folder_dialog() -> str:
 
 
 def drive_root_folder_name() -> str:
-    """드라이브에 만드는 맨 위 폴더 이름 (drive_uploader.ROOT_FOLDER)."""
-    global _DRIVE_ROOT_NAME
-    if _DRIVE_ROOT_NAME is None:
-        try:
-            from drive_uploader import ROOT_FOLDER
+    """드라이브에 만드는 맨 위 폴더 이름 (folder_layout.DRIVE_ROOT_FOLDER = drive_uploader.ROOT_FOLDER).
 
-            _DRIVE_ROOT_NAME = str(ROOT_FOLDER)
-        except Exception:
-            _DRIVE_ROOT_NAME = "AutoSaver"
-    return _DRIVE_ROOT_NAME
+    예전엔 drive_uploader 를 불러와 읽어서 구글 라이브러리가 함께 올라왔고, 이 함수를 부르는
+    /api/config 가 앱을 켤 때마다 1초 걸려 첫 화면이 그만큼 늦었다.
+    """
+    from folder_layout import DRIVE_ROOT_FOLDER
+
+    return DRIVE_ROOT_FOLDER
 
 
-_DRIVE_ROOT_NAME: str | None = None
 
 
 def _dir_size(path: Path, skip: Path | None = None) -> tuple[int, int]:
@@ -4133,6 +4162,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         parsed = urlparse(path)
         route = unquote(parsed.path)
         if route == "/":
+            BOOT.setdefault("page", time.time())  # 창이 첫 화면을 달라고 한 때 (켤 때 걸린 시간 기록용)
             return str(WEB_ROOT / "index.html")
         # 경로 탈출 차단: 정규화 후 WEB_ROOT 밖으로 나가면 차단
         web_root = WEB_ROOT.resolve()
@@ -4845,6 +4875,10 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             if ok:
                 message = "전체 동기화를 시작했습니다." if sync_mode == "full" else "빠른 동기화를 시작했습니다."
             self.send_json({"ok": ok, "message": message}, HTTPStatus.OK if ok else HTTPStatus.CONFLICT)
+            return
+        if route == "/api/boot-done":
+            # 화면이 첫 새로고침을 마쳤다: 켤 때 걸린 시간을 남긴다 (record_boot_done)
+            self.send_json(record_boot_done(workspace))
             return
         if route == "/api/verify":
             ok, message = start_task(workspace, "verify")

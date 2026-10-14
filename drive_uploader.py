@@ -7,7 +7,7 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 from runtime_config import GOOGLE_CLIENT_SECRETS_PATH, GOOGLE_SCOPES, GOOGLE_TOKEN_PATH
-from folder_layout import lms_subfolders, normalize_layout
+from folder_layout import DRIVE_ROOT_FOLDER, lms_subfolders, normalize_layout
 
 # Drive만 쓰지만, 권한 목록은 앱 전체와 같아야 한다.
 # 여기서 Drive 권한만 요청하면 로그인할 때 token.json이 덮어써져
@@ -15,7 +15,7 @@ from folder_layout import lms_subfolders, normalize_layout
 SCOPES = GOOGLE_SCOPES
 CREDENTIALS_PATH = GOOGLE_CLIENT_SECRETS_PATH
 TOKEN_PATH = GOOGLE_TOKEN_PATH
-ROOT_FOLDER = "AutoSaver"
+ROOT_FOLDER = DRIVE_ROOT_FOLDER  # folder_layout 에 둔다 (화면 서버가 구글 라이브러리 없이 읽게)
 
 
 def drive_folder_name(course_name):

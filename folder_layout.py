@@ -12,6 +12,10 @@ from __future__ import annotations
 import re
 from typing import Any
 
+# Drive 맨 위 폴더 이름. 화면 설정(/api/config)이 이 이름 하나 읽으려고 drive_uploader 를 불러오면
+# google.auth·googleapiclient 까지 따라 올라와 앱을 켠 뒤 첫 화면이 1초 늦었다(2026-10-15 실측 1.0s). 그래서 여기 둔다.
+DRIVE_ROOT_FOLDER = "AutoSaver"
+
 LAYOUTS = ("lms", "flat")
 DEFAULT_LAYOUT = "lms"
 

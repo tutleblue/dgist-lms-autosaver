@@ -787,3 +787,10 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 - 그래파이트 테마(2026-10-14): 사용자가 시안 넷 중 고른 '그래파이트 바탕 + 더스티 블루 포인트'(글꼴은 그대로). `[data-theme="graphite"]`(#f2f2f7 바탕·흰 카드·accent #4f6f9a)와 `graphite-dark`(#000 바탕·#1c1c1e 카드·accent #6e8cb8, 글씨용 accent-strong #a9bedc). '자동'은 이 둘을 따른다. 예전 '기본'(크림+코랄)·'다크' 는 요청대로 그대로 고를 수 있다. 서버 `UI_THEMES` 에도 두 키를 넣어야 저장된다. 그래파이트 다크의 메일 종이는 #f5f5f7.
 - 테마 줄이기(2026-10-15): 고르는 목록은 자동·기본·다크 셋만(자동 = 기본↔다크). 화이트·남색·그래파이트는 목록에서 빼고 색 정의는 남겼다. 저장된 값이 빠진 테마면 applyTheme 이 자동으로 돌린다.
 - 보낸 메일 받는 사람(2026-10-15): 보낸·임시보관 메일은 읽기 화면 머리에 '받는 사람 · 이름' 과 주소, 목록 줄에 '→ 이름'. 메일 자료의 toName/toEmail 을 쓴다(첫 받는 사람).
+
+## 켜는 속도 (2026-10-15)
+- **가장 큰 원인(9초)**: `app.start_server` 가 이미 켜진 Daling 을 찾으려 후보 포트 21개(8765~8785)에 connect 했는데, Windows 는 닫힌 localhost 포트 연결을 거절하지 않고 제한 시간 0.4s 까지 기다린다(WSAEWOULDBLOCK). 21×0.4 ≈ 8.4s 가 켤 때마다 들었다(boot_times.json: serverReady 9.0s). `port_in_use` 를 '직접 잡아 보기'(SO_EXCLUSIVEADDRUSE bind)로 바꿔 21개 1.7ms. 쓰는 중인 포트만 `/healthz` 로 Daling 인지 본다.
+- 측정(새로 켠 서버): 첫 화면이 기다리는 API 중 `/api/config` 가 처음에만 1.0s — Drive 맨 위 폴더 이름 하나 읽으려 `drive_uploader` 를 불러와 google.auth 까지 올라왔다. 이름은 `folder_layout.DRIVE_ROOT_FOLDER` 로 옮겨 9ms.
+- 남은 첫 호출 비용(`/api/status` 445ms: 시간표 모듈 0.21s·구글 토큰 확인 0.19s, course-staff 130ms, emails 80ms)은 `app._prewarm_first_screen` 이 서버를 띄우자마자 뒤에서 미리 해 둔다(창=WebView2 가 뜨는 1~2초 동안). 실측 676ms → 50ms.
+- 켤 때 상단 버전 글자용 GitHub 확인(`/api/update/check`)은 3초 뒤로 미뤘다(첫 화면 요청과 연결을 다투지 않게).
+- 기록: 화면이 첫 새로고침을 마치면 `/api/boot-done` → `boot_times.json`(최근 30번: serverReady·pageRequested·firstScreen, 실행 파일 생성 시각 기준 초). '느리다' 는 신고가 오면 이 기록부터 본다.
