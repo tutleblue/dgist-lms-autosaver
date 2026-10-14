@@ -26,6 +26,9 @@ node --check web\app.js
 .venv\Scripts\python.exe scripts\dev_server.py
 #   Claude 데스크톱 앱에서는 .claude/launch.json 의 "autosaver-src" 로 preview_start
 
+# 디자인 스튜디오: 앱 복제본에서 화면을 직접 만지고 댓글 → 저장본을 Claude 가 반영 (.claude/skills/design-studio)
+.venv\Scripts\python.exe tools\design_studio\studio_server.py
+
 # 설치 파일 만들기 / 만들고 이 PC에 설치·실행
 powershell -ExecutionPolicy Bypass -File packaging\build_installer.ps1
 powershell -ExecutionPolicy Bypass -File packaging\build_installer.ps1 -Install
@@ -120,6 +123,7 @@ AUTOSAVER_DATA_ROOT=C:/lms-autosaver AUTOSAVER_CONFIG_PATH=C:/lms-autosaver/conf
 | 메일 화면 | `app.js` `renderEmails`, `emailListRow`, `renderMailBody`, `mailFrameDoc` |
 | 폴더 나무 | `app.js` `renderFolderView`, `buildFolderTree`, `folderTreeHtml` |
 | 삼성 노트 | `samsung_notes.import_pdfs` |
+| 디자인 요청 반영 | `tools/design_studio/requests/*.md` → `.claude/skills/design-studio/SKILL.md` |
 
 ## 5. 알아 두면 시간을 아끼는 사실
 
