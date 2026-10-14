@@ -11834,6 +11834,8 @@ const STATUS_KIND_LABEL = { emails: "메일", deadlines: "마감", sync: "자료
 const STATUS_KIND_DOING = { emails: "새 메일 확인하는 중", deadlines: "과제 마감 확인하는 중", sync: "새 강의자료 받는 중" };
 const STATUS_KIND_NEXT = { emails: "새 메일 확인", deadlines: "과제 마감 확인", sync: "새 강의자료 확인" };
 
+// 상태판 제목은 사이드바 폭(약 9자)에 들어가게 짧게 쓴다. "메일 가져오기가 계속 실…" 로 잘렸다(2026-10-14).
+// 자세한 사정은 상태판에 올리면 보이는 도움말(tip)에 있다.
 function statusLights() {
   const cfg = state.config || {};
   const h = state.health || {};
@@ -11844,27 +11846,27 @@ function statusLights() {
   const since = (k) => (ok[k] ? agoText(ok[k]) : "아직 안 함");
 
   const lms = !cfg.lmsId || !cfg.hasLmsPassword
-    ? { tone: "off", why: "LMS 계정을 넣어 주세요" }
+    ? { tone: "off", why: "LMS 계정 필요" }
     : auth.sync || auth.deadlines
       ? { tone: "bad", why: "LMS 로그인 실패" }
       : (streak.sync || 0) >= 2 || (streak.deadlines || 0) >= 2
-        ? { tone: "warn", why: "LMS 가져오기가 계속 실패해요" }
+        ? { tone: "warn", why: "LMS 연결 오류" }
         : { tone: "ok", why: "" };
   lms.tip = `LMS · 자료 ${since("sync")} · 마감 ${since("deadlines")}`;
 
   const mail = !cfg.schoolEmail || !cfg.hasSchoolEmailPassword
-    ? { tone: "off", why: "학교 메일 계정을 넣어 주세요" }
+    ? { tone: "off", why: "메일 계정 필요" }
     : auth.emails
-      ? { tone: "bad", why: "학교 메일 로그인 실패" }
+      ? { tone: "bad", why: "메일 로그인 실패" }
       : (streak.emails || 0) >= 2
-        ? { tone: "warn", why: "메일 가져오기가 계속 실패해요" }
+        ? { tone: "warn", why: "메일 연결 오류" }
         : { tone: "ok", why: "" };
   mail.tip = `학교 메일 · ${since("emails")}`;
 
   const drive = cfg.driveUpload === false
     ? { tone: "off", why: "", tip: "Drive · 꺼 둠" }
     : !oauth.tokenUsable
-      ? { tone: "bad", why: "구글 로그인이 필요해요", tip: "Drive · 로그인 필요" }
+      ? { tone: "bad", why: "구글 로그인 필요", tip: "Drive · 로그인 필요" }
       : { tone: "ok", why: "", tip: "Drive · 연결됨" };
 
   return { lms, mail, drive };

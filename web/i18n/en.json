@@ -1821,5 +1821,11 @@
  "이미지로 가져오기 · 에브리타임 시간표를 캡처해서 넣기": "Import from image · Add a screenshot of your Everytime timetable",
  "수업 없는 날": "No classes today",
  "문제가 생겼어요. 앱을 다시 켜 보고, 계속되면 설정 → 실행 로그를 확인해 주세요.": "Something went wrong. Restart the app, and if it keeps happening, check Settings → Activity log.",
- "나머지 {0}개 더 보기": "Show {0} more"
+ "나머지 {0}개 더 보기": "Show {0} more",
+ "LMS 계정 필요": "LMS account needed",
+ "LMS 연결 오류": "LMS error",
+ "구글 로그인 필요": "Google sign-in needed",
+ "메일 계정 필요": "Mail account needed",
+ "메일 로그인 실패": "Mail sign-in failed",
+ "메일 연결 오류": "Mail error"
 }

@@ -176,7 +176,8 @@ def get_fglp() -> dict:
         "notes": [
             {
                 "level": "info",
-                "text": f"{SOURCE_LABEL} 기준입니다. 파견 대학 {len(_FGLP)}곳(TYPE 1 {sum(1 for x in _FGLP if x[6] == 'TYPE 1')}곳, TYPE 2 {sum(1 for x in _FGLP if x[6] == 'TYPE 2')}곳)과 대학별 어학 기준이 이 문서에 실려 있습니다.",
+                # 문장 대신 출처·숫자만 짧게 ('…기준입니다' 같은 줄글은 흐린 글씨로 길게 늘어져 지저분했다)
+                "text": f"{SOURCE_LABEL} · 파견 대학 {len(_FGLP)}곳 (TYPE 1 {sum(1 for x in _FGLP if x[6] == 'TYPE 1')} · TYPE 2 {sum(1 for x in _FGLP if x[6] == 'TYPE 2')})",
             },
             {
                 "level": "info",
