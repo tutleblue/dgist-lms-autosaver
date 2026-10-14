@@ -1197,6 +1197,9 @@ function mailFrameDoc(html, showImages) {
       img,table{max-width:100% !important;height:auto}
       table{border-collapse:collapse}
       a{color:${cs.getPropertyValue("--accent-strong").trim() || "#c60"}}
+      ::-webkit-scrollbar{width:8px;height:8px;background:transparent}
+      ::-webkit-scrollbar-button{display:none}
+      ::-webkit-scrollbar-thumb{background:rgba(128,128,128,.35);border:2px solid transparent;background-clip:padding-box;border-radius:999px}
     </style>${blocker}</head><body>${html}</body></html>`;
 }
 

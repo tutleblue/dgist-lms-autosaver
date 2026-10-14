@@ -10602,3 +10602,52 @@ body.mail-resizing iframe { pointer-events: none; } /* 끄는 중 본문 iframe 
 }
 /* 메일함(mail-focus)은 초를 통째로 숨기는 규칙이 있어, 상단 바 시계에서는 되살린다 */
 .app-shell.mail-focus .nowbar-compact .nowbar-sec { display: inline-block; }
+
+/* ===== 스크롤바 =====
+   기본 스크롤바가 어두운 화면에서 밝은 회색 막대 + 위아래 화살표로 오른쪽 끝을 통째로 차지했고,
+   제목 줄 모드에서는 창 단추 옆까지 올라와 거추장스러웠다(2026-10-14 사용자 스크린샷).
+   얇은 둥근 막대만 남기고(마우스를 올리면 조금 진해짐), 화살표·바탕은 없앤다. 전체 화면 막대는 상단 바 아래부터.
+   주의: scrollbar-width/scrollbar-color 를 같이 주면 크로미움이 아래 ::-webkit-scrollbar 를 무시한다. */
+::-webkit-scrollbar { width: 10px; height: 10px; background: transparent; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+::-webkit-scrollbar-corner { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--text) 18%, transparent);
+  border: 3px solid transparent;
+  background-clip: padding-box;
+  border-radius: 999px;
+  min-height: 40px;
+}
+::-webkit-scrollbar-thumb:hover { background-color: color-mix(in srgb, var(--text) 36%, transparent); border-width: 2px; }
+html.custom-frame::-webkit-scrollbar-track { margin-top: var(--winctl-h, 48px); }
+/* 전체 화면 막대는 더 가늘게(창 단추가 창 끝에 거의 붙도록). 막대 자리는 상단 바 아래부터 */
+html::-webkit-scrollbar { width: 8px; }
+html::-webkit-scrollbar-thumb { border-width: 2px; }
+
+/* ===== 탭 전환 때 상단 오른쪽이 깜빡이던 것 (2026-10-14) =====
+   - 상단 바는 겹침 전환(plus-lighter)으로 사라졌다 나타났다. 새로고침 단추 글('강의 새로고침'↔'새로고침')이
+     바뀌는 데다 반투명 알약 단추가 섞이며 밝기가 출렁였다.
+   - 창 단추(#winControls)는 root 사진에 들어가 있어, 그 위에 올라온 상단 바 사진에 잠깐 가려졌다.
+   - '실행 로그' 손잡이는 본문(appview)에 들어 있어 본문과 함께 흐려졌다.
+   상단 바·창 단추·실행 로그 손잡이는 전환하지 않고 그 자리에서 바로 바뀐다. 본문만 부드럽게 바뀐다. */
+.win-controls { view-transition-name: winctl; }
+#railToggle { view-transition-name: railtab; }
+::view-transition-group(topbar),
+::view-transition-group(winctl),
+::view-transition-group(railtab),
+html.vt-quick::view-transition-group(topbar) { animation: none !important; }
+::view-transition-old(topbar),
+::view-transition-old(winctl),
+::view-transition-old(railtab),
+html.vt-quick::view-transition-old(topbar) { animation: none !important; opacity: 0 !important; }
+::view-transition-new(topbar),
+::view-transition-new(winctl),
+::view-transition-new(railtab),
+html.vt-quick::view-transition-new(topbar) { animation: none !important; opacity: 1 !important; mix-blend-mode: normal !important; }
+/* 안 읽은 메일 카드 목록·버스 노선은 scrollbar-width: thin 이 걸려 있어 위 얇은 막대 대신
+   흰 바탕·화살표 달린 기본 막대가 나왔다(2026-10-14 사용자 스크린샷). 표준 속성을 풀어 같은 모양으로. */
+.metric-inline-list,
+.bus-line { scrollbar-width: auto; }
+.metric-inline-list::-webkit-scrollbar { width: 8px; }
+.metric-inline-list::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--text) 18%, transparent); background-clip: padding-box; border: 2px solid transparent; }
