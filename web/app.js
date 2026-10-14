@@ -919,7 +919,7 @@ function renderDeadlines() {
   $("#deadlinesCount").textContent = `${rows.length}건`;
   const updated = state.deadlines.updatedAt;
   $("#deadlinesUpdatedAt").textContent = updated
-    ? `마지막 갱신 ${updated.replace("T", " ")} · 상단의 '새로고침'으로 다시 가져올 수 있습니다.`
+    ? `마지막 갱신 ${updated.replace("T", " ").slice(0, 16)}`
     : "아직 가져온 마감 정보가 없습니다. 상단의 '새로고침'을 눌러 주세요.";
 
   // 완료(제출)한 과제와 남은 과제를 나눠서 보여 준다
@@ -7358,7 +7358,7 @@ function renderTimetable() {
   const hint = $("#timetableHint");
   if (hint) {
     hint.textContent = entries.length
-      ? `${ttSummaryText(entries)} · 칸을 눌러 수정하거나 빈 곳을 눌러 추가하세요.`
+      ? ttSummaryText(entries) // 사용법 안내는 뺐다: 흐린 부가 설명은 꼭 필요한 것만 (2026-10-14)
       : "빈 칸을 누르면 과목을 넣을 수 있어요.";
   }
 }
