@@ -224,7 +224,7 @@ function acadTitleEn(text) {
   let s = String(text || "").trim();
   if (!/[가-힣]/.test(s)) return null;
   let tail = "";
-  s = s.replace(/\s+(D-\d+|진행 중)$/, (_, d) => { tail = d === "진행 중" ? " · now" : ` ${d}`; return ""; });
+  s = s.replace(/\s+(D-\d+|진행 중)$/, (_, d) => { tail = d === "진행 중" ? " (now)" : ` ${d}`; return ""; });
   let grad = false;
   s = s.replace(/^대학 및 대학원\s*/, "");
   if (/^대학원\s+/.test(s)) { grad = true; s = s.replace(/^대학원\s+/, ""); }
@@ -236,6 +236,9 @@ function acadTitleEn(text) {
   s = s.replace(/(^|\s)([12])학기\s*/, (_, a, n) => { term = n === "1" ? "Spring" : "Fall"; return a; });
   s = s.replace(/\('(\d{2})\.(\d{1,2})월 졸업생\)/, (_, y, m) => ` (${I18N_MONTHS[Number(m) - 1]} '${y} grads)`);
   s = s.replace(/수업일수\s*(\d)\/4선/, (_, n) => `${n}/4 of semester`);
+  // 공공데이터 학사일정의 구간 이름 (2026-10): '수업일수(1/4이후 ~ 2/4)', '수업일수(개강일 ~ 1/4)'
+  s = s.replace(/수업일수\s*\(\s*개강일\s*~\s*(\d)\/4\s*\)/, (_, b) => `semester: start – ${b}/4`);
+  s = s.replace(/수업일수\s*\(\s*(\d)\/4\s*이후\s*~\s*(\d)\/4\s*\)/, (_, a, b) => `semester: ${a}/4 – ${b}/4`);
   s = s.replace(/(\d+)주년\s*/, (_, n) => `${ACAD_ORDINAL(Number(n))} `);
   // '대체공휴일(한글날)': 괄호 안 공휴일 이름은 번역표(신정·추석…)에서 찾는다
   s = s.replace(/대체공휴일\(([^)]+)\)/, (_, h) => `substitute holiday (${I18N.exact.get(h) || h})`);
@@ -1653,7 +1656,7 @@ function directoryOrg(p) {
 /** 주고받은 메일의 보낸이·받는이 전부에서 연락처를 모은다 (보낸편지함만 보던 것보다 넓게) */
 function mailContacts() {
   const emails = state.emails.emails || [];
-  const key = `${state.emails.updatedAt}|${emails.length}|${(state.emails.contacts || []).length}|${state.courseStaffSig || ""}`;
+  const key = `${state.emails.updatedAt}|${emails.length}|${(state.emails.contacts || []).length}|${state.courseStaffSig || ""}|${I18N.lang}`;
   if (mailContacts.key === key) return mailContacts.list;
   const byEmail = new Map();
   const put = (display, addr, count = 1) => {
@@ -1677,7 +1680,10 @@ function mailContacts() {
   staffContacts().forEach((s) => {
     put(s.name, s.email, 0);
     const had = byEmail.get(s.email.toLowerCase());
-    if (had) had.tag = had.tag ? `${had.tag}, ${s.tag}` : s.tag;
+    if (had) {
+      had.tag = had.tag ? `${had.tag}, ${s.tag}` : s.tag;
+      had.alias = [had.alias, s.alias].filter(Boolean).join(" ");
+    }
   });
   emails.forEach((m) => {
     put(m.fromName, m.fromEmail, 0);
@@ -1695,7 +1701,7 @@ function contactMatches(term) {
     .map((c) => {
       // '물리 조교' 처럼 띄어 쓴 여러 낱말은 낱말마다 어딘가에 맞아야 한다
       const words = q.split(/\s+/).filter(Boolean);
-      const fields = [c.name, c.email.split("@")[0], c.org, c.email, c.tag];
+      const fields = [c.name, c.email.split("@")[0], c.org, c.email, c.tag, c.alias];
       const s = words.length > 1
         ? Math.min(...words.map((w) => matchScore(w, ...fields)))
         : matchScore(q, ...fields);
@@ -1919,7 +1925,7 @@ function setupAutocomplete() {
             data-name="${escapeHtml(c.name ? label : "")}" title="${escapeHtml(`${label} <${c.email}>${tag ? ` · ${tag}` : ""}`)}">
             <span class="ac-name">${acMark(c.name || c.email, q)}</span>${
               org ? `<span class="ac-org">/${acMark(org, q)}</span>` : ""
-            }${tag ? `<span class="ac-tag">${acMark(tag, q)}</span>` : ""}<span class="ac-email">&lt;${acMark(c.email, q)}&gt;${c.guess ? " · 추정" : ""}</span>
+            }${tag ? `<span class="ac-tag">${acMark(tag, q)}</span>` : ""}<span class="ac-email">&lt;${acMark(c.email, q)}&gt;${c.guess ? '<span class="ac-guess"> · 추정</span>' : ""}</span>
           </button>`;
         })
         .join("");
@@ -3201,7 +3207,9 @@ function courseSummaries() {
 function courseMetaLine(course) {
   const parts = [course.levelLabel, course.termLabel].filter(Boolean);
   if (!parts.length) return "";
-  return `<div class="course-meta">${parts.map(escapeHtml).join(" · ")}</div>`;
+  // 마디마다 따로 옮긴다: 이어 붙인 줄을 통째로 옮기면 '{0} {1}학기' 틀이 앞마디까지 삼켜
+  // 영어 화면에 'Year 1 AY2026 · 2 term' 처럼 나왔다(2026-10-14)
+  return `<div class="course-meta">${parts.map((part) => escapeHtml(tr(part))).join(" · ")}</div>`;
 }
 
 /* 강의계획서가 자료에 들어와 있으면 카드 아래에서 바로 열 수 있게 한다.
@@ -3255,13 +3263,15 @@ function renderCourses() {
       const nextLine = course.next
         ? `다음 마감 <b>${formatDue(course.next.due)}</b> · ${escapeHtml(shortText(course.next.name, 30))}`
         : "다가오는 미제출 마감 없음";
+      // 영어 화면에서는 한글 이름이 LMS 영어 이름으로 바뀌어 제목과 같은 줄이 두 번 보였다 → 같으면 뺀다
+      const showKorean = course.korean && !(I18N.lang === "en" && courseNameKey(tr(course.korean)) === courseNameKey(course.label));
       return `
         <article class="course-card ${enabled ? "" : "off"}">
           ${removeBtn}
           <div class="course-card-top">
             <h3>
               ${escapeHtml(shortText(course.label, 40))}
-              ${course.korean ? `<span class="course-korean">${escapeHtml(shortText(course.korean, 36))}</span>` : ""}
+              ${showKorean ? `<span class="course-korean">${escapeHtml(shortText(course.korean, 36))}</span>` : ""}
             </h3>
             <label class="toggle" title="Drive 자동 업로드 포함 여부">
               <input type="checkbox" data-course="${escapeHtml(course.label)}" ${enabled ? "checked" : ""} />
@@ -12978,6 +12988,14 @@ function sectionText(section) {
   return n ? `${n}분반` : "";
 }
 
+/** 꼬리표 한 마디: '일반물리Ⅱ 3분반 교수', 영어 화면은 'General Physics II · Sec. 3 · Professor'.
+   한 문자열로 이어 붙여 두면 화면 번역(tr)이 마디를 못 나눠 영어 화면에서도 한국어로 남았다(2026-10-14). */
+function staffHitText(course, section, role) {
+  if (I18N.lang !== "en") return `${course} ${sectionText(section)} ${role}`.replace(/\s+/g, " ").trim();
+  const n = String(section || "").replace(/^0+(?=\d)/, "");
+  return [tr(course), n ? `Sec. ${n}` : "", tr(role)].filter(Boolean).join(" · ");
+}
+
 /** 메일 보낸 사람 주소 → '일반물리Ⅱ 3분반 교수 · 외 2분반' (이번 학기만). mine: 내가 듣는 과목·분반인지 */
 function coursePersonTag(email) {
   const hits = (state.coursePeople || {})[String(email || "").toLowerCase()] || [];
@@ -12985,11 +13003,11 @@ function coursePersonTag(email) {
   const first = hits[0];
   const same = hits.filter((h) => h.title === first.title && h.role === first.role && h !== first);
   const others = hits.filter((h) => h.title !== first.title || h.role !== first.role);
-  let text = `${first.title} ${sectionText(first.section)} ${first.role}`.replace(/\s+/g, " ").trim();
+  const text = staffHitText(first.title, first.section, first.role);
   const extra = [];
   if (same.length) extra.push(`외 ${same.length}개 분반`);
   if (others.length) extra.push(`${others.length}과목 더`);
-  const full = hits.map((h) => `${h.title} ${sectionText(h.section)} ${h.role}${h.mine ? " (내 수업)" : ""}`).join("\n");
+  const full = hits.map((h) => `${staffHitText(h.title, h.section, h.role)}${h.mine ? tr(" (내 수업)") : ""}`).join("\n");
   return { text, extra: extra.join(" · "), mine: Boolean(first.mine), full };
 }
 
@@ -13007,7 +13025,8 @@ function staffContacts() {
   (state.courseStaff || new Map()).forEach(({ label, rows }) => {
     const course = courseShortName(label);
     rows.forEach((s) => {
-      if (s.email) out.push({ name: s.name, email: s.email, tag: `${course} ${sectionText(s.section)} ${s.role}`.replace(/\s+/g, " ") });
+      // alias: LMS 영어 과목명 + 한글 이름. 어느 쪽으로 쳐도 찾히게 (꼬리표는 화면 언어 하나뿐이라)
+      if (s.email) out.push({ name: s.name, email: s.email, tag: staffHitText(course, s.section, s.role), alias: `${label} ${course}` });
     });
   });
   return out;
