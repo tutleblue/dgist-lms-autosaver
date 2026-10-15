@@ -67,6 +67,7 @@ DGIST 학생용 데스크톱 앱 "붕어빵"(저장소 이름 dgist-lms-autosave
 | 동기화 경고 배너 | 연속 실패 또는 3일 이상 동기화 안 됨 | `renderHealth` |
 | 화면 자동 갱신 | 작업 중 2초, 평소 12초, 창이 가려지면 쉼 | `refreshAll` 타이머 |
 | 첫 실행 소개 | 처음 켜면 마스코트 달구가 메뉴와 화면 안 요소(시간표·D-day·공지 탭·자료 보기 방식·메일 쓰기·저장 위치·언어…)를 비추며 기능을 알려 줌(24단계, 묶음 시작·매일 보는 곳·공부·메일·편하게 쓰기·설정, 단계마다 짧은 기능 목록 tips. 건너뛰기·이전·다음, 점을 눌러 건너뛰기, 키보드 ←→ Esc). 아래쪽 요소는 비추기 전에 스크롤해 오고, 못 찾으면 fallback(그 메뉴), 학사일정이 없으면 D-day 단계는 뺌(when). 본 기록은 데이터 폴더 `tutorial.json`. 설정의 '앱 소개 다시 보기'로 다시 봄. 마치면 처음 쓰는 사람의 '새 업데이트' 점은 끔 | `TOUR_STEPS`, `startTour`, `/api/tutorial`, `/api/tutorial/done`, `web/img/dalgu/` |
+| 체험 모드 | 계정 없이 가짜 데이터로 모든 화면 둘러보기. 켜는 곳: 첫 실행 소개 첫 카드 '계정 없이 체험하기'·상단 바 알약(계정이 없을 때)·설정 › 연결된 계정 › 체험 모드. 켜 있으면 창 맨 위 줄무늬 띠 + 상단 바 '체험 중 · 가짜 데이터 · 체험 끝내기' + 상태판 '체험 중'. 아래 '체험 모드' 절 | `demo_mode.py`, `renderDemoPill`, `setDemo`, `/api/demo` |
 | 업데이트 소식 | 새 버전일 때만 사이드바 아래 상태 카드 바로 위에 '새 업데이트' 카드가 붙음. 누르면 바뀐 내용 창, 한 번 보면 사라짐(지난 내용은 설정의 '업데이트 내용'). 본 기록은 데이터 폴더 `whats_new.json` | `loadWhatsNew`, `openWhatsNew`, `/api/whats-new`, `data/changelog.json` |
 
 ### 3.2 대시보드 (`dashboard`)
@@ -175,17 +176,21 @@ DGIST 학생용 데스크톱 앱 "붕어빵"(저장소 이름 dgist-lms-autosave
 
 | 카드 | 내용 |
 |---|---|
-| 연결된 계정 | LMS·학교 메일·Google 줄마다 로고와 상태 알약(`renderAccountPills`, `renderGoogleSection`). 비밀번호는 DPAPI 암호화, 바꿀 때만 입력 |
+| 연결된 계정 | LMS·학교 메일·Google 줄마다 로고와 상태 알약(`renderAccountPills`, `renderGoogleSection`). 비밀번호는 DPAPI 암호화, 바꿀 때만 입력. 맨 아래 '체험 모드' 줄(`#demoRow`, 체험해 보기/체험 끝내기) |
 | 강의자료 저장 | 저장 위치 카드 두 개: 구글 드라이브(`AUTO_DRIVE_UPLOAD`, 구글 미연결이면 '로그인 필요'), 내 컴퓨터(스위치 + 이번 학기/모든 과목 → `AUTO_LOCAL_SAVE`, 폴더 바꾸기, 지금 맞추기). `renderSaveDestinations` |
 | └ 다른 클라우드 | OneDrive·Dropbox·iCloud Drive·네이버 MYBOX. 로그인 없이 PC 동기화 폴더 안 `붕어빵 강의자료\<과목>`에 넣는다 (`detect_cloud_roots`, `cloud_targets`, 설정 `CLOUD_SAVE`). 못 찾으면 '폴더 고르기'(`/api/pick-folder`)로 `path` 지정. '넣을 과목'(`SAVE_SCOPE`)과 '지금 맞추기'는 내 컴퓨터·클라우드 공통. 복사는 `autosave_local` → 위치마다 `_mirror_rows` (필기한 파일 보호 규칙 동일). 과목 아래는 LMS 하위 폴더(`lms_subfolders`) 그대로, 1.11.3까지 펼쳐 넣은 사본은 옮겨 놓는다 |
-| └ 차지하는 공간 | 같은 카드 아래. 앱(프로그램 + LMS 로그인용 브라우저 + 메일·설정 데이터) / 강의자료 / 내 컴퓨터 사본을 한 막대로(`/api/storage`의 `app`·`localSave`). 접힌 '강의자료 정리하기'에서 학기·과목별 삭제(`/api/storage/cleanup`, 앱 보관함에서만) |
+| └ 차지하는 공간 | 같은 카드 아래. 앱(프로그램 + LMS 로그인용 브라우저 + 메일·설정 데이터) / 강의자료 / 내 컴퓨터 사본을 한 막대로(`/api/storage`의 `app`·`localSave`). Edge 를 쓰는 PC 에 예전 셸이 남았으면 막대 아래 '예전에 받은 LMS 브라우저' 줄과 '휴지통으로 보내기'(`/api/storage/trash-browser`). 접힌 '강의자료 정리하기'에서 학기·과목별 삭제(`/api/storage/cleanup`, 앱 보관함에서만) |
 | 자동으로 가져오기 | 메일(기본 5분)·과제 마감(60분)·강의자료(180분) 주기, 하루 한 번 전체 확인 시각(`SCHEDULE_TIME`) |
 | 구글 캘린더 | 머리의 스위치로 메일 일정 자동 등록, 캘린더 이름, 지금 넣기, 학사일정도 넣기 |
 | 관심 있는 메일 | 관심 분야·활동 태그, 직접 적기, 끝난 행사 메일 숨기기 |
 | 추가 기능 켜기 (접힘) | Gemini 키(번역·요약·시간표 사진), DGIST 공공데이터 키 |
 | 앱 | 버전, 업데이트 내용, 전체 다시 확인, 설정 내보내기/불러오기(비밀번호 포함 여부) |
 
-앱 크기에서 브라우저는 `chromium_headless_shell-*` 만 센다. 같은 `ms-playwright` 폴더의 일반 `chromium-*`(약 430MB)은 개발용이라 앱 몫이 아니다.
+앱 크기에서 브라우저는 `chromium_headless_shell-*` 만 센다(`browser_setup.shell_dirs`). 같은 `ms-playwright` 폴더의 일반 `chromium-*`(약 430MB)은 개발용이라 앱 몫이 아니고 정리할 때도 건드리지 않는다. Windows 는 Edge 를 쓰므로(4.1) 새로 깐 PC 에는 이 칸이 없다. 예전에 받아 둔 셸(약 270MB)이 남은 PC 에서는 이름을 '예전에 받은 브라우저 (지금은 안 씀)'으로 바꿔 세고(`unused`), 막대 아래 줄의 '휴지통으로 보내기'로 정리한다(2026-10-15).
+- **지우지 않고 휴지통으로**: `browser_setup.recycle` 이 `SHFileOperationW`(FOF_ALLOWUNDO) 로 폴더째 보낸다. 휴지통 크기를 넘으면 Windows 가 조용히 영구 삭제하므로 `FOF_WANTNUKEWARNING` 으로 먼저 묻게 했다.
+- **쓰는 중이면 안 옮김**: 폴더 이름을 잠깐 바꿔 보아(`.daling-check`) 안 되면 그대로 둔다(일부 파일만 옮겨지는 것 방지). LMS 작업(sync·deadlines·verify)이 도는 중이면 거절. Edge 가 없는 PC(셸로 로그인)·맥·리눅스는 이 줄이 안 나오고 API 도 거절. 체험 모드에서도 막는다.
+- **다시 받기**: Edge 가 나중에 실패하면 `launch_lms_browser` → `ensure_shell` 이 다시 받는다. 그래서 Windows 의 `shell_ready` 는 `chromium_headless_shell-*` 만 본다 — Playwright 1.49+ 의 headless 실행은 셸만 쓰는데, 예전처럼 개발용 `chromium-*` 도 '있다' 로 보면 받지 않고 'Executable doesn't exist' 로 실패했다(실측). 받을 때 `playwright install` 이 어느 Playwright 도 참조하지 않는 옛 판 폴더(`.links` 기준)를 스스로 지운다 — 앱이 아니라 Playwright 동작이다.
+- 실측(가짜 셸 14,098,304바이트, `PLAYWRIGHT_BROWSERS_PATH` 로 임시 폴더): 파일을 열어 둔 채 누르면 409 '쓰는 중' · 폴더 그대로 · 휴지통 0개 / 닫고 누르면 휴지통에 같은 크기로 들어가고 '휴지통으로 옮겼어요 (13.4 MB)', 앱 크기 41.9→28.5MB, 옆 `chromium-9999` 그대로, 휴지통에서 되살리기 됨 / 개발용 `chromium-*` 만 남기고 Edge 실패 흉내 → 셸 151.0.7922.34 를 받아 띄움(32초).
 프로그램·브라우저 크기는 10분 동안 기억한다(`_FOOTPRINT_CACHE`). 프로그램 크기는 EXE 로 돌 때만 나온다.
 
 GitHub 업데이트 확인 버튼은 뺐다. 설치형은 새 설치 파일로 업데이트하고, 저장소 버전이 뒤처져 있어 "최신"이라는 오답을 줬다(4.9절).
@@ -196,7 +201,7 @@ GitHub 업데이트 확인 버튼은 뺐다. 설치형은 새 설치 파일로 �
 
 ### 4.1 LMS 자료 동기화 (`lms_crawler.py`)
 
-1. `ensure_browser()`로 Chromium headless shell 확보 (`%LOCALAPPDATA%\ms-playwright`, 처음 한 번 내려받음)
+1. `browser_setup.launch_lms_browser()`로 브라우저를 띄움. **Windows 는 깔려 있는 Microsoft Edge**(Playwright `channel="msedge"`)를 써서 아무것도 받지 않는다. Edge 가 없거나 못 띄우면 예전처럼 Chromium headless shell(`%LOCALAPPDATA%\ms-playwright`, 처음 한 번 270MB)을 받아 쓴다. 맥·리눅스는 headless shell 그대로. 작업 로그에 `LMS 접속 브라우저: Microsoft Edge 155…` 한 줄을 남긴다.
 2. `login_lms()`: SAML 로그인. `networkidle`을 쓰지 않고 선택자·URL·`/users/me` 응답으로 기다림.
 3. 과목 목록 → 과목 4개씩 병렬 `crawl_course`
 4. `process_content` 재귀:
@@ -208,6 +213,8 @@ GitHub 업데이트 확인 버튼은 뺐다. 설치형은 새 설치 파일로 �
 5. `download_lms_file`: 동영상 건너뜀. 이미 받은 URL이면 내려받지 않고 `remember_lms_place`로 경로·순서만 갱신. 같은 과목의 같은 파일명은 새 사본을 만들지 않고 덮어씀.
 6. 공지사항 첨부도 받음 (`공지사항(Announcements)` 폴더)
 7. 끝나면 `web_ui.organize_downloads`가 `downloads\<학기>\<과목>\`로 옮기고 `stored` 경로 기록
+
+LMS 브라우저를 Edge 로 바꾼 까닭 (2026-10-15): Playwright 가 받는 `chrome-headless-shell.exe`·dll 이 서명 없음(실측 NotSigned)이라 스마트 앱 컨트롤(SAC)이 켜진 PC 에서는 Store 판도 LMS 동기화가 막힐 수 있고, Store 정책 10.2.2(실행 코드를 내려받아 실행)에도 걸릴 수 있다. Edge 는 Microsoft 서명이고 Windows 10/11 에 늘 있다. 찾는 자리는 Playwright 와 같은 순서(`LOCALAPPDATA` → `PROGRAMFILES` → `PROGRAMFILES(X86)` 아래 `Microsoft\Edge\Application\msedge.exe`, `browser_setup.system_edge`). 실측(Edge 155 vs headless shell 151, 같은 계정): 띄우기 0.46초 vs 0.17초, SSO 로그인 52초 vs 53초, 과목 21개·콘텐츠 API 같은 결과, 마감 새로고침 81초·빠른 동기화 148초 종료 코드 0. `ms-playwright` 를 빈 폴더로 바꿔도 받지 않고 로그인됐다. 사용자가 Edge 를 켜 둔 채여도 Playwright 가 따로 임시 프로필로 띄우고 끝나면 남는 프로세스가 없다. 시험용으로 `AUTOSAVER_LMS_BROWSER=shell` 이면 Edge 를 건너뛴다. 예전에 받아 둔 `ms-playwright` 폴더는 앱이 스스로 지우지 않는다. 사용자가 설정 › 앱 크기에서 휴지통으로 보낼 수 있다(3절, 실패하면 다시 받음). 에브리타임 시간표 링크 가져오기(`timetable_import._fetch_everytime`)도 같은 `launch_lms_browser` 로 띄운다(`download=False` — 화면 요청 안에서 270MB 를 받지 않음). 예전엔 셸만 불러서 Edge 만 있는 PC 에서는 늘 실패하고 '자동 접속을 막고 있어'로 잘못 보였다. Edge 를 못 띄워 셸로 되돌아가면 `ms-playwright\daling-edge-failed.txt` 를 남기고(Edge 가 다시 뜨면 지움), 그동안은 셸을 '안 씀'으로 보지 않는다(`shell_unused`) — 정책으로 headless Edge 가 막힌 PC 에서 셸을 휴지통으로 보냈다가 동기화마다 270MB 를 다시 받는 일을 막는다.
 
 빠른 모드(`AUTOSAVER_SYNC_MODE=fast`, 기본)는 마지막 동기화 2일 전 이후 바뀐 파일만 확인합니다. 순서·경로가 비어 있는 옛 자료를 채우려면 전체 모드로 한 번 돌립니다. 지난 학기 과목은 LMS가 403으로 막아 순서가 안 채워집니다.
 
@@ -305,9 +312,10 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 | `app.py` | 데스크톱 진입점. 서버 띄우기(포트 선택), pywebview 창, 스케줄러, 알림, 작업 프로세스 분기 |
 | `web_ui.py` | HTTP 서버와 모든 API. 설정 읽기/쓰기(DPAPI), 작업 실행, 자료 목록, 메일 본문·그림, 삼성 노트 작업, 정리·저장·Drive |
 | `runtime_config.py` | 작업 프로세스와 공유하는 설정 상수, 데이터 경로, `WORKER_FLAG`, `SECRET_KEYS` |
+| `demo_mode.py` | 체험 모드: 임시 폴더에 가짜 데이터 만들기·지우기, 켜 있는 동안 바깥 연결 막기, 체험 중 메일 읽음·별표·휴지통 |
 | `main.py` | `sync` 작업 본체: LMS 크롤 → Drive 폴더·업로드 → 알림 메일 |
 | `lms_crawler.py` | LMS 로그인, 자료·공지·마감 수집, 폴더 경로·순서 기록 |
-| `browser_setup.py` | Playwright Chromium 확보 |
+| `browser_setup.py` | LMS 로그인 브라우저: Windows Edge, 없으면 Playwright 헤드리스 셸 받기. 안 쓰는 셸 휴지통으로(`recycle`) |
 | `email_reader.py` | IMAP 수집·구조 해석·본문·그림·분류, 읽음/별표/이동/삭제, SMTP 보내기, 리마인드 |
 | `email_notifier.py` | 동기화 결과 알림 메일 (함수 이름 `send_kakao_message`는 옛 이름, 실제로는 메일) |
 | `translator.py` | 메일 번역 (Gemini 또는 Ollama) |
@@ -375,6 +383,7 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 
 | 경로 | 내용 |
 |---|---|
+| `/api/demo` | 체험 모드 켜기·끄기 `{on, lang}` (GET 은 상태: active·blocked 수·available) |
 | `/api/run` | 자료 동기화 (`mode`: fast/full) |
 | `/api/refresh-deadlines`, `/api/refresh-emails`, `/api/verify`, `/api/stop` | 작업 시작·중지 |
 | `/api/config`, `/api/config/import` | 설정 저장, 백업 불러오기 |
@@ -385,6 +394,7 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 | `/api/save-local`, `/api/organize-files`, `/api/open-downloads`, `/api/pick-folder` | 로컬 저장·정리 |
 | `/api/local-autosave/run` | 내 컴퓨터 자동 저장 지금 실행 (`mode`: current/all, 뒤에서) |
 | `/api/shelves/save`, `/api/storage/cleanup` | 내 폴더, 저장 공간 정리 |
+| `/api/storage/trash-browser` | Edge 를 쓰는 PC 에서 예전에 받은 LMS 브라우저(헤드리스 셸)를 휴지통으로 |
 | `/api/samsung-notes/send`, `/api/samsung-notes/organize` | 한 개 넣기(뒤에서), 노트 폴더 정리 |
 | `/api/timetable/save`, `/api/timetable/delete`, `/api/timetable/bulk`, `/api/timetable/import-link`, `/api/timetable/import-image` | 시간표 |
 | `/api/my-events/save`, `/api/my-events/delete`, `/api/export-ics` | 내 일정, ics 저장 |
@@ -424,7 +434,7 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 
 그 밖의 위치:
 - 설치 폴더: `%LOCALAPPDATA%\Programs\붕어빵`
-- Playwright 브라우저: `%LOCALAPPDATA%\ms-playwright`
+- LMS 브라우저: 시스템 Edge(`C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe`). Edge 가 안 될 때만 Playwright headless shell 을 `%LOCALAPPDATA%\ms-playwright` 에 받음
 - 로컬 저장: `문서\붕어빵 파일 정리\<과목>\` (OneDrive 문서 폴더일 수 있음, `SHGetKnownFolderPath`로 찾음)
 - 삼성 노트 DB: `%LOCALAPPDATA%\Packages\SAMSUNGELECTRONICSCoLtd.SamsungNotes_wyx1vj98g3asy\LocalState\Storage.sqlite` (백업은 같은 폴더의 `Storage.sqlite.붕어빵백업-*`)
 
@@ -572,6 +582,7 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 
 - 코드의 문구는 한국어 그대로 두고, 화면에 그려진 글자를 번역표 `web/i18n/en.json`(한국어 → 영어)으로 바꿔 보여 준다 (`app.js` 앞부분 `I18N`, `tr`, `i18nTranslateTree`, MutationObserver).
 - 표에 정확히 있는 문구만 바꾼다. `{0}` 이 든 틀은 빈자리를 옮겨 넣는다. 고정 한글이 두 글자 이하인 틀은 빈자리까지 모두 영어가 될 때만 쓴다(메일 제목 등 사용자 글 보호). 한글 없는 틀은 무시한다.
+- 개수 뒤 영어 명사는 `{0:class|classes}` 꼴로 쓴다: `{0}` 이 1 이면 앞말, 아니면 뒷말(`"오늘 남은 수업 {0}개": "{0} {0:class|classes} left today"`). 한국어 '{0}개' 하나가 영어에선 단수·복수 둘이라 '1 classes left today' 가 나왔다(2026-10-15).
 - ` · ` 로 이어 붙인 줄은 마디마다 옮긴다. 날짜(`(월)`, `오후 4:18`, `2026년 9월`)는 규칙으로 바꾼다.
 - 알림·확인창(`confirm`/`alert`)과 토스트도 같은 표를 쓴다. 속성은 placeholder·title·aria-label·data-hint·alt.
 - 언어는 `ui_prefs.json` 의 `lang`(ko/en), 없으면 윈도우 언어(한국어가 아니면 영어). 바꾸면 화면을 다시 불러온다. 번역하지 않을 곳은 `data-no-i18n`.
@@ -771,7 +782,7 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 |---|---|---|---|
 | SignPath Foundation (Windows) | 무료 | 심사 수 주~2달, 승인 뒤에도 밀림 | 2026 거절 사례가 '사용자층이 아직 없음'. 이 저장소(별 0)는 지금은 어렵다. 받아도 게시자는 'SignPath Foundation', SmartScreen 평판은 쌓여야 함. `release.yml`·`.signpath/` 준비됨 |
 | OSSign (Windows) | 무료 | — | 신청 잠정 중단, 저장소 6개월 이상 활동 필요 |
-| Microsoft Store MSIX | 무료(개인 등록 2025-09~) | 1~2주 | Microsoft 가 서명 → Store 설치는 SmartScreen·SAC 모두 통과. 포장은 준비됨(`packaging\msix`), 심사(로그인 앱은 시험 계정 요구)가 남음 — 아래 'Microsoft Store 판' |
+| Microsoft Store MSIX | 무료(개인 등록 2025-09~) | 1~2주 | Microsoft 가 서명 → Store 설치는 SmartScreen·SAC 모두 통과. 포장은 준비됨(`packaging\msix`), 심사(로그인 앱은 시험 계정 요구 → '체험 모드' 로 대응)가 남음 — 아래 'Microsoft Store 판' |
 | Azure Artifact Signing | 월 $9.99~ | — | 개인은 미국·캐나다만 |
 | Certum 오픈소스 인증서 | 약 €49 | 며칠 | 유료, 품절 |
 | Apple 공증 (맥) | 연 $99 | — | 무료 Apple 계정으로는 불가. Homebrew 는 `--no-quarantine` 을 없앴고(5.0) Gatekeeper 를 못 넘는 cask 를 2026-09-01 에 막았다 |
@@ -812,7 +823,7 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 | 명령 줄 | 실행 파일 경로 | 실행 별칭 `daling.exe` (`%LOCALAPPDATA%\Microsoft\WindowsApps`) | 점검: `daling.exe --autosaver-smoke` |
 - 개발 서버에서 Store 판 화면 보기: `.claude/launch.json` 의 `autosaver-src-store`(8793, `AUTOSAVER_PRETEND_MSIX=1`). 설정 › 앱 › 새 버전 칸에 'Microsoft Store가 새 버전을 알아서 설치해요 (v1.12.28)', 새 버전 알약·'지금 업데이트' 없음 확인(콘솔 오류 0).
 - 남은 위험(제출 전에 볼 것):
-  - **LMS 브라우저는 서명이 없다**: Playwright 가 처음 쓸 때 받는 `chrome-headless-shell.exe`·dll 이 서명 없음(이 PC 실측 NotSigned). 패키지 밖에서 받은 파일이라 Store 서명이 덮지 않아 SAC 가 켜진 PC 에서는 Store 판도 LMS 동기화가 막힐 수 있고, 정책 10.2.2(실행 코드 내려받기)에 걸릴 수도 있다. 대안: 모든 Windows 에 있는 Microsoft 서명 Edge 를 Playwright `channel="msedge"` 로 쓰기(270MB 받기도 없어짐). 묶은 `node.exe` 는 OpenJS Foundation 서명(Valid).
+  - **LMS 브라우저**: 2026-10-15 부터 Windows 는 Microsoft 서명 Edge 를 `channel="msedge"` 로 써서(4.1) 패키지 밖에서 서명 없는 실행 파일을 받지 않는다. 남은 위험은 Edge 가 없거나(지운 PC) 회사·학교 정책으로 headless 가 막혀 못 띄우는 PC 뿐 — 그때만 예전처럼 서명 없는 `chrome-headless-shell` 을 받아 SAC·정책 10.2.2 위험이 남는다. 묶은 `node.exe` 는 OpenJS Foundation 서명(Valid).
   - 삼성 노트 정리(`organize_notes`)는 다른 앱(삼성 노트)의 DB 를 직접 고친다. 심사에서 '다른 앱 데이터 변경'으로 볼 수 있다. PDF 보내기(WinRT Launcher)는 지원되는 방법.
 
 ### Store 제출 절차 (계정 등록·제출은 사용자가 직접)
@@ -823,15 +834,35 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
    - 가격·사용 가능: 무료, 시장은 대한민국(또는 전체).
    - 속성: 범주 '교육'(또는 '생산성'), **개인정보처리방침 URL `https://gudaling.dev/privacy`** (정책 10.5.1: 아이디·비밀번호·메일을 다루므로 필수. 2026-10-15 열림 확인), 지원 주소(GitHub issues 또는 tutleblue12@gmail.com).
    - 연령 등급: IARC 설문. 폭력·도박 없음, 사용자끼리 대화하는 기능은 없음(학교 메일 보내기는 이용자 본인 계정의 메일 앱 기능)으로 답한다.
-   - 스토어 목록(한국어·영어): 설명, 스크린샷 1장 이상(1366×768 이상, 개인정보 없는 화면 — 디자인 스튜디오 연습용 앱 화면을 쓰면 안전), 짧은 설명.
+   - 스토어 목록(한국어·영어): 설명, 짧은 설명, 스크린샷(1366×768 이상, 개인정보 없는 화면). **스크린샷은 `packaging\msix\store-screenshots\` 의 12장** — `ko-1-dashboard`~`ko-6-mail` 은 한국어 목록에, `en-…` 은 영어 목록에 번호 순서대로(대시보드·과제 마감·캘린더·강의·자료·메일함). 1920×1080 PNG, 장마다 140~260KB.
+     - 다시 찍기: `.venv\Scripts\python.exe packaging\msix\store_screenshots.py` (약 40초. `--lang ko|en`, `--theme dark`, `--only dashboard emails`). 임시 폴더를 데이터 폴더로 삼은 개발 서버(8792)를 따로 띄워 체험 모드(가짜 데이터, 아래 '체험 모드' 절)로 찍으므로 `C:\lms-autosaver` 는 읽지도 쓰지도 않는다. 2026-10-15 찍는 동안 서버가 막은 바깥 연결 0건.
+     - 모양: 1536×864 화면을 1.25배(1080p 노트북의 Windows 기본 배율 125%). 개발 서버엔 창 단추가 없어서 `/api/window` 대답만 custom:true 로 바꿔 설치본처럼 최소화·최대화·닫기를 그리고, 체험 중엔 빼는 바깥 글꼴(Inter·Lora)을 찍는 브라우저에만 붙인다.
+     - 체험 표시(맨 위 줄무늬 띠·'체험 중 · 가짜 데이터' 알약·상태판 '체험 중')는 넣지 않는다(사용자 결정, 2026-10-15). 둘러보는 사람이 '체험 끝내기'를 기능으로 오해하지 않게. 첫 화면의 `<html data-demo>` 만 떼고 받아 보통 화면 코드로 그리므로 화면에 보이는 것은 모두 계정을 넣은 화면에도 있는 것이다. 체험 화면 그대로는 `--demo-badge`.
+     - 구도: 캘린더는 메일에서 뽑은 세미나 날을 골라 상세에서 그 메일을 펼친 모습(연사·장소·본문), 자료는 '전체 목록'(과목 폴더 4개만으로는 화면이 빔), 메일함은 맨 위 메일을 연 모습. 가짜 데이터가 찍는 날 기준이라 날짜·'오늘 남은 수업' 수는 찍는 시각마다 다르다.
    - **제한된 기능 `runFullTrust` 사유** (영어로):
-     > Daling is a classic Win32 desktop app (Python, packaged with PyInstaller) that shows its UI in WebView2 served from a local 127.0.0.1 server. It starts its own helper processes (붕어빵.exe --autosaver-job) and Playwright's bundled Node.js driver to sign in to the university LMS in a headless browser, saves course files to the user's own folders (C:\lms-autosaver, Documents) and can hand PDFs to Samsung Notes. These need full-trust desktop execution; the app cannot run in an AppContainer.
-   - **인증 참고 사항(Notes for certification) — 정책 10.3.1** ('로그인이 필요하면 쓸 수 있는 시험 계정을 주라'): DGIST 계정은 학교가 재학생에게만 발급하는 SSO 계정이라 심사용으로 만들 수 없고, 이용자 계정을 넘기는 것은 학교 규정 위반이다. 대응:
-     - 지금 쓸 수 있는 것: 로그인 없이 되는 기능(학사일정·학교 공지·셔틀·FGLP·개설강좌 시간표)을 적고, 로그인 기능(LMS 자료·마감·학교 메일)은 화면 녹화 영상(YouTube 일부 공개) 주소로 보여 준다. 예시:
-       > Login is optional. Without an account you can test: academic calendar, school notices, shuttle timetable, FGLP list and course timetable (public data). LMS/mail features need a DGIST student account issued only by the university (SSO), which we cannot create for testers; a screen recording of those features is at <영상 주소>. No account is needed to launch or navigate the app.
-     - 권장(후속 작업): 앱에 '체험 데이터로 둘러보기' 를 넣어 가짜 과목·자료·마감·메일로 모든 화면을 볼 수 있게 하고, 참고 사항에 켜는 법을 적는다. 시험 계정 없이 심사를 통과하는 가장 확실한 길.
+     > Daling is a classic Win32 desktop app (Python, packaged with PyInstaller) that shows its UI in WebView2 served from a local 127.0.0.1 server. It starts its own helper processes (붕어빵.exe --autosaver-job) and Playwright's bundled Node.js driver to sign in to the university LMS with the system Microsoft Edge in headless mode (nothing is downloaded on Windows), saves course files to the user's own folders (C:\lms-autosaver, Documents) and can hand PDFs to Samsung Notes. These need full-trust desktop execution; the app cannot run in an AppContainer.
+   - **인증 참고 사항(Notes for certification) — 정책 10.3.1** ('로그인이 필요하면 쓸 수 있는 시험 계정을 주라'): DGIST 계정은 학교가 재학생에게만 발급하는 SSO 계정이라 심사용으로 만들 수 없고, 이용자 계정을 넘기는 것은 학교 규정 위반이다. 대응은 앱 안 **체험 모드**(아래 '체험 모드' 절, 1.12.28~). 참고 사항 칸에 그대로 붙인다:
+       > No test account is needed. DGIST LMS and school mail use SSO accounts that the university issues only to enrolled students, so we cannot create one for testers. Instead, the app has a built-in demo mode with sample data:
+       > 1. Launch Daling. On the first intro card, click "Try without an account" (or, any time, the same button in the top bar, or Settings › Connected accounts › Demo mode › "Try the demo").
+       > 2. Every screen fills with sample data: Dashboard, Deadlines, Calendar, Courses (with announcements), Files (sample PDFs open locally) and Mailbox (read, star, delete, restore).
+       > 3. While the demo is on, a striped bar at the top and a "Demo · sample data" pill are shown. The app makes no network requests in demo mode; actions that need a server (sync, sending mail, Google sign-in, uploads) show "Not available in demo mode".
+       > 4. Click "End demo" in the top bar to leave the demo. Your own data folder is not touched.
+       > Public screens (academic calendar, school notices, shuttle bus, course timetable) also work without an account outside demo mode. The UI can be switched to English in Settings › Language; demo data then appears in English.
+     - 심사자가 한국어 화면으로 보면 체험 데이터도 한국어다(켤 때의 화면 언어로 만든다). 영어로 보려면 먼저 설정 › 언어를 English 로.
 5. 심사는 보통 1~3일. 통과하면 Store 주소가 생긴다 → 사이트 내려받기에 'Microsoft Store 에서 받기' 를 더할 수 있다.
 6. 새 버전: `VERSION`·changelog 를 올리고 같은 명령으로 새 `-store.msix` 를 만들어 '업데이트' 제출. Store 가 이용자 PC 에서 자동으로 바꾼다(앱 안 업데이트는 꺼져 있음).
+
+## 체험 모드 (2026-10-15)
+Microsoft Store 정책 10.3.1(로그인 앱은 심사용 시험 계정을 줄 것)에 대응. DGIST 계정은 학교가 재학생에게만 주는 SSO 계정이라 줄 수 없어서, 심사자와 처음 깐 사람이 계정 없이 모든 화면을 보게 했다. 코드: `demo_mode.py`, `web_ui`(`workspace_for_user`·`_demo_get`·`_demo_post`·`toggle_demo`·`send_demo_index`), `app.scheduler_loop`, `app.js`(`DEMO_ON`·`renderDemoPill`·`setDemo`).
+
+- **켜기·끄기**: 첫 실행 소개 첫 카드의 '계정 없이 체험하기'(계정이 없을 때만), 상단 바 알약(계정이 없으면 '계정 없이 체험하기', 체험 중이면 '체험 중 · 가짜 데이터 · 체험 끝내기'), 설정 › 연결된 계정 맨 아래 '체험 모드'. `POST /api/demo {on, lang}` 뒤 화면을 새로 띄운다(남은 목록·캐시가 섞이지 않게). 켠 상태는 메모리에만 있어 앱을 다시 켜면 늘 내 데이터로 시작한다. 동기화·메일 작업이 도는 중에는 켜지 않는다('가져오는 중이에요').
+- **데이터 폴더**: 켜면 `%TEMP%\daling-demo\<pid>`(표지 `.daling-demo`)에 새로 만들고(실측 0.06초) `workspace_for_user` 가 그 폴더를 돌려준다. 끄면 그 폴더를 지운다. 앱이 체험 중에 꺼져 남은 폴더는 다음에 켤 때 하루 지난 것만 치운다. 진짜 폴더(`C:\lms-autosaver`)에서는 화면 취향 세 파일(`ui_prefs.json`·`tutorial.json`·`whats_new.json`)만 읽어 오고, 끌 때 체험 중 바뀐 것(테마·언어, 끝까지 본 소개)만 돌려놓는다. 자료·메일·설정은 옮기지 않는다. 오류 기록(`server_errors.log`)도 체험 중에는 체험 폴더에.
+- **가짜 데이터**(켤 때 화면 언어 ko/en 으로, 날짜는 오늘 기준): 과목 4개(미적분학Ⅱ·일반물리학Ⅱ·프로그래밍 기초·글쓰기와 소통, LMS 과목명 꼴 그대로), 강의자료 17개(LMS 폴더·순서·받은 날짜를 흩어 둠, PDF 는 눌러 열리는 진짜 한 쪽 PDF·영문), 마감 11개(오늘·내일·3일 뒤… 제출·채점 완료 섞음)와 LMS 일정(중간고사), 과목 공지 6개, 메일 13통(받은 편지함 10·보낸 2·휴지통 1, 분류·안읽음·답장·세미나/진로 행사 날짜 → 캘린더), 시간표 7칸, 내 일정 2개, 학교 공지 6개(누를 곳 없음), 학교 행사 2개(사진 없음), 셔틀 예시 노선(화면에 '체험용 예시 시간표예요'). 학사일정·개설강좌는 앱에 든 공개 씨앗 그대로. 시험·세미나가 주말에 걸리면 월요일로.
+  - 사람은 옛이야기 인물(이몽룡·성춘향·전우치·심청·장화·홍련·콩쥐·팥쥐, 영어 화면은 로마자), 주소는 예약된 `example.com`, 강의실은 A101 같은 번호. 실명·실제 주소 없음.
+  - 설정은 상태판이 정상으로 보이게 `LMS_ID`·`SCHOOL_EMAIL`(student@example.com)과 비밀번호 칸에 자리 글자(`demo`)만 넣는다. 진짜 비밀번호가 아니고 어디로도 보내지 않는다. Drive 는 꺼 둠.
+- **바깥 요청 0건**: 체험 중에는 (1) `start_task` 가 작업 프로세스를 띄우지 않고(자동 실행도), `scheduler_loop` 는 알림까지 쉰다. (2) 화면 서버가 바깥이 필요한 라우트를 먼저 받는다: 동기화·메일 보내기/임시저장/이동·번역·Drive·Google·캘린더·삼성 노트·내 컴퓨터 저장·.ics 내보내기·업데이트·제출 페이지 열기·설정 저장은 409 '체험 중에는 쓸 수 없어요. 체험을 끝내고 계정을 넣으면 돼요.', 학사일정·공지·셔틀·학교 행사·개설강좌는 새로 받지 않고 있는 것(씨앗)만, 메일 읽음·별표·휴지통·되돌리기는 체험 폴더의 `emails.json` 만 고친다(`demo_mode.patch_mail`). 상단 새로고침은 같은 문구만 띄운다. (3) 안전망: `socket.getaddrinfo`·`socket.connect`·`connect_ex` 를 바꿔 끼워 루프백이 아닌 곳은 막고 `demo_mode.BLOCKED` 에 남긴다(`GET /api/demo` 의 `blocked`). (4) 화면: 체험 중 `index.html` 은 서버가 `<html data-demo="1">` 를 달고 Google Fonts `<link id="webFonts">` 를 뺀다(그래서 `styles.css` 맨 위의 `@import` 를 `index.html` 로 옮겼다). 체험 중 메일 임시저장·별표 localStorage 키는 `autosaver-demo-*`.
+- **확인(2026-10-15, 개발 서버)**: 대시보드·마감·캘린더·강의·자료·메일함·창고가 모두 찬 것을 한국어·영어로 확인. 화면이 받은 자원 36·37개 중 바깥 0개(`performance` 기록), 모든 화면과 막는 라우트 17개를 부른 뒤 서버 차단 기록 0건(아무 코드도 바깥으로 나가려 하지 않음). 직접 시험: `urlopen("https://lms.dgist.ac.kr")`·IP 직접 연결 모두 막힘. 끈 뒤 진짜 자료 360개·과목 18개로 돌아오고 취향 파일 세 개와 `config.json` 이 미리 떠 둔 사본과 바이트까지 같음. 빈 데이터 폴더(처음 깐 PC)에서 소개 첫 카드 → '계정 없이 체험하기' → 데이터가 찬 채 소개가 다시 시작(계정 넣기 단계는 뺌).
+- 공유 웹사이트 모드(`AUTOSAVER_MULTI_USER`)에서는 쓰지 않는다(`available: false`, 줄·알약 숨김).
 
 ## 영어 화면의 학사일정 (2026-10-12)
 - 학사일정 이름은 학교 데이터라 번역표에 없어 영어 화면에서도 한국어였다. `acadTitleEn` 이 낱말표(`ACAD_TERMS`)로 옮긴다: '대학 및 대학원' 머리는 빼고, '대학원' 은 'Grad:', 'YYYY학년도 N학기' 는 'Spring/Fall YYYY', 계절학기는 'Summer/Winter session YYYY', "('26.8월 졸업생)" 은 "(Aug '26 grads)", 뒤의 'D-52' 는 그대로. `tr` 안에서 표·틀 다음에 부르며, 다 옮겨 한글이 하나도 안 남을 때만 쓴다(메일 제목은 그대로). 2026 학사일정 38개 이름 모두 옮겨짐.
@@ -898,3 +929,15 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 - 남은 첫 호출 비용(`/api/status` 445ms: 시간표 모듈 0.21s·구글 토큰 확인 0.19s, course-staff 130ms, emails 80ms)은 `app._prewarm_first_screen` 이 서버를 띄우자마자 뒤에서 미리 해 둔다(창=WebView2 가 뜨는 1~2초 동안). 실측 676ms → 50ms.
 - 켤 때 상단 버전 글자용 GitHub 확인(`/api/update/check`)은 3초 뒤로 미뤘다(첫 화면 요청과 연결을 다투지 않게).
 - 기록: 화면이 첫 새로고침을 마치면 `/api/boot-done` → `boot_times.json`(최근 30번: serverReady·pageRequested·firstScreen, 실행 파일 생성 시각 기준 초). '느리다' 는 신고가 오면 이 기록부터 본다.
+
+## AI 도우미 (AI CLI: Claude · Gemini · Codex, 2026-10-15)
+
+- `ai_cli.py`: 이 PC 에 로그인해 둔 CLI 를 그대로 부른다(앱은 키를 받지 않는다). 질문은 **표준입력**으로(배치 파일 인자 해석 위험 회피), 빈 임시 폴더에서, 창 없이, 180초 제한. claude `-p --disallowedTools …`, gemini `-p "Answer the request above."`, codex `exec --skip-git-repo-check --ephemeral -s read-only -o <파일> -`.
+- 실측: 한 줄 질문 claude 9초·codex 10초, 말로 찾기 13~15초(목록 799개), 초안 15초, codex 번역 11초. gemini 는 로그인 전이면 'Please set an Auth method' → '로그인 필요' 로 알린다.
+- 설정 'AI 도우미'(`#stAi`): 쓸 AI(자동·Claude·Gemini·Codex, 설치 여부 표시) + 내 정보(이름·학번·소속·소개·서명) → `ai_profile.json`. 설정 폼 저장과 따로 저장(입력칸에 name 속성 없음).
+- 번역: `/api/mail/translate` 가 고른 AI CLI 를 먼저, 안 되면 예전 길(Ollama → Gemini 키).
+- 말로 찾기: 통합 검색 팝업 맨 아래 'AI 에게 물어보기'. `buildSearchResults(q, {all:true})` 로 모든 후보를 모아 순번 id 로 보내고, 돌아온 id 만 원래 결과로 연다(모델이 지어낸 id 는 버려짐). `keepOpen` 항목은 팝업을 닫지 않는다.
+- 메일 초안: 쓰기 화면 'AI 초안' → 한 줄 요청. 받는 사람 주소로 `state.coursePeople` 에서 과목·분반·역할(내 수업 먼저)을 찾아 함께 보낸다. 외국인 교수면 영어로 쓴다. 'AI 없이 내 소개 넣기' 단추도 있다.
+- 체험 모드에서는 `/api/ai/search`·`/api/ai/draft` 를 막는다. 자동 실행은 없다(누를 때만 바깥으로 나감). 상태 확인은 첫 화면 4초 뒤.
+- AI 모델 고르기·받는 사람 추천(2026-10-15 '밀착형 AI'): 메일 쓰기 단추에 'AI 초안' 대신 지금 모델 이름(Opus 5.5, GPT-6-Astra …). 초안 칸의 고르기에서 Claude(opus·sonnet·fable·haiku 별칭)·Gemini(2.5 Pro 등)·Codex(`~/.codex/models_cache.json` 의 visibility=list, 기본은 config.toml model) 모델을 바꾼다 → `ai_profile.json` 의 provider·model. 모델 이름은 `_SAFE_MODEL` 글자만(배치 파일 인자). 안 골랐으면 화면에 보이는 그 CLI 기본 모델을 서버도 똑같이 쓴다.
+- 초안이 받는 사람(to)·참조(cc)도 고른다. 후보는 내가 듣는 과목의 교수·조교 중 주소를 아는 사람(`aiDraftCandidates`, 최대 80명: 주소·이름·역할·과목·분반)이고, 후보 밖 주소는 버린다. 받는 사람 칸이 비면 바로 채우고, 나머지는 칩(누르면 넣기/빼기). 제목은 제목 칸에 바로. 실측: 받는 사람 빈칸 + '일반물리 교수님께 결석 양해' → 3분반 교수 자동, 조교 참조 추천, Opus 5.5 14.8초.

@@ -96,6 +96,9 @@ AUTOSAVER_DATA_ROOT=C:/lms-autosaver AUTOSAVER_CONFIG_PATH=C:/lms-autosaver/conf
 26-5. **영어 화면**: 화면 문구를 새로 넣거나 고치면 `python scripts/i18n_extract.py` 를 돌려 `web/i18n/en.json` 에 영어를 채웁니다(빠진 것 0 이 되게). 사용자 자료(메일·과목명)는 번역하지 않습니다.
 26-2. 다만 **주간 시간표는 버튼(편집 창) 방식을 지킵니다.** 사용자가 그렇게 정했습니다. 시간표에 드래그 이동을 다시 넣지 않습니다.
 
+### 체험 모드 (Store 심사용, `demo_mode.py`)
+26-6. 체험 중에는 **바깥 요청 0건**을 지킵니다. 새 API 가 LMS·메일·Google·학교 서버에 묻는다면 `DashboardHandler.DEMO_BLOCKED_GET/POST` 에 넣거나 체험 중엔 있는 것만 주게 합니다(소켓 차단은 안전망). 가짜 데이터에 실명·실제 주소를 넣지 않습니다(옛이야기 인물·example.com). `--autosaver-smoke` 의 '체험 모드' 점검이 지켜봅니다.
+
 ### 마스코트 달구·첫 실행 소개
 26-3. 달구 그림은 `design/dalgu/sheet0.png`·`sheet1.png`·`sheet2.webp`(4×4 스티커 시트, sheet2 는 걷기·달리기·옆모습)에서 `scripts/slice_dalgu.py`로 잘라 `web/img/dalgu/`에 둡니다. 포즈를 바꾸려면 스크립트의 `POSES`를 고치고 다시 돌립니다(시스템 파이썬의 Pillow 사용, 앱에는 불필요). `design/`은 설치 파일에 들어가지 않습니다.
 26-4. 첫 실행 소개(`TOUR_STEPS`)는 새 화면·메뉴를 만들면 함께 고칩니다. 비출 곳은 선택자로 적고, 못 찾으면 가운데 카드로 나옵니다. 어둡게 하는 막은 큰 `box-shadow` 대신 사각형 네 장(`.tour-dim`)을 씁니다 — WebView 가 큰 그림자를 그리지 않을 때가 있었습니다. 달구는 카드에 붙어 있지 않고 단계마다 비출 곳 옆으로 걸어갑니다(`placeBuddy`). 새 단계를 넣을 때 자리는 자동으로 고르니 `pose` 만 정하면 됩니다.
@@ -129,6 +132,7 @@ AUTOSAVER_DATA_ROOT=C:/lms-autosaver AUTOSAVER_CONFIG_PATH=C:/lms-autosaver/conf
 | 메일 화면 | `app.js` `renderEmails`, `emailListRow`, `renderMailBody`, `mailFrameDoc` |
 | 폴더 나무 | `app.js` `renderFolderView`, `buildFolderTree`, `folderTreeHtml` |
 | 삼성 노트 | `samsung_notes.import_pdfs` |
+| 체험 모드(가짜 데이터) | `demo_mode.build`, `web_ui._demo_get`·`_demo_post`·`toggle_demo`, `app.js` `setDemo` |
 
 ## 5. 알아 두면 시간을 아끼는 사실
 

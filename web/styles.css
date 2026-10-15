@@ -1,5 +1,3 @@
-@import url("https://fonts.googleapis.com/css2?family=Lora:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap");
-
 :root {
   --bg: #faf9f5;
   --bg-deep: #f0eee6;
@@ -7961,13 +7959,18 @@ a:hover { color: var(--accent); }
 }
 .hint:hover,
 .hint:focus-visible { color: var(--accent-strong); border-color: var(--accent); outline: none; }
+/* 말풍선은 보일 때만 그린다. 예전엔 투명하게(opacity 0) 늘 깔려 있어서, 오른쪽 칸 '?' 의
+   280px 말풍선이 설정 화면 폭을 146px 늘렸다(1280 창 scrollWidth 1174 / clientWidth 1028).
+   가로 막대는 안 보여도 scrollIntoView 가 화면을 옆으로 밀어 사이드바 밑으로 넣었다.
+   자리(--hint-x)와 폭(--hint-w)은 app.js placeHint 가 화면 안에 들어오게 잡는다. */
 .hint::after {
   content: attr(data-hint);
+  display: none;
   position: absolute;
-  left: -10px;
+  left: var(--hint-x, -10px);
   bottom: calc(100% + 8px);
   width: max-content;
-  max-width: 280px;
+  max-width: var(--hint-w, 280px);
   padding: 9px 11px;
   border-radius: 9px;
   background: var(--text);
@@ -7976,14 +7979,12 @@ a:hover { color: var(--accent); }
   text-align: left;
   white-space: normal;
   box-shadow: 0 10px 28px -10px rgba(0, 0, 0, 0.35);
-  opacity: 0;
-  transform: translateY(3px);
-  transition: opacity 0.12s ease, transform 0.12s ease;
   pointer-events: none;
   z-index: 40;
 }
 .hint:hover::after,
-.hint:focus::after { opacity: 1; transform: none; }
+.hint:focus::after { display: block; animation: hint-pop 0.12s ease; }
+@keyframes hint-pop { from { opacity: 0; transform: translateY(3px); } }
 
 /* 한 줄짜리 설정: 왼쪽 이름, 오른쪽 조작 */
 .set-row {
@@ -8032,7 +8033,7 @@ a:hover { color: var(--accent); }
 .settings-section h3 { flex-wrap: wrap; }
 .form-grid label > span { display: flex; align-items: center; gap: 2px; }
 .about-made { margin: 10px 0 0; font-size: 11.5px; color: var(--text-faint); }
-.hint.show::after { opacity: 1; transform: none; }
+.hint.show::after { display: block; animation: hint-pop 0.12s ease; }
 .hint.show { color: var(--accent-strong); border-color: var(--accent); }
 /* 캘린더 이름·자동 가져오기 칸도 다른 입력칸과 같은 모양 */
 .inline-fields input,
@@ -8326,6 +8327,21 @@ label.st-dest, .st-dest label.st-dest-top { cursor: pointer; }
 .st-clean > summary span { font-weight: 400; font-size: 12px; color: var(--text-faint); }
 .st-clean[open] { padding-bottom: 14px; }
 .st-clean-note { margin: 10px 0 0; font-size: 11.5px; color: var(--text-faint); line-height: 1.5; }
+/* Edge 를 쓰는 PC 에 남은 예전 LMS 브라우저 (휴지통으로 보내기) */
+.st-oldbrowser {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 12px;
+  margin-top: 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.st-oldbrowser > div { flex: 1 1 220px; min-width: 0; }
+.st-oldbrowser strong { display: block; font-size: 12.5px; font-weight: 500; color: var(--text-soft); }
+.st-oldbrowser strong b { font-weight: 700; color: var(--text); margin-left: 2px; }
+.st-oldbrowser span { display: block; font-size: 11.5px; color: var(--text-faint); }
 
 /* ③ 자동으로 가져오기 */
 .st-auto { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
@@ -8396,6 +8412,10 @@ label.st-dest, .st-dest label.st-dest-top { cursor: pointer; }
   .st-acct-fields, .st-acct-actions { grid-column: 1 / -1; }
   .st-acct-actions { justify-content: flex-start; }
   .st-dest-grid { grid-template-columns: 1fr; }
+  /* 앱 카드 머리의 단추 셋(업데이트 내용·앱 소개 다시 보기·실행 로그)은 줄을 안 바꿔
+     375 폭에서 설정 화면을 73px 넘쳤다(실행 로그 오른쪽 끝 438). 제목 아래 줄로 내린다. */
+  .st-head:has(> .button) { flex-wrap: wrap; }
+  .st-head:has(> .button) > div { flex-basis: calc(100% - 48px); }
 }
 @media (max-width: 420px) {
   .st-acct-fields { grid-template-columns: 1fr; }
@@ -10945,3 +10965,105 @@ html.custom-frame body { height: 100%; overflow: hidden; }
 .custom-frame .app-shell.mail-focus .workspace { overflow: hidden; }
 /* 설정은 창 맨 위부터 덮는 판(position:fixed; top:0)이라 막대가 다시 창 끝까지 올라갔다 → 상단 바 아래부터 */
 .custom-frame #view-settings { top: var(--topbar-h, 61px); }
+
+/* ===== 체험 모드 (demo_mode.py, 2026-10-15) =====
+   체험 중에는 창 맨 위 띠(모든 화면, 메일함 포함)와 상단 바 알약으로 '가짜 데이터' 임을 늘 보인다.
+   계정이 없을 때는 같은 알약이 '계정 없이 체험하기' 단추가 된다. */
+.demo-stripe { display: none; }
+html[data-demo] .demo-stripe {
+  display: block;
+  position: fixed;
+  inset: 0 0 auto 0;
+  height: 3px;
+  z-index: 2147482000;
+  pointer-events: none;
+  background: repeating-linear-gradient(135deg, var(--amber) 0 12px, var(--amber-soft) 12px 24px);
+}
+.demo-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  box-sizing: border-box;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  white-space: nowrap;
+}
+.demo-pill.on {
+  padding-left: 14px;
+  border: 1px dashed var(--amber);
+  background: var(--amber-soft);
+}
+.demo-text { font-size: 12.5px; font-weight: 700; color: var(--amber); }
+.demo-btn {
+  height: 30px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+}
+.demo-btn:hover { background: var(--surface-soft); }
+.demo-btn:active { transform: scale(0.97); }
+/* 끝내기: 어느 테마에서나 글씨가 잘 보이게 글자색·바탕색을 뒤집어 쓴다 */
+.demo-pill.on .demo-btn { background: var(--text); color: var(--bg); }
+.demo-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (max-width: 1100px) {
+  .demo-pill.on { padding-left: 4px; }
+  .demo-pill.on .demo-text { display: none; }
+}
+.st-logo-demo { background: var(--amber-soft); border-color: transparent; color: var(--amber); }
+.st-logo-demo .icon svg { width: 20px; height: 20px; }
+
+/* ===== AI 도우미 (2026-10-15) ===== */
+.ai-providers { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 4px 0 14px; }
+.ai-provider {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+  padding: 10px 12px; border-radius: 12px; border: 1px solid var(--border);
+  background: var(--surface); color: var(--text); font: inherit; cursor: pointer; text-align: left;
+}
+.ai-provider strong { font-size: 13.5px; }
+.ai-provider span { font-size: 11.5px; color: var(--text-faint); }
+.ai-provider.on { border-color: var(--accent); background: var(--accent-soft); }
+.ai-provider.on span { color: var(--accent-strong); }
+.ai-provider.missing { opacity: 0.55; }
+.ai-profile { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.ai-profile label { display: flex; flex-direction: column; gap: 5px; font-size: 12px; font-weight: 600; color: var(--text-soft); }
+.ai-profile label.wide { grid-column: 1 / -1; }
+.ai-profile input, .ai-profile textarea { font: inherit; font-weight: 400; }
+.ai-profile-foot { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+.ai-privacy { font-size: 11.5px; color: var(--text-faint); margin-right: auto; }
+@media (max-width: 760px) { .ai-providers { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+.ai-draft {
+  margin: 10px 16px 4px; padding: 12px; border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--border));
+  background: color-mix(in srgb, var(--accent-soft) 55%, var(--surface));
+  display: flex; flex-direction: column; gap: 8px;
+}
+.ai-draft textarea { width: 100%; box-sizing: border-box; resize: vertical; font: inherit; }
+.ai-draft-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ai-draft-ctx { font-size: 11.5px; color: var(--text-soft); margin-right: auto; min-width: 0; }
+.ai-draft-note { margin: 0; font-size: 12px; color: var(--accent-strong); }
+#aiDraftToggle .icon, #aiDraftRun .icon { width: 15px; height: 15px; }
+/* 모델 고르기 · 받는 사람/참조 추천 칩 (2026-10-15 '밀착형 AI') */
+.ai-model-select { height: 32px; border-radius: 999px; padding: 0 10px; font: inherit; font-size: 12.5px; max-width: 170px; }
+.ai-suggest { display: flex; flex-direction: column; gap: 6px; }
+.ai-why { margin: 0; font-size: 12px; color: var(--text-soft); }
+.ai-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.ai-chip {
+  display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px; border-radius: 999px;
+  border: 1px dashed var(--border-strong); background: var(--surface); color: var(--text);
+  font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer;
+}
+.ai-chip em { font-style: normal; font-size: 11px; font-weight: 700; color: var(--accent-strong); }
+.ai-chip span { font-weight: 400; color: var(--text-faint); font-size: 11.5px; }
+.ai-chip.on { border-style: solid; border-color: var(--accent); background: var(--accent-soft); }
+#aiDraftModelName { white-space: nowrap; }

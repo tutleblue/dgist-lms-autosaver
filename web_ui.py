@@ -29,6 +29,7 @@ from typing import Any
 import urllib.request
 from urllib.parse import parse_qs, quote, urlencode, urlparse
 
+import demo_mode
 import secret_store
 
 
@@ -134,8 +135,9 @@ def workspace_for_user(user_id: str) -> UserWorkspace:
         root = USERS_ROOT / user_id
         config_path = root / "config.json"
     else:
-        root = AUTOSAVER_ROOT
-        config_path = AUTOSAVER_ROOT / "config.json"
+        # 체험 모드(demo_mode)가 켜 있으면 임시 폴더의 가짜 데이터를 쓴다. 진짜 폴더는 건드리지 않는다.
+        root = demo_mode.root() or AUTOSAVER_ROOT
+        config_path = root / "config.json"
     return UserWorkspace(
         user_id=user_id,
         root=root,
@@ -1427,8 +1429,8 @@ def get_school_events(workspace: UserWorkspace, force: bool = False) -> dict[str
             fresh = (datetime.now() - datetime.fromisoformat(fetched)).total_seconds() < SCHOOL_EVENTS_TTL
         except ValueError:
             fresh = False
-    if fresh and not force:
-        return {"ok": True, "items": data.get("items", []), "fetchedAt": fetched, "cached": True}
+    if (fresh and not force) or demo_mode.active():
+        return {"ok": True, "items": data.get("items", []) if isinstance(data, dict) else [], "fetchedAt": fetched, "cached": True}
     with _school_events_lock:
         try:
             import dgist_api
@@ -2610,21 +2612,18 @@ def app_footprint(workspace: UserWorkspace, download_dir: Path) -> dict[str, Any
         program = Path(sys.executable).resolve().parent
         parts.append({"key": "program", "label": "프로그램", "bytes": _cached_dir_size("program", program)})
     try:
-        from browser_setup import browsers_root
+        import browser_setup
 
-        browser = browsers_root()
-    except Exception:
-        browser = None
-    if browser is not None and browser.exists():
         # 앱은 화면 없는 크로미움(chromium_headless_shell)만 쓴다 (browser_setup 이 --only-shell 로 받음).
         # 같은 폴더에 개발용으로 받은 일반 크로미움(430MB)이 있을 수 있는데 앱 몫이 아니라 세지 않는다.
-        shell_bytes = sum(
-            _cached_dir_size(f"browser:{d.name}", d)
-            for d in browser.iterdir()
-            if d.is_dir() and d.name.lower().startswith("chromium_headless_shell-")
-        )
-        if shell_bytes:
-            parts.append({"key": "browser", "label": "LMS 로그인용 브라우저", "bytes": shell_bytes})
+        shell_bytes = sum(_cached_dir_size(f"browser:{d.name}", d) for d in browser_setup.shell_dirs())
+        unused = browser_setup.shell_unused()
+    except Exception:
+        shell_bytes, unused = 0, False
+    if shell_bytes:
+        # Windows 는 Edge 로 로그인한다(4.1). 그 전에 받아 둔 셸(약 270MB)은 안 쓰이니 그렇게 적고, 휴지통으로 보낼 수 있게 한다.
+        label = "예전에 받은 브라우저 (지금은 안 씀)" if unused else "LMS 로그인용 브라우저"
+        parts.append({"key": "browser", "label": label, "bytes": shell_bytes, "unused": unused})
     # 데이터 폴더 안에 강의자료 폴더가 들어 있으니 그것만 빼고 센다
     data_bytes = _dir_size(workspace.root, skip=download_dir)[0] if workspace.root.exists() else 0
     parts.append({"key": "data", "label": "메일·설정 데이터", "bytes": data_bytes})
@@ -2632,6 +2631,39 @@ def app_footprint(workspace: UserWorkspace, download_dir: Path) -> dict[str, Any
         p["human"] = human_size(p["bytes"])
     total = sum(p["bytes"] for p in parts)
     return {"bytes": total, "human": human_size(total), "parts": parts}
+
+
+def trash_old_browser(workspace: UserWorkspace) -> dict[str, Any]:
+    """Edge 를 쓰는 PC 에서 예전에 받은 LMS 로그인 브라우저(헤드리스 셸)를 휴지통으로 보낸다.
+
+    지우지 않는다 — 사용자가 휴지통에서 되살릴 수 있다. Edge 가 나중에 실패하면 launch_lms_browser 가 다시 받는다.
+    개발용 chromium-* 는 shell_dirs 에 들지 않아 건드리지 않는다.
+    """
+    import browser_setup
+
+    if not browser_setup.shell_unused():
+        return {"ok": False, "message": "이 컴퓨터는 이 브라우저로 LMS에 로그인해요. 정리하지 않을게요."}
+    with task_lock:
+        busy = any(
+            task_states.get(task_key(workspace.user_id, kind), {}).get("running")
+            for kind in ("sync", "deadlines", "verify")
+        )
+    if busy:
+        return {"ok": False, "message": "LMS 확인이 끝난 뒤에 다시 해 주세요."}
+    dirs = browser_setup.shell_dirs()
+    if not dirs:
+        return {"ok": True, "message": "정리할 브라우저가 없어요."}
+    moved_bytes, failed = 0, 0
+    for d in dirs:
+        size = _cached_dir_size(f"browser:{d.name}", d)
+        if browser_setup.recycle(d):
+            moved_bytes += size
+        else:
+            failed += 1
+        _FOOTPRINT_CACHE.pop(f"browser:{d.name}", None)
+    if failed:
+        return {"ok": False, "message": "쓰는 중이라 옮기지 못했어요. 잠시 뒤 다시 해 주세요."}
+    return {"ok": True, "message": f"휴지통으로 옮겼어요 ({human_size(moved_bytes)})"}
 
 
 def cloud_save_footprint(config: dict[str, Any]) -> dict[str, Any]:
@@ -3152,6 +3184,15 @@ def mark_whats_new_seen(workspace: UserWorkspace, version: str) -> dict[str, Any
         updater.update_marker_path().unlink(missing_ok=True)  # '업데이트를 마쳤어요' 는 한 번만
     except OSError:
         pass
+
+    def as_tuple(value: Any) -> tuple[int, ...]:
+        return tuple(int(n) if n.isdigit() else 0 for n in str(value or "").split("."))
+
+    # 판이 다른 Daling 둘(설치판·Store 판)이 이 파일을 함께 쓴다. 더 새 판을 본 기록을 옛 판이 낮춰 쓰지 않게
+    old = read_json(workspace.root / "whats_new.json", {})
+    old_seen = old.get("seen") if isinstance(old, dict) else None
+    if old_seen and as_tuple(old_seen) > as_tuple(version):
+        return {"ok": True, "seen": str(old_seen)[:20]}
     atomic_write_text((workspace.root / "whats_new.json"), 
         json.dumps({"seen": str(version)[:20], "at": now_iso()}, ensure_ascii=False), encoding="utf-8"
     )
@@ -3202,17 +3243,20 @@ def get_academic_calendar(workspace: UserWorkspace, year: int | None = None, ref
             payload["semester"] = {}
         return payload
 
-    if entry and fresh_enough:
+    # 체험 중에는 학교 서버에 묻지 않는다: 있는 것(씨앗을 복사해 둔 캐시)을 그대로 쓴다
+    if entry and (fresh_enough or demo_mode.active()):
         return with_semester(
             {"ok": True, "year": year, "cached": True, **{k: v for k, v in entry.items() if k != "fetchedAt"}}
         )
 
     # 캐시가 없는 첫 실행이면 미리 넣어 둔 것으로 바로 화면을 채운다.
     # 새로 받는 건 예약 새로고침에 맡기고 여기서 기다리게 하지 않는다.
-    if not entry and not refresh:
+    if not entry and (not refresh or demo_mode.active()):
         seeded = (read_seed("seed_academic_calendar.json").get("years") or {}).get(str(year))
         if seeded and seeded.get("events"):
             return with_semester({**seeded, "ok": True, "seeded": True})
+    if demo_mode.active():
+        return {"ok": False, "year": year, "events": [], "message": demo_mode.BLOCK_MESSAGE}
 
     result = academic_calendar.fetch_academic_calendar(year)
     if not result.get("ok"):
@@ -3244,6 +3288,10 @@ def get_shuttle(workspace: UserWorkspace, refresh: bool = False) -> dict[str, An
     import shuttle
 
     cache = read_json(workspace.shuttle_path, {}) or {}
+    if demo_mode.active():
+        # 체험 중: 만들어 둔 예시 시간표만 (학교 홈페이지에 묻지 않는다)
+        return {"cached": True, **cache} if isinstance(cache, dict) and cache.get("routes") else {
+            "ok": False, "routes": [], "message": demo_mode.BLOCK_MESSAGE}
     if not refresh and isinstance(cache, dict) and cache.get("routes"):
         try:
             fetched = datetime.fromisoformat(cache.get("fetchedAt", ""))
@@ -3542,7 +3590,7 @@ def get_course_catalog(
         except ValueError:
             pass
 
-    if not entry and not refresh:
+    if not entry and (not refresh or demo_mode.active()):
         # 'auto' 로 들어오면 씨앗은 실제 학기 코드로 저장돼 있으니 그쪽으로 맞춰 찾는다
         term = year_term or timetable_import.current_term_value()
         seeded = (read_seed("seed_course_catalog.json").get("terms") or {}).get(
@@ -3550,6 +3598,9 @@ def get_course_catalog(
         )
         if seeded and seeded.get("courses"):
             return {**seeded, "seeded": True}
+    if demo_mode.active():
+        # 체험 중: 앱에 들어 있는 씨앗(공개 개설강좌)만 보여 주고 학교 서버에는 묻지 않는다
+        return {"ok": False, "courses": [], "message": demo_mode.BLOCK_MESSAGE}
 
     result = timetable_import.fetch_dgist_catalog(
         year_term=year_term, undergraduate=undergraduate
@@ -3604,6 +3655,9 @@ def get_notices(workspace: UserWorkspace, refresh: bool = False) -> dict[str, An
     import notice_board
 
     cache = read_json(workspace.notices_path, {}) or {}
+    if demo_mode.active():
+        items = cache.get("items", []) if isinstance(cache, dict) else []
+        return {"ok": True, "cached": True, "items": items, "count": len(items)}
     if not refresh and isinstance(cache, dict) and cache.get("items"):
         try:
             fetched = datetime.fromisoformat(cache.get("fetchedAt", ""))
@@ -3844,6 +3898,8 @@ def get_status(workspace: UserWorkspace, base_url: str | None = None) -> dict[st
             "running": running,
             "kind": task_kind,
         },
+        # 체험 모드: 공유 웹사이트 모드에서는 쓰지 않는다(사용자마다 폴더가 따로라 바꿔 끼울 수 없다)
+        "demo": {**demo_mode.status(), "available": not MULTI_USER_MODE},
     }
 
 
@@ -4048,6 +4104,9 @@ TASK_NAMES = {"sync": "자료 동기화를", "verify": "설정 점검을", "dead
 
 
 def start_task(workspace: UserWorkspace, kind: str, sync_mode: str = "fast", auto: bool = False) -> tuple[bool, str]:
+    if demo_mode.active():
+        # 체험 중: LMS·메일 서버에 가짜 계정으로 로그인하러 가지 않는다 (자동 실행도 여기서 멈춘다)
+        return False, demo_mode.BLOCK_MESSAGE
     with task_lock:
         task_state = task_states.setdefault(task_key(workspace.user_id, kind), default_task_state())
         if task_state["running"]:
@@ -4243,14 +4302,18 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         return workspace
 
     def read_body_json(self) -> dict[str, Any]:
+        # 본문은 한 번만 읽을 수 있다. 체험 모드 문지기(_demo_post)가 먼저 읽어도 원래 처리가 같은 값을 받게 담아 둔다.
+        if hasattr(self, "_body_json"):
+            return self._body_json
         length = int(self.headers.get("Content-Length", "0"))
-        if length == 0:
-            return {}
-        raw = self.rfile.read(length).decode("utf-8")
-        try:
-            return json.loads(raw)
-        except json.JSONDecodeError:
-            return {}
+        body: Any = {}
+        if length:
+            try:
+                body = json.loads(self.rfile.read(length).decode("utf-8"))
+            except json.JSONDecodeError:
+                body = {}
+        self._body_json = body
+        return body
 
     def _accepts_gzip(self) -> bool:
         return "gzip" in (self.headers.get("Accept-Encoding") or "").lower()
@@ -4295,6 +4358,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         설치형(창 없는 EXE)에서는 오류가 어디에도 안 찍히고 연결만 끊겨서,
         메일 보내기가 '아무 반응 없이' 실패해도 이유를 알 수 없었다.
         """
+        self.__dict__.pop("_body_json", None)  # read_body_json 이 담아 둔 본문은 요청마다 새로 (연결을 이어 쓸 때)
         try:
             handler()
         except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
@@ -4303,7 +4367,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             import traceback
 
             try:
-                log = AUTOSAVER_ROOT / "server_errors.log"
+                log = (demo_mode.root() or AUTOSAVER_ROOT) / "server_errors.log"
                 with open(log, "a", encoding="utf-8") as fh:
                     fh.write(f"\n=== {datetime.now().isoformat(timespec='seconds')} {self.command} {self.path}\n")
                     fh.write(traceback.format_exc())
@@ -4369,6 +4433,11 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                     str(exc),
                     success=False,
                 )
+            return
+        if route == "/api/demo":
+            self.send_json({**demo_mode.status(), "available": not MULTI_USER_MODE})
+            return
+        if demo_mode.active() and self._demo_get(route):
             return
         if route == "/api/status":
             self.send_json(get_status(workspace, base_url))
@@ -4471,6 +4540,12 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             return
         if route == "/api/window":
             self.send_json(_window_chrome_call(None))
+            return
+        if route == "/api/ai/status":
+            import ai_cli
+
+            self.send_json({"ok": True, "available": ai_cli.available(), "models": ai_cli.models(),
+                            "profile": ai_cli.load_profile(workspace.root / "ai_profile.json")})
             return
         if route == "/api/course-announcements":
             self.send_json(get_course_announcements(workspace))
@@ -4632,7 +4707,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 version = "?"
             last_error = ""
             try:
-                log = AUTOSAVER_ROOT / "server_errors.log"
+                log = (demo_mode.root() or AUTOSAVER_ROOT) / "server_errors.log"
                 if log.exists():
                     text = log.read_text(encoding="utf-8", errors="replace")
                     entry = text.strip().split("\n=== ")[-1]
@@ -4740,6 +4815,8 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body)
             return
+        if route in ("/", "/index.html") and demo_mode.active() and self.send_demo_index():
+            return
         # 화면 파일은 압축해서 준다 (app.js 316KB, styles.css 203KB → 1/4 정도)
         static_types = {
             ".js": "text/javascript; charset=utf-8",
@@ -4753,6 +4830,113 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             if self.send_static_gz(target, static_types[target.suffix.lower()]):
                 return
         super().do_GET()
+
+    # ===== 체험 모드 (demo_mode) =====
+    # 화면 서버가 바깥 서버에 묻는 라우트를 체험 중에는 여기서 먼저 받는다. 소켓 차단(demo_mode)은 빠뜨린 곳을 위한 안전망.
+    DEMO_BLOCKED_GET = {
+        "/api/mail/eml", "/api/mail-image", "/api/drive/list", "/api/drive/get",
+        "/api/place-search", "/api/fglp", "/api/seminars",
+    }
+    DEMO_BLOCKED_POST = {
+        "/api/config", "/api/config/import", "/api/run", "/api/verify", "/api/refresh-deadlines", "/api/refresh-emails",
+        "/api/update/apply", "/api/update/open-download", "/api/send-email", "/api/mail/save-draft",
+        "/api/mail/move", "/api/mail/folder-create", "/api/mail/translate", "/api/timetable/import-image",
+        "/api/timetable/import-link", "/api/samsung-notes/send", "/api/samsung-notes/organize", "/api/organize-files",
+        "/api/assignment/open", "/api/storage/cleanup", "/api/storage/trash-browser", "/api/google/credentials", "/api/google/connect",
+        "/api/google/disconnect", "/api/gcal/sync-academic", "/api/gcal/sync", "/api/local-autosave/run",
+        # 내 컴퓨터(문서·다운로드 폴더)에 가짜 자료를 쓰지 않는다
+        "/api/save-local", "/api/export-ics",
+        # AI CLI 는 바깥 서비스에 묻는다
+        "/api/ai/search", "/api/ai/draft",
+    }
+    DEMO_MAIL_POST = {
+        "/api/mark-read": "mark-read", "/api/mark-all-read": "mark-all-read", "/api/delete-email": "delete",
+        "/api/restore-email": "restore", "/api/mail/star": "star",
+    }
+
+    def _demo_get(self, route: str) -> bool:
+        if route == "/api/mail/folders":
+            self.send_json({"ok": True, "folders": [
+                {"raw": "INBOX", "name": "INBOX", "key": "inbox"}, {"raw": "Sent", "name": "Sent", "key": "sent"},
+                {"raw": "Drafts", "name": "Drafts", "key": "draft"}, {"raw": "Trash", "name": "Trash", "key": "trash"},
+            ]})
+            return True
+        if route == "/api/dgist-api/status":
+            self.send_json({"ok": True, "hasKey": False, "demo": True, "message": demo_mode.BLOCK_MESSAGE})
+            return True
+        if route == "/api/update/check":
+            import updater
+
+            self.send_json({"ok": False, "current": updater.local_version(), "message": "체험 중에는 업데이트를 확인하지 않아요"})
+            return True
+        if route in self.DEMO_BLOCKED_GET:
+            self.send_json({"ok": False, "demo": True, "message": demo_mode.BLOCK_MESSAGE}, HTTPStatus.CONFLICT)
+            return True
+        return False
+
+    def _demo_post(self, route: str, workspace: UserWorkspace) -> bool:
+        """체험 중 POST. 바깥 서버가 필요하면 막고, 메일 읽음·별표·휴지통은 체험 폴더의 emails.json 만 고친다."""
+        if route in self.DEMO_BLOCKED_POST or (
+            route == "/api/files/bulk" and str(self.read_body_json().get("action", "")) != "hide"
+        ):
+            self.send_json({"ok": False, "demo": True, "message": demo_mode.BLOCK_MESSAGE}, HTTPStatus.CONFLICT)
+            return True
+        if route == "/api/mail/discard-draft":
+            self.send_json({"ok": True, "dropped": 0})
+            return True
+        action = self.DEMO_MAIL_POST.get(route)
+        if action:
+            payload = self.read_body_json()
+            result = demo_mode.patch_mail(
+                workspace.emails_log, action, payload.get("uid"), str(payload.get("folder", "inbox")),
+                seen=payload.get("seen", True), starred=payload.get("starred", True),
+                permanent=payload.get("permanent"),
+            )
+            self.send_json(result, HTTPStatus.OK if result.get("ok") else HTTPStatus.BAD_REQUEST)
+            return True
+        return False
+
+    def toggle_demo(self) -> None:
+        """POST /api/demo {on, lang}: 체험 모드를 켜고 끈다. 화면은 답을 받은 뒤 새로 고친다."""
+        payload = self.read_body_json()
+        if MULTI_USER_MODE:
+            self.send_json({"ok": False, "message": "공유 웹사이트 모드에서는 쓸 수 없습니다."}, HTTPStatus.BAD_REQUEST)
+            return
+        turn_on = bool(payload.get("on"))
+        if turn_on and not demo_mode.active():
+            with task_lock:
+                busy = any(t.get("running") for t in task_states.values())
+            if busy:
+                # 돌던 작업(진짜 계정)의 기록이 체험 화면에 섞이지 않게
+                self.send_json({"ok": False, "message": "가져오는 중이에요. 끝나면 다시 눌러 주세요."}, HTTPStatus.CONFLICT)
+                return
+            lang = "en" if str(payload.get("lang", "")) == "en" else "ko"
+            demo_mode.enable(AUTOSAVER_ROOT, lang, read_seed("seed_academic_calendar.json").get("years") or {})
+        elif not turn_on and demo_mode.active():
+            demo_mode.disable(AUTOSAVER_ROOT)
+        # 경로가 바뀌었으니 화면 서버가 들고 있던 목록을 버린다
+        for cache in (_files_cache, _emails_cache, _directory_cache, _people_cache):
+            cache.clear()
+        self.send_json({"ok": True, **demo_mode.status()})
+
+    def send_demo_index(self) -> bool:
+        """체험 중 첫 화면: <html data-demo> 를 달고(처음 그릴 때부터 체험 띠를 보이게) 바깥 글꼴을 빼서 준다."""
+        try:
+            text = (WEB_ROOT / "index.html").read_text(encoding="utf-8")
+        except OSError:
+            return False
+        text = text.replace("<html ", '<html data-demo="1" ', 1)
+        text = re.sub(r'\s*<link[^>]*id="webFonts"[^>]*>', "", text, count=1)
+        body = text.encode("utf-8")
+        self.send_response(HTTPStatus.OK)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        if self._accepts_gzip():
+            body = gzip.compress(body, compresslevel=6)
+            self.send_header("Content-Encoding", "gzip")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+        return True
 
     def serve_mail_image(self, workspace: UserWorkspace, mail_id: str, index_raw: str) -> None:
         """메일 본문 안의 그림 한 장. 받아 둔 것이 없으면 그때 받아 온다."""
@@ -4857,6 +5041,11 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         workspace = self.get_workspace()
         base_url = self.request_base_url()
         route = urlparse(self.path).path
+        if route == "/api/demo":
+            self.toggle_demo()
+            return
+        if demo_mode.active() and self._demo_post(route, workspace):
+            return
         if route == "/api/config":
             payload = self.read_body_json()
             values = write_config(workspace, payload)
@@ -4906,6 +5095,15 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         if route == "/api/update/apply":
             if MULTI_USER_MODE:
                 self.send_json({"ok": False, "message": "공유 웹사이트 모드에서는 쓸 수 없습니다."}, HTTPStatus.BAD_REQUEST)
+                return
+            with task_lock:
+                busy = any(t.get("running") for t in task_states.values())
+            with notes_job_lock:
+                busy = busy or bool(notes_job.get("running"))
+            if busy:
+                # 설치하려면 앱이 꺼져야 하는데, 그러면 돌던 동기화·Drive 올리기·삼성 노트 가져오기가 중간에 끊긴다
+                # (맥 install.sh 는 남은 작업 프로세스를 pkill, Windows 설치 프로그램은 쓰이는 파일의 프로세스를 닫는다)
+                self.send_json({"ok": False, "message": "가져오는 중이에요. 끝나면 다시 눌러 주세요."}, HTTPStatus.CONFLICT)
                 return
             try:
                 import updater
@@ -5130,7 +5328,18 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 text = found.get("body") or found.get("snippet") or ""
                 if not text.strip() and found.get("bodyHtml"):
                     text = email_reader.clean_html_to_text(found["bodyHtml"], 4000)
-                result = translator.translate(text)
+                # 2026-10-15: 설정에서 고른 AI CLI(Claude·Gemini·Codex)를 먼저 쓴다. 없거나 실패하면 예전 길로.
+                import ai_cli
+
+                profile = ai_cli.load_profile(workspace.root / "ai_profile.json")
+                try:
+                    if not ai_cli.pick(profile.get("provider") or None):
+                        raise ai_cli.AIError("no cli")
+                    res = ai_cli.translate(text, str(payload.get("target") or "ko"), profile.get("provider") or None,
+                                           model=profile.get("model") or "")
+                    result = {"text": res["text"], "engine": res.get("modelLabel") or ai_cli.LABELS[res["provider"]]}
+                except ai_cli.AIError:
+                    result = translator.translate(text)
                 self.send_json({"ok": True, **result})
             except Exception as exc:
                 self.send_json({"ok": False, "message": str(exc)}, HTTPStatus.BAD_REQUEST)
@@ -5386,6 +5595,13 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             except Exception as exc:
                 self.send_json({"ok": False, "message": str(exc)}, HTTPStatus.BAD_REQUEST)
             return
+        if route == "/api/storage/trash-browser":
+            try:
+                result = trash_old_browser(workspace)
+                self.send_json(result, HTTPStatus.OK if result.get("ok") else HTTPStatus.CONFLICT)
+            except Exception as exc:
+                self.send_json({"ok": False, "message": str(exc)}, HTTPStatus.BAD_REQUEST)
+            return
         if route == "/api/google/credentials":
             # 다른 컴퓨터에서도 구글 로그인을 할 수 있게, credentials.json 을
             # 앱 화면에서 직접 넣는다. 이 파일은 배포판에 넣지 않는다.
@@ -5527,6 +5743,32 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             return
         if route == "/api/tutorial/done":
             self.send_json(mark_tutorial_done(workspace, self.read_body_json()))
+            return
+        if route in ("/api/ai/profile", "/api/ai/search", "/api/ai/draft"):
+            # AI CLI 도우미 (ai_cli.py). 답이 10초쯤 걸리지만 서버가 요청마다 스레드를 써서 화면은 멈추지 않는다.
+            import ai_cli
+
+            profile_path = workspace.root / "ai_profile.json"
+            try:
+                payload = self.read_body_json() or {}
+                if route == "/api/ai/profile":
+                    self.send_json({"ok": True, "profile": ai_cli.save_profile(profile_path, payload)})
+                    return
+                profile = ai_cli.load_profile(profile_path)
+                provider = profile.get("provider") or None
+                model = profile.get("model") or ""
+                if route == "/api/ai/search":
+                    index = payload.get("index") if isinstance(payload.get("index"), list) else []
+                    res = ai_cli.search(str(payload.get("query") or ""), index, provider, model=model)
+                else:
+                    context = payload.get("context") if isinstance(payload.get("context"), dict) else {}
+                    res = ai_cli.draft(str(payload.get("request") or ""), profile, context, provider, model=model)
+                res["engine"] = res.get("modelLabel") or ai_cli.LABELS.get(res.get("provider"), "")
+                self.send_json(res)
+            except ai_cli.AIError as exc:
+                self.send_json({"ok": False, "message": str(exc)}, HTTPStatus.BAD_REQUEST)
+            except Exception as exc:
+                self.send_json({"ok": False, "message": str(exc)}, HTTPStatus.BAD_REQUEST)
             return
         if route == "/api/window":
             # 앱 상단 바의 최소화·최대화·닫기 단추

@@ -440,6 +440,10 @@ def scheduler_loop() -> None:
     # 켜자마자 LMS 를 두드리지 않도록 2분만 숨을 고른다
     started_at = time.monotonic()
     while True:
+        if web_ui.demo_mode.active():
+            # 체험 모드 중에는 자동 가져오기·알림을 쉰다 (바깥 서버에 묻지 않고, 진짜 마감 알림이 가짜 화면과 섞이지 않게)
+            time.sleep(30)
+            continue
         try:
             config = web_ui.read_config(workspace)
             schedule_time = str(config.get("SCHEDULE_TIME", "08:00")).strip() or "08:00"

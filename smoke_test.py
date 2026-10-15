@@ -12,6 +12,7 @@
 하는 일 (네트워크·LMS·메일·키체인 실제 항목은 건드리지 않는다)
     - 데이터 폴더를 빈 임시 폴더로 바꾼다 (prepare_env, app.py 가 web_ui 를 불러오기 전에 부른다)
     - 화면 서버를 빈 포트(0)에 띄워 /healthz, /, /app.js, 가벼운 /api 몇 개를 GET
+    - 체험 모드(Store 심사용 가짜 데이터)를 켜면 데이터가 차고 바깥 연결이 막히며, 끄면 체험 폴더가 지워지는지
     - 작업 프로세스(`--autosaver-job smoke`)가 창 없이 뜨고 출력·데이터 경로가 이어지는지
     - Playwright 드라이버(node)가 실행되는지, 맥이면 AppKit·WebKit·인증서 묶음
     - Windows Store 판(MSIX)이면 업데이트를 Store 에 맡기는지, 작업 프로세스가 같은 패키지 안에서 도는지
@@ -181,9 +182,50 @@ def run(app) -> int:
                 raise RuntimeError(f"HTTP {status}, {len(body)}바이트")
             return f"{len(body)}바이트"
 
+        def demo_mode_check():
+            # 체험 모드(Store 심사용): 켜면 가짜 데이터가 차고, 바깥 연결이 막히고, 끄면 폴더가 지워진다.
+            # 바깥 연결 확인은 막혔을 때만 부른다(점검은 네트워크를 쓰지 않는다).
+            import socket
+            import urllib.request
+
+            import demo_mode
+
+            def post(on: bool) -> dict:
+                req = urllib.request.Request(base + "/api/demo", data=json.dumps({"on": on}).encode(),
+                                             headers={"Content-Type": "application/json"}, method="POST")
+                with urllib.request.urlopen(req, timeout=20) as resp:
+                    return json.loads(resp.read().decode("utf-8"))
+
+            post(True)
+            try:
+                folder = demo_mode.root()
+                if not demo_mode.active() or folder is None or not (folder / demo_mode.MARKER).exists():
+                    raise RuntimeError("체험 폴더가 안 생김")
+                files = len(_json(base, "/api/files").get("files", []))
+                mails = len(_json(base, "/api/emails").get("emails", []))
+                if files < 10 or mails < 10:
+                    raise RuntimeError(f"가짜 데이터가 덜 참: 자료 {files}, 메일 {mails}")
+                _status, body, _ = _get(base, "/")
+                if b'data-demo="1"' not in body or b"webFonts" in body:
+                    raise RuntimeError("첫 화면에 체험 표시가 없거나 바깥 글꼴이 남음")
+                try:
+                    socket.getaddrinfo("lms.dgist.ac.kr", 443)
+                    raise RuntimeError("체험 중인데 바깥 이름 찾기가 됨")
+                except socket.gaierror:
+                    pass
+                ok, _msg = web_ui.start_task(web_ui.workspace_for_user("local"), "sync")
+                if ok:
+                    raise RuntimeError("체험 중인데 동기화가 시작됨")
+            finally:
+                post(False)
+            if demo_mode.active() or folder.exists():
+                raise RuntimeError("끈 뒤에도 체험 폴더가 남음")
+            return f"자료 {files} · 메일 {mails} · 바깥 연결 막힘 · 끄면 지워짐"
+
         check("GET /healthz", healthz)
         check("GET /", index)
         check("GET /app.js", app_js)
+        check("체험 모드", demo_mode_check)
         # 네트워크 없이 파일만 읽는 것들 (설정·업데이트 내용·소개·화면 설정)
         for route in ("/api/config", "/api/whats-new", "/api/tutorial", "/api/ui-prefs", "/api/task"):
             check(f"GET {route}", lambda route=route: f"{len(_json(base, route))}개 항목")
@@ -259,8 +301,8 @@ def run(app) -> int:
             proc = subprocess.run([str(node), "--version"], capture_output=True, text=True, timeout=60)
             if proc.returncode != 0:
                 raise RuntimeError(f"node 실행 실패 {proc.returncode}: {proc.stderr.strip()[-300:]}")
-            return f"node {proc.stdout.strip()} · 브라우저 {'있음' if browser_setup.browser_ready() else '없음(처음 쓸 때 받음)'}"
-        return f"{command[:2]} · 브라우저 {'있음' if browser_setup.browser_ready() else '없음'}"
+            return f"node {proc.stdout.strip()} · 브라우저 {browser_setup.browser_label()}"
+        return f"{command[:2]} · 브라우저 {browser_setup.browser_label()}"
 
     check("Playwright 드라이버", playwright_driver)
 
