@@ -9,7 +9,8 @@
     키체인 항목마다 접근 허락(ACL)이 따로 있다. ad-hoc 서명이면 새 버전을 깔 때마다 서명 해시가
     바뀌어 macOS 가 '키체인 접근 허용?' 을 다시 묻는다. 사설 인증서로 서명해도 마찬가지다: '믿는 앱' 은
     인증서 DR 로 묶이지만 항목의 partition_id 가 'cdhash:<만든 빌드>' 라서 (2026-10-15 CI 실측, persist_test).
-    애플 팀 ID 가 있는 서명이어야 'teamid:' 로 묶여 안 묻는다. 비밀 값 다섯 개를 항목
+    만들 때 접근 목록을 넘겨도 partition 은 붙고, 고치려면 키체인 암호가 필요했다 (mac_keychain_lab, FEATURES.md
+    'macOS 판'). 애플 팀 ID 가 있는 서명이어야 'teamid:' 로 묶여 안 묻는다. 비밀 값 다섯 개를 항목
     다섯 개로 두면 업데이트할 때마다 다섯 번 묻는다. 그래서 서비스 "Daling" · 계정 "settings"
     항목 하나에 {키: 값} JSON 을 넣는다 (묻는 것은 한 번).
 
@@ -276,8 +277,5 @@ def persist_test(phase: str, account: str = "smoke-persist") -> str:
         raise RuntimeError("점검 항목이 없습니다 (write 단계가 안 돌았거나 다른 키체인에 썼습니다)")
     if not str(json.loads(raw or "{}").get("SMOKE", "")).startswith("persist-"):
         raise RuntimeError("점검 항목 내용이 다릅니다")
-    try:
-        _delete_item(account)
-    except KeychainError:
-        pass  # 지우기 허락은 따로일 수 있다. CI 는 임시 키체인째 지운다
+    # 지우지 않는다: '키체인 실험' 은 3판이 이어서 읽는다. CI 는 임시 키체인째 지운다
     return "다음 빌드가 묻지 않고 읽음"

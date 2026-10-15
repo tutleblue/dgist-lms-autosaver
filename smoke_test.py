@@ -21,6 +21,7 @@
       (CI 는 맥은 임시 키체인, 리눅스는 dbus-run-session 안의 gnome-keyring 에서)
     - 맥에서 AUTOSAVER_SMOKE_KEYCHAIN=write / read 면 그것만: 이 빌드가 남긴 항목을 '다음 빌드' 가 묻지 않고 읽는지
       (mac.yml 이 같은 자리에 같은 인증서로 다시 서명한 앱을 놓고 read 로 부른다, mac_keychain.persist_test)
+      write 에 AUTOSAVER_SMOKE_KEYCHAIN_METHOD, droppart·addpart(+ …_PARTITION)·delete·readui 는 mac.yml '키체인 실험' 용 (mac_keychain_lab)
 """
 from __future__ import annotations
 
@@ -86,12 +87,24 @@ def run(app) -> int:
         print(f"[{'OK' if ok else 'FAIL'}] {name} ({took * 1000:.0f}ms) {detail}", flush=True)
 
     phase = os.environ.get("AUTOSAVER_SMOKE_KEYCHAIN", "")
-    if sys.platform == "darwin" and phase in ("write", "read"):
-        # 키체인 허락이 다음 빌드로 이어지는지만 본다 (mac.yml '키체인 허락 유지 점검'). 다른 점검은 건너뜀
-        def keychain_persist():
-            import mac_keychain
+    if sys.platform == "darwin" and phase in ("write", "read", "droppart", "addpart", "delete", "readui"):
+        # 키체인 허락이 다음 빌드로 이어지는지만 본다 (mac.yml '키체인 허락 유지 점검'·'키체인 실험'). 다른 점검은 건너뜀
+        method = os.environ.get("AUTOSAVER_SMOKE_KEYCHAIN_METHOD", "default")
 
-            return mac_keychain.persist_test(phase)
+        def keychain_persist():
+            if phase == "read" or (phase == "write" and method == "default"):
+                import mac_keychain
+
+                return mac_keychain.persist_test(phase)
+            import mac_keychain_lab
+
+            if phase == "write":
+                return mac_keychain_lab.write(method)
+            if phase == "delete":
+                return mac_keychain_lab.delete()
+            if phase == "readui":
+                return mac_keychain_lab.read_ui()
+            return mac_keychain_lab.edit_partitions(phase, os.environ.get("AUTOSAVER_SMOKE_KEYCHAIN_PARTITION", ""))
 
         check(f"키체인 허락 유지 ({phase})", keychain_persist)
         ok = results[-1][0]

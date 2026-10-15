@@ -8,7 +8,7 @@
 #  - 서명: 오래 쓰는 사설 코드 서명 인증서 하나로 한다(packaging/mac/make_sign_cert.sh 로 한 번 만듦). 서명 요구
 #    조건(DR)이 인증서에 묶여 새 판도 같은 조건을 만족한다 → DR 로 비교하는 개인정보 보호 권한(TCC)은 이어진다.
 #    키체인은 아니다: 항목의 partition_id 가 'cdhash:<만든 빌드>' 라 업데이트 뒤 한 번 다시 묻는다(2026-10-15 실측,
-#    '키체인 허락 유지 점검'). 비밀이 없으면 예전처럼 ad-hoc(DR 이 cdhash 라 빌드마다 바뀜).
+#    '키체인 허락 유지 점검'). 피할 길도 없었다('키체인 실험', FEATURES.md 'macOS 판'). 비밀이 없으면 예전처럼 ad-hoc.
 #    공증(notarization)은 유료 Apple Developer 계정이 있어야 해서 하지 않는다 → 브라우저로 받은 DMG 는 처음 한 번
 #    '시스템 설정 → 개인정보 보호 및 보안 → 그래도 열기'. 한 줄 설치(docs/install.sh)는 격리 표시가 없어 이 창이 없다.
 #
@@ -28,6 +28,14 @@ on:
         description: "서명 비밀이 없을 때, 이번 실행에서만 쓰고 버릴 인증서로 서명 길을 점검"
         type: boolean
         default: false
+      keychain_lab:
+        description: "키체인 실험: 다음 빌드가 묻지 않고 읽게 할 길을 여러 방법으로 잰다 (서명 인증서가 있어야 함, 몇 분 더 걸림)"
+        type: boolean
+        default: false
+      keychain_lab_cases:
+        description: "키체인 실험에서 돌릴 경우 (빈칸이면 모두. 예: ownerprev ownerself nextdel)"
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -388,6 +396,175 @@ jobs:
           elif [ -n "$CERT" ]; then
             echo "::notice::사설 인증서 다음 빌드도 키체인을 다시 묻습니다 ($(verdict "$CERT")): 항목 partition_id 가 cdhash 라서. 알려진 결과(2026-10-15)"
           fi
+          exit 0
+
+      - name: 키체인 실험 (keychain_lab)
+        # 위 점검이 '사설 인증서로도 다음 빌드는 못 읽는다(partition_id = cdhash)' 고 잰 뒤, 피할 길이 있는지 잰다.
+        # 만드는 방법·고치기(mac_keychain_lab.py 머리말)를 바꿔 가며 1판이 만들고 → 2판 → 3판(판 번호만 바꿔 같은
+        # 인증서로 다시 서명, 업데이트처럼 .Daling.app.new 에 놓고 바꿔 끼움)이 묻는 창 없이 읽는지 본다.
+        # 3판까지 보는 까닭: 2판이 읽으며 제 partition 을 붙이는 식이면 3판에서 다시 막힌다.
+        # 결과는 단계 요약 표, 접근 목록(dump-keychain -a, 비밀 값 없음)은 logs/keychain-lab.log.
+        # 1차(실행 38684779540): 접근 목록 고치기는 SecKeychainSetUserInteractionAllowed(false) 를 무시하고 창을 띄워
+        # 멈추기도 했고, 그 창이 떠 있는 동안 뒤의 codesign 까지 멈춰 25분을 넘겼다. 그래서 멈추면 화면을 찍고
+        # SecurityAgent 를 꺼 창을 치우며, 멈출 수 있는 경우는 뒤로 뺐다. keychain_lab_cases 로 몇 경우만 돌릴 수 있다.
+        if: inputs.keychain_lab && steps.cert.outputs.identity != '-'
+        continue-on-error: true
+        timeout-minutes: 25
+        env:
+          IDENTITY: ${{ steps.cert.outputs.identity }}
+          SIGN_KC: ${{ steps.cert.outputs.keychain }}
+          CASES: ${{ inputs.keychain_lab_cases }}
+        run: |
+          set +e
+          mkdir -p logs
+          LOG="$PWD/logs/keychain-lab.log"
+          DUMP="$RUNNER_TEMP/kc-lab-dump.txt"
+          : > "$LOG"
+          OLD_DEFAULT="$(security default-keychain -d user | tr -d '" ')"
+          SEARCH="$(security list-keychains -d user | tr -d '"')"
+          limited() {  # $1 초 안에 안 끝나면 (SHOT 이 있으면 화면을 찍고) 죽이고 124. 출력은 $OUT(기본 $LOG)에 붙인다
+            local limit=$1 pid out="${OUT:-$LOG}"
+            shift
+            "$@" >> "$out" 2>&1 &
+            pid=$!
+            for _ in $(seq 1 "$limit"); do
+              kill -0 "$pid" 2>/dev/null || { wait "$pid"; return $?; }
+              sleep 1
+            done
+            [ -n "$SHOT" ] && screencapture -x "$SHOT" 2>/dev/null
+            kill -KILL "$pid" 2>/dev/null
+            wait "$pid" 2>/dev/null
+            echo "(${limit}초 넘게 멈춰 죽임${SHOT:+, 화면 ${SHOT##*/}})" >> "$LOG"
+            return 124
+          }
+          unstick() {  # 멈춘 프로세스를 죽여도 묻는 창은 남아 뒤의 키체인·codesign 을 붙잡는다 (1차 실측)
+            pkill -x SecurityAgent 2>/dev/null || sudo pkill -x SecurityAgent 2>/dev/null
+            echo "(SecurityAgent 를 꺼 묻는 창을 치움, pkill=$?)" >> "$LOG"
+            sleep 2
+          }
+          cdhash() { codesign -dvvv "$1" 2>&1 | sed -n 's/^CDHash=//p'; }
+          run_app() {  # $1 앱, $2 단계(write|read|droppart|addpart|delete), $3 만드는 방법, $4 더할 partition
+            local rc
+            echo "-- $2${3:+ ($3)}${4:+ $4}" >> "$LOG"
+            SHOT="$PWD/logs/keychain-lab-$CASE-$GEN-$2.png" limited 60 env AUTOSAVER_SMOKE_KEYCHAIN="$2" \
+              AUTOSAVER_SMOKE_KEYCHAIN_METHOD="${3:-default}" AUTOSAVER_SMOKE_KEYCHAIN_PARTITION="$4" \
+              "$1/Contents/MacOS/Daling" --autosaver-smoke
+            rc=$?
+            [ "$rc" = 124 ] && unstick
+            return "$rc"
+          }
+          acl() {  # $1 키체인, $2 언제 → 로그에 접근 목록, PARTS 에 partition_id 항목 설명 (비밀 값은 안 찍는다: -d 없음)
+            : > "$DUMP"
+            echo "-- 접근 목록 ($2)" >> "$LOG"
+            if ! OUT="$DUMP" limited 30 security dump-keychain -a "$1"; then
+              PARTS="(접근 목록 못 읽음)"
+              return
+            fi
+            sed -n '/^access:/,$p' "$DUMP" >> "$LOG"
+            PARTS="$(awk '/: partition_id$/{f=1; next} f && /description:/{sub(/^ *description: */, ""); printf "%s%s", (n++ ? " / " : ""), $0; f=0}' "$DUMP")"
+            PARTS="${PARTS:-없음}"
+          }
+          verdict() {
+            case $1 in
+              0) echo "묻지 않고 읽음" ;; 1) echo "못 읽음" ;; 124) echo "멈춤" ;; *) echo "오류($1)" ;;
+            esac
+          }
+          did() {
+            case $1 in
+              0) echo "됨" ;; 1) echo "안 됨" ;; 124) echo "멈춤(창)" ;; *) echo "오류($1)" ;;
+            esac
+          }
+          RESULTS=()
+          # $1 이름, $2 만드는 방법, $3 만든 뒤(none|droppart), $4 업데이트 때
+          #   none | prev: 옛 판이 새 판 cdhash 를 더함 | self: 새 판이 제 것을 더함 | del: 새 판이 옛 항목을 지우고 다시 만듦
+          #   | ui: 2판이 묻는 창을 막지 않고 읽음 (사용자가 보는 창을 찍는다, 3판 없음)
+          lab() {
+            local name=$1 method=$2 after=$3 update=$4
+            local base="$RUNNER_TEMP/lab-$name" kc="daling-lab-$name.keychain"
+            local app="$RUNNER_TEMP/lab-$name/Daling.app" new="$RUNNER_TEMP/lab-$name/.Daling.app.new"
+            local row="| $name | $method | $after | $update" rc step gen cd_new gens
+            CASE=$name
+            GEN=1
+            rm -rf "$base" && mkdir -p "$base" && ditto dist/Daling.app "$app" || { RESULTS+=("$row | 준비 실패 | | | |"); return; }
+            security create-keychain -p daling-ci "$kc" && security set-keychain-settings "$kc" \
+              && security unlock-keychain -p daling-ci "$kc" || { RESULTS+=("$row | 준비 실패 | | | |"); return; }
+            security list-keychains -d user -s "$kc" $SEARCH
+            security default-keychain -d user -s "$kc"
+            echo "==== $name: 만들기 $method · 만든 뒤 $after · 업데이트 때 $update · 1판 cdhash=$(cdhash "$app")" >> "$LOG"
+            run_app "$app" write "$method"
+            rc=$?
+            if [ "$rc" = 0 ] && [ "$after" = droppart ]; then run_app "$app" droppart; rc=$?; fi
+            acl "$kc" "1판이 만든 뒤"
+            row="$row | $(did "$rc") | $PARTS"
+            # 1판이 못 만들었으면 읽기 결과는 뜻이 없다 ('항목 없음' 을 '못 읽음' 으로 잘못 세지 않게)
+            gens="2 3"
+            [ "$rc" = 0 ] || { row="$row | - | -"; gens=""; }
+            for gen in $gens; do
+              GEN=$gen
+              rm -rf "$new" && ditto "$app" "$new"
+              plutil -replace CFBundleVersion -string "lab-$gen" "$new/Contents/Info.plist"
+              if ! limited 120 codesign --force --timestamp=none --keychain "$SIGN_KC" --sign "$IDENTITY" "$new"; then
+                row="$row | 다시 서명 실패"
+                [ "$gen" = 2 ] && row="$row | -"
+                break
+              fi
+              cd_new="$(cdhash "$new")"
+              echo "== ${gen}판 cdhash=$cd_new dr=$(codesign -d -r- "$new" 2>&1 | sed -n 's/^#* *designated => //p')" >> "$LOG"
+              step=""
+              if [ "$update" = prev ]; then run_app "$app" addpart "" "cdhash:$cd_new"; step=$?; fi
+              rm -rf "$app" && mv "$new" "$app"
+              if [ "$update" = self ]; then run_app "$app" addpart "" "cdhash:$cd_new"; step=$?; fi
+              if [ "$update" = ui ]; then
+                run_app "$app" readui
+                rc=$?
+                row="$row | 창을 열어 둔 읽기: $(verdict "$rc") | -"
+                break
+              fi
+              if [ "$update" = del ]; then
+                run_app "$app" delete
+                step=$?
+                [ "$step" = 0 ] && run_app "$app" write default
+              fi
+              run_app "$app" read
+              rc=$?
+              acl "$kc" "${gen}판 읽은 뒤"
+              row="$row | ${step:+고치기 $(did "$step") → }$(verdict "$rc")"
+            done
+            RESULTS+=("$row |")
+            security default-keychain -d user -s "$OLD_DEFAULT"
+            security list-keychains -d user -s $SEARCH
+            security delete-keychain "$kc"
+            rm -rf "$base"
+          }
+          # 1차에서 잰 것 (실행 38684779540): default·access·allowall·owner 는 2·3판 모두 못 읽음(-25293),
+          # ownerdrop 은 지우기가 -25293(키체인 암호 필요), drop 은 고치기가 창을 띄워 멈춤.
+          # 멈출 수 있는 경우(고치기 허락이 아무 앱에도 없는 default 항목 고치기)는 맨 뒤.
+          # ui 는 창을 띄우므로 맨 끝 (2차 실측: 창이 한 번 뜨면 SecurityAgent 를 꺼도 뒤의 codesign 이 멈췄다)
+          ALL="default access allowall owner ownerdrop ownerprev ownerself nextdel drop prev self ui"
+          for c in ${CASES:-$ALL}; do
+            case $c in
+              default)   lab default   default  none     none ;;
+              access)    lab access    access   none     none ;;
+              allowall)  lab allowall  allowall none     none ;;
+              owner)     lab owner     owner    none     none ;;
+              ownerdrop) lab ownerdrop owner    droppart none ;;
+              ownerprev) lab ownerprev owner    none     prev ;;
+              ownerself) lab ownerself owner    none     self ;;
+              nextdel)   lab nextdel   default  none     del ;;
+              drop)      lab drop      default  droppart none ;;
+              prev)      lab prev      default  none     prev ;;
+              self)      lab self      default  none     self ;;
+              ui)        lab ui        default  none     ui ;;
+              *) echo "모르는 경우: $c" >> "$LOG" ;;
+            esac
+          done
+          cat "$LOG"
+          {
+            echo "### 키체인 실험 (1판이 만든 항목을 2판·3판이 묻지 않고 읽는가)"
+            echo "| 경우 | 만들기 | 만든 뒤 | 업데이트 때 | 1판 쓰기 | 1판 뒤 partition_id | 2판 | 3판 |"
+            echo "|---|---|---|---|---|---|---|---|"
+            printf '%s\n' "${RESULTS[@]}"
+          } | tee -a "$GITHUB_STEP_SUMMARY"
           exit 0
 
       - name: DMG 만들기
