@@ -34,7 +34,7 @@ powershell -ExecutionPolicy Bypass -File packaging\build_installer.ps1 -Install
 powershell -ExecutionPolicy Bypass -File packaging\msix\build_msix.ps1 -Build
 powershell -ExecutionPolicy Bypass -File packaging\msix\build_msix.ps1 -Install -Smoke
 
-# 디자인 스튜디오 (연습용 복제 앱에서 화면 만지기·댓글 → 저장본 반영). 도구는 ~/.claude/design-studio/tool,
+# 디자인 스튜디오 (/tutleblue-design-studio 스킬. 연습용 복제 앱에서 화면 만지기·댓글 → 저장본 반영). 도구는 공개 저장소 tutleblue/claude-code-designtool → ~/.claude/design-studio/tool,
 # 개인화는 .claude/design-studio/, 저장본·시안은 .design-studio/ (git 제외). --mode real 은 내 데이터를 읽기만
 .venv\Scripts\python.exe "$env:USERPROFILE\.claude\design-studio\tool\run_studio.py" --project .
 
@@ -132,6 +132,7 @@ AUTOSAVER_DATA_ROOT=C:/lms-autosaver AUTOSAVER_CONFIG_PATH=C:/lms-autosaver/conf
 | 메일 화면 | `app.js` `renderEmails`, `emailListRow`, `renderMailBody`, `mailFrameDoc` |
 | 폴더 나무 | `app.js` `renderFolderView`, `buildFolderTree`, `folderTreeHtml` |
 | 삼성 노트 | `samsung_notes.import_pdfs` |
+| 디자인 요청 반영 | `.design-studio/requests/*.md` → `/tutleblue-design-studio` 스킬 (도구의 `skill/GUIDE.md` 3절) |
 | 체험 모드(가짜 데이터) | `demo_mode.build`, `web_ui._demo_get`·`_demo_post`·`toggle_demo`, `app.js` `setDemo` |
 
 ## 5. 알아 두면 시간을 아끼는 사실

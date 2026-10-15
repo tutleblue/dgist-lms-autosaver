@@ -1,3 +1,7 @@
+/* 글꼴: 웹폰트(@import Lora·Inter)를 뺐다 (디자인 검토 2026-10-14).
+   둘 다 한글이 없어 숫자만 Lora·한글은 다른 명조로 섞여 그려졌고, 처음 켤 때·오프라인이면 받지 못해 글꼴이 바뀌었다.
+   이제 Windows 기본(Segoe UI + 맑은 고딕, 있으면 Pretendard) 하나로 쓰고, 숫자는 tabular-nums 로 맞춘다. */
+
 :root {
   --bg: #faf9f5;
   --bg-deep: #f0eee6;
@@ -7,10 +11,13 @@
   --border-strong: #cfc9b8;
   --text: #1f1e1d;
   --text-soft: #5d5a52;
-  --text-faint: #8b877c;
-  --accent: #c0674a;
-  --accent-strong: #9c4e33;
-  --accent-soft: #f6e9e3;
+  /* 흐린 글자도 정보다: 흰색 5.39·바탕 5.11·깊은 바탕 4.64:1 (예전 #8b877c 는 3.59:1) */
+  --text-faint: #6e6a61;
+  /* 강조색은 앱의 마스코트 달구의 파랑(#5a82c8)에서 가져와 흰 글자가 올라가도 읽히게 낮췄다.
+     흰 글자 5.2:1 이라 채운 단추·배지에 바로 쓴다. 예전 테라코타 #c0674a 는 3.98:1 이었다. */
+  --accent: #3e6bb9;
+  --accent-strong: #2e4f89;
+  --accent-soft: #e8eef8;
   --green: #4f7a55;
   --green-soft: #e8efe7;
   --amber: #a37413;
@@ -19,8 +26,9 @@
   --violet-soft: #efe9fa;
   --red: #a63440;
   --red-soft: #f8e6e6;
-  --blue: #4d7192;
-  --blue-soft: #e7eef4;
+  /* 정보 파랑이 강조 파랑과 겹치지 않게 청록 쪽으로 비킨다 (남색 테마와 같은 방법) */
+  --blue: #3f7f8c;
+  --blue-soft: #e3f0f1;
   /* 붕어빵 로고: 베이지 바탕 + 노릇한 주황 */
   --bp-bg: #faf6ec;
   --bp-body: #f7be3c;
@@ -29,8 +37,9 @@
   --radius: 14px;
   --radius-sm: 9px;
   --shadow: 0 1px 2px rgba(31, 30, 29, 0.035), 0 10px 28px -12px rgba(31, 30, 29, 0.10);
-  --font-serif: "Lora", "Noto Serif KR", Georgia, serif;
-  --font-sans: "Inter", "Pretendard", "Segoe UI", "Malgun Gothic", system-ui, sans-serif;
+  /* 제목도 본문과 같은 글꼴 (이름은 그대로 두어 쓰는 곳 22군데를 고치지 않는다) */
+  --font-sans: "Pretendard", "Segoe UI", "Malgun Gothic", "Apple SD Gothic Neo", system-ui, sans-serif;
+  --font-serif: var(--font-sans);
 }
 
 /* 화이트 테마: 순백 배경 + 코랄 유지 (클로드 크림 대비 더 밝고 중립적) */
@@ -43,8 +52,8 @@
   --border-strong: #d0d3d9;
   --text: #16181d;
   --text-soft: #545963;
-  --text-faint: #888e99;
-  --accent-soft: #fbeee8;
+  --text-faint: #686e79;
+  --accent-soft: #e8eef8;
   --green-soft: #e7f3ea;
   --amber-soft: #fbf1d8;
   --red-soft: #fbe6e6;
@@ -61,10 +70,12 @@
   --border-strong: #54514a;
   --text: #e8e6df;
   --text-soft: #b5b1a6;
-  --text-faint: #8a867b;
-  --accent: #c0674a;
-  --accent-strong: #dd8b6b;
-  --accent-soft: #40312a;
+  /* 카드 4.88·깊은 바탕 6.15:1 (예전 3.64:1) */
+  --text-faint: #a19d92;
+  /* 채운 단추의 흰 글자 4.6:1. 어두운 바탕 위 강조 글자는 밝은 --accent-strong 으로 */
+  --accent: #4774c2;
+  --accent-strong: #9dbaea;
+  --accent-soft: #2c3546;
   --green: #8fb58f;
   --green-soft: #2d392d;
   --amber: #d2a44a;
@@ -73,8 +84,8 @@
   --violet-soft: #332c47;
   --red: #e08585;
   --red-soft: #442a2a;
-  --blue: #92b2d8;
-  --blue-soft: #2c3848;
+  --blue: #7fb8bf;
+  --blue-soft: #263b3e;
   /* 다크에서는 바탕을 어둡게 낮추고 붕어빵은 살짝 더 밝게 */
   --bp-bg: #f3edde;
   --bp-body: #f7be3c;
@@ -7240,7 +7251,7 @@ body.dash-dragging-now * { cursor: grabbing !important; }
   --border-strong: #c7cfdc;
   --text: #1b2130;
   --text-soft: #4f5a6e;
-  --text-faint: #8490a3;
+  --text-faint: #5f6b80;
   --accent: #3e63a6;
   --accent-strong: #2d4c85;
   --accent-soft: #e6ecf6;
@@ -8676,15 +8687,7 @@ body.tour-open { overflow: hidden; }
 
 /* ===== 인사말 (명조체 한 줄 + 불꽃 표시 + 오늘 요약) ===== */
 .hero-greeting { display: flex; align-items: center; gap: 12px; }
-.hero-spark {
-  flex: none;
-  width: 26px;
-  height: 26px;
-  color: var(--accent);
-  animation: hero-spark-in 0.9s cubic-bezier(0.22, 1, 0.36, 1);
-}
-@keyframes hero-spark-in { from { transform: rotate(-90deg) scale(0.4); opacity: 0; } to { transform: none; opacity: 1; } }
-.hero-panel .hero-sub { margin: 2px 0 0 38px; font-size: 13.5px; color: var(--text-soft); }
+.hero-panel .hero-sub { margin: 2px 0 0 0; font-size: 13.5px; color: var(--text-soft); }
 /* 나우바 펼침: 시험 기간 달구 카드 */
 .now-dalgu { display: flex; align-items: center; gap: 10px; padding: 4px 2px 2px; }
 .now-dalgu-pet {
@@ -8730,7 +8733,6 @@ body.tour-open { overflow: hidden; }
 @media (prefers-reduced-motion: reduce) {
   .now-dalgu-pet img, .now-dalgu.hop .now-dalgu-pet { animation: none !important; }
 }
-@media (prefers-reduced-motion: reduce) { .hero-spark { animation: none; } }
 
 /* D-day 아래 '다음에 챙길 것' */
 .dday-next { display: block; margin-top: 3px; font-size: 11.5px; color: var(--text-faint); }
@@ -10966,6 +10968,119 @@ html.custom-frame body { height: 100%; overflow: hidden; }
 /* 설정은 창 맨 위부터 덮는 판(position:fixed; top:0)이라 막대가 다시 창 끝까지 올라갔다 → 상단 바 아래부터 */
 .custom-frame #view-settings { top: var(--topbar-h, 61px); }
 
+
+/* ===== 디자인 검토 반영 (2026-10-14) ===== */
+
+/* 시간표 칸: 진하게 칠하고 흰 글자를 올리던 것을, 옅은 바탕 + 왼쪽 띠 + 본문 글자색으로.
+   흰 글자는 12색 중 9색이 4.5:1 미만이었고(coral 3.12·amber 3.25), 보조 줄은 9.5px·opacity 0.9 였다.
+   과목 색은 띠와 옅은 바탕으로 그대로 구분된다. 색 고르기 동그라미(.tt-color)는 진한 색 그대로. */
+.tone-coral { --tone: #d97757; }
+.tone-blue { --tone: #5b7da8; }
+.tone-green { --tone: #5e8b5e; }
+.tone-amber { --tone: #b8860b; }
+.tone-violet { --tone: #7c6bab; }
+.tone-teal { --tone: #3f8f8a; }
+.tone-rose { --tone: #c0587a; }
+.tone-olive { --tone: #7a8636; }
+.tone-indigo { --tone: #4f5bb0; }
+.tone-plum { --tone: #95579a; }
+.tone-sky { --tone: #2f86ad; }
+.tone-brown { --tone: #8a6446; }
+.tt-col .tt-block {
+  background: color-mix(in srgb, var(--tone, var(--accent)) 16%, var(--surface));
+  border-left: 3px solid var(--tone, var(--accent));
+  border-radius: 3px 6px 6px 3px;
+  color: var(--text);
+}
+.tt-col .tt-block:hover { opacity: 1; background: color-mix(in srgb, var(--tone, var(--accent)) 26%, var(--surface)); }
+[data-theme="dark"] .tt-col .tt-block { background: color-mix(in srgb, var(--tone, var(--accent)) 17%, var(--surface)); }
+[data-theme="dark"] .tt-col .tt-block:hover { background: color-mix(in srgb, var(--tone, var(--accent)) 24%, var(--surface)); }
+.tt-col .tt-block strong { font-size: 12px; }
+.tt-col .tt-block span,
+.tt-col .tt-block em,
+.tt-col .tt-block .tt-prof { font-size: 11px; opacity: 1; color: var(--text-soft); }
+
+/* 대시보드 요약: 숫자 카드 네 장 → '다가오는 마감' 목록이 첫 줄, 강의·새 메일은 한 줄 요약.
+   2x2 로 접히면 카드 하나가 숫자 하나만 담고(158px), 어떤 마감인지는 마우스를 올려야 보였다.
+   '전체 자료' 수는 대시보드에서 뺐다(자료 화면·사이드바에 있다). */
+#metricsStage .metrics-grid,
+#metricsStage.peek-open .metrics-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+#metricsStage .metric-icon,
+#metricsStage .metrics-grid .metric-card[data-peek="files"] { display: none; }
+#metricsStage [data-peek="deadlines"] {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(118px, auto) minmax(0, 1fr);
+  column-gap: 22px;
+  align-content: start;
+}
+#metricsStage [data-peek="deadlines"] > .metric-label,
+#metricsStage [data-peek="deadlines"] > strong,
+#metricsStage [data-peek="deadlines"] > small { grid-column: 1; opacity: 1; }
+#metricsStage [data-peek="deadlines"] > strong { font-size: 30px; }
+#metricsStage [data-peek="deadlines"] .metric-inline {
+  position: static;
+  grid-column: 2;
+  grid-row: 1 / span 3;
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+  max-height: 172px;
+}
+#metricsStage [data-peek="deadlines"] .peek-row { animation: none; padding: 5px 2px; }
+#metricsStage [data-peek="deadlines"] .peek-main strong { font-size: 13px; }
+#metricsStage [data-peek="deadlines"] .peek-main span { font-size: 11.5px; }
+#metricsStage .metric-card:not([data-peek="deadlines"]) {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 12px 16px;
+}
+#metricsStage .metric-card:not([data-peek="deadlines"]) > strong { order: -1; font-size: 20px; margin: 0; }
+#metricsStage .metric-card:not([data-peek="deadlines"]) .metric-label {
+  font-size: 13px; text-transform: none; letter-spacing: 0; color: var(--text);
+}
+#metricsStage .metric-card:not([data-peek="deadlines"]) > small { margin-left: auto; text-align: right; }
+#metricsStage .metric-card:not([data-peek="deadlines"]) .metric-inline { display: none; }
+#metricsStage .metric-card:not([data-peek="deadlines"]):hover > * { opacity: 1; }
+@media (max-width: 640px) {
+  #metricsStage [data-peek="deadlines"] { grid-template-columns: minmax(0, 1fr); }
+  #metricsStage [data-peek="deadlines"] .metric-inline { grid-column: 1; grid-row: auto; margin-top: 10px; }
+  #metricsStage .metrics-grid { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* 숫자는 글자 폭을 맞춰 바뀔 때 흔들리지 않게 */
+.metric-card strong,
+.nowbar-time,
+.dday-count strong,
+.hero-greeting { font-variant-numeric: tabular-nums; }
+
+/* 로그인·연결 끊김 알림 (본문 맨 위): 한 줄로 */
+.alert-banner.auth-banner { align-items: center; padding: 10px 14px; margin-bottom: 14px; }
+.auth-banner .alert-icon { width: 28px; height: 28px; border-radius: 8px; }
+.auth-banner .alert-body strong { margin: 0; font-size: 14px; }
+.auth-banner .alert-actions { display: flex; flex-direction: row; gap: 8px; align-items: center; }
+
+/* 설정 › 화면: 테마 고르기 */
+.st-theme { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.st-theme-opt {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text-soft);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.st-theme-opt .icon { width: 16px; height: 16px; }
+.st-theme-opt:hover { border-color: var(--border-strong); color: var(--text); }
+.st-theme-opt.on { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-strong); }
+.st-theme-note { flex-basis: 100%; margin: 4px 2px 0; font-size: 12px; color: var(--text-faint); }
 /* ===== 체험 모드 (demo_mode.py, 2026-10-15) =====
    체험 중에는 창 맨 위 띠(모든 화면, 메일함 포함)와 상단 바 알약으로 '가짜 데이터' 임을 늘 보인다.
    계정이 없을 때는 같은 알약이 '계정 없이 체험하기' 단추가 된다. */

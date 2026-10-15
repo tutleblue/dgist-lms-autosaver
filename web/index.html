@@ -5,9 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Daling</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=daling" />
-    <!-- 바깥 글꼴(Google Fonts). styles.css 의 @import 에 있던 것을 여기로 옮겼다: 체험 모드에서는 서버가 이 줄을 빼서
-         체험 중 바깥 요청이 0건이 되게 한다(web_ui.send_demo_index). 못 받으면 Pretendard·맑은 고딕으로 그린다. -->
-    <link id="webFonts" rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lora:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" />
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
@@ -248,18 +245,23 @@
                 새로고침
               </button>
             </div>
-            <!-- 테마: 누를 때마다 카드가 넘어가듯 다음 테마로 -->
-            <button class="theme-flip" id="themeFlip" type="button" aria-label="테마 바꾸기">
-              <span class="tf-card" id="themeCard">
-                <span class="icon" data-icon="sparkle"></span>
-              </span>
-              <span class="tf-name" id="themeName">기본</span>
-            </button>
+            <!-- 테마 단추는 설정 › 화면으로 옮겼다 (상단 막대는 검색·새로고침만, 디자인 검토 2026-10-14) -->
           </div>
         </header>
 
         <section class="workspace">
           <div class="content-column">
+            <!-- 로그인·연결이 끊기면 어느 화면에서든 맨 위에 한 줄로 (예전엔 사이드바 맨 아래 카드에만 보였다) -->
+            <section class="alert-banner auth-banner" id="authBanner" hidden role="alert">
+              <div class="alert-icon"><span class="icon" data-icon="alert"></span></div>
+              <div class="alert-body">
+                <strong id="authBannerTitle">다시 로그인이 필요해요</strong>
+              </div>
+              <div class="alert-actions">
+                <button class="button compact primary" id="authBannerFix" type="button">다시 로그인</button>
+                <button class="button compact ghost" id="authBannerLater" type="button">나중에</button>
+              </div>
+            </section>
 
             <!-- ===== 대시보드 ===== -->
             <section class="view" id="view-dashboard">
@@ -272,14 +274,6 @@
                   <span id="dashEditLabel">화면 편집</span>
                 </button>
                 <h1 id="heroTitle" class="hero-greeting">
-                  <!-- Daling 로고 (scripts/make_icons.py 의 STROKES 를 32칸으로 옮긴 것). 색은 테마 강조색(currentColor) -->
-                  <svg class="hero-spark" viewBox="0 0 32 32" aria-hidden="true">
-                    <g fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
-                      <path d="M24.8 3.2 L3.2 27.2" />
-                      <path d="M3.2 27.3 C7.5 26 12.6 25.1 18.2 24.8 L24.2 24.6" />
-                      <path d="M19.8 15.6 C20.4 18.2 22.3 20.4 24 22.6 L28.5 28.7" />
-                    </g>
-                  </svg>
                   <span id="heroText">안녕하세요</span>
                 </h1>
                 <p class="hero-sub" id="heroSub"></p>
@@ -1618,6 +1612,17 @@
                 <span class="toggle"><input type="checkbox" name="notifyNewFiles" id="notifyNewFiles" /><span class="track"></span></span>
               </label>
             </div>
+          </section>
+
+          <!-- 화면: 테마는 여기서 고른다. 바로 바뀌고 저장 단추는 필요 없다. -->
+          <section class="st-card" id="stLook">
+            <header class="st-head">
+              <span class="st-tile blue"><span class="icon" data-icon="sparkle"></span></span>
+              <div>
+                <h3>화면</h3>
+              </div>
+            </header>
+            <div class="st-theme" id="themeOptions" role="radiogroup" aria-label="테마"></div>
           </section>
 
           <!-- ④ 구글 캘린더 -->
