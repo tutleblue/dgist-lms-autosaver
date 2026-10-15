@@ -22,6 +22,7 @@ mac.yml '키체인 실험' 단계(workflow_dispatch 의 keychain_lab)가 smoke_t
         addpart   partition 목록에 'cdhash:<…>' 를 더한다 — 옛 빌드가 다음 빌드 것을(업데이트 직전),
                   또는 새 빌드가 제 것을(처음 켤 때)
         delete    새 빌드가 못 읽는 옛 항목을 지울 수 있나 (옛 판이 값을 넘겨주고 새 판이 다시 만드는 길의 뒷정리)
+        readui    묻는 창을 막지 않고 읽는다 — 사용자가 업데이트 뒤 실제로 보는 창을 CI 가 화면으로 찍는다
 
 CI 에서 한 번 돌고 끝나는 프로세스라 CF 객체는 대부분 놓아주지 않는다.
 """
@@ -273,3 +274,11 @@ def delete() -> str:
     finally:
         sec.SecKeychainSetUserInteractionAllowed(1)
     return "점검 항목을 지움"
+
+
+def read_ui() -> str:
+    """묻는 창을 막지 않고 읽는다 (CI 는 창이 뜬 채 멈춘 것을 찍고 죽인다). 창 없이 읽히면 그대로 성공."""
+    raw = mac_keychain._read_item(ACCOUNT)
+    if raw is None:
+        raise RuntimeError("점검 항목이 없습니다")
+    return "묻는 창 없이 읽음"

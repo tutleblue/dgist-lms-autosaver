@@ -477,6 +477,7 @@ jobs:
           RESULTS=()
           # $1 이름, $2 만드는 방법, $3 만든 뒤(none|droppart), $4 업데이트 때
           #   none | prev: 옛 판이 새 판 cdhash 를 더함 | self: 새 판이 제 것을 더함 | del: 새 판이 옛 항목을 지우고 다시 만듦
+          #   | ui: 2판이 묻는 창을 막지 않고 읽음 (사용자가 보는 창을 찍는다, 3판 없음)
           lab() {
             local name=$1 method=$2 after=$3 update=$4
             local base="$RUNNER_TEMP/lab-$name" kc="daling-lab-$name.keychain"
@@ -513,6 +514,12 @@ jobs:
               if [ "$update" = prev ]; then run_app "$app" addpart "" "cdhash:$cd_new"; step=$?; fi
               rm -rf "$app" && mv "$new" "$app"
               if [ "$update" = self ]; then run_app "$app" addpart "" "cdhash:$cd_new"; step=$?; fi
+              if [ "$update" = ui ]; then
+                run_app "$app" readui
+                rc=$?
+                row="$row | 창을 열어 둔 읽기: $(verdict "$rc") | -"
+                break
+              fi
               if [ "$update" = del ]; then
                 run_app "$app" delete
                 step=$?
@@ -532,7 +539,8 @@ jobs:
           # 1차에서 잰 것 (실행 38684779540): default·access·allowall·owner 는 2·3판 모두 못 읽음(-25293),
           # ownerdrop 은 지우기가 -25293(키체인 암호 필요), drop 은 고치기가 창을 띄워 멈춤.
           # 멈출 수 있는 경우(고치기 허락이 아무 앱에도 없는 default 항목 고치기)는 맨 뒤.
-          ALL="default access allowall owner ownerdrop ownerprev ownerself nextdel drop prev self"
+          # ui 는 창을 띄우므로 맨 끝 (2차 실측: 창이 한 번 뜨면 SecurityAgent 를 꺼도 뒤의 codesign 이 멈췄다)
+          ALL="default access allowall owner ownerdrop ownerprev ownerself nextdel drop prev self ui"
           for c in ${CASES:-$ALL}; do
             case $c in
               default)   lab default   default  none     none ;;
@@ -546,6 +554,7 @@ jobs:
               drop)      lab drop      default  droppart none ;;
               prev)      lab prev      default  none     prev ;;
               self)      lab self      default  none     self ;;
+              ui)        lab ui        default  none     ui ;;
               *) echo "모르는 경우: $c" >> "$LOG" ;;
             esac
           done
