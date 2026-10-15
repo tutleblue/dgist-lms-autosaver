@@ -82,6 +82,18 @@ download_verified() {
 
 daling_running() { pgrep -f "Daling.app/Contents/MacOS/Daling" >/dev/null 2>&1; }
 
+# 본체(창)만. 작업 프로세스(--autosaver-job)는 본체가 꺼진 뒤에도 하던 일을 마저 한다.
+# 둘을 같이 보면, 이미 꺼진 본체에 '종료' 를 보내 도로 켜지게 하거나(osascript) 작업을 중간에 끊었다.
+daling_app_running() {
+  pgrep -lf "Daling.app/Contents/MacOS/Daling" 2>/dev/null | grep -v -e '--autosaver-job' | grep -q .
+}
+
+# $1 초 동안 본체가 꺼지기를 기다린다
+wait_app_quit() {
+  i=0
+  while daling_app_running && [ "$i" -lt "$1" ]; do sleep 1; i=$((i + 1)); done
+}
+
 # $1 초 동안 Daling(본체·작업 프로세스)이 다 꺼지기를 기다린다
 wait_quit() {
   i=0
@@ -116,17 +128,23 @@ install_mac() {
   if [ -n "${DALING_DEST:-}" ] && [ -d "$DALING_DEST" ] && [ -w "$DALING_DEST" ]; then dest="$DALING_DEST"
   elif [ -d "$HOME/Applications/Daling.app" ] && [ ! -d /Applications/Daling.app ]; then dest="$HOME/Applications"
   elif [ -w /Applications ]; then dest=/Applications
+  elif [ -d /Applications/Daling.app ]; then
+    # 관리자가 아닌 계정: ~/Applications 에 깔면 Daling 이 둘이 되고 독·런치패드는 옛 판을 계속 연다
+    die "/Applications 에 쓸 권한이 없어요. 관리자 계정에서 설치하거나 DMG 를 열어 직접 옮겨 주세요." \
+        "no permission to write to /Applications. Install from an admin account, or open the DMG and drag Daling in."
   else dest="$HOME/Applications"; mkdir -p "$dest"; fi
 
   # 켜져 있으면 닫는다 (켜 둔 채 바꾸면 서명이 어긋나 다음 실행이 막힌다)
   if daling_running; then
     say "켜져 있는 Daling 을 닫는 중…" "Closing the running Daling…"
     # 앱 안 업데이트면 앱이 스스로 꺼지는 중이다. 꺼진 앱에 '종료' 를 보내면 도로 켜질 수 있어 먼저 기다린다
-    [ "${DALING_UPDATE:-}" = 1 ] && wait_quit 15
-    if daling_running; then
+    [ "${DALING_UPDATE:-}" = 1 ] && wait_app_quit 15
+    if daling_app_running; then
       osascript -e 'tell application id "app.daling.desktop" to quit' >/dev/null 2>&1 </dev/null || true
-      wait_quit 20
+      wait_app_quit 20
     fi
+    # 남은 작업 프로세스(동기화·Drive 올리기)는 끝나기를 더 기다린다. 그래도 남으면 그때 닫는다
+    wait_quit 180
     pkill -f "Daling.app/Contents/MacOS/Daling" >/dev/null 2>&1 || true
     sleep 1
   fi

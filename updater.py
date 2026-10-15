@@ -338,6 +338,21 @@ def _mac_dest(bundle: Path | None) -> str:
     return folder if os.access(folder, os.W_OK) else ""
 
 
+def _mac_locked_folder() -> str:
+    """앱이 놓인 폴더에 이 계정이 쓸 수 없으면 그 폴더. 아니면 빈 값.
+
+    관리자가 아닌 계정에서 /Applications/Daling.app 을 업데이트하면 install.sh 가 ~/Applications 에 새 판을
+    따로 깔았다. 독·런치패드는 계속 옛 판을 열고, 옛 판은 같은 업데이트를 또 권했다. 받기 전에 멈춘다.
+    """
+    bundle = _mac_bundle()
+    if not bundle:
+        return ""
+    folder = str(bundle.parent)
+    if folder.startswith("/Volumes/") or "/AppTranslocation/" in folder:
+        return ""  # 임시 자리: install.sh 가 알맞은 자리를 고른다
+    return "" if os.access(folder, os.W_OK) else folder
+
+
 def mac_install_log_path() -> Path:
     try:
         from runtime_config import AUTOSAVER_DATA_ROOT
@@ -382,6 +397,13 @@ def apply_update(on_ready_to_exit=None) -> dict:
         return {"ok": False, "manual": True, "message": _manual_note()}
     if not ((getattr(sys, "frozen", False) and os.name == "nt") or _mac_self_install()):
         return {"ok": False, "message": "소스로 실행 중이면 git pull 로 받아 주세요. 설치형 앱에서만 자동 업데이트합니다."}
+    if sys.platform == "darwin":
+        locked = _mac_locked_folder()
+        if locked:
+            return {
+                "ok": False,
+                "message": f"{locked} 에 쓸 권한이 없어 업데이트할 수 없어요. 관리자 계정에서 업데이트하거나 새 DMG 로 설치해 주세요.",
+            }
     with _job_lock:
         if _job["running"]:
             return {"ok": False, "busy": True, "message": "이미 업데이트하는 중입니다."}

@@ -141,8 +141,10 @@ Type: dirifempty; Name: "{userprograms}\붕어빵"
 [UninstallRun]
 ; 삭제할 때는 설치와 달리 켜져 있는 앱을 닫아 주지 않는다. 창을 닫아도 알림 영역에서 돌고 있으면
 ; 쓰이는 파일 48개를 못 지우고 '삭제 완료' 라고 끝나 반쯤 남은 폴더가 된다(2026-09-28 재현).
-; 앱과 뒤에서 도는 작업(같은 이름의 exe)을 먼저 닫는다.
-Filename: "{sys}\taskkill.exe"; Parameters: "/F /T /IM ""{#AppExe}"""; Flags: runhidden waituntilterminated; RunOnceId: "CloseBungeoppang"
+; 앱과 뒤에서 도는 작업을 먼저 닫는다. 이름(/IM 붕어빵.exe)으로 닫으면 같은 exe 이름을 쓰는 Store 판(MSIX)까지
+; 동기화·삼성 노트 가져오기 도중에 끊겼다. 이 설치 폴더에서 돈 프로세스만(자식 브라우저까지 /T) 닫는다.
+; unins*.exe 는 빼야 삭제 프로그램이 스스로를 닫지 않는다.
+Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Command ""Get-CimInstance Win32_Process | Where-Object {{ $_.ExecutablePath -and $_.ExecutablePath.StartsWith('{app}\', [StringComparison]::OrdinalIgnoreCase) -and $_.Name -notlike 'unins*' }} | ForEach-Object {{ taskkill.exe /F /T /PID $_.ProcessId }}"""; Flags: runhidden waituntilterminated; RunOnceId: "CloseBungeoppang"
 
 [UninstallDelete]
 ; 앱이 설치 폴더 안에 만든 런타임 파일 정리 (사용자 문서는 건드리지 않음)

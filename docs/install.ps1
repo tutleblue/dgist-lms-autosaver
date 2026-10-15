@@ -99,7 +99,10 @@
     }
 
     Say '설치 창을 여는 중… (끝나면 Daling 이 켜져요)' 'Opening the installer… (Daling starts when it finishes)'
-    $p = Start-Process -FilePath $file -PassThru -Wait
+    # -Wait 는 설치 프로그램이 마지막에 켠 Daling 까지 기다려, 앱을 끌 때까지 여기서 멈췄다. 설치 프로그램만 기다린다.
+    $p = Start-Process -FilePath $file -PassThru
+    $null = $p.Handle  # 종료 코드를 읽으려면 끝나기 전에 손잡이를 잡아 둬야 한다
+    $p.WaitForExit()
     Remove-Item $file -Force -ErrorAction SilentlyContinue
     # Inno Setup 종료 코드: 0 완료, 2·5 사용자가 취소
     if ($p.ExitCode -eq 0) {
