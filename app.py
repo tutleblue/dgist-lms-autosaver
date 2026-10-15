@@ -90,6 +90,12 @@ def set_app_user_model_id() -> None:
     """
     if os.name != "nt":
         return
+    import runtime_config
+
+    if runtime_config.is_msix():
+        # Store 판(MSIX)은 패키지가 앱 ID(<패키지 패밀리>!Daling)를 정해 준다. 여기서 우리 ID 를 붙이면 작업 표시줄이
+        # 창을 시작 메뉴의 Daling 과 다른 앱으로 묶는다.
+        return
     try:
         import ctypes
 
@@ -110,6 +116,8 @@ def apply_window_icon(timeout: float = 15.0) -> bool:
     try:
         import ctypes
 
+        import window_chrome
+
         user32 = ctypes.windll.user32
         IMAGE_ICON, LR_LOADFROMFILE = 1, 0x0010
         WM_SETICON, ICON_SMALL, ICON_BIG = 0x0080, 0, 1
@@ -117,7 +125,8 @@ def apply_window_icon(timeout: float = 15.0) -> bool:
         deadline = time.time() + timeout
         hwnd = 0
         while time.time() < deadline:
-            hwnd = user32.FindWindowW(None, WINDOW_TITLE)
+            # 제목만으로 찾으면 탐색기의 'Daling' 대리 창이 잡힐 수 있다 (window_chrome.find_app_window)
+            hwnd = window_chrome.find_app_window(WINDOW_TITLE, os.getpid())
             if hwnd:
                 break
             time.sleep(0.3)
@@ -174,9 +183,12 @@ def notify(title: str, message: str) -> None:
         return
     try:
         from winotify import Notification
+        import runtime_config
 
         toast = Notification(
-            app_id=WINDOW_TITLE,
+            # Store 판(MSIX)에서는 알림을 띄우는 PowerShell 도 패키지 신원을 물려받는다. 'Daling' 으로도 뜨지만(2026-10-15 실측)
+            # 패키지 앱 ID 로 띄워야 알림이 시작 메뉴의 Store 판 Daling 과 같은 앱으로 묶인다
+            app_id=runtime_config.msix_app_user_model_id() or WINDOW_TITLE,
             title=title,
             msg=message[:200],
             icon=str(APP_ICON) if APP_ICON.exists() else "",
@@ -428,6 +440,10 @@ def scheduler_loop() -> None:
     # 켜자마자 LMS 를 두드리지 않도록 2분만 숨을 고른다
     started_at = time.monotonic()
     while True:
+        if web_ui.demo_mode.active():
+            # 체험 모드 중에는 자동 가져오기·알림을 쉰다 (바깥 서버에 묻지 않고, 진짜 마감 알림이 가짜 화면과 섞이지 않게)
+            time.sleep(30)
+            continue
         try:
             config = web_ui.read_config(workspace)
             schedule_time = str(config.get("SCHEDULE_TIME", "08:00")).strip() or "08:00"
@@ -635,6 +651,44 @@ def _prewarm_first_screen() -> None:
         pass
 
 
+class _startup_lock:
+    """서버를 찾고 띄우는 동안 다른 Daling 이 끼어들지 못하게 한다 (Windows 이름 있는 뮤텍스).
+
+    두 Daling 이 거의 동시에 켜지면(설치판 시작 프로그램 + Store 판 시작 작업, 또는 두 번 누르기) 둘 다
+    '떠 있는 대시보드 없음' 을 본 뒤 하나는 8765, 하나는 8766 에 서버를 띄워 스케줄러가 둘이 됐다
+    (같은 C:\\lms-autosaver 에 메일 두 번 받기·로그인 두 번·삼성 노트 중복). 차례로 들어가면 뒤에 온 쪽은
+    앞의 대시보드를 찾아 그 창만 앞으로 가져온다. 뮤텍스는 프로세스가 죽으면 저절로 풀린다.
+    """
+
+    def __enter__(self):
+        self.handle = None
+        if os.name != "nt":
+            return self
+        try:
+            import ctypes
+
+            kernel32 = ctypes.windll.kernel32
+            kernel32.CreateMutexW.restype = ctypes.c_void_p
+            kernel32.WaitForSingleObject.argtypes = [ctypes.c_void_p, ctypes.c_uint32]
+            handle = kernel32.CreateMutexW(None, False, "Local\\Daling.StartServer")
+            # 0 = 받음, 0x80 = 앞 주인이 죽으며 놓고 감(그래도 받은 것). 20초 넘게 못 받으면 예전처럼 그냥 간다
+            if handle and kernel32.WaitForSingleObject(handle, 20000) in (0, 0x80):
+                self.handle = handle
+            elif handle:
+                kernel32.CloseHandle(ctypes.c_void_p(handle))
+        except Exception:
+            self.handle = None
+        return self
+
+    def __exit__(self, *exc):
+        if self.handle:
+            import ctypes
+
+            ctypes.windll.kernel32.ReleaseMutex(ctypes.c_void_p(self.handle))
+            ctypes.windll.kernel32.CloseHandle(ctypes.c_void_p(self.handle))
+        return False
+
+
 def start_server() -> ThreadingHTTPServer | None:
     """서버를 띄우고 반환. 이미 붕어빵 대시보드가 떠 있으면 None.
 
@@ -747,7 +801,8 @@ def run_worker(job: str) -> int:
             # 데이터 경로를 물려받는지' 만 본다. 화면(start_task)에서는 부를 수 없는 이름이다.
             import runtime_config
 
-            print(f"smoke-worker ok data={runtime_config.AUTOSAVER_DATA_ROOT}")
+            # package: Store 판(MSIX)이면 작업 프로세스도 같은 패키지 안에서 도는지 (AppData 가상화를 같이 봐야 한다)
+            print(f"smoke-worker ok data={runtime_config.AUTOSAVER_DATA_ROOT} package={runtime_config.msix_package_full_name() or '-'}")
         else:
             print(f"알 수 없는 작업입니다: {job}")
             return 1
@@ -895,7 +950,8 @@ def main() -> None:
 
     _marks["webviewImported"] = time.time()
     try:
-        server = start_server()
+        with _startup_lock():
+            server = start_server()
     except RuntimeError as exc:
         if os.name == "nt":
             import ctypes
@@ -943,9 +999,17 @@ def main() -> None:
     if os.name == "nt":
         import window_chrome
 
-    # 이미 켜져 있으면 창을 하나 더 열지 않고 그 창을 앞으로 가져온다
-    if server is None and window_chrome and window_chrome.focus_existing(WINDOW_TITLE):
-        return
+    # 이미 켜져 있으면 창을 하나 더 열지 않고 그 창을 앞으로 가져온다.
+    # 거의 동시에 두 번 켜면 앞의 Daling 은 서버만 띄우고 창은 아직 만드는 중이다(실측: 두 번째가 창을 하나 더 띄움).
+    # 서버가 있는 걸 봤으니 창이 뜰 때까지 잠깐 기다린다.
+    if server is None and window_chrome:
+        deadline = time.time() + 8
+        while True:
+            if window_chrome.focus_existing(WINDOW_TITLE):
+                return
+            if time.time() >= deadline:
+                break
+            time.sleep(0.3)
     width, height, x, y = initial_window_size()
 
     if window_chrome:

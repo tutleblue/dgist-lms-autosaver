@@ -310,3 +310,50 @@ PLAYWRIGHT_HEADLESS = os.environ.get("AUTOSAVER_HEADLESS", "1").lower() not in {
 #  정작 크롤링은 돌지 않는다) 그래서 EXE 일 때는 이 인자를 붙여
 # app.py 가 창을 띄우지 않고 작업만 하고 끝나도록 한다.
 WORKER_FLAG = "--autosaver-job"
+
+
+# ===== Microsoft Store 판 (MSIX, packaging/msix) =====
+# MSIX 로 깐 앱은 '패키지 신원'을 갖고 돈다(작업 프로세스·node·크로미움도 물려받는다). 그 안에서는
+#   - 설치 폴더(C:\Program Files\WindowsApps\…)가 읽기 전용이고
+#   - 앱 안 업데이트(GitHub 설치 파일을 받아 돌리기)를 하면 Store 판과 따로 노는 두 번째 Daling 이 깔린다 → Store 가 맡는다
+#   - 작업 표시줄·알림의 앱 ID 는 패키지가 정한다(<패키지 패밀리>!Daling). 우리 ID 를 따로 붙이면 다른 앱으로 보인다
+# 그래서 여기서 '지금 패키지 안인가' 를 한 번 묻고 기억해 둔다 (FEATURES.md 'Microsoft Store 판').
+_PACKAGE_INFO: dict[str, str] = {}
+
+
+def _package_string(func_name: str) -> str:
+    """kernel32 의 GetCurrentPackageFullName·GetCurrentApplicationUserModelId 값. 패키지 밖이면 빈 문자열."""
+    if func_name in _PACKAGE_INFO:
+        return _PACKAGE_INFO[func_name]
+    value = ""
+    if os.environ.get("AUTOSAVER_PRETEND_MSIX") == "1":
+        # 개발 서버에서 Store 판 화면(업데이트 칸 등)을 보려고. 실제 패키지 동작은 바뀌지 않는다.
+        value = "Daling.Pretend_0.0.0.0_x64__pretend" if "Package" in func_name else "Daling.Pretend_pretend!Daling"
+    elif os.name == "nt":
+        try:
+            import ctypes
+
+            func = getattr(ctypes.windll.kernel32, func_name)
+            length = ctypes.c_uint32(0)
+            # 패키지 안이면 122(버퍼 부족)와 길이를 준다. 밖이면 15700(APPMODEL_ERROR_NO_PACKAGE)
+            if func(ctypes.byref(length), None) == 122 and length.value:
+                buf = ctypes.create_unicode_buffer(length.value)
+                if func(ctypes.byref(length), buf) == 0:
+                    value = buf.value
+        except (AttributeError, OSError):
+            value = ""  # Windows 8 이전에는 함수가 없다
+    _PACKAGE_INFO[func_name] = value
+    return value
+
+
+def msix_package_full_name() -> str:
+    return _package_string("GetCurrentPackageFullName")
+
+
+def msix_app_user_model_id() -> str:
+    """패키지 안이면 '<패키지 패밀리>!Daling'. 밖이면 빈 문자열."""
+    return _package_string("GetCurrentApplicationUserModelId")
+
+
+def is_msix() -> bool:
+    return bool(msix_package_full_name())

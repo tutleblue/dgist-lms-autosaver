@@ -53,7 +53,19 @@ LINUX_MANUAL_NOTE = "리눅스에서는 새 AppImage 를 내려받아 실행 권
 # tar.gz·한 줄 설치(~/.local/opt/daling)로 깐 사람에게 AppImage 를 권하면 둘이 생긴다. 같은 명령을 다시 돌리면 바뀐다
 LINUX_SCRIPT_NOTE = "터미널에서 curl -fsSL https://gudaling.dev/install.sh | sh 를 다시 실행하면 새 버전으로 바뀌어요"
 LINUX_MISSING_NOTE = "리눅스용 새 버전 파일이 아직 올라오지 않았어요"
+# Microsoft Store 판(MSIX, packaging/msix): 새 버전은 Store 가 받아 바꾼다. 여기서 GitHub 설치 파일을 돌리면
+# Store 판과 따로 노는 두 번째 Daling(Inno 설치본)이 깔린다. 그래서 GitHub 에 묻지도, 받지도 않는다.
+STORE_NOTE = "Microsoft Store가 새 버전을 알아서 설치해요"
 _last_manual_url = ""
+
+
+def _store_edition() -> bool:
+    try:
+        import runtime_config
+
+        return runtime_config.is_msix()
+    except Exception:
+        return False
 
 
 def _mac_self_install() -> bool:
@@ -142,6 +154,10 @@ def _release_notes(body: str) -> list[str]:
 def check_update() -> dict:
     global _last_manual_url
     current = local_version()
+    if _store_edition():
+        # 화면(app.js checkForUpdate)은 store 면 '새 버전' 알약·'지금 업데이트' 를 띄우지 않고 이 안내만 보인다
+        return {"ok": True, "current": current, "latest": current, "updateAvailable": False,
+                "store": True, "canInstall": False, "message": STORE_NOTE, "repo": REPO}
     try:
         release = _get_json(LATEST_RELEASE_API)
     except urllib.error.HTTPError as exc:
@@ -322,6 +338,21 @@ def _mac_dest(bundle: Path | None) -> str:
     return folder if os.access(folder, os.W_OK) else ""
 
 
+def _mac_locked_folder() -> str:
+    """앱이 놓인 폴더에 이 계정이 쓸 수 없으면 그 폴더. 아니면 빈 값.
+
+    관리자가 아닌 계정에서 /Applications/Daling.app 을 업데이트하면 install.sh 가 ~/Applications 에 새 판을
+    따로 깔았다. 독·런치패드는 계속 옛 판을 열고, 옛 판은 같은 업데이트를 또 권했다. 받기 전에 멈춘다.
+    """
+    bundle = _mac_bundle()
+    if not bundle:
+        return ""
+    folder = str(bundle.parent)
+    if folder.startswith("/Volumes/") or "/AppTranslocation/" in folder:
+        return ""  # 임시 자리: install.sh 가 알맞은 자리를 고른다
+    return "" if os.access(folder, os.W_OK) else folder
+
+
 def mac_install_log_path() -> Path:
     try:
         from runtime_config import AUTOSAVER_DATA_ROOT
@@ -359,11 +390,20 @@ def _start_mac_install(dmg: Path) -> None:
 
 def apply_update(on_ready_to_exit=None) -> dict:
     """설치형 앱: 최신 설치 파일을 받아 확인한 뒤 설치를 시작한다(뒤에서 돈다)."""
+    if _store_edition():
+        return {"ok": False, "store": True, "message": STORE_NOTE}
     if _manual_platform():
         # 리눅스(와 소스로 돌리는 맥)는 설치 파일을 돌리지 않는다. 화면은 open_manual_download 를 부른다.
         return {"ok": False, "manual": True, "message": _manual_note()}
     if not ((getattr(sys, "frozen", False) and os.name == "nt") or _mac_self_install()):
         return {"ok": False, "message": "소스로 실행 중이면 git pull 로 받아 주세요. 설치형 앱에서만 자동 업데이트합니다."}
+    if sys.platform == "darwin":
+        locked = _mac_locked_folder()
+        if locked:
+            return {
+                "ok": False,
+                "message": f"{locked} 에 쓸 권한이 없어 업데이트할 수 없어요. 관리자 계정에서 업데이트하거나 새 DMG 로 설치해 주세요.",
+            }
     with _job_lock:
         if _job["running"]:
             return {"ok": False, "busy": True, "message": "이미 업데이트하는 중입니다."}

@@ -2,11 +2,11 @@
    함수들은 스튜디오가 필요할 때 부르므로, 앱 전역(state·switchView·applyTheme …)이 아직 없어도 된다. */
 window.__STUDIO_APP__ = {
   views: {
-    dashboard: "대시보드", deadlines: "마감", calendar: "캘린더", courses: "과목", files: "자료",
-    emails: "메일함", storage: "서랍", settings: "설정",
+    dashboard: "대시보드", deadlines: "과제 마감", calendar: "캘린더", courses: "강의", files: "자료",
+    emails: "메일함", storage: "창고", settings: "설정",
   },
-  // 기본 테마는 data-theme 이 없는 상태다
-  // 앱에서 고를 수 있는 테마만 (2026-10-15 자동·기본·다크로 줄임. 화이트·남색·그래파이트는 색 정의만 남아 있다)
+  // 기본 테마는 data-theme 이 없는 상태다. 앱의 '자동' 은 기본·다크 중 하나로 칠하므로 따로 두지 않는다.
+  // 화이트·남색·그래파이트는 2026-10-15 앱 목록에서 빠졌다(색 정의만 styles.css 에 남음).
   themes: [
     { key: "claude", label: "기본", selector: ":root:not([data-theme])" },
     { key: "dark", label: "다크", selector: ':root[data-theme="dark"]' },

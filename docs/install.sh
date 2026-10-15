@@ -4,7 +4,7 @@
 #   curl -fsSL https://gudaling.dev/install.sh | sh
 #
 # 왜 이 스크립트를 쓰나
-#   맥 판은 ad-hoc 서명뿐이다(공증에는 유료 Apple 개발자 계정이 필요). 브라우저로 받은 DMG 에는 격리 표시
+#   맥 판은 공증이 없다(유료 Apple 개발자 계정이 필요, 서명은 사설 인증서나 ad-hoc). 브라우저로 받은 DMG 에는 격리 표시
 #   (com.apple.quarantine)가 붙고, Gatekeeper 는 그 표시가 있는 앱을 공증으로 확인하려다 막는다.
 #   curl 은 격리 표시를 붙이지 않는다. 그 대신 받은 파일이 GitHub 릴리스의 원본과 같은지 여기서 SHA-256 으로 확인한다.
 #   리눅스는 서명 검사가 없지만, 실행 권한·앱 목록 등록·업데이트를 한 번에 해 준다.
@@ -82,6 +82,18 @@ download_verified() {
 
 daling_running() { pgrep -f "Daling.app/Contents/MacOS/Daling" >/dev/null 2>&1; }
 
+# 본체(창)만. 작업 프로세스(--autosaver-job)는 본체가 꺼진 뒤에도 하던 일을 마저 한다.
+# 둘을 같이 보면, 이미 꺼진 본체에 '종료' 를 보내 도로 켜지게 하거나(osascript) 작업을 중간에 끊었다.
+daling_app_running() {
+  pgrep -lf "Daling.app/Contents/MacOS/Daling" 2>/dev/null | grep -v -e '--autosaver-job' | grep -q .
+}
+
+# $1 초 동안 본체가 꺼지기를 기다린다
+wait_app_quit() {
+  i=0
+  while daling_app_running && [ "$i" -lt "$1" ]; do sleep 1; i=$((i + 1)); done
+}
+
 # $1 초 동안 Daling(본체·작업 프로세스)이 다 꺼지기를 기다린다
 wait_quit() {
   i=0
@@ -116,17 +128,23 @@ install_mac() {
   if [ -n "${DALING_DEST:-}" ] && [ -d "$DALING_DEST" ] && [ -w "$DALING_DEST" ]; then dest="$DALING_DEST"
   elif [ -d "$HOME/Applications/Daling.app" ] && [ ! -d /Applications/Daling.app ]; then dest="$HOME/Applications"
   elif [ -w /Applications ]; then dest=/Applications
+  elif [ -d /Applications/Daling.app ]; then
+    # 관리자가 아닌 계정: ~/Applications 에 깔면 Daling 이 둘이 되고 독·런치패드는 옛 판을 계속 연다
+    die "/Applications 에 쓸 권한이 없어요. 관리자 계정에서 설치하거나 DMG 를 열어 직접 옮겨 주세요." \
+        "no permission to write to /Applications. Install from an admin account, or open the DMG and drag Daling in."
   else dest="$HOME/Applications"; mkdir -p "$dest"; fi
 
   # 켜져 있으면 닫는다 (켜 둔 채 바꾸면 서명이 어긋나 다음 실행이 막힌다)
   if daling_running; then
     say "켜져 있는 Daling 을 닫는 중…" "Closing the running Daling…"
     # 앱 안 업데이트면 앱이 스스로 꺼지는 중이다. 꺼진 앱에 '종료' 를 보내면 도로 켜질 수 있어 먼저 기다린다
-    [ "${DALING_UPDATE:-}" = 1 ] && wait_quit 15
-    if daling_running; then
+    [ "${DALING_UPDATE:-}" = 1 ] && wait_app_quit 15
+    if daling_app_running; then
       osascript -e 'tell application id "app.daling.desktop" to quit' >/dev/null 2>&1 </dev/null || true
-      wait_quit 20
+      wait_app_quit 20
     fi
+    # 남은 작업 프로세스(동기화·Drive 올리기)는 끝나기를 더 기다린다. 그래도 남으면 그때 닫는다
+    wait_quit 180
     pkill -f "Daling.app/Contents/MacOS/Daling" >/dev/null 2>&1 || true
     sleep 1
   fi
@@ -136,7 +154,7 @@ install_mac() {
   rm -rf "$dest/.Daling.app.new" "$dest/.Daling.app.old"
   ditto "$mnt/Daling.app" "$dest/.Daling.app.new"
   hdiutil detach "$mnt" -quiet >/dev/null 2>&1 || true
-  # 복사가 온전한지 (ad-hoc 서명도 파일마다 해시를 담고 있다)
+  # 복사가 온전한지 (사설 인증서·ad-hoc 서명도 파일마다 해시를 담고 있다)
   codesign --verify --deep --strict "$dest/.Daling.app.new" >/dev/null 2>&1 \
     || die "새 판의 서명 확인에 실패했어요. 다시 해 주세요." "the new copy failed its signature check. Please try again."
   if [ -e "$dest/Daling.app" ]; then

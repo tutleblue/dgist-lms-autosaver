@@ -86,7 +86,11 @@ $hash = (Get-FileHash $setup.FullName -Algorithm SHA256).Hash.ToLower()
 if (-not $Install) { "완료 (설치는 -Install 로)"; return }
 
 "[5/5] 이 PC 에 설치"
-Get-Process -Name "붕어빵" -ErrorAction SilentlyContinue | Stop-Process -Force
+# 이 PC 의 설치판만 닫는다. 이름으로만 고르면 같은 exe 이름의 Store 판(MSIX)까지 작업 도중에 꺼졌다.
+$installDir = Join-Path $env:LOCALAPPDATA "Programs\붕어빵\"
+Get-Process -Name "붕어빵" -ErrorAction SilentlyContinue |
+  Where-Object { $_.Path -and $_.Path.StartsWith($installDir, [StringComparison]::OrdinalIgnoreCase) } |
+  Stop-Process -Force
 Start-Sleep -Seconds 2
 $p = Start-Process -FilePath $setup.FullName -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /TASKS=desktopicon" -Wait -PassThru
 "설치 종료코드: $($p.ExitCode)"

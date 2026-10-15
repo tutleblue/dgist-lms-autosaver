@@ -6,8 +6,11 @@
     맥에서는 값은 키체인에, config.json 에는 'keychain:<키 이름>' 표시만 남긴다.
 
 왜 항목 하나에 모두 넣나
-    키체인 항목마다 접근 허락(ACL)이 따로 있다. 이 앱은 ad-hoc 서명이라 새 버전을 깔 때마다
-    서명 해시가 바뀌어 macOS 가 '키체인 접근 허용?' 을 다시 묻는다. 비밀 값 다섯 개를 항목
+    키체인 항목마다 접근 허락(ACL)이 따로 있다. ad-hoc 서명이면 새 버전을 깔 때마다 서명 해시가
+    바뀌어 macOS 가 '키체인 접근 허용?' 을 다시 묻는다. 사설 인증서로 서명해도 마찬가지다: '믿는 앱' 은
+    인증서 DR 로 묶이지만 항목의 partition_id 가 'cdhash:<만든 빌드>' 라서 (2026-10-15 CI 실측, persist_test).
+    만들 때 접근 목록을 넘겨도 partition 은 붙고, 고치려면 키체인 암호가 필요했다 (mac_keychain_lab, FEATURES.md
+    'macOS 판'). 애플 팀 ID 가 있는 서명이어야 'teamid:' 로 묶여 안 묻는다. 비밀 값 다섯 개를 항목
     다섯 개로 두면 업데이트할 때마다 다섯 번 묻는다. 그래서 서비스 "Daling" · 계정 "settings"
     항목 하나에 {키: 값} JSON 을 넣는다 (묻는 것은 한 번).
 
@@ -244,3 +247,35 @@ def self_test(account: str = "smoke-test") -> str:
     if _read_item(account) is not None:
         raise RuntimeError("점검용 키체인 항목이 지워지지 않았습니다.")
     return "쓰기·고치기·읽기·지우기 성공"
+
+
+def persist_test(phase: str, account: str = "smoke-persist") -> str:
+    """CI 점검용, 두 빌드로 나눠 부른다: 'write' 는 이 빌드로 점검 항목을 남기고,
+    'read' 는 같은 자리에 깐 '다음 빌드'(같은 인증서로 다시 서명) 가 묻는 창 없이 읽는지 본다.
+
+    파일 키체인은 항목을 만든 앱의 서명 요구 조건(DR)과 partition_id 를 함께 본다. 애플 포럼
+    (developer.apple.com/forums/thread/98484) 에 애플 CA 가 아닌 인증서로 서명한 앱이 업데이트 뒤
+    partition_id 에 새 cdhash 가 붙으며 다시 물었다는 글이 있어, 사설 인증서로 정말 안 묻는지 잰다.
+    읽을 때는 묻는 창을 띄울 수 없게 막아 둔다 — 다시 물어야 하면 기다리지 않고 -25308 로 실패한다.
+    """
+    import secrets as _secrets
+
+    if phase == "write":
+        _write_item(json.dumps({"SMOKE": "persist-" + _secrets.token_hex(8)}), account)
+        return "점검 항목을 남김"
+    if phase != "read":
+        raise ValueError(f"phase 는 write·read: {phase!r}")
+    ctypes, sec, _cf = _load_api()
+    sec.SecKeychainSetUserInteractionAllowed.argtypes = [ctypes.c_ubyte]  # Boolean
+    sec.SecKeychainSetUserInteractionAllowed.restype = ctypes.c_int32
+    sec.SecKeychainSetUserInteractionAllowed(0)
+    try:
+        raw = _read_item(account)
+    finally:
+        sec.SecKeychainSetUserInteractionAllowed(1)
+    if raw is None:
+        raise RuntimeError("점검 항목이 없습니다 (write 단계가 안 돌았거나 다른 키체인에 썼습니다)")
+    if not str(json.loads(raw or "{}").get("SMOKE", "")).startswith("persist-"):
+        raise RuntimeError("점검 항목 내용이 다릅니다")
+    # 지우지 않는다: '키체인 실험' 은 3판이 이어서 읽는다. CI 는 임시 키체인째 지운다
+    return "다음 빌드가 묻지 않고 읽음"

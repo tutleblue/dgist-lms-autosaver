@@ -15,7 +15,11 @@ from runtime_config import (
 
 async def verify():
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=PLAYWRIGHT_HEADLESS)
+        from browser_setup import launch_lms_browser
+
+        browser = await launch_lms_browser(p, PLAYWRIGHT_HEADLESS)
+        if browser is None:
+            return
         page = await browser.new_page()
 
         # 로그인 절차를 여기에 따로 베껴 두면 한쪽만 고쳐지고 다른 쪽은 그대로 남는다.

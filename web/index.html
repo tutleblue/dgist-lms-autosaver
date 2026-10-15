@@ -8,6 +8,8 @@
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
+    <!-- 체험 모드 표시: 창 맨 위 얇은 띠. <html data-demo> 일 때만 보인다(web_ui.send_demo_index) -->
+    <div class="demo-stripe" aria-hidden="true"></div>
     <!-- 창 단추: 기본 제목 줄을 없앤 설치 앱에서만 보인다 (window_chrome.py). 상단 바가 제목 줄 역할을 한다 -->
     <div class="win-controls" id="winControls" hidden>
       <button type="button" class="win-btn" data-win="minimize" title="최소화" aria-label="최소화">&#xE921;</button>
@@ -142,6 +144,7 @@
           <div class="tour-actions">
             <button type="button" class="tour-skip" id="tourSkip">건너뛰기</button>
             <span class="tour-gap"></span>
+            <button type="button" class="button compact ghost" id="tourDemo" hidden>계정 없이 체험하기</button>
             <button type="button" class="button compact ghost" id="tourPrev">이전</button>
             <button type="button" class="button compact primary" id="tourNext">다음</button>
           </div>
@@ -217,6 +220,11 @@
             <div class="search-pop" id="searchPop" role="listbox" aria-label="검색 결과" hidden></div>
           </div>
           <div class="topbar-actions">
+            <!-- 체험 모드 알약 (renderDemoPill): 체험 중이면 '체험 중 · 끝내기', 계정이 없으면 '계정 없이 체험하기' -->
+            <div class="demo-pill" id="demoPill" hidden>
+              <span class="demo-text" id="demoText">체험 중 · 가짜 데이터</span>
+              <button type="button" class="demo-btn" id="demoPillButton">체험 끝내기</button>
+            </div>
             <!-- 작업 진행 표시: 동기화/새로고침을 누르면 물방울이 튀어나와 여기서 부풀어 오름 -->
             <div class="top-progress" id="topProgress" hidden aria-live="polite">
               <span class="top-progress-ring" aria-hidden="true"></span>
@@ -927,6 +935,12 @@
                           보내기
                         </button>
                         <button class="button ghost compact" id="previewMailButton" type="button">미리보기</button>
+                        <!-- AI 초안: 설정에서 고른 AI CLI 로 본문을 써 준다 (app.js 'AI 도우미') -->
+                        <!-- 'AI 초안' 대신 지금 쓰는 모델 이름(Opus 5.5, GPT-6-Astra …)을 보인다. 모델은 열린 칸에서 바꾼다 -->
+                        <button class="button ghost compact" id="aiDraftToggle" type="button" title="AI 초안 · 모델 바꾸기" hidden>
+                          <span class="icon" data-icon="sparkle"></span>
+                          <span id="aiDraftModelName">AI 초안</span>
+                        </button>
                         <button class="button ghost compact" id="saveDraftButton" type="button">임시저장</button>
                         <span class="compose-bar-note" id="draftNote"></span>
                         <button class="icon-button danger compose-discard" id="cancelComposeButton" type="button" aria-label="작성 취소" title="작성 취소">
@@ -935,6 +949,23 @@
                       </div>
 
                       <div class="compose-scroll">
+                        <!-- AI 초안 칸: '무엇을 쓸까요?' 한 줄 → 제목·본문을 채운다. 내 정보(학번·소개)와
+                             받는 사람이 맡은 과목·분반은 자동으로 넣는다 -->
+                        <div class="ai-draft" id="aiDraftBox" hidden>
+                          <textarea id="aiDraftRequest" rows="2" placeholder="예: 다음 주 화요일 기업탐방 때문에 수업에 빠진다고 양해를 구하고, 출결 처리를 어떻게 하면 되는지 여쭤봐 줘"></textarea>
+                          <div class="ai-draft-row">
+                            <span class="ai-draft-ctx" id="aiDraftContext"></span>
+                            <select id="aiModelSelect" class="ai-model-select" aria-label="쓸 모델"></select>
+                            <button type="button" class="button ghost compact" id="aiIntroButton" title="설정에 적어 둔 내 소개를 본문 맨 앞에 넣습니다 (AI 없이)">내 소개 넣기</button>
+                            <button type="button" class="button primary compact" id="aiDraftRun">
+                              <span class="icon" data-icon="sparkle"></span>
+                              초안 쓰기
+                            </button>
+                          </div>
+                          <p class="ai-draft-note" id="aiDraftNote" hidden></p>
+                          <!-- 누구에게·참조로 누구를: AI 추천을 눌러 바로 넣고 빼기 -->
+                          <div class="ai-suggest" id="aiDraftSuggest" hidden></div>
+                        </div>
                         <!-- 받는사람 -->
                         <div class="cfield autocomplete-field">
                           <label class="cfield-label" for="composeTo">받는사람</label>
@@ -1333,6 +1364,17 @@
               </div>
               <input type="file" id="credFileInput" accept=".json,application/json" hidden />
             </div>
+            <!-- 체험 모드: 계정 없이 가짜 데이터로 둘러보기 (demo_mode.py). 공유 웹사이트 모드에서는 숨긴다 -->
+            <div class="st-acct st-demo" id="demoRow" hidden>
+              <span class="st-logo st-logo-demo" aria-hidden="true"><span class="icon" data-icon="sparkle"></span></span>
+              <div class="st-acct-name">
+                <strong>체험 모드</strong>
+                <small id="demoRowText">계정 없이 가짜 데이터로 둘러봐요</small>
+              </div>
+              <div class="st-acct-actions">
+                <button class="button compact" id="demoRowButton" type="button">체험해 보기</button>
+              </div>
+            </div>
           </section>
 
           <!-- ② 강의자료 저장 + 저장 공간 -->
@@ -1451,6 +1493,35 @@
           </section>
 
           <!-- ③ 자동으로 가져오기 -->
+          <!-- AI 도우미: 번역·말로 찾기·메일 초안에 쓸 AI CLI 와, 메일마다 쓰는 내 정보 -->
+          <section class="st-card" id="stAi">
+            <header class="st-head">
+              <span class="st-tile violet"><span class="icon" data-icon="sparkle"></span></span>
+              <div>
+                <h3>AI 도우미 <span class="labs-badge">실험실</span></h3>
+                <p>번역 · 말로 찾기 · 메일 초안. 이 PC 에 로그인해 둔 CLI 계정을 써요.</p>
+              </div>
+              <!-- 실험실 스위치: 끄면 메일 쓰기의 모델 단추·검색의 'AI 에게 물어보기'·번역의 AI 가 모두 사라진다 -->
+              <label class="labs-switch" title="AI 도우미 켜기/끄기">
+                <span class="toggle"><input type="checkbox" id="aiEnabled" /><span class="track"></span></span>
+              </label>
+            </header>
+            <div class="ai-body" id="aiBody" hidden>
+            <div class="ai-providers" id="aiProviders" role="radiogroup" aria-label="쓸 AI"></div>
+            <div class="ai-profile">
+              <label>이름<input id="aiName" type="text" autocomplete="off" placeholder="홍길동" /></label>
+              <label>학번<input id="aiStudentId" type="text" autocomplete="off" placeholder="2026xxxxx" /></label>
+              <label class="wide">소속<input id="aiDept" type="text" autocomplete="off" placeholder="DGIST 기초학부 1학년" /></label>
+              <label class="wide">자기소개 한 줄<input id="aiIntro" type="text" autocomplete="off" placeholder="안녕하세요, 기초학부 26학번 홍길동입니다." /></label>
+              <label class="wide">서명<textarea id="aiSignature" rows="2" placeholder="홍길동 드림&#10;학번: 2026xxxxx"></textarea></label>
+            </div>
+            <div class="ai-profile-foot">
+              <span class="ai-privacy">메일 초안·번역·검색을 누를 때만 그 내용이 고른 AI 로 보내져요.</span>
+              <button type="button" class="button compact" id="aiProfileSave">저장</button>
+            </div>
+            </div>
+          </section>
+
           <section class="st-card" id="stAuto">
             <header class="st-head">
               <span class="st-tile green"><span class="icon" data-icon="sync"></span></span>

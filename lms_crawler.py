@@ -679,18 +679,16 @@ async def fetch_course_staff(page, courses):
 
 async def crawl_deadlines_only():
     """파일 다운로드 없이 마감일/캘린더만 갱신."""
-    from browser_setup import ensure_browser, explain_launch_failure
+    from browser_setup import ensure_browser, launch_lms_browser
 
     if not ensure_browser():
         return
 
     async with async_playwright() as p:
-        try:
-            browser = await p.chromium.launch(headless=PLAYWRIGHT_HEADLESS)
-        except Exception as exc:
-            # 리눅스에서 시스템 라이브러리가 빠져 못 띄웠으면 설치 명령을 알려 준다 (다른 운영체제는 아무것도 안 함)
-            explain_launch_failure(exc)
-            raise
+        # Windows 는 Edge, 안 되면 헤드리스 셸 (browser_setup.launch_lms_browser)
+        browser = await launch_lms_browser(p, PLAYWRIGHT_HEADLESS)
+        if browser is None:
+            return
         context = await browser.new_context()
         page = await context.new_page()
         await login_lms(page)
@@ -786,18 +784,16 @@ async def crawl_lms(fast=None):
     _announcements.clear()
     _message_probe.clear()
 
-    from browser_setup import ensure_browser, explain_launch_failure
+    from browser_setup import ensure_browser, launch_lms_browser
 
     # 부르는 쪽(main.run_job)이 목록을 그대로 훑으므로 빈 목록으로 돌려줘야 한다
     if not ensure_browser():
         return new_files
 
     async with async_playwright() as p:
-        try:
-            browser = await p.chromium.launch(headless=PLAYWRIGHT_HEADLESS)
-        except Exception as exc:
-            explain_launch_failure(exc)  # 리눅스: 빠진 시스템 라이브러리 설치 명령 (위와 같음)
-            raise
+        browser = await launch_lms_browser(p, PLAYWRIGHT_HEADLESS)
+        if browser is None:
+            return new_files
         context = await browser.new_context(accept_downloads=True)
         page = await context.new_page()
         _page = page

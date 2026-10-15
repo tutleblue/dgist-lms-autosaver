@@ -72,8 +72,15 @@ async def _fetch_everytime(url: str, timeout_ms: int = 25000) -> list[dict[str, 
 
         env = launch_env()
 
+    from browser_setup import launch_lms_browser
+
     async with async_playwright() as pw:
-        browser = await pw.chromium.launch(headless=True, env=env)
+        # LMS 와 같은 브라우저: Windows 는 Edge(받아 둔 셸이 없어도 된다), 안 되면 받아 둔 셸.
+        # 예전엔 셸만 불러서, Edge 만 있는 PC 에서는 늘 실패해 '자동 접속을 막고 있어' 로 잘못 보였다.
+        # 화면 요청 안이라 셸이 없어도 270MB 를 받지는 않는다(download=False).
+        browser = await launch_lms_browser(pw, headless=True, env=env, download=False)
+        if browser is None:
+            raise RuntimeError("LMS 로그인용 브라우저가 없음")
         try:
             page = await browser.new_page()
             await page.goto(url, wait_until="networkidle", timeout=timeout_ms)

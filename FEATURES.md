@@ -67,6 +67,7 @@ DGIST 학생용 데스크톱 앱 "붕어빵"(저장소 이름 dgist-lms-autosave
 | 동기화 경고 배너 | 연속 실패 또는 3일 이상 동기화 안 됨 | `renderHealth` |
 | 화면 자동 갱신 | 작업 중 2초, 평소 12초, 창이 가려지면 쉼 | `refreshAll` 타이머 |
 | 첫 실행 소개 | 처음 켜면 마스코트 달구가 메뉴와 화면 안 요소(시간표·D-day·공지 탭·자료 보기 방식·메일 쓰기·저장 위치·언어…)를 비추며 기능을 알려 줌(24단계, 묶음 시작·매일 보는 곳·공부·메일·편하게 쓰기·설정, 단계마다 짧은 기능 목록 tips. 건너뛰기·이전·다음, 점을 눌러 건너뛰기, 키보드 ←→ Esc). 아래쪽 요소는 비추기 전에 스크롤해 오고, 못 찾으면 fallback(그 메뉴), 학사일정이 없으면 D-day 단계는 뺌(when). 본 기록은 데이터 폴더 `tutorial.json`. 설정의 '앱 소개 다시 보기'로 다시 봄. 마치면 처음 쓰는 사람의 '새 업데이트' 점은 끔 | `TOUR_STEPS`, `startTour`, `/api/tutorial`, `/api/tutorial/done`, `web/img/dalgu/` |
+| 체험 모드 | 계정 없이 가짜 데이터로 모든 화면 둘러보기. 켜는 곳: 첫 실행 소개 첫 카드 '계정 없이 체험하기'·상단 바 알약(계정이 없을 때)·설정 › 연결된 계정 › 체험 모드. 켜 있으면 창 맨 위 줄무늬 띠 + 상단 바 '체험 중 · 가짜 데이터 · 체험 끝내기' + 상태판 '체험 중'. 아래 '체험 모드' 절 | `demo_mode.py`, `renderDemoPill`, `setDemo`, `/api/demo` |
 | 업데이트 소식 | 새 버전일 때만 사이드바 아래 상태 카드 바로 위에 '새 업데이트' 카드가 붙음. 누르면 바뀐 내용 창, 한 번 보면 사라짐(지난 내용은 설정의 '업데이트 내용'). 본 기록은 데이터 폴더 `whats_new.json` | `loadWhatsNew`, `openWhatsNew`, `/api/whats-new`, `data/changelog.json` |
 
 ### 3.2 대시보드 (`dashboard`)
@@ -175,17 +176,21 @@ DGIST 학생용 데스크톱 앱 "붕어빵"(저장소 이름 dgist-lms-autosave
 
 | 카드 | 내용 |
 |---|---|
-| 연결된 계정 | LMS·학교 메일·Google 줄마다 로고와 상태 알약(`renderAccountPills`, `renderGoogleSection`). 비밀번호는 DPAPI 암호화, 바꿀 때만 입력 |
+| 연결된 계정 | LMS·학교 메일·Google 줄마다 로고와 상태 알약(`renderAccountPills`, `renderGoogleSection`). 비밀번호는 DPAPI 암호화, 바꿀 때만 입력. 맨 아래 '체험 모드' 줄(`#demoRow`, 체험해 보기/체험 끝내기) |
 | 강의자료 저장 | 저장 위치 카드 두 개: 구글 드라이브(`AUTO_DRIVE_UPLOAD`, 구글 미연결이면 '로그인 필요'), 내 컴퓨터(스위치 + 이번 학기/모든 과목 → `AUTO_LOCAL_SAVE`, 폴더 바꾸기, 지금 맞추기). `renderSaveDestinations` |
 | └ 다른 클라우드 | OneDrive·Dropbox·iCloud Drive·네이버 MYBOX. 로그인 없이 PC 동기화 폴더 안 `붕어빵 강의자료\<과목>`에 넣는다 (`detect_cloud_roots`, `cloud_targets`, 설정 `CLOUD_SAVE`). 못 찾으면 '폴더 고르기'(`/api/pick-folder`)로 `path` 지정. '넣을 과목'(`SAVE_SCOPE`)과 '지금 맞추기'는 내 컴퓨터·클라우드 공통. 복사는 `autosave_local` → 위치마다 `_mirror_rows` (필기한 파일 보호 규칙 동일). 과목 아래는 LMS 하위 폴더(`lms_subfolders`) 그대로, 1.11.3까지 펼쳐 넣은 사본은 옮겨 놓는다 |
-| └ 차지하는 공간 | 같은 카드 아래. 앱(프로그램 + LMS 로그인용 브라우저 + 메일·설정 데이터) / 강의자료 / 내 컴퓨터 사본을 한 막대로(`/api/storage`의 `app`·`localSave`). 접힌 '강의자료 정리하기'에서 학기·과목별 삭제(`/api/storage/cleanup`, 앱 보관함에서만) |
+| └ 차지하는 공간 | 같은 카드 아래. 앱(프로그램 + LMS 로그인용 브라우저 + 메일·설정 데이터) / 강의자료 / 내 컴퓨터 사본을 한 막대로(`/api/storage`의 `app`·`localSave`). Edge 를 쓰는 PC 에 예전 셸이 남았으면 막대 아래 '예전에 받은 LMS 브라우저' 줄과 '휴지통으로 보내기'(`/api/storage/trash-browser`). 접힌 '강의자료 정리하기'에서 학기·과목별 삭제(`/api/storage/cleanup`, 앱 보관함에서만) |
 | 자동으로 가져오기 | 메일(기본 5분)·과제 마감(60분)·강의자료(180분) 주기, 하루 한 번 전체 확인 시각(`SCHEDULE_TIME`) |
 | 구글 캘린더 | 머리의 스위치로 메일 일정 자동 등록, 캘린더 이름, 지금 넣기, 학사일정도 넣기 |
 | 관심 있는 메일 | 관심 분야·활동 태그, 직접 적기, 끝난 행사 메일 숨기기 |
 | 추가 기능 켜기 (접힘) | Gemini 키(번역·요약·시간표 사진), DGIST 공공데이터 키 |
 | 앱 | 버전, 업데이트 내용, 전체 다시 확인, 설정 내보내기/불러오기(비밀번호 포함 여부) |
 
-앱 크기에서 브라우저는 `chromium_headless_shell-*` 만 센다. 같은 `ms-playwright` 폴더의 일반 `chromium-*`(약 430MB)은 개발용이라 앱 몫이 아니다.
+앱 크기에서 브라우저는 `chromium_headless_shell-*` 만 센다(`browser_setup.shell_dirs`). 같은 `ms-playwright` 폴더의 일반 `chromium-*`(약 430MB)은 개발용이라 앱 몫이 아니고 정리할 때도 건드리지 않는다. Windows 는 Edge 를 쓰므로(4.1) 새로 깐 PC 에는 이 칸이 없다. 예전에 받아 둔 셸(약 270MB)이 남은 PC 에서는 이름을 '예전에 받은 브라우저 (지금은 안 씀)'으로 바꿔 세고(`unused`), 막대 아래 줄의 '휴지통으로 보내기'로 정리한다(2026-10-15).
+- **지우지 않고 휴지통으로**: `browser_setup.recycle` 이 `SHFileOperationW`(FOF_ALLOWUNDO) 로 폴더째 보낸다. 휴지통 크기를 넘으면 Windows 가 조용히 영구 삭제하므로 `FOF_WANTNUKEWARNING` 으로 먼저 묻게 했다.
+- **쓰는 중이면 안 옮김**: 폴더 이름을 잠깐 바꿔 보아(`.daling-check`) 안 되면 그대로 둔다(일부 파일만 옮겨지는 것 방지). LMS 작업(sync·deadlines·verify)이 도는 중이면 거절. Edge 가 없는 PC(셸로 로그인)·맥·리눅스는 이 줄이 안 나오고 API 도 거절. 체험 모드에서도 막는다.
+- **다시 받기**: Edge 가 나중에 실패하면 `launch_lms_browser` → `ensure_shell` 이 다시 받는다. 그래서 Windows 의 `shell_ready` 는 `chromium_headless_shell-*` 만 본다 — Playwright 1.49+ 의 headless 실행은 셸만 쓰는데, 예전처럼 개발용 `chromium-*` 도 '있다' 로 보면 받지 않고 'Executable doesn't exist' 로 실패했다(실측). 받을 때 `playwright install` 이 어느 Playwright 도 참조하지 않는 옛 판 폴더(`.links` 기준)를 스스로 지운다 — 앱이 아니라 Playwright 동작이다.
+- 실측(가짜 셸 14,098,304바이트, `PLAYWRIGHT_BROWSERS_PATH` 로 임시 폴더): 파일을 열어 둔 채 누르면 409 '쓰는 중' · 폴더 그대로 · 휴지통 0개 / 닫고 누르면 휴지통에 같은 크기로 들어가고 '휴지통으로 옮겼어요 (13.4 MB)', 앱 크기 41.9→28.5MB, 옆 `chromium-9999` 그대로, 휴지통에서 되살리기 됨 / 개발용 `chromium-*` 만 남기고 Edge 실패 흉내 → 셸 151.0.7922.34 를 받아 띄움(32초).
 프로그램·브라우저 크기는 10분 동안 기억한다(`_FOOTPRINT_CACHE`). 프로그램 크기는 EXE 로 돌 때만 나온다.
 
 GitHub 업데이트 확인 버튼은 뺐다. 설치형은 새 설치 파일로 업데이트하고, 저장소 버전이 뒤처져 있어 "최신"이라는 오답을 줬다(4.9절).
@@ -196,7 +201,7 @@ GitHub 업데이트 확인 버튼은 뺐다. 설치형은 새 설치 파일로 �
 
 ### 4.1 LMS 자료 동기화 (`lms_crawler.py`)
 
-1. `ensure_browser()`로 Chromium headless shell 확보 (`%LOCALAPPDATA%\ms-playwright`, 처음 한 번 내려받음)
+1. `browser_setup.launch_lms_browser()`로 브라우저를 띄움. **Windows 는 깔려 있는 Microsoft Edge**(Playwright `channel="msedge"`)를 써서 아무것도 받지 않는다. Edge 가 없거나 못 띄우면 예전처럼 Chromium headless shell(`%LOCALAPPDATA%\ms-playwright`, 처음 한 번 270MB)을 받아 쓴다. 맥·리눅스는 headless shell 그대로. 작업 로그에 `LMS 접속 브라우저: Microsoft Edge 155…` 한 줄을 남긴다.
 2. `login_lms()`: SAML 로그인. `networkidle`을 쓰지 않고 선택자·URL·`/users/me` 응답으로 기다림.
 3. 과목 목록 → 과목 4개씩 병렬 `crawl_course`
 4. `process_content` 재귀:
@@ -208,6 +213,8 @@ GitHub 업데이트 확인 버튼은 뺐다. 설치형은 새 설치 파일로 �
 5. `download_lms_file`: 동영상 건너뜀. 이미 받은 URL이면 내려받지 않고 `remember_lms_place`로 경로·순서만 갱신. 같은 과목의 같은 파일명은 새 사본을 만들지 않고 덮어씀.
 6. 공지사항 첨부도 받음 (`공지사항(Announcements)` 폴더)
 7. 끝나면 `web_ui.organize_downloads`가 `downloads\<학기>\<과목>\`로 옮기고 `stored` 경로 기록
+
+LMS 브라우저를 Edge 로 바꾼 까닭 (2026-10-15): Playwright 가 받는 `chrome-headless-shell.exe`·dll 이 서명 없음(실측 NotSigned)이라 스마트 앱 컨트롤(SAC)이 켜진 PC 에서는 Store 판도 LMS 동기화가 막힐 수 있고, Store 정책 10.2.2(실행 코드를 내려받아 실행)에도 걸릴 수 있다. Edge 는 Microsoft 서명이고 Windows 10/11 에 늘 있다. 찾는 자리는 Playwright 와 같은 순서(`LOCALAPPDATA` → `PROGRAMFILES` → `PROGRAMFILES(X86)` 아래 `Microsoft\Edge\Application\msedge.exe`, `browser_setup.system_edge`). 실측(Edge 155 vs headless shell 151, 같은 계정): 띄우기 0.46초 vs 0.17초, SSO 로그인 52초 vs 53초, 과목 21개·콘텐츠 API 같은 결과, 마감 새로고침 81초·빠른 동기화 148초 종료 코드 0. `ms-playwright` 를 빈 폴더로 바꿔도 받지 않고 로그인됐다. 사용자가 Edge 를 켜 둔 채여도 Playwright 가 따로 임시 프로필로 띄우고 끝나면 남는 프로세스가 없다. 시험용으로 `AUTOSAVER_LMS_BROWSER=shell` 이면 Edge 를 건너뛴다. 예전에 받아 둔 `ms-playwright` 폴더는 앱이 스스로 지우지 않는다. 사용자가 설정 › 앱 크기에서 휴지통으로 보낼 수 있다(3절, 실패하면 다시 받음). 에브리타임 시간표 링크 가져오기(`timetable_import._fetch_everytime`)도 같은 `launch_lms_browser` 로 띄운다(`download=False` — 화면 요청 안에서 270MB 를 받지 않음). 예전엔 셸만 불러서 Edge 만 있는 PC 에서는 늘 실패하고 '자동 접속을 막고 있어'로 잘못 보였다. Edge 를 못 띄워 셸로 되돌아가면 `ms-playwright\daling-edge-failed.txt` 를 남기고(Edge 가 다시 뜨면 지움), 그동안은 셸을 '안 씀'으로 보지 않는다(`shell_unused`) — 정책으로 headless Edge 가 막힌 PC 에서 셸을 휴지통으로 보냈다가 동기화마다 270MB 를 다시 받는 일을 막는다.
 
 빠른 모드(`AUTOSAVER_SYNC_MODE=fast`, 기본)는 마지막 동기화 2일 전 이후 바뀐 파일만 확인합니다. 순서·경로가 비어 있는 옛 자료를 채우려면 전체 모드로 한 번 돌립니다. 지난 학기 과목은 LMS가 403으로 막아 순서가 안 채워집니다.
 
@@ -305,9 +312,10 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 | `app.py` | 데스크톱 진입점. 서버 띄우기(포트 선택), pywebview 창, 스케줄러, 알림, 작업 프로세스 분기 |
 | `web_ui.py` | HTTP 서버와 모든 API. 설정 읽기/쓰기(DPAPI), 작업 실행, 자료 목록, 메일 본문·그림, 삼성 노트 작업, 정리·저장·Drive |
 | `runtime_config.py` | 작업 프로세스와 공유하는 설정 상수, 데이터 경로, `WORKER_FLAG`, `SECRET_KEYS` |
+| `demo_mode.py` | 체험 모드: 임시 폴더에 가짜 데이터 만들기·지우기, 켜 있는 동안 바깥 연결 막기, 체험 중 메일 읽음·별표·휴지통 |
 | `main.py` | `sync` 작업 본체: LMS 크롤 → Drive 폴더·업로드 → 알림 메일 |
 | `lms_crawler.py` | LMS 로그인, 자료·공지·마감 수집, 폴더 경로·순서 기록 |
-| `browser_setup.py` | Playwright Chromium 확보 |
+| `browser_setup.py` | LMS 로그인 브라우저: Windows Edge, 없으면 Playwright 헤드리스 셸 받기. 안 쓰는 셸 휴지통으로(`recycle`) |
 | `email_reader.py` | IMAP 수집·구조 해석·본문·그림·분류, 읽음/별표/이동/삭제, SMTP 보내기, 리마인드 |
 | `email_notifier.py` | 동기화 결과 알림 메일 (함수 이름 `send_kakao_message`는 옛 이름, 실제로는 메일) |
 | `translator.py` | 메일 번역 (Gemini 또는 Ollama) |
@@ -375,6 +383,7 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 
 | 경로 | 내용 |
 |---|---|
+| `/api/demo` | 체험 모드 켜기·끄기 `{on, lang}` (GET 은 상태: active·blocked 수·available) |
 | `/api/run` | 자료 동기화 (`mode`: fast/full) |
 | `/api/refresh-deadlines`, `/api/refresh-emails`, `/api/verify`, `/api/stop` | 작업 시작·중지 |
 | `/api/config`, `/api/config/import` | 설정 저장, 백업 불러오기 |
@@ -385,6 +394,7 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 | `/api/save-local`, `/api/organize-files`, `/api/open-downloads`, `/api/pick-folder` | 로컬 저장·정리 |
 | `/api/local-autosave/run` | 내 컴퓨터 자동 저장 지금 실행 (`mode`: current/all, 뒤에서) |
 | `/api/shelves/save`, `/api/storage/cleanup` | 내 폴더, 저장 공간 정리 |
+| `/api/storage/trash-browser` | Edge 를 쓰는 PC 에서 예전에 받은 LMS 브라우저(헤드리스 셸)를 휴지통으로 |
 | `/api/samsung-notes/send`, `/api/samsung-notes/organize` | 한 개 넣기(뒤에서), 노트 폴더 정리 |
 | `/api/timetable/save`, `/api/timetable/delete`, `/api/timetable/bulk`, `/api/timetable/import-link`, `/api/timetable/import-image` | 시간표 |
 | `/api/my-events/save`, `/api/my-events/delete`, `/api/export-ics` | 내 일정, ics 저장 |
@@ -424,7 +434,7 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 
 그 밖의 위치:
 - 설치 폴더: `%LOCALAPPDATA%\Programs\붕어빵`
-- Playwright 브라우저: `%LOCALAPPDATA%\ms-playwright`
+- LMS 브라우저: 시스템 Edge(`C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe`). Edge 가 안 될 때만 Playwright headless shell 을 `%LOCALAPPDATA%\ms-playwright` 에 받음
 - 로컬 저장: `문서\붕어빵 파일 정리\<과목>\` (OneDrive 문서 폴더일 수 있음, `SHGetKnownFolderPath`로 찾음)
 - 삼성 노트 DB: `%LOCALAPPDATA%\Packages\SAMSUNGELECTRONICSCoLtd.SamsungNotes_wyx1vj98g3asy\LocalState\Storage.sqlite` (백업은 같은 폴더의 `Storage.sqlite.붕어빵백업-*`)
 
@@ -465,7 +475,8 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 | 이 PC에 설치 | `packaging\build_installer.ps1 -Install` |
 | 맥 앱 (DMG) | GitHub Actions `.github/workflows/mac.yml` → `daling-<버전>-mac-arm64.dmg` 아티팩트 (아래 'macOS 판') |
 | 리눅스 앱 (AppImage·tar.gz) | GitHub Actions `.github/workflows/linux.yml` → `daling-<버전>-linux-x86_64.AppImage`·`.tar.gz` 아티팩트 (아래 '리눅스 판') |
-| 설치본 점검 | `<실행 파일> --autosaver-smoke` (창 없이, 빈 임시 데이터 폴더로. `smoke_test.py`) |
+| Microsoft Store 판 (MSIX) | `packaging\msix\build_msix.ps1` → `packaging\out\daling-<버전>-win-x64.msix`(시험판)·`-store.msix`(제출판) (아래 'Microsoft Store 판') |
+| 설치본 점검 | `<실행 파일> --autosaver-smoke` (창 없이, 빈 임시 데이터 폴더로. `smoke_test.py`). Store 판은 `daling.exe --autosaver-smoke` |
 
 설치 파일(Inno Setup)은 관리자 권한 없이 사용자 폴더에 설치하고, WebView2가 없으면 부트스트래퍼를 실행하고, .NET 4.7.2 미만이면 안내 후 중단합니다. zip 배포에서 생기던 "인터넷에서 받은 파일" 차단 문제를 피하려고 설치 파일로 바꿨습니다. 공인 서명이 없어서 브라우저로 받으면 처음 실행 때 SmartScreen이 뜹니다. 사이트의 한 줄 설치는 이 창 없이 깝니다 (아래 '서명·한 줄 설치'). `build_installer.ps1` 은 설치 파일 옆에 `<설치 파일>.sha256` 도 만듭니다 — 릴리스에 같이 올립니다.
 
@@ -481,7 +492,7 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 - 삼성 노트 넣기는 PDF만, 파일당 약 5.5초 (삼성 노트 자체 저장 시간)
 - 설치형 앱의 자가 업데이트는 막혀 있음. 새 설치 파일로 배포해야 함
 - GitHub에 올리지 않은 커밋과 변경이 많음 (`git status`로 확인). 푸시·릴리스는 사용자가 `gh auth login` 후 요청할 때
-- 공인 코드 서명 없음: 브라우저로 받으면 SmartScreen(Windows)·Gatekeeper(맥) 경고. 한 줄 설치로 피하지만 Windows 스마트 앱 컨트롤은 못 피함 ('서명·한 줄 설치')
+- 공인 코드 서명 없음: 브라우저로 받으면 SmartScreen(Windows)·Gatekeeper(맥) 경고. 한 줄 설치로 피하지만 Windows 스마트 앱 컨트롤은 못 피함 ('서명·한 줄 설치'). Microsoft Store 판은 포장까지 준비됨, 등록·제출은 사용자가 ('Microsoft Store 판')
 
 
 ### 공휴일·명절 인사 (`app.js`)
@@ -571,6 +582,7 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 
 - 코드의 문구는 한국어 그대로 두고, 화면에 그려진 글자를 번역표 `web/i18n/en.json`(한국어 → 영어)으로 바꿔 보여 준다 (`app.js` 앞부분 `I18N`, `tr`, `i18nTranslateTree`, MutationObserver).
 - 표에 정확히 있는 문구만 바꾼다. `{0}` 이 든 틀은 빈자리를 옮겨 넣는다. 고정 한글이 두 글자 이하인 틀은 빈자리까지 모두 영어가 될 때만 쓴다(메일 제목 등 사용자 글 보호). 한글 없는 틀은 무시한다.
+- 개수 뒤 영어 명사는 `{0:class|classes}` 꼴로 쓴다: `{0}` 이 1 이면 앞말, 아니면 뒷말(`"오늘 남은 수업 {0}개": "{0} {0:class|classes} left today"`). 한국어 '{0}개' 하나가 영어에선 단수·복수 둘이라 '1 classes left today' 가 나왔다(2026-10-15).
 - ` · ` 로 이어 붙인 줄은 마디마다 옮긴다. 날짜(`(월)`, `오후 4:18`, `2026년 9월`)는 규칙으로 바꾼다.
 - 알림·확인창(`confirm`/`alert`)과 토스트도 같은 표를 쓴다. 속성은 placeholder·title·aria-label·data-hint·alt.
 - 언어는 `ui_prefs.json` 의 `lang`(ko/en), 없으면 윈도우 언어(한국어가 아니면 영어). 바꾸면 화면을 다시 불러온다. 번역하지 않을 곳은 `data-no-i18n`.
@@ -707,16 +719,35 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 - 'LMS·공지' 탭(`isLmsMail`)은 수업·LMS 분류도 포함한다.
 
 ## macOS 판 (2026-10-12)
-- 빌드는 GitHub Actions 에서만(개발 PC 가 Windows): `.github/workflows/mac.yml` — `build/mac` 브랜치 푸시 또는 수동 실행, macos-latest(arm64)·Python 3.13·`requirements-mac.txt` → `packaging/mac/daling-mac.spec` → `dist/Daling.app` → ad-hoc 서명 → `--autosaver-smoke` → 실제 앱 25초 띄워 `/healthz`·스크린샷 → `daling-<버전>-mac-arm64.dmg`(+ `.sha256`). 릴리스는 만들지 않는다.
+- 빌드는 GitHub Actions 에서만(개발 PC 가 Windows): `.github/workflows/mac.yml` — `build/mac` 브랜치 푸시 또는 수동 실행, macos-latest(arm64)·Python 3.13·`requirements-mac.txt` → `packaging/mac/daling-mac.spec` → `dist/Daling.app` → 서명(사설 인증서, 비밀이 없으면 ad-hoc — 아래 '서명 인증서') → `--autosaver-smoke` → 실제 앱 25초 띄워 `/healthz`·스크린샷 → `daling-<버전>-mac-arm64.dmg`(+ `.sha256`). 릴리스는 만들지 않는다.
 - 공증 없음(유료 Apple Developer 계정 필요). 브라우저로 받은 DMG 는 처음 한 번 '시스템 설정 → 개인정보 보호 및 보안 → 그래도 열기'(macOS 15 부터 Control-클릭 → 열기 는 안 통함). 한 줄 설치(`curl -fsSL https://gudaling.dev/install.sh | sh`)는 격리 표시가 안 붙어 이 창이 없다 ('서명·한 줄 설치').
-- 비밀 설정: 맥은 DPAPI 가 없어 예전엔 config.json 에 평문이었다. 이제 로그인 키체인(서비스 `Daling`, 계정 `settings`, {키: 값} JSON 한 항목)에 두고 config.json 에는 `keychain:<키>` 만. `mac_keychain.py`(Security.framework 를 ctypes 로, 비밀번호가 명령줄에 안 실림). `web_ui.dpapi_protect/unprotect` 와 `runtime_config._load_config` 둘 다 푼다. 항목을 하나로 둔 까닭: ad-hoc 서명은 새 버전마다 서명 해시가 바뀌어 키체인 접근을 다시 묻는데, 항목이 다섯이면 다섯 번 묻는다. 키체인이 거절하면 DPAPI 실패와 같이 평문을 남기고 다음 저장 때 다시 넣는다.
+- 비밀 설정: 맥은 DPAPI 가 없어 예전엔 config.json 에 평문이었다. 이제 로그인 키체인(서비스 `Daling`, 계정 `settings`, {키: 값} JSON 한 항목)에 두고 config.json 에는 `keychain:<키>` 만. `mac_keychain.py`(Security.framework 를 ctypes 로, 비밀번호가 명령줄에 안 실림). `web_ui.dpapi_protect/unprotect` 와 `runtime_config._load_config` 둘 다 푼다. 항목을 하나로 둔 까닭: ad-hoc 서명은 새 버전마다 서명 해시가 바뀌어 키체인 접근을 다시 묻는데, 항목이 다섯이면 다섯 번 묻는다(사설 인증서로 서명해도 키체인은 다시 묻는다 — 아래 '서명 인증서'). 키체인이 거절하면 DPAPI 실패와 같이 평문을 남기고 다음 저장 때 다시 넣는다.
 - 알림·오류 상자: `osascript`(`app.notify`, `_osascript`). 글은 스크립트에 끼우지 않고 `on run argv` 인자로 넘긴다. 알림 센터에는 '스크립트 편집기' 로 보여 제목 줄에 Daling 을 넣는다.
 - SSL: 묶은 파이썬의 OpenSSL 은 빌드한 맥의 인증서 경로를 본다 → `app.py` 가 `SSL_CERT_FILE` 을 certifi 로(작업 프로세스도 물려받음). Windows 는 시스템 저장소를 읽어 필요 없다.
 - 경로: 데이터 `~/.lms-autosaver`, LMS 브라우저 `~/Library/Caches/ms-playwright`(`browser_ready` 가 맥 실행 파일 이름도 본다), Playwright `node` 는 `Contents/Resources` 에 데이터로 묶여 실행 권한을 확인한다.
 - 창: 첫 크기는 `NSScreen.visibleFrame`(메뉴 막대·Dock 제외)에 맞추고 자리는 pywebview 가 가운데로. 삼성 노트는 없음(`is_available` False → 버튼 숨김).
 - 업데이트: 릴리스의 `daling-<버전>-mac-arm64.dmg` 만 본다. (2026-10-15~) '지금 업데이트' 는 Windows 처럼 앱이 직접 받아 GitHub digest 로 확인하고, 앱에 묶은 `install.sh`(= `docs/install.sh`)를 따로 띄운 뒤 앱이 꺼진다. install.sh 는 앱이 다 꺼지기를 기다려 DMG 의 앱을 지금 앱이 있는 폴더에 바꿔 끼우고(새 판 복사 → 서명 확인 → 이름만 바꾸기) 다시 켠다. 기록은 `~/.lms-autosaver/update-mac.log`. 예전처럼 브라우저로 받으면 업데이트마다 격리 표시 때문에 '그래도 열기' 를 또 눌러야 했다. 앱이 urllib 로 받은 파일에는 격리 표시가 없다(Info.plist 에 `LSFileQuarantineEnabled` 없음, 샌드박스 아님 — `--autosaver-smoke` 가 확인). DMG 안에서 켰거나(/Volumes) 옮기지 않고 켠(AppTranslocation) 앱은 /Applications(못 쓰면 ~/Applications)에 깐다.
 - 아이콘: `packaging/mac/Daling.icns` ← `python scripts/make_icons.py --mac` (애플 격자: 1024 안 824 네모).
-- 점검 `--autosaver-smoke`: 빈 임시 데이터 폴더로 화면 서버(빈 포트)·화면 파일·가벼운 /api·작업 프로세스(`--autosaver-job smoke`)·node·(맥) Cocoa 모듈·인증서, `AUTOSAVER_SMOKE_KEYCHAIN=1` 이면 점검용 계정으로 키체인 왕복. Windows 소스에서도 돈다(13개 통과).
+- 점검 `--autosaver-smoke`: 빈 임시 데이터 폴더로 화면 서버(빈 포트)·화면 파일·가벼운 /api·작업 프로세스(`--autosaver-job smoke`)·node·(맥) Cocoa 모듈·인증서, `AUTOSAVER_SMOKE_KEYCHAIN=1` 이면 점검용 계정으로 키체인 왕복, `=write`/`=read` 면 그것만(다음 빌드가 묻지 않고 읽는지, 아래), `=droppart`/`addpart`/`delete`/`readui` 는 '키체인 실험' 용. Windows 소스에서도 돈다(13개 통과).
+- 서명 인증서 (2026-10-15): ad-hoc 서명의 서명 요구 조건(designated requirement, DR)은 `cdhash H"…"` 라 빌드마다 바뀌고, macOS 는 개인정보 보호 권한(TCC: 문서 폴더 접근 등)과 키체인 '믿는 앱' 을 이 조건에 묶는다 → 업데이트마다 다시 묻는다. 오래 쓰는 사설 코드 서명 인증서 하나로 서명하면 DR 이 `identifier "app.daling.desktop" and certificate root = H"<인증서 SHA-1>"` 로 고정된다. **키체인 재질문은 이걸로 안 없어진다**(아래 실측). Gatekeeper 경고와는 상관없다(공증이 필요, 한 줄 설치가 피함). 알림은 osascript 라 앱 신원과 무관.
+  - 만들기(한 번, 사용자 PC): `sh packaging/mac/make_sign_cert.sh [폴더]` (Windows 는 Git Bash, 기본 `~/daling-mac-sign`). CN `Daling Mac Signing`, RSA 2048, 20년, `CA:FALSE`·`digitalSignature`·`codeSigning`. .p12 는 3DES·SHA-1 MAC 으로 만든다 — macOS `security import` 가 OpenSSL 3 기본(AES-256·PBKDF2) .p12 를 못 읽는다. `-subj`·`file:` 인자는 Git Bash 경로 변환에 깨져 설정 파일·`env:` 로 넘긴다.
+  - 비밀: `MAC_SIGN_P12_BASE64`(.base64.txt)·`MAC_SIGN_P12_PASSWORD`(.password.txt) 를 **사용자가 직접** 저장소 Settings → Secrets → Actions 에 넣는다. 개인 키는 저장소·커밋·채팅에 두지 않는다. 폴더를 잃거나 새로 만들면 SHA-1 이 바뀌어 그 판에서 모두 한 번 다시 허락한다.
+  - CI(`mac.yml`): 비밀이 있으면 임시 키체인에 넣고(`set-key-partition-list` 로 codesign 이 묻지 않게) `codesign --force --deep --timestamp=none --sign <SHA-1>`. 없으면 ad-hoc. 서명 뒤 `codesign -d -r-` 의 DR 이 `certificate (root|leaf) = H"<SHA-1>"` 가 아니면 실패. 수동 실행의 `test_cert` 를 켜면 비밀 없이도 이번 실행만 쓰는 인증서를 같은 스크립트로 만들어 이 길을 점검한다. 끝에 서명 키체인을 지운다.
+  - '키체인 허락 유지 점검': 이번 빌드(A)가 임시 키체인에 점검 항목을 쓰고, 같은 자리에 판 번호만 바꿔 같은 신원으로 다시 서명한 B(cdhash 다름)가 묻는 창을 막은 채(`SecKeychainSetUserInteractionAllowed(false)`) 읽는다. 양성 대조군(A 가 그대로 다시 읽기)은 읽어야, 음성 대조군(ad-hoc B)은 못 읽어야 정상. 항목 접근 목록(`security dump-keychain -a`)도 남긴다. 결과는 실행 요약 표와 `logs/keychain-persist.log`. 양성 대조군이 깨질 때만 단계가 실패한다(사설 인증서 결과는 알림).
+  - 실측(2026-10-15, 실행 38616964018 ad-hoc·38617564695 시험용 인증서): 같은 빌드는 다시 읽고, ad-hoc 다음 빌드·**사설 인증서 다음 빌드 둘 다 못 읽는다**(OSStatus -25293). 항목 접근 목록에서 '믿는 앱' 요구 조건은 인증서 DR 로 바뀌었지만, 따로 붙는 `partition_id` 가 `cdhash:<만든 빌드>` 다. 애플 팀 ID 가 없는 서명은 partition 이 cdhash 뿐이라(애플 포럼 developer.apple.com/forums/thread/98484 와 같음) 업데이트마다 키체인을 한 번 묻는다. 없애려면 Developer ID(팀 ID → `teamid:`)가 필요하다.
+  - 키체인 실험(2026-10-15, 수동 실행 `keychain_lab`·`keychain_lab_cases`, `mac_keychain_lab.py`; 실행 38684779540·38687984270·38689511971, 시험용 인증서): 1판이 만든 점검 항목을 판 번호만 바꿔 같은 인증서로 다시 서명한 2판·3판이 묻는 창을 막고 읽는가. 경우별 접근 목록(`dump-keychain -a`)은 각 실행의 `logs/keychain-lab.log`, 결과 표는 실행 요약.
+    - (a) 접근 목록을 직접 넘겨 만들기(`SecAccessCreate` + `SecKeychainItemCreateFromContent`): **안 됨**. 넘긴 목록엔 partition 항목이 없는데 만든 항목엔 `partition_id = cdhash:<1판>` 이 붙는다(만들 때 시스템이 붙임). 읽기를 모든 앱에 열어도(allowall), 접근 목록 고치기 권한(change_acl)을 인증서 DR 에 줘도(owner) 2·3판 모두 -25293.
+    - (b) partition 목록 고치기: **안 됨**. 만든 빌드가 곧바로 지우기(ownerdrop), 업데이트 직전 옛 판이 새 판 cdhash 더하기(ownerprev), 새 판이 제 cdhash 더하기(ownerself) 모두 `SecKeychainItemSetAccess` 가 키체인 암호를 요구한다 — 고치기 권한을 인증서 DR 에 줬어도 -25293, 기본 항목(고치기 권한이 아무 앱에도 없음)은 '접근 권한을 바꾸려 함 — 키체인 암호 입력' 창이 묻는 창 막기를 무시하고 뜬다(drop). `security set-…-partition-list` 가 `-k <암호>` 를 받는 것과 같은 규칙. 앱이 로그인 암호를 알아야 하므로 쓸 수 없다. 기본 항목의 prev·self 는 drop 의 창이 남아 뒤 codesign 이 멈춰 따로 재지 못했다(같은 `SetAccess` 라 같은 창).
+    - 되는 것 하나: **새 판은 못 읽는 옛 항목을 묻지 않고 지울 수 있다**(nextdel: 지우기 → 새로 만들기 → 읽기, 2·3판 모두 됨). 값은 꺼내지 못한다.
+    - 사용자가 보는 창(ui, 화면 찍음): 'Daling 이(가) 키체인의 "Daling" 키에 접근하려고 함 — 허용하려면 키체인 암호 입력' + 항상 허용·거부·허용. **업데이트마다 로그인 암호를 쳐야 한다**(클릭 한 번이 아님). '항상 허용' 이면 그 판에서는 다시 안 묻는다.
+    - CI 주의: 묻는 창이 한 번 뜨면 프로세스를 죽이고 SecurityAgent 를 꺼도 뒤의 codesign·dump-keychain 이 멈췄다 → 창을 띄우는 경우는 맨 끝에, 한 실행에 하나만.
+  - 고를 길 (지금 저장 방식은 그대로, 사용자가 정한다):
+    1. 지금대로(키체인, 업데이트마다 한 번 암호): 다른 앱·같은 사용자의 다른 프로세스는 값을 못 꺼낸다(DR + partition). 대가는 위 창.
+    2. 넘겨주기: 앱 안 업데이트 때 옛 판이 비밀 값을 데이터 폴더의 0600 파일에 잠깐 적고 → 새 판이 처음 켤 때 옛 항목을 지우고(묻지 않음, nextdel 실측) 새 항목에 넣은 뒤 파일을 지운다. 앱 안 업데이트에서는 안 묻는다. 대가: 업데이트하는 몇 초(실패하면 다음 실행까지) 같은 사용자의 프로세스가 그 파일을 읽을 수 있다. DMG 끌어 놓기·한 줄 설치로 바꾸면 넘겨줄 틈이 없어 1과 같다.
+    3. 0600 파일만(리눅스 `secretfile:` 길): 안 묻지만 암호화가 없다 — 같은 사용자의 모든 프로세스·Time Machine 백업·동기화 폴더에 평문. 키체인 '모든 앱 허용' 은 partition 때문에 소용없어(allowall) 중간 길도 없다. `/usr/bin/security` 를 거쳐 읽는 길(항목을 `apple-tool:` partition 으로)도 아무 프로세스나 같은 명령으로 꺼낼 수 있어 이 수준이다(재지 않음).
+    4. Developer ID(연 99달러): partition 이 `teamid:` 라 안 묻고, 공증으로 Gatekeeper 창도 없어진다. 근본 해결.
+  - 권고: Developer ID 전까지 1 을 유지하고, 업데이트마다 암호를 치는 것이 불편하다는 말이 나오면 2 를 앱 안 업데이트에만 더한다. 3 은 보호가 평문 파일 수준으로 떨어져 권하지 않는다.
+  - 그래도 남기는 까닭: TCC 는 DR(csreq)로 비교하므로 인증서 서명이면 이어진다(CI 로는 못 잼). 이미 ad-hoc 판을 쓰던 사람은 인증서로 바뀐 첫 판에서 TCC 를 한 번 더 묻는다.
 - 맥에서 HTTPServer 의 `getfqdn` 역조회를 건너뛴다(`ExclusiveHTTPServer.server_bind`). 첫 CI 실행에서 '로컬 네트워크의 기기 찾기 허용?' 창이 떴고 서버가 15초 늦게 떴다. 건너뛰고 나서 창이 없어지고 1초 만에 뜬다.
 
 ## 리눅스 판 (2026-10-12)
@@ -751,10 +782,87 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 |---|---|---|---|
 | SignPath Foundation (Windows) | 무료 | 심사 수 주~2달, 승인 뒤에도 밀림 | 2026 거절 사례가 '사용자층이 아직 없음'. 이 저장소(별 0)는 지금은 어렵다. 받아도 게시자는 'SignPath Foundation', SmartScreen 평판은 쌓여야 함. `release.yml`·`.signpath/` 준비됨 |
 | OSSign (Windows) | 무료 | — | 신청 잠정 중단, 저장소 6개월 이상 활동 필요 |
-| Microsoft Store MSIX | 무료(개인 등록 2025-09~) | 1~2주 | Microsoft 가 서명 → Store 설치는 SmartScreen·SAC 모두 통과. MSIX 포장·심사(로그인 앱은 시험 계정 요구)가 필요 |
+| Microsoft Store MSIX | 무료(개인 등록 2025-09~) | 1~2주 | Microsoft 가 서명 → Store 설치는 SmartScreen·SAC 모두 통과. 포장은 준비됨(`packaging\msix`), 심사(로그인 앱은 시험 계정 요구 → '체험 모드' 로 대응)가 남음 — 아래 'Microsoft Store 판' |
 | Azure Artifact Signing | 월 $9.99~ | — | 개인은 미국·캐나다만 |
 | Certum 오픈소스 인증서 | 약 €49 | 며칠 | 유료, 품절 |
 | Apple 공증 (맥) | 연 $99 | — | 무료 Apple 계정으로는 불가. Homebrew 는 `--no-quarantine` 을 없앴고(5.0) Gatekeeper 를 못 넘는 cask 를 2026-09-01 에 막았다 |
+
+## Microsoft Store 판 (MSIX, 2026-10-15)
+무료로 지금 받을 수 있는 공인 서명은 Store 뿐이다(위 표). Store 에서 받은 MSIX 는 Microsoft 가 다시 서명하므로 SmartScreen('PC 보호')·스마트 앱 컨트롤(SAC)·S 모드(Store 앱만 허용)에 막히지 않는다. EXE·MSI 를 그대로 내는 길(정책 10.2.9)은 공인 인증서 서명이 있어야 해서 안 된다.
+- 만들기: `packaging\msix\build_msix.ps1` — [1/6] `dist\붕어빵`(없거나 `-Build` 면 `build_installer.ps1 -Stage exe`) → [2/6] `build\msix\layout` 에 복사 + 매니페스트 → [3/6] `resources.pri` → [4/6] MakeAppx → [5/6] 서명 → [6/6] `-Install`(·`-Smoke`). `-Uninstall` 은 시험판 지우기.
+  - 시험판 `packaging\out\daling-<버전>-win-x64.msix`: 이름 `jykim5215.Daling`, 게시자 = 사설 인증서 주체(`CN=붕어빵 (jykim5215), O=jykim5215`), 사설 서명. 73.8MB(Inno 설치 파일 57MB 보다 큼: MSIX 는 파일마다 따로 압축).
+  - 제출판 `-Store -IdentityName … -Publisher … -PublisherDisplayName …` → `…-store.msix`: Partner Center 값으로, 서명 안 함(Store 가 서명). 가짜 값으로 묶기까지 확인.
+  - 도구: Windows SDK 가 없으면 Microsoft 의 NuGet 패키지 `Microsoft.Windows.SDK.BuildTools` 10.0.26100.4654(22MB)를 `build\msix-tools` 에 한 번 받아 MakeAppx·MakePri·SignTool 을 쓴다. 셋 다 Microsoft 서명인지 확인한다(SDK 전체 설치는 관리자 권한이 든다).
+  - 판 번호: `VERSION` 1.12.28 → 1.12.28.0 (Store 는 넷째 자리를 자기가 쓰므로 0).
+- 매니페스트 틀 `packaging\msix\AppxManifest.xml`: `runFullTrust`(보통 Win32 앱), `windows.startupTask`(꺼짐), 실행 별칭 `daling.exe`, 최소 Windows 10 2004(19041), 언어 ko-KR·en-US. 실행 파일 이름은 `붕어빵.exe` 그대로(MakeAppx 가 받아 줌).
+- 로고: `python scripts/make_icons.py --msix` → `packaging\msix\Assets`(배율 5벌 + 작업 표시줄 크기 14벌 × 바탕판 없는 판). 이름만으로는 Windows 가 배율 판을 못 고르므로 build 가 makepri 로 `resources.pri`(후보 96개)를 만든다 — 없으면 작업 표시줄·시작 메뉴 아이콘이 빈다. `_internal` 수천 개는 색인하지 않게 매니페스트+Assets 만 따로 놓고 만든다.
+- 이 PC 시험 설치: MSIX 설치는 시스템 서비스가 서명을 보므로 '현재 사용자' 신뢰로는 안 되고(실측 0x800B0109 '루트 인증서는 신뢰할 수 있어야'), **사용자가 직접** 관리자 PowerShell 에서 한 번 `Import-Certificate -FilePath packaging\bungeoppang-codesign.cer -CertStoreLocation Cert:\LocalMachine\TrustedPeople`. (보안 설정이라 대신 하지 않는다. 되돌리기: 인증서 관리자에서 '신뢰할 수 있는 사람'의 붕어빵 인증서 삭제)
+
+### MSIX 안에서 달라지는 것
+2026-10-15 이 PC 실측 (`jykim5215.Daling_1.12.28.0_x64__mm60x010zk88p`, 설치 위치 `C:\Program Files\WindowsApps\…`):
+- `daling.exe --autosaver-smoke` **14개 통과**. 작업 프로세스가 같은 패키지 이름으로 돎(`package=` 일치), node 실행, 업데이트는 Store 로.
+- `%LOCALAPPDATA%` **바로 아래에 새로 만든 폴더**: 패키지 안에서 만들면 `…\Packages\<패밀리>\LocalCache\Local` 로 가고 밖에서 안 보인다. 반대로 **설치 뒤에 밖에서 만든 바로 아래 폴더는 패키지 안에서 아예 안 보인다**(폴더 2개로 확인. 같은 EXE 를 패키지 밖에서 돌리면 보임). 설치 전부터 있던 `ms-playwright` 는 보인다.
+- **이미 있던 하위 폴더**(`Programs\붕어빵`, 삼성 노트 `LocalState`, `Temp`): 밖에서 만든 파일이 보이고, 안에서 새로 만든 파일·고친 내용이 진짜 자리에 그대로 간다 → 삼성 노트 DB·백업·저널도 진짜 자리에 쓰인다(실제 DB 에는 쓰지 않고 같은 성격의 폴더로 확인). 홈 폴더·`Temp` 도 진짜 자리.
+- 알림: 패키지 안에서 앱 ID 'Daling' 과 패키지 앱 ID 둘 다 알림 기록에 남았다(둘 다 뜸). 패키지 앱 ID 를 쓰는 까닭은 시작 메뉴의 Daling 과 같은 앱으로 묶기 위해서.
+- 창: `daling.exe` 로 켜면 서버가 0.8초 만에 뜨고(`/healthz`), 패키지 안 `붕어빵.exe` 의 'Daling' 창(1320×812)에 WebView2 로 대시보드가 그려진다(제목 줄 없는 모양까지 같음).
+- 따로 된 데이터로 띄워 볼 때는 `AUTOSAVER_ROOT`(web_ui) 와 `AUTOSAVER_DATA_ROOT`·`AUTOSAVER_CONFIG_PATH`(작업 프로세스)를 **모두** 바꿔야 한다. `AUTOSAVER_DATA_ROOT` 만 바꿨더니 화면은 실제 `C:\lms-autosaver` 를 읽었다(41초 만에 껐고 `boot_times.json`·`notices.json` 만 쓰임. 예약 작업은 켜고 45초 쉰 뒤라 돌지 않음). 실행 별칭은 부른 쪽의 환경 변수를 물려준다.
+- 확인 못 한 것: 작업 표시줄·시작 메뉴 아이콘 모양, 알림 클릭, 시작 시 자동 실행 켜기, SAC 켠 PC, 실제 LMS 동기화(Store 판으로 로그인).
+
+| 무엇 | Inno 설치판 | Store 판(MSIX) | 대응 |
+|---|---|---|---|
+| 설치 폴더 | `%LOCALAPPDATA%\Programs\붕어빵` | `C:\Program Files\WindowsApps\<패키지>` 읽기 전용 | 앱이 설치 폴더에 쓰는 곳 없음(코드 확인: `PROJECT_ROOT` 는 읽기만) |
+| 데이터 `C:\lms-autosaver` | 그대로 | 그대로 (AppData 밖은 가상화 안 함) | 두 판이 같은 데이터를 나눠 쓴다. 앱을 지워도 남음 |
+| `%LOCALAPPDATA%` 에 새로 만드는 파일·폴더 | 그대로 | 패키지 전용 자리(`…\Packages\<패밀리>\LocalCache\Local`)로 돌려지고, 앱과 그 자식 프로세스에게만 원래 자리로 보인다. 이미 있는 파일 고치기는 진짜 자리에 | LMS 브라우저(`ms-playwright`)는 설치 전부터 진짜 자리에 있었으면 그것을 쓰고, 없으면 패키지 안에 받는다(앱을 지우면 같이 지워짐). 설치 뒤 Inno 판이 받은 것은 Store 판이 못 본다(실측, 아래) |
+| HKCU 쓰기 | 그대로 | 앱 전용 사본 | 앱은 레지스트리에 쓰지 않는다(winreg 없음) |
+| 시작 시 자동 실행 | 설치 때 고르면 시작프로그램 폴더 바로 가기 | 바로 가기를 만들어도 가상화돼 탐색기가 못 본다 → `StartupTask`(기본 꺼짐) | 켜기: 설정 › 앱 › 시작 프로그램(또는 작업 관리자 › 시작 앱)에서 Daling |
+| 작업 프로세스 | `붕어빵.exe --autosaver-job` | 같음. 자식 프로세스(작업·node·크로미움·알림 PowerShell)가 패키지 신원을 물려받는다 | `--autosaver-smoke` 가 작업 프로세스의 패키지 이름이 같은지 본다 |
+| 앱 안 업데이트 | GitHub 설치 파일을 받아 조용히 설치 | 끔. 돌리면 Store 판과 따로 노는 Inno 판이 하나 더 깔린다 | `runtime_config.is_msix()` → `updater` 가 GitHub 에 묻지 않고 'Microsoft Store가 새 버전을 알아서 설치해요'. 새 버전은 Store 가 깐다 |
+| 작업 표시줄 앱 ID | `DGIST.Bungeoppang.App` 을 붙임 | 패키지가 정함(`<패밀리>!Daling`) | 패키지 안이면 `SetCurrentProcessExplicitAppUserModelID` 를 부르지 않는다(붙이면 창이 시작 메뉴의 Daling 과 다른 앱으로 묶인다) |
+| 알림 | winotify 앱 ID 'Daling' | 패키지 앱 ID 로 | `app.notify` 가 `msix_app_user_model_id()` 를 쓴다 |
+| WebView2 | 없으면 설치 파일이 깔아 줌 | MSIX 는 설치 프로그램을 못 돌린다 | Windows 11 은 기본 포함, 10 도 Edge 업데이트로 대부분 있음. 없으면 창 대신 기본 브라우저로 연다(`app.run_in_browser`) |
+| 명령 줄 | 실행 파일 경로 | 실행 별칭 `daling.exe` (`%LOCALAPPDATA%\Microsoft\WindowsApps`) | 점검: `daling.exe --autosaver-smoke` |
+- 개발 서버에서 Store 판 화면 보기: `.claude/launch.json` 의 `autosaver-src-store`(8793, `AUTOSAVER_PRETEND_MSIX=1`). 설정 › 앱 › 새 버전 칸에 'Microsoft Store가 새 버전을 알아서 설치해요 (v1.12.28)', 새 버전 알약·'지금 업데이트' 없음 확인(콘솔 오류 0).
+- 남은 위험(제출 전에 볼 것):
+  - **LMS 브라우저**: 2026-10-15 부터 Windows 는 Microsoft 서명 Edge 를 `channel="msedge"` 로 써서(4.1) 패키지 밖에서 서명 없는 실행 파일을 받지 않는다. 남은 위험은 Edge 가 없거나(지운 PC) 회사·학교 정책으로 headless 가 막혀 못 띄우는 PC 뿐 — 그때만 예전처럼 서명 없는 `chrome-headless-shell` 을 받아 SAC·정책 10.2.2 위험이 남는다. 묶은 `node.exe` 는 OpenJS Foundation 서명(Valid).
+  - 삼성 노트 정리(`organize_notes`)는 다른 앱(삼성 노트)의 DB 를 직접 고친다. 심사에서 '다른 앱 데이터 변경'으로 볼 수 있다. PDF 보내기(WinRT Launcher)는 지원되는 방법.
+
+### Store 제출 절차 (계정 등록·제출은 사용자가 직접)
+1. **개인 개발자 등록(무료)**: storedeveloper.microsoft.com → 'Get started for free' → 개인(Individual) 선택, 개인 Microsoft 계정으로 로그인 → 휴대폰으로 정부 발급 신분증 원본 + 셀카 촬영(밝은 곳). 2025-09 부터 개인은 무료·카드 불필요, 회사 계정은 $99.
+2. Partner Center › 앱 및 게임 › 새 제품 › MSIX 또는 PWA 앱 → 이름 예약('Daling'. 이미 쓰이면 'Daling for DGIST' 등 — 보이는 이름 `DisplayName` 도 같이 바꿔 묶는다).
+3. 제품 관리 › 제품 ID 에서 `Package/Identity/Name`·`Package/Identity/Publisher`·`Package/Properties/PublisherDisplayName` 을 복사 → `build_msix.ps1 -Build -Store -IdentityName … -Publisher … -PublisherDisplayName …` → `packaging\out\daling-<버전>-win-x64-store.msix` 를 패키지 칸에 올린다.
+4. 제출 칸:
+   - 가격·사용 가능: 무료, 시장은 대한민국(또는 전체).
+   - 속성: 범주 '교육'(또는 '생산성'), **개인정보처리방침 URL `https://gudaling.dev/privacy`** (정책 10.5.1: 아이디·비밀번호·메일을 다루므로 필수. 2026-10-15 열림 확인), 지원 주소(GitHub issues 또는 tutleblue12@gmail.com).
+   - 연령 등급: IARC 설문. 폭력·도박 없음, 사용자끼리 대화하는 기능은 없음(학교 메일 보내기는 이용자 본인 계정의 메일 앱 기능)으로 답한다.
+   - 스토어 목록(한국어·영어): 설명, 짧은 설명, 스크린샷(1366×768 이상, 개인정보 없는 화면). **스크린샷은 `packaging\msix\store-screenshots\` 의 12장** — `ko-1-dashboard`~`ko-6-mail` 은 한국어 목록에, `en-…` 은 영어 목록에 번호 순서대로(대시보드·과제 마감·캘린더·강의·자료·메일함). 1920×1080 PNG, 장마다 140~260KB.
+     - 다시 찍기: `.venv\Scripts\python.exe packaging\msix\store_screenshots.py` (약 40초. `--lang ko|en`, `--theme dark`, `--only dashboard emails`). 임시 폴더를 데이터 폴더로 삼은 개발 서버(8792)를 따로 띄워 체험 모드(가짜 데이터, 아래 '체험 모드' 절)로 찍으므로 `C:\lms-autosaver` 는 읽지도 쓰지도 않는다. 2026-10-15 찍는 동안 서버가 막은 바깥 연결 0건.
+     - 모양: 1536×864 화면을 1.25배(1080p 노트북의 Windows 기본 배율 125%). 개발 서버엔 창 단추가 없어서 `/api/window` 대답만 custom:true 로 바꿔 설치본처럼 최소화·최대화·닫기를 그리고, 체험 중엔 빼는 바깥 글꼴(Inter·Lora)을 찍는 브라우저에만 붙인다.
+     - 체험 표시(맨 위 줄무늬 띠·'체험 중 · 가짜 데이터' 알약·상태판 '체험 중')는 넣지 않는다(사용자 결정, 2026-10-15). 둘러보는 사람이 '체험 끝내기'를 기능으로 오해하지 않게. 첫 화면의 `<html data-demo>` 만 떼고 받아 보통 화면 코드로 그리므로 화면에 보이는 것은 모두 계정을 넣은 화면에도 있는 것이다. 체험 화면 그대로는 `--demo-badge`.
+     - 구도: 캘린더는 메일에서 뽑은 세미나 날을 골라 상세에서 그 메일을 펼친 모습(연사·장소·본문), 자료는 '전체 목록'(과목 폴더 4개만으로는 화면이 빔), 메일함은 맨 위 메일을 연 모습. 가짜 데이터가 찍는 날 기준이라 날짜·'오늘 남은 수업' 수는 찍는 시각마다 다르다.
+   - **제한된 기능 `runFullTrust` 사유** (영어로):
+     > Daling is a classic Win32 desktop app (Python, packaged with PyInstaller) that shows its UI in WebView2 served from a local 127.0.0.1 server. It starts its own helper processes (붕어빵.exe --autosaver-job) and Playwright's bundled Node.js driver to sign in to the university LMS with the system Microsoft Edge in headless mode (nothing is downloaded on Windows), saves course files to the user's own folders (C:\lms-autosaver, Documents) and can hand PDFs to Samsung Notes. These need full-trust desktop execution; the app cannot run in an AppContainer.
+   - **인증 참고 사항(Notes for certification) — 정책 10.3.1** ('로그인이 필요하면 쓸 수 있는 시험 계정을 주라'): DGIST 계정은 학교가 재학생에게만 발급하는 SSO 계정이라 심사용으로 만들 수 없고, 이용자 계정을 넘기는 것은 학교 규정 위반이다. 대응은 앱 안 **체험 모드**(아래 '체험 모드' 절, 1.12.28~). 참고 사항 칸에 그대로 붙인다:
+       > No test account is needed. DGIST LMS and school mail use SSO accounts that the university issues only to enrolled students, so we cannot create one for testers. Instead, the app has a built-in demo mode with sample data:
+       > 1. Launch Daling. On the first intro card, click "Try without an account" (or, any time, the same button in the top bar, or Settings › Connected accounts › Demo mode › "Try the demo").
+       > 2. Every screen fills with sample data: Dashboard, Deadlines, Calendar, Courses (with announcements), Files (sample PDFs open locally) and Mailbox (read, star, delete, restore).
+       > 3. While the demo is on, a striped bar at the top and a "Demo · sample data" pill are shown. The app makes no network requests in demo mode; actions that need a server (sync, sending mail, Google sign-in, uploads) show "Not available in demo mode".
+       > 4. Click "End demo" in the top bar to leave the demo. Your own data folder is not touched.
+       > Public screens (academic calendar, school notices, shuttle bus, course timetable) also work without an account outside demo mode. The UI can be switched to English in Settings › Language; demo data then appears in English.
+     - 심사자가 한국어 화면으로 보면 체험 데이터도 한국어다(켤 때의 화면 언어로 만든다). 영어로 보려면 먼저 설정 › 언어를 English 로.
+5. 심사는 보통 1~3일. 통과하면 Store 주소가 생긴다 → 사이트 내려받기에 'Microsoft Store 에서 받기' 를 더할 수 있다.
+6. 새 버전: `VERSION`·changelog 를 올리고 같은 명령으로 새 `-store.msix` 를 만들어 '업데이트' 제출. Store 가 이용자 PC 에서 자동으로 바꾼다(앱 안 업데이트는 꺼져 있음).
+
+## 체험 모드 (2026-10-15)
+Microsoft Store 정책 10.3.1(로그인 앱은 심사용 시험 계정을 줄 것)에 대응. DGIST 계정은 학교가 재학생에게만 주는 SSO 계정이라 줄 수 없어서, 심사자와 처음 깐 사람이 계정 없이 모든 화면을 보게 했다. 코드: `demo_mode.py`, `web_ui`(`workspace_for_user`·`_demo_get`·`_demo_post`·`toggle_demo`·`send_demo_index`), `app.scheduler_loop`, `app.js`(`DEMO_ON`·`renderDemoPill`·`setDemo`).
+
+- **켜기·끄기**: 첫 실행 소개 첫 카드의 '계정 없이 체험하기'(계정이 없을 때만), 상단 바 알약(계정이 없으면 '계정 없이 체험하기', 체험 중이면 '체험 중 · 가짜 데이터 · 체험 끝내기'), 설정 › 연결된 계정 맨 아래 '체험 모드'. `POST /api/demo {on, lang}` 뒤 화면을 새로 띄운다(남은 목록·캐시가 섞이지 않게). 켠 상태는 메모리에만 있어 앱을 다시 켜면 늘 내 데이터로 시작한다. 동기화·메일 작업이 도는 중에는 켜지 않는다('가져오는 중이에요').
+- **데이터 폴더**: 켜면 `%TEMP%\daling-demo\<pid>`(표지 `.daling-demo`)에 새로 만들고(실측 0.06초) `workspace_for_user` 가 그 폴더를 돌려준다. 끄면 그 폴더를 지운다. 앱이 체험 중에 꺼져 남은 폴더는 다음에 켤 때 하루 지난 것만 치운다. 진짜 폴더(`C:\lms-autosaver`)에서는 화면 취향 세 파일(`ui_prefs.json`·`tutorial.json`·`whats_new.json`)만 읽어 오고, 끌 때 체험 중 바뀐 것(테마·언어, 끝까지 본 소개)만 돌려놓는다. 자료·메일·설정은 옮기지 않는다. 오류 기록(`server_errors.log`)도 체험 중에는 체험 폴더에.
+- **가짜 데이터**(켤 때 화면 언어 ko/en 으로, 날짜는 오늘 기준): 과목 4개(미적분학Ⅱ·일반물리학Ⅱ·프로그래밍 기초·글쓰기와 소통, LMS 과목명 꼴 그대로), 강의자료 17개(LMS 폴더·순서·받은 날짜를 흩어 둠, PDF 는 눌러 열리는 진짜 한 쪽 PDF·영문), 마감 11개(오늘·내일·3일 뒤… 제출·채점 완료 섞음)와 LMS 일정(중간고사), 과목 공지 6개, 메일 13통(받은 편지함 10·보낸 2·휴지통 1, 분류·안읽음·답장·세미나/진로 행사 날짜 → 캘린더), 시간표 7칸, 내 일정 2개, 학교 공지 6개(누를 곳 없음), 학교 행사 2개(사진 없음), 셔틀 예시 노선(화면에 '체험용 예시 시간표예요'). 학사일정·개설강좌는 앱에 든 공개 씨앗 그대로. 시험·세미나가 주말에 걸리면 월요일로.
+  - 사람은 옛이야기 인물(이몽룡·성춘향·전우치·심청·장화·홍련·콩쥐·팥쥐, 영어 화면은 로마자), 주소는 예약된 `example.com`, 강의실은 A101 같은 번호. 실명·실제 주소 없음.
+  - 설정은 상태판이 정상으로 보이게 `LMS_ID`·`SCHOOL_EMAIL`(student@example.com)과 비밀번호 칸에 자리 글자(`demo`)만 넣는다. 진짜 비밀번호가 아니고 어디로도 보내지 않는다. Drive 는 꺼 둠.
+- **바깥 요청 0건**: 체험 중에는 (1) `start_task` 가 작업 프로세스를 띄우지 않고(자동 실행도), `scheduler_loop` 는 알림까지 쉰다. (2) 화면 서버가 바깥이 필요한 라우트를 먼저 받는다: 동기화·메일 보내기/임시저장/이동·번역·Drive·Google·캘린더·삼성 노트·내 컴퓨터 저장·.ics 내보내기·업데이트·제출 페이지 열기·설정 저장은 409 '체험 중에는 쓸 수 없어요. 체험을 끝내고 계정을 넣으면 돼요.', 학사일정·공지·셔틀·학교 행사·개설강좌는 새로 받지 않고 있는 것(씨앗)만, 메일 읽음·별표·휴지통·되돌리기는 체험 폴더의 `emails.json` 만 고친다(`demo_mode.patch_mail`). 상단 새로고침은 같은 문구만 띄운다. (3) 안전망: `socket.getaddrinfo`·`socket.connect`·`connect_ex` 를 바꿔 끼워 루프백이 아닌 곳은 막고 `demo_mode.BLOCKED` 에 남긴다(`GET /api/demo` 의 `blocked`). (4) 화면: 체험 중 `index.html` 은 서버가 `<html data-demo="1">` 를 달고 Google Fonts `<link id="webFonts">` 를 뺀다(그래서 `styles.css` 맨 위의 `@import` 를 `index.html` 로 옮겼다). 2026-10-14 디자인 검토로 웹폰트 자체를 뺐으므로 이 줄은 이제 할 일이 없다(빼는 코드는 그대로 둠). 체험 중 메일 임시저장·별표 localStorage 키는 `autosaver-demo-*`.
+- **확인(2026-10-15, 개발 서버)**: 대시보드·마감·캘린더·강의·자료·메일함·창고가 모두 찬 것을 한국어·영어로 확인. 화면이 받은 자원 36·37개 중 바깥 0개(`performance` 기록), 모든 화면과 막는 라우트 17개를 부른 뒤 서버 차단 기록 0건(아무 코드도 바깥으로 나가려 하지 않음). 직접 시험: `urlopen("https://lms.dgist.ac.kr")`·IP 직접 연결 모두 막힘. 끈 뒤 진짜 자료 360개·과목 18개로 돌아오고 취향 파일 세 개와 `config.json` 이 미리 떠 둔 사본과 바이트까지 같음. 빈 데이터 폴더(처음 깐 PC)에서 소개 첫 카드 → '계정 없이 체험하기' → 데이터가 찬 채 소개가 다시 시작(계정 넣기 단계는 뺌).
+- 공유 웹사이트 모드(`AUTOSAVER_MULTI_USER`)에서는 쓰지 않는다(`available: false`, 줄·알약 숨김).
 
 ## 영어 화면의 학사일정 (2026-10-12)
 - 학사일정 이름은 학교 데이터라 번역표에 없어 영어 화면에서도 한국어였다. `acadTitleEn` 이 낱말표(`ACAD_TERMS`)로 옮긴다: '대학 및 대학원' 머리는 빼고, '대학원' 은 'Grad:', 'YYYY학년도 N학기' 는 'Spring/Fall YYYY', 계절학기는 'Summer/Winter session YYYY', "('26.8월 졸업생)" 은 "(Aug '26 grads)", 뒤의 'D-52' 는 그대로. `tr` 안에서 표·틀 다음에 부르며, 다 옮겨 한글이 하나도 안 남을 때만 쓴다(메일 제목은 그대로). 2026 학사일정 38개 이름 모두 옮겨짐.
@@ -875,3 +983,16 @@ Apple HIG·WCAG 기준 검토(디자인 스튜디오 가짜 데이터에서 계�
 - 남은 첫 호출 비용(`/api/status` 445ms: 시간표 모듈 0.21s·구글 토큰 확인 0.19s, course-staff 130ms, emails 80ms)은 `app._prewarm_first_screen` 이 서버를 띄우자마자 뒤에서 미리 해 둔다(창=WebView2 가 뜨는 1~2초 동안). 실측 676ms → 50ms.
 - 켤 때 상단 버전 글자용 GitHub 확인(`/api/update/check`)은 3초 뒤로 미뤘다(첫 화면 요청과 연결을 다투지 않게).
 - 기록: 화면이 첫 새로고침을 마치면 `/api/boot-done` → `boot_times.json`(최근 30번: serverReady·pageRequested·firstScreen, 실행 파일 생성 시각 기준 초). '느리다' 는 신고가 오면 이 기록부터 본다.
+
+## AI 도우미 (AI CLI: Claude · Gemini · Codex, 2026-10-15)
+
+- `ai_cli.py`: 이 PC 에 로그인해 둔 CLI 를 그대로 부른다(앱은 키를 받지 않는다). 질문은 **표준입력**으로(배치 파일 인자 해석 위험 회피), 빈 임시 폴더에서, 창 없이, 180초 제한. claude `-p --disallowedTools …`, gemini `-p "Answer the request above."`, codex `exec --skip-git-repo-check --ephemeral -s read-only -o <파일> -`.
+- 실측: 한 줄 질문 claude 9초·codex 10초, 말로 찾기 13~15초(목록 799개), 초안 15초, codex 번역 11초. gemini 는 로그인 전이면 'Please set an Auth method' → '로그인 필요' 로 알린다.
+- 설정 'AI 도우미'(`#stAi`): 쓸 AI(자동·Claude·Gemini·Codex, 설치 여부 표시) + 내 정보(이름·학번·소속·소개·서명) → `ai_profile.json`. 설정 폼 저장과 따로 저장(입력칸에 name 속성 없음).
+- 번역: `/api/mail/translate` 가 고른 AI CLI 를 먼저, 안 되면 예전 길(Ollama → Gemini 키).
+- 말로 찾기: 통합 검색 팝업 맨 아래 'AI 에게 물어보기'. `buildSearchResults(q, {all:true})` 로 모든 후보를 모아 순번 id 로 보내고, 돌아온 id 만 원래 결과로 연다(모델이 지어낸 id 는 버려짐). `keepOpen` 항목은 팝업을 닫지 않는다.
+- 메일 초안: 쓰기 화면 'AI 초안' → 한 줄 요청. 받는 사람 주소로 `state.coursePeople` 에서 과목·분반·역할(내 수업 먼저)을 찾아 함께 보낸다. 외국인 교수면 영어로 쓴다. 'AI 없이 내 소개 넣기' 단추도 있다.
+- 체험 모드에서는 `/api/ai/search`·`/api/ai/draft` 를 막는다. 자동 실행은 없다(누를 때만 바깥으로 나감). 상태 확인은 첫 화면 4초 뒤.
+- AI 모델 고르기·받는 사람 추천(2026-10-15 '밀착형 AI'): 메일 쓰기 단추에 'AI 초안' 대신 지금 모델 이름(Opus 5.5, GPT-6-Astra …). 초안 칸의 고르기에서 Claude(opus·sonnet·fable·haiku 별칭)·Gemini(2.5 Pro 등)·Codex(`~/.codex/models_cache.json` 의 visibility=list, 기본은 config.toml model) 모델을 바꾼다 → `ai_profile.json` 의 provider·model. 모델 이름은 `_SAFE_MODEL` 글자만(배치 파일 인자). 안 골랐으면 화면에 보이는 그 CLI 기본 모델을 서버도 똑같이 쓴다.
+- 초안이 받는 사람(to)·참조(cc)도 고른다. 후보는 내가 듣는 과목의 교수·조교 중 주소를 아는 사람(`aiDraftCandidates`, 최대 80명: 주소·이름·역할·과목·분반)이고, 후보 밖 주소는 버린다. 받는 사람 칸이 비면 바로 채우고, 나머지는 칩(누르면 넣기/빼기). 제목은 제목 칸에 바로. 실측: 받는 사람 빈칸 + '일반물리 교수님께 결석 양해' → 3분반 교수 자동, 조교 참조 추천, Opus 5.5 14.8초.
+- AI 도우미 실험실 스위치(2026-10-15): 설정 'AI 도우미' 카드 머리의 '실험실' 표시 옆 스위치(`#aiEnabled`) → `ai_profile.json` 의 `enabled`("1"/빈 값, 처음엔 꺼짐). 끄면 메일 쓰기의 모델 단추·초안 칸, 검색의 'AI 에게 물어보기', 카드 상세(`#aiBody`)가 숨고, 서버도 `/api/ai/search`·`/api/ai/draft` 를 거절하며 메일 번역은 AI CLI 를 건너뛰고 예전 길(Ollama → Gemini 키)로 간다.

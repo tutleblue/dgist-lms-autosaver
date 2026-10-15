@@ -1,7 +1,7 @@
 {
   "name": "Daling",
   "project": "../..",
-  "studioVersion": "0.2.0",
+  "studioVersion": "0.2.1",
   "webRoot": "web",
   "workDir": ".design-studio",
   "context": "context.md",

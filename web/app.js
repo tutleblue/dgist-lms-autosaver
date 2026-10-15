@@ -104,6 +104,10 @@ const state = {
 
 const $ = (selector) => document.querySelector(selector);
 
+/* 체험 모드(demo_mode.py): 서버가 첫 화면에 <html data-demo="1"> 를 달아 준다.
+   켜고 끌 때마다 화면을 새로 띄우므로(setDemo) 한 번 읽어 상수로 둔다. */
+const DEMO_ON = document.documentElement.dataset.demo === "1";
+
 /* ===== 아이콘 =====
    아이콘마다 <svg>와 <path>를 통째로 새로 만들어 넣었더니, 자료 300줄이
    있는 화면에서 아이콘만 노드 2,600개를 차지했다. 모양은 문서 맨 위
@@ -290,9 +294,13 @@ function tr(text, depth = 0) {
       if (p.weak && groups.some((g) => HANGUL_RE.test(g))) continue;
       // 빈자리가 ' · ' 로 이어진 여러 마디를 삼켰으면 이 틀이 아니다 → 아래에서 마디별로 옮긴다
       if (groups.some((g) => HANGUL_RE.test(g) && / [·—|] /.test(g))) continue;
-      out = p.en.replace(/\{(\d+)\}/g, (_, i) => {
+      // '{0:class|classes}' 는 {0} 이 1 이면 앞말, 아니면 뒷말. 한국어 '{0}개' 하나가 영어에선 단수·복수 둘이라
+      // 대시보드에 '1 classes left today' 가 나왔다(2026-10-15 Store 스크린샷).
+      out = p.en.replace(/\{(\d+)(?::([^{}|]*)\|([^{}]*))?\}/g, (_, i, one, many) => {
         const at = p.order.indexOf(Number(i));
-        return at < 0 ? "" : groups[at];
+        const value = at < 0 ? "" : groups[at];
+        if (one == null) return value;
+        return /^\s*1\s*$/.test(value) ? one : many;
       });
       break;
     }
@@ -634,6 +642,11 @@ function renderLastSync() {
 }
 
 async function runViewRefresh(view) {
+  // 체험 중에는 아무것도 새로 받지 않는다. 그대로 두면 공지·셔틀이 '새로 받았어요' 라고 알렸다
+  if (DEMO_ON) {
+    showToast("체험 중에는 쓸 수 없어요. 체험을 끝내고 계정을 넣으면 돼요.");
+    return;
+  }
   switch (view) {
     case "emails":
     case "compose":
@@ -2268,7 +2281,7 @@ function bindAddressPicker() {
 }
 
 /* --- 임시저장 · 미리보기 --- */
-const DRAFT_KEY = "autosaver-mail-draft";
+const DRAFT_KEY = DEMO_ON ? "autosaver-demo-mail-draft" : "autosaver-mail-draft";
 
 function collectDraft() {
   const form = $("#composeForm");
@@ -2785,7 +2798,7 @@ function isLmsMail(mail) {
    예전에는 점수(score)가 6점 넘으면 저절로 '중요'가 됐다. 내가 고른 것이
    아니라 예측이라 믿기 어려웠다. 이제는 눌러서 직접 찍는다.
    서버에 메일 깃발을 저장하는 자리가 없어 이 컴퓨터에 적어 둔다. */
-const STAR_STORE = "autosaver-mail-stars";
+const STAR_STORE = DEMO_ON ? "autosaver-demo-mail-stars" : "autosaver-mail-stars";
 
 function loadStars() {
   try {
@@ -4513,6 +4526,8 @@ const RENDER_PARTS = [
   { key: "fglp", views: ["storage"], render: renderFglp, of: () => "1" },
   { key: "timetable", views: ["dashboard"], render: renderTimetable,
     of: (s) => sig(listSig(s.timetable), s.ttShowSat) },
+  { key: "demo", render: renderDemoPill,
+    of: (s) => sig(s.status?.demo?.available, s.status?.requiredConfig?.lms) },
 ];
 
 const renderSigns = new Map();
@@ -4657,7 +4672,12 @@ function eventShortTitle(subject) {
   t = t.split(/\s[-–—]\s|[(（＜<「]|,\s|\s및\s/)[0];
   t = t.replace(/\s*(종합\s*)?(개최\s*|참가\s*신청\s*|진행\s*)?안내\s*$/, "").replace(/\s*(행사\s*)?진행$/, "").trim();
   if (tag) {
-    const tagLabel = /세미나|특강|행사/.test(tag) ? tag : `${tag}${/seminar|세미나/i.test(raw) ? " 세미나" : ""}`;
+    // 영어 꼬리표 [Seminar] [BS Colloquium] 도 그 자체가 행사 이름이다. 한글만 봐서 'Seminar 세미나' 가 됐다(2026-10-15).
+    // 덧붙이는 말도 꼬리표 말을 따른다: [PHCH] → 'PHCH Seminar', [물리학과] → '물리학과 세미나'
+    const tagIsEvent = /세미나|특강|행사/.test(tag)
+      || /\b(seminar|colloquium|lecture|talk|symposium|workshop|forum|conference)s?\b/i.test(tag);
+    const suffix = /seminar|세미나/i.test(raw) ? (/[가-힣]/.test(tag) ? " 세미나" : " Seminar") : "";
+    const tagLabel = tagIsEvent ? tag : `${tag}${suffix}`;
     if (english || !t || !EVENT_WORD_RE.test(t)) return tagLabel;
     if (/^(특별)?(세미나|특강|행사)$/.test(t)) return `${tag} ${t}`;
   }
@@ -7186,6 +7206,8 @@ async function renderStorage() {
         detail: cloud.parts.map((p) => `${p.label} ${p.human}`).join(" · ") });
     }
     const sum = segs.reduce((n, x) => n + (x.bytes || 0), 0) || 1;
+    // Windows 는 Edge 로 로그인한다. 그 전에 받아 둔 헤드리스 셸(약 270MB)은 안 쓰여 휴지통으로 보낼 수 있게 한다.
+    const oldBrowser = app.parts.find((p) => p.key === "browser" && p.unused);
     const free = $("#diskFreeText");
     if (free) {
       free.textContent = disk.freeHuman ? `디스크 여유 ${disk.freeHuman}` : "";
@@ -7212,6 +7234,17 @@ async function renderStorage() {
           )
           .join("")}
       </div>
+      ${
+        oldBrowser
+          ? `<div class="st-oldbrowser">
+              <div>
+                <strong>예전에 받은 LMS 브라우저 <b>${oldBrowser.human}</b></strong>
+                <span>지금은 Microsoft Edge로 로그인해서 쓰지 않아요</span>
+              </div>
+              <button class="button compact" id="trashOldBrowserButton" type="button">휴지통으로 보내기</button>
+            </div>`
+          : ""
+      }
       ${disk.low ? `<p class="storage-warn">디스크 여유 공간이 부족합니다. 지난 학기 자료를 정리해 보세요.</p>` : ""}
       ${shared}
       <details class="st-clean">
@@ -7278,6 +7311,25 @@ async function renderStorage() {
     };
     box.querySelectorAll("input[type=checkbox]").forEach((c) => c.addEventListener("change", sync));
 
+    $("#trashOldBrowserButton")?.addEventListener("click", async (event) => {
+      if (
+        !(await uiConfirm(
+          `예전에 받은 LMS 로그인 브라우저(${oldBrowser.human})를 휴지통으로 보냅니다.\n\n` +
+            "지금은 Microsoft Edge로 로그인해서 필요 없어요. Edge가 안 되는 날엔 앱이 다시 받아요.",
+          { title: "안 쓰는 브라우저 정리", ok: "휴지통으로" },
+        ))
+      )
+        return;
+      event.target.disabled = true;
+      try {
+        const r = await api("/api/storage/trash-browser", { method: "POST", body: "{}" });
+        showToast(r.message);
+      } catch (error) {
+        showToast(error.message);
+      }
+      renderStorage();
+    });
+
     $("#cleanupStorageButton")?.addEventListener("click", async () => {
       const semesters = [...box.querySelectorAll("[data-sem]:checked")].map((c) => c.dataset.sem);
       const courses = [...box.querySelectorAll("[data-course-storage]:checked")].map(
@@ -7285,10 +7337,13 @@ async function renderStorage() {
       );
       const names = [...semesters, ...courses];
       if (!names.length) return;
+      // 한 문자열로 둔다. tr() 은 공백을 한 칸으로 줄인 문장 전체를 번역표와 맞추는데, 둘로 나눠 두면
+      // 앞쪽 틀의 {0} 이 뒷문장까지 삼켜 영어 화면에 한국어 반쪽이 남았다.
+      // 이름은 목록에 보이는 것과 같게 하나씩 옮긴다(한국어 화면에서는 그대로).
+      const list = names.map((n) => tr(n)).join(", ");
       if (
         !(await uiConfirm(
-          `다음 강의자료를 앱 보관함에서 지웁니다.\n${names.join(", ")}\n\n` +
-            "직접 넣은 파일과 드라이브·내 컴퓨터 사본은 그대로예요. 지난 학기 자료는 LMS에서 다시 받지 못할 수 있어요.",
+          `다음 강의자료를 앱 보관함에서 지웁니다.\n${list}\n\n직접 넣은 파일과 드라이브·내 컴퓨터 사본은 그대로예요. 지난 학기 자료는 LMS에서 다시 받지 못할 수 있어요.`,
           { title: "강의자료 정리", danger: true, ok: "지우기" },
         ))
       )
@@ -9458,7 +9513,9 @@ function renderShuttle() {
     const meta = state.shuttleMeta || {};
     const when = meta.fetchedAt ? new Date(meta.fetchedAt) : null;
     const day = when && !Number.isNaN(when.getTime()) ? `${when.getMonth() + 1}월 ${when.getDate()}일` : "";
-    hint.textContent = meta.stale
+    hint.textContent = meta.demo
+      ? "체험용 예시 시간표예요"
+      : meta.stale
       ? `학교 홈페이지에서 새 시간표를 못 받아 ${day || "예전"} 시간표를 보여 줍니다`
       : `학교 홈페이지 기준${day ? ` · ${day} 확인` : ""}`;
     hint.classList.toggle("stale", Boolean(meta.stale));
@@ -9501,7 +9558,7 @@ function loadShuttle(refresh) {
     .then((res) => {
       if (!res.routes || !res.routes.length) return;
       state.shuttle = res.routes;
-      state.shuttleMeta = { fetchedAt: res.fetchedAt || "", stale: Boolean(res.stale) };
+      state.shuttleMeta = { fetchedAt: res.fetchedAt || "", stale: Boolean(res.stale), demo: Boolean(res.demo) };
       renderShuttle();
       if (refresh) showToast(`버스 노선 ${res.routes.length}개를 새로 받았어요.`);
     })
@@ -9575,14 +9632,15 @@ function renderNotices() {
     list.innerHTML = `<p class="notice-empty">공지를 불러오는 중이에요.</p>`;
     return;
   }
-  list.innerHTML = items
-    .map(
-      (n) => `
-      <a class="notice-row" href="${escapeHtml(n.url)}" data-link="${escapeHtml(n.url)}" target="_blank" rel="noreferrer">
+  const row = (n) => `
         <span class="notice-board">${escapeHtml(n.board)}</span>
         <span class="notice-title" title="${escapeHtml(n.title)}">${escapeHtml(n.title)}</span>
-        <span class="notice-date">${escapeHtml(n.date)}</span>
-      </a>`,
+        <span class="notice-date">${escapeHtml(n.date)}</span>`;
+  list.innerHTML = items
+    .map((n) =>
+      n.url
+        ? `<a class="notice-row" href="${escapeHtml(n.url)}" data-link="${escapeHtml(n.url)}" target="_blank" rel="noreferrer">${row(n)}</a>`
+        : `<div class="notice-row">${row(n)}</div>`,
     )
     .join("");
 }
@@ -10587,13 +10645,29 @@ async function loadWhatsNew() {
   if (state.whatsNew?.justUpdated) window.setTimeout(openWhatsNew, 600);
 }
 
+// 'a.b.c' 끼리 숫자로 비교. a 가 크면 양수
+function compareVersions(a, b) {
+  const pa = String(a || "").split(".").map((n) => parseInt(n, 10) || 0);
+  const pb = String(b || "").split(".").map((n) => parseInt(n, 10) || 0);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i += 1) {
+    if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) - (pb[i] || 0);
+  }
+  return 0;
+}
+
+// 이 판의 업데이트 내용을 아직 안 봤는지. '같지 않음' 으로 보면 설치판·Store 판처럼 판이 다른 Daling 둘이
+// 같은 데이터 폴더(whats_new.json)를 쓸 때 서로 '봤음' 을 덮어써 켤 때마다 다시 떴다. 더 새 판을 봤으면 본 것으로 친다.
+function whatsNewUnseen(info) {
+  return !info?.seen || compareVersions(info.seen, info.version) < 0;
+}
+
 function renderWhatsNewButton() {
   const button = $("#whatsNewButton");
   const info = state.whatsNew;
   if (!button || !info?.entries?.length) return;
   // 새 버전일 때만 보인다. 한 번 열어 보면 사라진다
   // (지난 내용은 설정의 '업데이트 내용' 에서 본다. 남겨 두면 사이드바에 글자만 떠 있어 어색했다)
-  const fresh = info.seen !== info.version;
+  const fresh = whatsNewUnseen(info);
   button.hidden = !fresh;
   button.classList.toggle("fresh", fresh);
   $("#whatsNewLabel").textContent = `새 업데이트 v${info.version}`;
@@ -10635,7 +10709,7 @@ async function openWhatsNew() {
   installIcons(dialog);
   if (typeof dialog.showModal === "function") dialog.showModal();
   else dialog.setAttribute("open", "");
-  if (info.seen !== info.version || info.justUpdated) {
+  if (whatsNewUnseen(info) || info.justUpdated) {
     info.seen = info.version;
     info.justUpdated = null;
     renderWhatsNewButton();
@@ -10665,9 +10739,42 @@ document.addEventListener("click", (event) => {
   });
   if (hint) {
     event.preventDefault();
+    placeHint(hint);
     hint.classList.toggle("show");
   }
 });
+
+/* 말풍선은 '?' 왼쪽에서 오른쪽으로 280px 까지 펼쳐진다. 오른쪽 칸의 '?'(하루 한 번 꼼꼼히,
+   연결된 계정 등)에서는 1280 창에서도 1383px 까지 나가 설정 화면 끝에서 잘렸고, 375 폭에서는
+   한 칸짜리 줄에서도 넘쳤다. 보이기 직전에 잘리는 상자(가까운 스크롤 상자) 안으로 당겨 넣는다. */
+function placeHint(hint) {
+  let left = 0;
+  let right = document.documentElement.clientWidth;
+  for (let p = hint.parentElement; p && p !== document.body; p = p.parentElement) {
+    if (getComputedStyle(p).overflowX === "visible") continue;
+    const r = p.getBoundingClientRect();
+    left = r.left + p.clientLeft;
+    right = left + p.clientWidth;
+    break;
+  }
+  const gap = 8;
+  const tip = getComputedStyle(hint, "::after");
+  // width·max-width 는 글자 폭이라 좌우 여백(11px 씩)을 따로 더한다 (빼먹으면 22px 넘쳤다)
+  const pad = parseFloat(tip.paddingLeft) + parseFloat(tip.paddingRight) || 0;
+  const maxW = Math.max(120, Math.min(280, right - left - gap * 2 - pad));
+  hint.style.setProperty("--hint-w", `${maxW}px`);
+  // 이미 보이는 중이면(마우스·초점) 실제 폭을, 아니면 가장 넓은 폭을 기준으로 잡는다
+  const w = (parseFloat(tip.width) || maxW) + pad;
+  const origin = hint.getBoundingClientRect().left + hint.clientLeft;
+  const x = Math.max(left + gap, Math.min(origin - 10, right - gap - w));
+  hint.style.setProperty("--hint-x", `${Math.round(x - origin)}px`);
+}
+["mouseover", "focusin"].forEach((type) =>
+  document.addEventListener(type, (event) => {
+    const hint = event.target.closest?.(".hint");
+    if (hint) placeHint(hint);
+  }),
+);
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") document.querySelectorAll(".hint.show").forEach((h) => h.classList.remove("show"));
 });
@@ -10900,6 +11007,7 @@ const TOUR_STEPS = [
   {
     chapter: "시작",
     view: "settings",
+    when: () => !DEMO_ON,
     targets: ["#stAccounts .st-head"],
     fallback: ['.nav-item[data-view="settings"]'],
     pose: "point",
@@ -10909,6 +11017,7 @@ const TOUR_STEPS = [
       "LMS 계정 → 강의자료·과제 마감·과목 공지",
       "학교 메일 → 메일함, 메일로 온 행사 일정",
       "Google 연결(선택) → Drive·구글 캘린더로 보내기",
+      "계정이 없으면 맨 아래 '체험 모드'로 둘러보기",
     ],
   },
   {
@@ -11513,6 +11622,7 @@ function showTourStep(index) {
   $("#tourNote").hidden = !step.note;
   $("#tourNote").textContent = step.note || "";
   $("#tourPrev").hidden = index === 0;
+  $("#tourDemo").hidden = !(index === 0 && demoInvite());
   $("#tourNext").textContent =
     index === 0 ? "둘러보기" : step.last ? (state.status?.requiredConfig?.lms ? "시작하기" : "계정 넣으러 가기") : "다음";
   $("#tourSkip").hidden = Boolean(step.last);
@@ -11628,7 +11738,7 @@ const SEARCH_GROUPS = [
   ["setting", "설정"],
 ];
 const SEARCH_ICON = {
-  go: "layout", course: "book", file: "file", deadline: "clock", mail: "mail",
+  ai: "sparkle", go: "layout", course: "book", file: "file", deadline: "clock", mail: "mail",
   event: "calendar", notice: "alert", setting: "settings",
 };
 const SEARCH_VIEWS = [
@@ -11670,9 +11780,10 @@ function dueText(iso) {
   return `${when} · ${days === 0 ? "오늘" : `D-${days}`}`;
 }
 
-function buildSearchResults(query) {
+function buildSearchResults(query, opts = {}) {
   const res = [];
-  const add = (group, score, item) => score > 0 && res.push({ group, score, ...item });
+  // opts.all: 점수와 상관없이 모든 후보를 모은다 (AI 검색에 넘길 목록)
+  const add = (group, score, item) => (opts.all ? res.push({ group, score: 1, ...item }) : score > 0 && res.push({ group, score, ...item }));
 
   SEARCH_VIEWS.forEach(([view, label, words]) => {
     const s = matchScore(query, label, words);
@@ -11831,6 +11942,7 @@ function buildSearchResults(query) {
     }),
   );
 
+  if (opts.all) return res;
   // 무리마다 점수순(같으면 최근 것 먼저)으로 몇 개만
   const LIMIT = { go: 3, course: 4, file: 6, deadline: 4, mail: 5, event: 4, notice: 3, setting: 3 };
   const grouped = SEARCH_GROUPS.map(([key, label]) => {
@@ -11842,7 +11954,7 @@ function buildSearchResults(query) {
   // 가장 잘 맞는 무리를 위로. 과목·바로 가기는 조금 더 앞에 (찾는 게 대개 '그 과목' 이라서)
   const groupBonus = (g) => g.items[0].score + (g.key === "course" || g.key === "go" ? 15 : 0);
   grouped.sort((a, b) => groupBonus(b) - groupBonus(a));
-  return grouped;
+  return withAiSearch(query, grouped);
 }
 
 function extractCourseLabelJs(name) {
@@ -11916,6 +12028,11 @@ function closeSearchPop() {
 function runSearchItem(index) {
   const item = searchFlat[index];
   if (!item) return;
+  // 'AI 에게 물어보기' 는 창을 닫지 않고 그 자리에서 결과를 기다린다
+  if (item.keepOpen) {
+    item.run();
+    return;
+  }
   closeSearchPop();
   $("#searchInput")?.blur();
   try {
@@ -12068,11 +12185,13 @@ function renderStatusCard(task) {
   const problem = order.find((l) => l.tone === "bad") || order.find((l) => l.tone === "off" && l.why) || order.find((l) => l.tone === "warn");
   const tone = problem ? (problem.tone === "warn" ? "warn" : "bad") : "ok";
 
-  const title = problem ? problem.why : "모두 정상";
+  const title = DEMO_ON ? "체험 중" : problem ? problem.why : "모두 정상";
   let line;
   const running = task ? task.running : state._taskRunning;
   const kind = task?.kind || state.task?.kind;
-  if (running && STATUS_KIND_DOING[kind]) {
+  if (DEMO_ON) {
+    line = "가짜 데이터 · 가져오기 쉼";
+  } else if (running && STATUS_KIND_DOING[kind]) {
     line = STATUS_KIND_DOING[kind];
   } else {
     const next = nextAutoJob();
@@ -12138,6 +12257,61 @@ function openSettingsAt(target) {
   }, 220);
 }
 
+
+/* ===== 체험 모드 =====
+   Store 심사(정책 10.3.1 시험 계정)와 처음 깐 사람을 위해 계정 없이 가짜 데이터로 모든 화면을 보여 준다(demo_mode.py).
+   켜고 끄는 곳: 상단 바 알약 · 설정 › 연결된 계정 · 첫 실행 소개의 첫 카드. 바꾸면 서버가 데이터 폴더를 바꿔 끼우고
+   화면은 새로 띄운다(남아 있던 목록·캐시가 섞이지 않게). 체험 중에는 서버가 바깥 연결을 모두 막는다. */
+function demoAvailable() {
+  return Boolean(state.status?.demo?.available);
+}
+
+/** 계정이 없는 사람에게만 '계정 없이 체험하기' 를 권한다 (계정을 넣은 사람은 설정에서 켤 수 있다) */
+function demoInvite() {
+  return !DEMO_ON && demoAvailable() && !state.status?.requiredConfig?.lms;
+}
+
+function renderDemoPill() {
+  const pill = $("#demoPill");
+  if (pill) {
+    pill.hidden = !(DEMO_ON || demoInvite());
+    pill.classList.toggle("on", DEMO_ON);
+    $("#demoText").hidden = !DEMO_ON;
+    $("#demoPillButton").textContent = DEMO_ON ? "체험 끝내기" : "계정 없이 체험하기";
+    $("#demoPillButton").title = DEMO_ON ? "체험을 끝내고 내 데이터로 돌아가요" : "가짜 데이터로 모든 화면을 둘러봐요";
+  }
+  const row = $("#demoRow");
+  if (row) {
+    row.hidden = !(DEMO_ON || demoAvailable());
+    $("#demoRowText").textContent = DEMO_ON ? "지금 가짜 데이터를 보고 있어요" : "계정 없이 가짜 데이터로 둘러봐요";
+    $("#demoRowButton").textContent = DEMO_ON ? "체험 끝내기" : "체험해 보기";
+  }
+  // 소개는 첫 목록을 받기 전에 뜰 수 있다. 목록(계정 유무)이 오면 첫 카드의 단추를 다시 맞춘다
+  if (tour.active) $("#tourDemo").hidden = !(tour.index === 0 && demoInvite());
+}
+
+let demoSwitching = false;
+async function setDemo(on) {
+  if (demoSwitching) return;
+  demoSwitching = true;
+  try {
+    // 영어 화면이면 가짜 메일·공지도 영어로 만든다
+    await api("/api/demo", { method: "POST", body: JSON.stringify({ on, lang: I18N.lang }) });
+    showToast(on ? "체험 데이터를 채우는 중이에요" : "내 데이터로 돌아가요");
+    window.setTimeout(() => window.location.reload(), 300);
+  } catch (error) {
+    demoSwitching = false;
+    showToast(humanError(error));
+  }
+}
+
+$("#demoPillButton")?.addEventListener("click", () => setDemo(!DEMO_ON));
+$("#demoRowButton")?.addEventListener("click", () => setDemo(!DEMO_ON));
+$("#tourDemo")?.addEventListener("click", () => {
+  // 소개는 끝낸 것으로 치지 않는다: 체험 화면에서 데이터가 찬 채로 처음부터 다시 보여 준다
+  setDemo(true);
+});
+
 $("#statusCard")?.addEventListener("click", () => {
   const target = $("#statusCard").dataset.target || "stAuto";
   openSettings();
@@ -12173,6 +12347,8 @@ async function checkForUpdate(manual = false) {
   const ready = Boolean(d.ok && d.updateAvailable);
   if (status) {
     if (!d.ok) status.textContent = d.message || "확인하지 못했어요";
+    // Store 판(MSIX): 새 버전은 Microsoft Store 가 깐다. GitHub 은 묻지 않는다 (updater.check_update)
+    else if (d.store) status.textContent = `Microsoft Store가 새 버전을 알아서 설치해요 (v${d.current})`;
     else if (ready) status.textContent = `v${d.latest} 이 나왔어요${d.size ? ` · ${Math.round(d.size / 1048576)}MB` : ""}`;
     else status.textContent = `최신 버전이에요 (v${d.current})`;
   }
@@ -13564,3 +13740,387 @@ function placeMailSearch() {
   row.classList.toggle("emptied", up);
 }
 window.addEventListener("resize", () => placeMailSearch());
+
+
+/* ===== AI 도우미 (ai_cli.py: Claude · Gemini · Codex CLI) =====
+   2026-10-15 사용자: 'AI CLI 를 탑재해 번역·자연어 검색·메일 초안을 쓰자. 세 CLI 를 모두 고를 수 있게.
+   교수·조교에게 쓰는 메일은 학번·자기소개·과목·분반을 매번 쓰니 미리 받아 두자.'
+   - 고른 AI 와 '내 정보' 는 설정의 'AI 도우미' 칸에서 정한다(ai_profile.json).
+   - 메일 내용이 고른 AI 회사로 나간다. 그래서 버튼을 눌렀을 때만 돌고, 자동으로는 돌지 않는다. */
+state.ai = { status: null, search: null };
+
+async function loadAiStatus(force = false) {
+  if (state.ai.status && !force) return state.ai.status;
+  try {
+    state.ai.status = await api("/api/ai/status");
+  } catch (error) {
+    state.ai.status = { available: {}, profile: {} };
+  }
+  paintAiSettings();
+  paintAiModelPicker();
+  return state.ai.status;
+}
+// 실험실 스위치(ai_profile.json enabled)가 켜져 있고 CLI 가 하나라도 있을 때만 AI 기능을 보인다
+const aiOn = () => state.ai.status?.profile?.enabled === "1";
+const aiReady = () => aiOn() && Object.values(state.ai.status?.available || {}).some(Boolean);
+
+/* --- 자연어 검색 --- */
+function withAiSearch(query, grouped) {
+  const out = grouped.slice();
+  const s = state.ai.search;
+  if (s && s.q === query) {
+    let items;
+    if (s.loading) items = [{ title: "AI 가 찾는 중…", sub: `${s.engine || "AI"} · 10초쯤 걸려요`, run: () => {}, keepOpen: true }];
+    else if (s.error) items = [{ title: s.error, sub: "다시 누르면 다시 물어봐요", run: () => runAiSearch(query), keepOpen: true }];
+    else if (!s.items.length) items = [{ title: "AI 도 맞는 걸 못 찾았어요", sub: s.note || "다른 말로 물어보세요", run: () => {}, keepOpen: true }];
+    else items = s.items;
+    const found = s.note ? "AI 가 찾은 것 · " + s.note : "AI 가 찾은 것";
+    out.unshift({ key: "ai", label: s.loading || s.error ? "AI 검색" : found, total: items.length, items });
+  }
+  if (query.trim().length >= 2 && aiReady() && !(s && s.q === query && (s.loading || s.items?.length))) {
+    out.push({
+      key: "ai",
+      label: "AI 에게 물어보기",
+      total: 1,
+      items: [{ title: `'${query}' 를 말로 찾기`, sub: "예: 지난주 물리 실험 보고서 양식 · 교수님이 보낸 시험 범위 메일", run: () => runAiSearch(query), keepOpen: true }],
+    });
+  }
+  return out;
+}
+
+async function runAiSearch(query) {
+  await loadAiStatus();
+  if (!aiReady()) {
+    showToast("AI CLI(Claude·Gemini·Codex)가 설치되어 있지 않아요. 설정 → AI 도우미를 봐 주세요.");
+    return;
+  }
+  // 화면이 가진 후보를 모두 모아 짧게 줄여 보낸다. id 는 이 목록의 순번이라, 모델이 지어낸 id 는 걸러진다.
+  const all = buildSearchResults(query, { all: true }).filter((r) => ["course", "file", "deadline", "mail", "event", "notice"].includes(r.group));
+  const index = all.slice(0, 1500).map((r, i) => ({ id: String(i), kind: r.group, title: String(r.title || "").slice(0, 120), sub: String(r.sub || "").slice(0, 80), date: String(r.date || "").slice(0, 10) }));
+  state.ai.search = { q: query, loading: true, items: [], engine: providerLabel() };
+  renderSearchPop();
+  try {
+    const res = await api("/api/ai/search", { method: "POST", body: JSON.stringify({ query, index }) });
+    const items = (res.ids || []).map((id) => all[Number(id)]).filter(Boolean).map((r) => ({ ...r, sub: r.sub }));
+    state.ai.search = { q: query, loading: false, items, note: res.note || "", engine: res.engine };
+  } catch (error) {
+    state.ai.search = { q: query, loading: false, items: [], error: humanError(error) };
+  }
+  if ($("#searchInput")?.value.trim() === query) renderSearchPop();
+}
+
+/* 지금 쓸 모델: 고른 것 → 없으면 그 CLI(자동이면 설치된 첫 CLI)의 기본 모델 */
+function currentAiModel() {
+  const st = state.ai.status || {};
+  const models = st.models || {};
+  const provider = st.profile?.provider || ["claude", "gemini", "codex"].find((k) => models[k]) || "";
+  const list = models[provider]?.models || [];
+  const id = st.profile?.model && st.profile?.provider === provider ? st.profile.model : models[provider]?.default || "";
+  const label = list.find((m) => m.id === id)?.label || id || "AI";
+  return { provider, id, label };
+}
+
+function paintAiModelPicker() {
+  const now = currentAiModel();
+  const btnLabel = $("#aiDraftModelName");
+  if (btnLabel) btnLabel.textContent = now.label;
+  const sel = $("#aiModelSelect");
+  if (!sel) return;
+  const names = { claude: "Claude", gemini: "Gemini", codex: "Codex" };
+  const models = state.ai.status?.models || {};
+  sel.innerHTML = Object.entries(models)
+    .map(([p, info]) => {
+      const opts = (info.models || [])
+        .map((m) => {
+          const selected = p === now.provider && m.id === now.id ? " selected" : "";
+          return `<option value="${p}|${escapeHtml(m.id)}"${selected}>${escapeHtml(m.label)}</option>`;
+        })
+        .join("");
+      return `<optgroup label="${names[p] || p}">${opts}</optgroup>`;
+    })
+    .join("");
+}
+
+function providerLabel() {
+  // 단추·안내에는 회사 이름보다 모델 이름(Opus 5.5, GPT-6-Astra …)을 보인다
+  return currentAiModel().label;
+}
+
+/* --- 설정: 쓸 AI 고르기 + 내 정보 --- */
+const AI_PROVIDERS = [
+  ["", "자동"],
+  ["claude", "Claude"],
+  ["gemini", "Gemini"],
+  ["codex", "Codex"],
+];
+const AI_PROFILE_FIELDS = [
+  ["name", "#aiName"],
+  ["studentId", "#aiStudentId"],
+  ["dept", "#aiDept"],
+  ["intro", "#aiIntro"],
+  ["signature", "#aiSignature"],
+];
+
+function paintAiSettings() {
+  const box = $("#aiProviders");
+  const st = state.ai.status;
+  if (!box || !st) return;
+  const on = aiOn();
+  const sw = $("#aiEnabled");
+  if (sw) sw.checked = on;
+  if ($("#aiBody")) $("#aiBody").hidden = !on;
+  // 메일 쓰기의 모델 단추와 초안 칸도 스위치를 따른다
+  if ($("#aiDraftToggle")) $("#aiDraftToggle").hidden = !on;
+  if (!on && $("#aiDraftBox")) $("#aiDraftBox").hidden = true;
+  const chosen = st.profile?.provider || "";
+  box.innerHTML = AI_PROVIDERS.map(([key, label]) => {
+    const has = key ? Boolean(st.available?.[key]) : aiReady();
+    const note = key ? (has ? "설치됨" : "없음") : "설치된 것부터";
+    return `<button type="button" class="ai-provider${chosen === key ? " on" : ""}${has ? "" : " missing"}" data-provider="${key}" role="radio" aria-checked="${chosen === key}">
+      <strong>${escapeHtml(label)}</strong><span>${escapeHtml(note)}</span></button>`;
+  }).join("");
+  AI_PROFILE_FIELDS.forEach(([key, sel]) => {
+    const el = $(sel);
+    if (el && document.activeElement !== el) el.value = st.profile?.[key] || "";
+  });
+}
+
+async function saveAiProfile(extra = {}) {
+  const payload = {
+    provider: state.ai.status?.profile?.provider || "",
+    model: state.ai.status?.profile?.model || "",
+    enabled: state.ai.status?.profile?.enabled || "",
+    ...extra,
+  };
+  AI_PROFILE_FIELDS.forEach(([key, sel]) => {
+    if ($(sel)) payload[key] = $(sel).value.trim();
+  });
+  const res = await api("/api/ai/profile", { method: "POST", body: JSON.stringify(payload) });
+  state.ai.status = { ...(state.ai.status || {}), profile: res.profile };
+  paintAiSettings();
+  paintAiModelPicker();
+  return res.profile;
+}
+
+$("#aiProviders")?.addEventListener("click", async (event) => {
+  const btn = event.target.closest("[data-provider]");
+  if (!btn) return;
+  const key = btn.dataset.provider;
+  if (key && !state.ai.status?.available?.[key]) {
+    showToast(`${btn.querySelector("strong").textContent} CLI 가 이 PC 에 없어요. 먼저 설치하고 터미널에서 한 번 로그인해 주세요.`);
+    return;
+  }
+  try {
+    await saveAiProfile({ provider: key, model: "" });
+    showToast(key ? `${btn.querySelector("strong").textContent} 를 쓸게요` : "설치된 AI 를 자동으로 고를게요");
+  } catch (error) {
+    showToast(humanError(error));
+  }
+});
+$("#aiProfileSave")?.addEventListener("click", async () => {
+  try {
+    await saveAiProfile();
+    showToast("내 정보를 저장했어요");
+  } catch (error) {
+    showToast(humanError(error));
+  }
+});
+
+/* --- 메일 초안 --- */
+// 받는 사람 칸의 첫 주소 → 이름·주소, 그 사람이 맡은 과목·분반(내 수업 먼저)
+function aiDraftContext() {
+  const form = $("#composeForm");
+  const toRaw = String(form?.elements.to.value || "");
+  const email = (toRaw.match(/[\w.+-]+@[\w-]+(\.[\w-]+)+/) || [""])[0].toLowerCase();
+  const name = toRaw.split(/[<,]/)[0].trim().replace(/^"|"$/g, "");
+  const hits = (state.coursePeople || {})[email] || [];
+  const hit = hits.find((h) => h.mine) || hits[0];
+  const plain = document.createElement("div");
+  plain.innerHTML = composeBody();
+  return {
+    to: [name && name !== email ? name : "", email].filter(Boolean).join(" "),
+    role: hit?.role || "",
+    course: hit?.title || "",
+    section: sectionText(hit?.section),
+    subject: form?.elements.subject.value || "",
+    body: (plain.innerText || "").trim().slice(0, 6000),
+    candidates: aiDraftCandidates(),
+  };
+}
+
+// 받는 사람·참조 후보: 내가 듣는 과목의 교수·조교(주소를 아는 사람)만. AI 는 이 안에서만 고를 수 있다.
+function aiDraftCandidates() {
+  const out = [];
+  const seen = new Set();
+  (state.courseStaff || new Map()).forEach(({ label, rows }) => {
+    (rows || []).forEach((r) => {
+      const email = String(r.email || "").toLowerCase();
+      if (!email || seen.has(email)) return;
+      const hits = (state.coursePeople || {})[email] || [];
+      if (!hits.some((h) => h.mine)) return;
+      seen.add(email);
+      out.push({ email, name: r.name || "", role: r.role || "", course: courseShortName(label), section: sectionText(r.section) });
+    });
+  });
+  return out.slice(0, 80);
+}
+
+function paintAiDraftContext() {
+  const ctx = aiDraftContext();
+  const p = state.ai.status?.profile || {};
+  const bits = [];
+  if (ctx.course) bits.push(`${ctx.course}${ctx.section ? ` ${ctx.section}` : ""} ${ctx.role}`.trim());
+  bits.push(p.studentId || p.name ? `내 정보: ${[p.name, p.studentId].filter(Boolean).join(" · ")}` : "내 정보 없음 (설정 → AI 도우미)");
+  bits.push(providerLabel());
+  const el = $("#aiDraftContext");
+  if (el) el.textContent = bits.join(" · ");
+}
+
+$("#aiDraftToggle")?.addEventListener("click", async () => {
+  const box = $("#aiDraftBox");
+  if (!box) return;
+  box.hidden = !box.hidden;
+  if (box.hidden) return;
+  await loadAiStatus();
+  paintAiDraftContext();
+  $("#aiDraftRequest")?.focus();
+});
+$("#composeTo")?.addEventListener("change", () => !$("#aiDraftBox")?.hidden && paintAiDraftContext());
+
+// AI 없이: 내 소개(+과목·분반)를 본문 맨 앞에. 매번 쓰는 '안녕하세요, ○○ 수강 중인 …' 을 한 번에.
+$("#aiIntroButton")?.addEventListener("click", async () => {
+  await loadAiStatus();
+  const p = state.ai.status?.profile || {};
+  const ctx = aiDraftContext();
+  const courseName = [ctx.course, ctx.section].filter(Boolean).join(" ");
+  const course = courseName ? courseName + "을 수강 중인 " : "";
+  const intro = p.intro || (p.name ? `안녕하세요, ${course}${[p.dept, p.studentId].filter(Boolean).join(" ")} ${p.name}입니다.` : "");
+  if (!intro) {
+    showToast("설정 → AI 도우미에 이름·학번·소개를 먼저 적어 주세요.");
+    return;
+  }
+  const lines = [intro, "", ""];
+  if (p.signature) lines.push("", p.signature);
+  setComposeBody(escapeHtml(lines.join("\n")).replace(/\n/g, "<br>") + composeBody());
+});
+
+$("#aiDraftRun")?.addEventListener("click", async () => {
+  const request = ($("#aiDraftRequest")?.value || "").trim();
+  const note = $("#aiDraftNote");
+  const btn = $("#aiDraftRun");
+  if (!request) {
+    if (note) {
+      note.hidden = false;
+      note.textContent = "무엇을 쓸지 한 줄 적어 주세요.";
+    }
+    $("#aiDraftRequest")?.focus();
+    return;
+  }
+  await loadAiStatus();
+  if (!aiReady()) {
+    showToast("AI CLI(Claude·Gemini·Codex)가 설치되어 있지 않아요.");
+    return;
+  }
+  btn.disabled = true;
+  if (note) {
+    note.hidden = false;
+    note.textContent = `${providerLabel()} 가 쓰는 중… 10~20초쯤 걸려요`;
+  }
+  try {
+    const ctx = aiDraftContext();
+    const res = await api("/api/ai/draft", { method: "POST", body: JSON.stringify({ request, context: ctx }) });
+    const form = $("#composeForm");
+    // 제목은 제목 칸에 바로 (사용자: '제목도 바로 제목란에')
+    if (res.subject && form) form.elements.subject.value = res.subject;
+    // 받는 사람 칸이 비어 있으면 AI 가 고른 사람을 바로 넣는다. 이미 있으면 아래 추천 칩으로만.
+    if (form && !form.elements.to.value.trim() && (res.to || []).length) form.elements.to.value = res.to.join(", ");
+    // 이미 쓴 글(답장 인용 포함)은 아래에 남기고, 초안을 위에 넣는다
+    const old = composeBody();
+    setComposeBody(escapeHtml(res.body || "").replace(/\n/g, "<br>") + (old ? `<br><br>${old}` : ""));
+    paintAiSuggestions(res, ctx.candidates);
+    if (note) note.textContent = `${res.engine || "AI"} 초안이에요 (${res.seconds}초). [ ] 칸과 내용을 확인하고 보내 주세요.`;
+  } catch (error) {
+    if (note) note.textContent = humanError(error);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// CLI 가 깔렸는지 미리 한 번 봐 둔다. 첫 화면을 늦추지 않게 몇 초 뒤에 (앱 켜는 시간 2초를 지킨다)
+window.setTimeout(() => loadAiStatus(), 4000);
+
+
+/* --- 받는 사람·참조 추천 칩: 눌러서 바로 넣고, 다시 누르면 뺀다 --- */
+function composeAddresses(field) {
+  const form = $("#composeForm");
+  return String(form?.elements[field].value || "")
+    .split(",")
+    .map((x) => x.trim())
+    .filter(Boolean);
+}
+function toggleComposeAddress(field, email) {
+  const form = $("#composeForm");
+  if (!form) return;
+  const list = composeAddresses(field);
+  const lower = email.toLowerCase();
+  const has = list.some((x) => x.toLowerCase().includes(lower));
+  const next = has ? list.filter((x) => !x.toLowerCase().includes(lower)) : [...list, email];
+  form.elements[field].value = next.join(", ");
+  form.elements[field].dispatchEvent(new Event("change"));
+}
+
+function paintAiSuggestions(res, candidates) {
+  const box = $("#aiDraftSuggest");
+  if (!box) return;
+  const who = new Map((candidates || []).map((c) => [c.email.toLowerCase(), c]));
+  const chip = (field, email) => {
+    const c = who.get(email.toLowerCase()) || { name: email };
+    const on = composeAddresses(field).some((x) => x.toLowerCase().includes(email.toLowerCase()));
+    const desc = [c.course, c.section, c.role].filter(Boolean).join(" ");
+    const fieldLabel = field === "to" ? "받는사람" : "참조";
+    const descHtml = desc ? `<span>${escapeHtml(desc)}</span>` : "";
+    const mark = on ? " ✓" : " +";
+    return `<button type="button" class="ai-chip${on ? " on" : ""}" data-field="${field}" data-email="${escapeHtml(email)}" title="${escapeHtml(email)}"><em>${fieldLabel}</em>${escapeHtml(c.name || email)}${descHtml}${mark}</button>`;
+  };
+  const items = [...(res.to || []).map((e) => chip("to", e)), ...(res.cc || []).map((e) => chip("cc", e))];
+  box.hidden = !items.length && !res.why;
+  const why = res.why ? `<p class="ai-why">${escapeHtml(res.why)}</p>` : "";
+  box.innerHTML = `${why}<div class="ai-chips">${items.join("")}</div>`;
+  box.dataset.res = JSON.stringify({ to: res.to || [], cc: res.cc || [], why: res.why || "" });
+}
+
+$("#aiDraftSuggest")?.addEventListener("click", (event) => {
+  const btn = event.target.closest(".ai-chip");
+  if (!btn) return;
+  toggleComposeAddress(btn.dataset.field, btn.dataset.email);
+  try {
+    paintAiSuggestions(JSON.parse($("#aiDraftSuggest").dataset.res || "{}"), aiDraftCandidates());
+  } catch (error) {
+    /* 다시 그리기만 못 하면 넘어간다 */
+  }
+});
+
+$("#aiModelSelect")?.addEventListener("change", async (event) => {
+  const [provider, model] = String(event.target.value || "").split("|");
+  try {
+    await saveAiProfile({ provider, model });
+    paintAiDraftContext();
+    showToast(currentAiModel().label + " 로 쓸게요");
+  } catch (error) {
+    showToast(humanError(error));
+  }
+});
+
+
+/* 실험실 스위치 */
+$("#aiEnabled")?.addEventListener("change", async (event) => {
+  const on = event.target.checked;
+  try {
+    await saveAiProfile({ enabled: on ? "1" : "" });
+    state.ai.search = null;
+    showToast(on ? "AI 도우미를 켰어요 (실험실)" : "AI 도우미를 껐어요");
+  } catch (error) {
+    event.target.checked = !on;
+    showToast(humanError(error));
+  }
+});

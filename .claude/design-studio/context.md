@@ -7,9 +7,10 @@ DGIST 학생용 Windows 데스크톱 앱(pywebview). 화면은 프레임워크 �
 - 화면 문구는 짧은 한국어, 사람 말로. 둥근 카드(`--radius`), 옅은 그림자(`--shadow`). 지나친 장식·그라데이션은 피한다.
 
 ## 테마 (styles.css 맨 위 블록)
-- 기본=`:root`, 화이트=`[data-theme="light"]`, 남색=`[data-theme="navy"]`, 다크=`[data-theme="dark"]`.
-- 저장본의 '테마' 열에 적힌 테마만 고친다. 화이트는 강조색을 `:root` 에서 물려받으니 기본을 고치면 화이트도 바뀐다 — 보고에 적는다.
-- 새 색 토큰을 만들면 네 테마 모두 값을 정한다. 다크에 따로 덮은 규칙(`[data-theme="dark"] .x`)이 있으면 함께 맞춘다.
+- 고르는 테마는 자동·기본·다크 셋(app.js `THEMES`). 자동은 Windows 설정에 따라 기본 또는 다크로 칠한다.
+- 기본=`:root`, 다크=`[data-theme="dark"]`. 저장본의 '테마' 열에 적힌 테마만 고친다.
+- 화이트(`light`)·남색(`navy`)·그래파이트는 목록에서 뺐고 색만 남아 있다. 새로 고치지 않는다.
+- 새 색 토큰을 만들면 기본·다크 모두 값을 정한다. 다크에 따로 덮은 규칙(`[data-theme="dark"] .x`)이 있으면 함께 맞춘다.
 
 ## 화면 코드
 - 화면 키: dashboard, deadlines, calendar, courses, files, emails, storage, settings. 화면 이동은 `switchView`.
