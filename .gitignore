@@ -43,7 +43,8 @@ artifacts/ui-settings.png
 artifacts/
 
 # Claude Code 로컬 설정
-.claude/
+.claude/*
+!.claude/design-studio/
 
 # 별도 하위 프로젝트 (자체 저장소)
 doc2paper/
@@ -76,3 +77,9 @@ scratch_trashed.json
 
 # Cloudflare wrangler 작업 캐시 (소개 사이트 배포)
 .wrangler/
+
+# 디자인 스튜디오 저장본·시안·로그 (개인화 설정 .claude/design-studio/ 는 커밋 대상)
+.design-studio/
+
+# 디자인 스튜디오가 init 때마다 다시 만드는 분석 결과 (개인화 설정 아님)
+.claude/design-studio/analysis.md

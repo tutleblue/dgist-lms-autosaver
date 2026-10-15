@@ -51,14 +51,50 @@ _MAC_BROWSER_FILES = ("chrome-headless-shell", "headless_shell", "Chromium", "Go
 _LINUX_BROWSER_FILES = ("chrome-headless-shell", "headless_shell", "chrome")
 
 
+# ===== Windows: 이미 깔려 있는 Microsoft Edge 를 먼저 쓴다 (2026-10-15) =====
+# Playwright 가 받는 chrome-headless-shell.exe·dll 은 서명이 없다(실측 NotSigned). 스마트 앱 컨트롤이 켜진 PC 에서는
+# Store 판도 LMS 동기화가 막힐 수 있다. Edge 는 Microsoft 서명이고 Windows 10/11 에 늘 있어 270MB 첫 다운로드도 없다.
+# 실측(2026-10-15, Edge 155): SSO 로그인 52초·과목 21개·콘텐츠 17/21(나머지는 지난 학기 403) — headless shell 과 같다.
+# 찾는 자리는 Playwright 의 channel="msedge" 와 같은 순서 (LOCALAPPDATA → PROGRAMFILES → PROGRAMFILES(X86)).
+EDGE_CHANNEL = "msedge"
+
+
+def system_edge() -> Path | None:
+    """Windows 에 깔린 Edge 실행 파일. 없거나 다른 운영체제면 None. AUTOSAVER_LMS_BROWSER=shell 이면 Edge 를 건너뛴다(시험용)."""
+    if os.name != "nt" or os.environ.get("AUTOSAVER_LMS_BROWSER", "").strip().lower() == "shell":
+        return None
+    for var in ("LOCALAPPDATA", "PROGRAMFILES", "PROGRAMFILES(X86)"):
+        base = os.environ.get(var, "").strip()
+        if base:
+            exe = Path(base) / "Microsoft" / "Edge" / "Application" / "msedge.exe"
+            if exe.is_file():
+                return exe
+    return None
+
+
 def browser_ready() -> bool:
-    """크로미움(또는 헤드리스 셸)이 이미 있는지."""
+    """LMS 로그인에 쓸 브라우저가 있는지 (Windows Edge 또는 받아 둔 헤드리스 셸)."""
+    return system_edge() is not None or shell_ready()
+
+
+def browser_label() -> str:
+    """점검 화면용: 어떤 브라우저를 쓸지."""
+    if system_edge() is not None:
+        return "Edge"
+    return "headless shell" if shell_ready() else "없음"
+
+
+def shell_ready() -> bool:
+    """크로미움(또는 헤드리스 셸)이 이미 받아져 있는지."""
     root = browsers_root()
     if not root.exists():
         return False
+    # Windows 는 Edge 가 실패했을 때만 셸로 띄우고, Playwright 1.49+ 의 headless 실행은 chromium_headless_shell 만 쓴다.
+    # 개발용 chromium-* 도 '있다' 로 보면, 셸을 휴지통에 보낸 뒤(설정 › 앱 크기) 다시 받지 않고 실행이 깨진다.
+    prefixes = ("chromium_headless_shell-",) if os.name == "nt" else ("chromium-", "chromium_headless_shell-")
     for child in root.iterdir():
         name = child.name.lower()
-        if name.startswith(("chromium-", "chromium_headless_shell-")):
+        if name.startswith(prefixes):
             if sys.platform == "darwin":
                 if any(p.is_file() for n in _MAC_BROWSER_FILES for p in child.rglob(n)):
                     return True
@@ -71,6 +107,81 @@ def browser_ready() -> bool:
             if any(child.rglob("*.exe")) or any(child.rglob("chrome")):
                 return True
     return False
+
+
+def shell_dirs() -> list[Path]:
+    """앱이 받는 헤드리스 셸 폴더(chromium_headless_shell-*). 같은 폴더의 개발용 chromium-* 는 앱 몫이 아니라 빼 둔다."""
+    root = browsers_root()
+    if not root.is_dir():
+        return []
+    return sorted(d for d in root.iterdir() if d.is_dir() and d.name.lower().startswith("chromium_headless_shell-"))
+
+
+# Edge 를 못 띄워 셸로 되돌아간 적이 있으면 남기는 표시. 회사·학교 정책으로 headless Edge 가 늘 막힌 PC 에서
+# 셸을 '안 씀'으로 보여 휴지통으로 보내게 하면, 다음 동기화가 270MB 를 다시 받는다. Edge 가 다시 뜨면 지운다.
+def _edge_failed_marker() -> Path:
+    return browsers_root() / "daling-edge-failed.txt"
+
+
+def edge_failed() -> bool:
+    """가장 최근 Edge 실행이 실패해 셸로 되돌아갔는지."""
+    return _edge_failed_marker().is_file()
+
+
+def _remember_edge_result(ok: bool, reason: str = "") -> None:
+    marker = _edge_failed_marker()
+    try:
+        if ok:
+            marker.unlink(missing_ok=True)
+        else:
+            from datetime import datetime
+
+            marker.parent.mkdir(parents=True, exist_ok=True)
+            marker.write_text(f"{datetime.now().isoformat(timespec='seconds')} {reason}\n", encoding="utf-8")
+    except OSError:
+        pass
+
+
+def shell_unused() -> bool:
+    """받아 둔 헤드리스 셸을 지금은 안 쓰는지 (Windows 에 Edge 가 있고, 최근 Edge 실행이 실패하지 않았으면)."""
+    return system_edge() is not None and not edge_failed()
+
+
+def recycle(path: Path) -> bool:
+    """폴더를 Windows 휴지통으로 보낸다. 옮겼으면 True. 지우지는 않는다(휴지통에서 되살릴 수 있다).
+
+    쓰는 중이면(Edge 가 실패해 셸로 동기화하는 중 등) 일부 파일만 옮겨질 수 있어, 이름을 잠깐 바꿔 보아 잠겼는지 먼저 본다.
+    휴지통에 안 들어가는 크기면 Windows 가 그냥 지우려 하므로 FOF_WANTNUKEWARNING 으로 사용자에게 먼저 묻게 한다.
+    """
+    if os.name != "nt" or not path.is_dir():
+        return False
+    import ctypes
+    from ctypes import wintypes
+
+    probe = path.with_name(path.name + ".daling-check")
+    try:
+        path.rename(probe)
+    except OSError:
+        return False
+    try:
+        probe.rename(path)
+    except OSError:
+        path = probe  # 되돌리지 못했으면 바뀐 이름 그대로 보낸다
+
+    class SHFILEOPSTRUCTW(ctypes.Structure):
+        _fields_ = [
+            ("hwnd", wintypes.HWND), ("wFunc", wintypes.UINT), ("pFrom", wintypes.LPCWSTR),
+            ("pTo", wintypes.LPCWSTR), ("fFlags", ctypes.c_ushort), ("fAnyOperationsAborted", wintypes.BOOL),
+            ("hNameMappings", ctypes.c_void_p), ("lpszProgressTitle", wintypes.LPCWSTR),
+        ]
+
+    fo_delete = 3
+    # FOF_SILENT | FOF_NOCONFIRMATION | FOF_ALLOWUNDO(휴지통) | FOF_NOERRORUI | FOF_WANTNUKEWARNING
+    flags = 0x0004 | 0x0010 | 0x0040 | 0x0400 | 0x4000
+    # pFrom 은 \0 두 개로 끝나야 한다 (ctypes 가 하나를 더 붙인다)
+    op = SHFILEOPSTRUCTW(wFunc=fo_delete, pFrom=str(path.resolve()) + "\0", fFlags=flags)
+    result = ctypes.windll.shell32.SHFileOperationW(ctypes.byref(op))
+    return result == 0 and not op.fAnyOperationsAborted and not path.exists()
 
 
 def _driver_command() -> list[str]:
@@ -108,8 +219,15 @@ def _driver_command() -> list[str]:
 
 
 def ensure_browser() -> bool:
-    """없으면 받는다. 받는 동안 진행 상황을 그대로 화면에 흘려보낸다."""
-    if browser_ready():
+    """쓸 브라우저를 확보한다. Windows 에 Edge 가 있으면 아무것도 받지 않는다."""
+    if system_edge() is not None:
+        return True
+    return ensure_shell()
+
+
+def ensure_shell() -> bool:
+    """헤드리스 셸이 없으면 받는다. 받는 동안 진행 상황을 그대로 화면에 흘려보낸다."""
+    if shell_ready():
         return True
 
     print("LMS 로그인에 쓸 브라우저가 없어 처음 한 번 내려받습니다.")
@@ -144,12 +262,46 @@ def ensure_browser() -> bool:
             sys.stdout.flush()
     process.wait()
 
-    if process.returncode != 0 or not browser_ready():
+    if process.returncode != 0 or not shell_ready():
         print("브라우저 설치가 끝나지 않았습니다. 인터넷 연결을 확인하고 다시 시도해 주세요.")
         return False
 
     print("브라우저 준비 완료.")
     return True
+
+
+async def launch_lms_browser(playwright, headless: bool = True, env: dict[str, str] | None = None,
+                             download: bool = True):
+    """LMS 로그인용 브라우저를 띄운다. Windows 는 Edge 먼저, 실패하면 헤드리스 셸. 못 구하면 None.
+
+    download=False 면 셸이 없을 때 받지 않고 None (화면 요청 안에서 270MB 를 받지 않게 — 시간표 링크 가져오기).
+    env 는 리눅스 묶음 앱의 화면 서버가 부를 때 넘긴다(launch_env). 어떤 브라우저를 썼는지 로그에 한 줄 남긴다.
+    """
+    import asyncio
+
+    if system_edge() is not None:
+        try:
+            browser = await playwright.chromium.launch(channel=EDGE_CHANNEL, headless=headless, env=env)
+            _remember_edge_result(True)
+            print(f"LMS 접속 브라우저: Microsoft Edge {browser.version}")
+            return browser
+        except Exception as exc:
+            # 회사·학교 정책으로 headless 가 막혔거나 Edge 가 업데이트 중일 수 있다. 예전 길로 되돌아간다
+            first = (str(exc).strip().splitlines() or [type(exc).__name__])[0][:160]
+            _remember_edge_result(False, first)
+            print(f"Edge 를 띄우지 못해 내려받은 브라우저로 바꿉니다: {first}")
+            sys.stdout.flush()
+    # Edge 가 없는 PC 는 부르는 쪽(lms_crawler)이 ensure_browser 로 이미 받아 두었다. 여기서 받는 것은 Edge 가 실패했을 때뿐
+    if not shell_ready() and not (download and await asyncio.to_thread(ensure_shell)):
+        return None
+    try:
+        browser = await playwright.chromium.launch(headless=headless, env=env)
+    except Exception as exc:
+        # 리눅스에서 시스템 라이브러리가 빠져 못 띄웠으면 설치 명령을 알려 준다 (다른 운영체제는 아무것도 안 함)
+        explain_launch_failure(exc)
+        raise
+    print(f"LMS 접속 브라우저: Chromium headless shell {browser.version}")
+    return browser
 
 
 # ===== 리눅스: 크로미움에 필요한 시스템 라이브러리가 없을 때 =====
@@ -234,5 +386,5 @@ def explain_launch_failure(exc: BaseException) -> None:
 
 
 if __name__ == "__main__":
-    print("이미 있음" if browser_ready() else "없음 — 받는 중")
+    print(f"브라우저: {browser_label()}")
     raise SystemExit(0 if ensure_browser() else 1)

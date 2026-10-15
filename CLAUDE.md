@@ -34,6 +34,10 @@ powershell -ExecutionPolicy Bypass -File packaging\build_installer.ps1 -Install
 powershell -ExecutionPolicy Bypass -File packaging\msix\build_msix.ps1 -Build
 powershell -ExecutionPolicy Bypass -File packaging\msix\build_msix.ps1 -Install -Smoke
 
+# 디자인 스튜디오 (연습용 복제 앱에서 화면 만지기·댓글 → 저장본 반영). 도구는 ~/.claude/design-studio/tool,
+# 개인화는 .claude/design-studio/, 저장본·시안은 .design-studio/ (git 제외). --mode real 은 내 데이터를 읽기만
+.venv\Scripts\python.exe "$env:USERPROFILE\.claude\design-studio\tool\run_studio.py" --project .
+
 # 설치된 앱이 떠 있는 포트 찾기 (8765가 막혀 있으면 8766~8785)
 Get-NetTCPConnection -OwningProcess (Get-Process 붕어빵).Id -State Listen
 ```
