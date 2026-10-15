@@ -21,6 +21,7 @@ mac.yml '키체인 실험' 단계(workflow_dispatch 의 keychain_lab)가 smoke_t
         droppart  만든 빌드가 곧바로 partition_id 항목을 지운다
         addpart   partition 목록에 'cdhash:<…>' 를 더한다 — 옛 빌드가 다음 빌드 것을(업데이트 직전),
                   또는 새 빌드가 제 것을(처음 켤 때)
+        delete    새 빌드가 못 읽는 옛 항목을 지울 수 있나 (옛 판이 값을 넘겨주고 새 판이 다시 만드는 길의 뒷정리)
 
 CI 에서 한 번 돌고 끝나는 프로세스라 CF 객체는 대부분 놓아주지 않는다.
 """
@@ -260,3 +261,15 @@ def edit_partitions(phase: str, partition: str = "") -> str:
     finally:
         sec.SecKeychainSetUserInteractionAllowed(1)
     return "partition 항목을 지움" if phase == "droppart" else f"partition 에 더함 ({partition})"
+
+
+def delete() -> str:
+    """점검 항목을 묻는 창 없이 지운다 (못 읽는 빌드가 지울 수 있는지)."""
+    _ct, sec, *_ = _load()
+    sec.SecKeychainSetUserInteractionAllowed(0)
+    try:
+        if not mac_keychain._delete_item(ACCOUNT):
+            raise RuntimeError("점검 항목이 없습니다")
+    finally:
+        sec.SecKeychainSetUserInteractionAllowed(1)
+    return "점검 항목을 지움"
