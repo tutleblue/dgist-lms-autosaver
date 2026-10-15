@@ -52,6 +52,10 @@ if os.name == "nt":
     _user32.IsZoomed.argtypes = [wintypes.HWND]
     _user32.PostMessageW.argtypes = [wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM]
     _user32.GetDpiForWindow.argtypes = [wintypes.HWND]
+    _user32.FindWindowExW.restype = wintypes.HWND
+    _user32.FindWindowExW.argtypes = [wintypes.HWND, wintypes.HWND, wintypes.LPCWSTR, wintypes.LPCWSTR]
+    _user32.GetClassNameW.argtypes = [wintypes.HWND, wintypes.LPWSTR, ctypes.c_int]
+    _user32.GetWindowThreadProcessId.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.DWORD)]
 
 
 def _frame_y() -> int:
@@ -98,10 +102,37 @@ def _wndproc(hwnd, msg, wparam, lparam):
     return _user32.CallWindowProcW(_old_proc, hwnd, msg, wparam, lparam)
 
 
+def find_app_window(title: str, pid: int | None = None) -> int:
+    """제목이 같은 최상위 창 가운데 Daling(WinForms) 창만 고른다. pid 를 주면 그 프로세스 창만.
+
+    FindWindowW(None, "Daling") 하나로 찾으면 탐색기의 작업 표시줄 대리 창
+    (explorer.exe, Windows.Internal.Shell.TabProxyWindow, 제목 "Daling")이 먼저 잡힐 때가 있다.
+    그 창에 창 처리기를 걸다 실패해 제목 줄이 다시 회색으로 돌아왔다(2026-10-15 실측, Store 판 설치 뒤).
+    """
+    after = None
+    cls = ctypes.create_unicode_buffer(256)
+    owner = wintypes.DWORD()
+    for _ in range(64):
+        hwnd = _user32.FindWindowExW(None, after, None, title)
+        if not hwnd:
+            return 0
+        after = hwnd
+        _user32.GetClassNameW(hwnd, cls, 256)
+        if not cls.value.startswith("WindowsForms10"):
+            continue
+        if pid is not None:
+            _user32.GetWindowThreadProcessId(hwnd, ctypes.byref(owner))
+            if owner.value != pid:
+                continue
+        return hwnd
+    return 0
+
+
 def _find_window(title: str, timeout: float) -> int:
     deadline = time.time() + timeout
+    pid = os.getpid()
     while time.time() < deadline:
-        hwnd = _user32.FindWindowW(None, title)
+        hwnd = find_app_window(title, pid)
         if hwnd:
             return hwnd
         time.sleep(0.1)
@@ -192,7 +223,7 @@ def focus_existing(title: str) -> bool:
     if os.name != "nt":
         return False
     try:
-        hwnd = _user32.FindWindowW(None, title)
+        hwnd = find_app_window(title)
         if not hwnd:
             return False
         if _user32.IsIconic(hwnd):

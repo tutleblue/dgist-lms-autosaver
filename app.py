@@ -116,6 +116,8 @@ def apply_window_icon(timeout: float = 15.0) -> bool:
     try:
         import ctypes
 
+        import window_chrome
+
         user32 = ctypes.windll.user32
         IMAGE_ICON, LR_LOADFROMFILE = 1, 0x0010
         WM_SETICON, ICON_SMALL, ICON_BIG = 0x0080, 0, 1
@@ -123,7 +125,8 @@ def apply_window_icon(timeout: float = 15.0) -> bool:
         deadline = time.time() + timeout
         hwnd = 0
         while time.time() < deadline:
-            hwnd = user32.FindWindowW(None, WINDOW_TITLE)
+            # 제목만으로 찾으면 탐색기의 'Daling' 대리 창이 잡힐 수 있다 (window_chrome.find_app_window)
+            hwnd = window_chrome.find_app_window(WINDOW_TITLE, os.getpid())
             if hwnd:
                 break
             time.sleep(0.3)
