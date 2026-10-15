@@ -12,7 +12,8 @@
 #  - 서명: 오래 쓰는 사설 코드 서명 인증서 하나로 한다(packaging/mac/make_sign_cert.sh 로 한 번 만듦). 서명 요구
 #    조건(DR)이 인증서에 묶여 새 판도 같은 조건을 만족한다 → DR 로 비교하는 개인정보 보호 권한(TCC)은 이어진다.
 #    키체인은 아니다: 항목의 partition_id 가 'cdhash:<만든 빌드>' 라 업데이트 뒤 한 번 다시 묻는다(2026-10-15 실측,
-#    '키체인 허락 유지 점검'). 피할 길도 없었다('키체인 실험', FEATURES.md 'macOS 판'). 비밀이 없으면 예전처럼 ad-hoc.
+#    '키체인 허락 유지 점검'). 서명으로 피할 길은 없었고('키체인 실험', FEATURES.md 'macOS 판'), 앱 안 업데이트는 옛 판이
+#    값을 넘겨 새 판이 항목을 다시 만든다('키체인 넘겨주기 점검'). 비밀이 없으면 예전처럼 ad-hoc.
 #    공증(notarization)은 유료 Apple Developer 계정이 있어야 해서 하지 않는다 → 브라우저로 받은 DMG 는 처음 한 번
 #    '시스템 설정 → 개인정보 보호 및 보안 → 그래도 열기'. 한 줄 설치(docs/install.sh)는 격리 표시가 없어 이 창이 없다.
 #
@@ -449,6 +450,128 @@ jobs:
             echo "::notice::사설 인증서 다음 빌드도 키체인을 다시 묻습니다 ($(verdict "$CERT")): 항목 partition_id 가 cdhash 라서. 알려진 결과(2026-10-15)"
           fi
           exit 0
+
+      - name: 키체인 넘겨주기 점검 (앱 안 업데이트)
+        # 위 점검대로 다음 빌드는 옛 항목을 못 읽는다(partition_id = cdhash). 그래서 앱 안 업데이트는 옛 판이 기억한 값을
+        # 데이터 폴더의 0600 파일로 넘기고(updater._mac_hand_off_secrets) 새 판이 처음 읽을 때 옛 항목을 묻지 않고 지운 뒤
+        # 제 항목을 다시 만든다(mac_keychain._restore_handoff). 1판이 넘기고 → 같은 자리에 판 번호만 바꿔 다시 서명한
+        # 2판이, 묻는 창을 프로세스 전체에서 막은 채 작업 프로세스와 같은 길(runtime_config)로 읽는지 잰다 (smoke_test._mac_handoff).
+        #  - next: 다음 빌드 (넘겨주기 없이는 못 읽어야 함 = 대조군) · same: 같은 빌드가 다시 켜짐 (업데이트 실패)
+        #  - stale: 하루 지난 파일은 쓰지 않고 지움 · adhoc: ad-hoc 서명도 같은 길
+        # 넘겨주기 파일이 남으면 실패. 값은 이 단계가 만든 무작위 값이고 찍지 않는다. 임시 키체인·점검 계정만 쓴다.
+        continue-on-error: true
+        timeout-minutes: 12
+        env:
+          IDENTITY: ${{ steps.cert.outputs.identity }}
+          SIGN_KC: ${{ steps.cert.outputs.keychain }}
+        run: |
+          set +e
+          mkdir -p logs
+          LOG="$PWD/logs/keychain-handoff.log"
+          : > "$LOG"
+          OLD_DEFAULT="$(security default-keychain -d user | tr -d '" ')"
+          SEARCH="$(security list-keychains -d user | tr -d '"')"
+          limited() {  # $1 초 안에 안 끝나면 죽이고 124 (묻는 창을 기다리며 멈출 때 대비)
+            local limit=$1 pid
+            shift
+            "$@" >> "$LOG" 2>&1 &
+            pid=$!
+            for _ in $(seq 1 "$limit"); do
+              kill -0 "$pid" 2>/dev/null || { wait "$pid"; return $?; }
+              sleep 1
+            done
+            kill -KILL "$pid" 2>/dev/null
+            wait "$pid" 2>/dev/null
+            echo "(${limit}초 넘게 멈춰 죽임)" >> "$LOG"
+            return 124
+          }
+          cdhash() { codesign -dvvv "$1" 2>&1 | sed -n 's/^CDHash=//p'; }
+          handoff() {  # $1 이름, $2 서명 신원('-' = ad-hoc), $3 next|same|stale → 0 = 통과
+            local name=$1 id=$2 expect=$3 base="$RUNNER_TEMP/ho-$1" kc="daling-handoff-$1.keychain" rc token cd_a cd_b
+            local app="$RUNNER_TEMP/ho-$1/Daling.app" data="$RUNNER_TEMP/ho-$1/data" kc_args=()
+            if [ "$id" != "-" ] && [ -n "$SIGN_KC" ]; then kc_args=(--keychain "$SIGN_KC"); fi
+            rm -rf "$base" && mkdir -p "$data" && ditto dist/Daling.app "$app" || return 2
+            if [ "$id" != "$IDENTITY" ]; then
+              codesign --force --timestamp=none "${kc_args[@]}" --sign "$id" "$app" >> "$LOG" 2>&1 || return 2
+            fi
+            security create-keychain -p daling-ci "$kc" && security set-keychain-settings "$kc" \
+              && security unlock-keychain -p daling-ci "$kc" || return 2
+            security list-keychains -d user -s "$kc" $SEARCH
+            security default-keychain -d user -s "$kc"
+            token="$(openssl rand -hex 16)"
+            cd_a="$(cdhash "$app")"
+            echo "==== $name ($expect) 1판 cdhash=$cd_a" >> "$LOG"
+            limited 90 env AUTOSAVER_SMOKE_KEYCHAIN=handoff-write AUTOSAVER_SMOKE_DATA_ROOT="$data" \
+              AUTOSAVER_SMOKE_HANDOFF_TOKEN="$token" "$app/Contents/MacOS/Daling" --autosaver-smoke
+            rc=$?
+            if [ "$rc" = 0 ]; then
+              # 권한(-rw-------)만 남긴다. 내용은 찍지 않는다
+              ls -la "$data" | grep -i handoff >> "$LOG"
+              if [ "$expect" = stale ]; then
+                python -c 'import json,sys,time; p=sys.argv[1]; f=open(p,"r+"); d=json.load(f); d["created"]=time.time()-2*86400; f.seek(0); f.write(json.dumps(d)); f.truncate(); f.close()' \
+                  "$data/keychain-handoff.json"
+              fi
+              if [ "$expect" != same ]; then
+                plutil -replace CFBundleVersion -string "handoff-next" "$app/Contents/Info.plist"
+                limited 120 codesign --force --timestamp=none "${kc_args[@]}" --sign "$id" "$app"
+              fi
+              cd_b="$(cdhash "$app")"
+              echo "== $name 2판 cdhash=$cd_b" >> "$LOG"
+              if [ "$expect" != same ] && { [ -z "$cd_b" ] || [ "$cd_a" = "$cd_b" ]; }; then
+                echo "cdhash 가 안 바뀌어 '다음 빌드' 가 아닙니다" >> "$LOG"
+                rc=3
+              else
+                limited 90 env AUTOSAVER_SMOKE_KEYCHAIN=handoff-read AUTOSAVER_SMOKE_HANDOFF_EXPECT="$expect" \
+                  AUTOSAVER_SMOKE_DATA_ROOT="$data" AUTOSAVER_SMOKE_HANDOFF_TOKEN="$token" \
+                  "$app/Contents/MacOS/Daling" --autosaver-smoke
+                rc=$?
+              fi
+              # 바깥에서도 한 번 더: 넘겨주기 파일(임시 파일 포함)이 남으면 실패
+              if ls -A "$data" | grep -qi handoff; then
+                echo "넘겨주기 파일이 남음:" >> "$LOG"
+                ls -la "$data" >> "$LOG"
+                [ "$rc" = 0 ] && rc=4
+              fi
+              grep -h "키체인 넘겨주기" "$data/update-mac.log" >> "$LOG" 2>/dev/null
+              # 2판 뒤 항목의 partition_id (값은 안 찍는다: -d 없음)
+              limited 30 security dump-keychain -a "$kc"
+            else
+              rc=2
+            fi
+            security default-keychain -d user -s "$OLD_DEFAULT"
+            security list-keychains -d user -s $SEARCH
+            security delete-keychain "$kc"
+            rm -rf "$base"
+            return "$rc"
+          }
+          verdict() {
+            case $1 in
+              0) echo "통과" ;; 1) echo "실패 (logs/keychain-handoff.log)" ;; 124) echo "멈춤 (묻는 창을 기다린 듯)" ;;
+              3) echo "점검 무효 (cdhash 가 안 바뀜)" ;; 4) echo "파일이 남음" ;; *) echo "점검 준비 실패" ;;
+            esac
+          }
+          handoff next "$IDENTITY" next;   NEXT=$?
+          handoff same "$IDENTITY" same;   SAME=$?
+          handoff stale "$IDENTITY" stale; STALE=$?
+          ADHOC=""
+          if [ "$IDENTITY" != "-" ]; then handoff adhoc - next; ADHOC=$?; fi
+          cat "$LOG"
+          {
+            echo "### 키체인 넘겨주기 (앱 안 업데이트 뒤 묻지 않고 읽는가)"
+            echo "| 경우 | 결과 |"
+            echo "|---|---|"
+            echo "| 다음 빌드 ($([ "$IDENTITY" = - ] && echo ad-hoc || echo 사설 인증서)) | $(verdict "$NEXT") |"
+            echo "| 같은 빌드가 다시 켜짐 (업데이트 실패) | $(verdict "$SAME") |"
+            echo "| 하루 지난 파일 (쓰지 않고 지움) | $(verdict "$STALE") |"
+            [ -n "$ADHOC" ] && echo "| ad-hoc 다음 빌드 | $(verdict "$ADHOC") |"
+          } >> "$GITHUB_STEP_SUMMARY"
+          FAILED=0
+          for r in "$NEXT" "$SAME" "$STALE" $ADHOC; do [ "$r" = 0 ] || FAILED=1; done
+          if [ "$FAILED" = 1 ]; then
+            echo "::error::키체인 넘겨주기 점검 실패 — next $(verdict "$NEXT") · same $(verdict "$SAME") · stale $(verdict "$STALE")${ADHOC:+ · adhoc $(verdict "$ADHOC")}"
+            exit 1
+          fi
+          echo "키체인 넘겨주기: 모두 통과"
 
       - name: 키체인 실험 (keychain_lab)
         # 위 점검이 '사설 인증서로도 다음 빌드는 못 읽는다(partition_id = cdhash)' 고 잰 뒤, 피할 길이 있는지 잰다.

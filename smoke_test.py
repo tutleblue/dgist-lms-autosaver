@@ -23,6 +23,8 @@
     - 맥에서 AUTOSAVER_SMOKE_KEYCHAIN=write / read 면 그것만: 이 빌드가 남긴 항목을 '다음 빌드' 가 묻지 않고 읽는지
       (mac.yml 이 같은 자리에 같은 인증서로 다시 서명한 앱을 놓고 read 로 부른다, mac_keychain.persist_test)
       write 에 AUTOSAVER_SMOKE_KEYCHAIN_METHOD, droppart·addpart(+ …_PARTITION)·delete·readui 는 mac.yml '키체인 실험' 용 (mac_keychain_lab)
+    - 맥에서 AUTOSAVER_SMOKE_KEYCHAIN=handoff-write / handoff-read 면 그것만: 앱 안 업데이트의 키체인 넘겨주기
+      (mac.yml '키체인 넘겨주기 점검', 두 빌드가 AUTOSAVER_SMOKE_DATA_ROOT 로 같은 데이터 폴더를 쓴다, _mac_handoff)
 """
 from __future__ import annotations
 
@@ -80,7 +82,13 @@ def prepare_env() -> Path:
     """사용자 데이터(C:\\lms-autosaver, ~/.lms-autosaver)를 건드리지 않게 빈 임시 폴더를 쓴다."""
     import tempfile
 
-    root = Path(tempfile.mkdtemp(prefix="daling-smoke-"))
+    fixed = os.environ.get("AUTOSAVER_SMOKE_DATA_ROOT", "")
+    if fixed:
+        # 키체인 넘겨주기 점검: 옛 판과 새 판이 같은 데이터 폴더를 봐야 한다 (CI 가 만든 빈 폴더)
+        root = Path(fixed)
+        root.mkdir(parents=True, exist_ok=True)
+    else:
+        root = Path(tempfile.mkdtemp(prefix="daling-smoke-"))
     os.environ["AUTOSAVER_ROOT"] = str(root)
     os.environ["AUTOSAVER_DATA_ROOT"] = str(root)
     os.environ["AUTOSAVER_CONFIG_PATH"] = str(root / "config.json")
@@ -113,6 +121,81 @@ def _json(base: str, path: str) -> dict:
     return data
 
 
+def _mac_handoff(phase: str) -> str:
+    """앱 안 업데이트가 키체인 값을 다음 빌드에 넘기는 길을 실제 함수로 잰다 (mac.yml '키체인 넘겨주기 점검').
+
+    handoff-write  옛 판: 점검 계정에 값 둘을 넣고(protect, 그래서 기억한다) updater 가 업데이트 직전에 부르는
+                   함수로 넘겨주기 파일을 적는다. 파일 권한이 0600 인지 본다.
+    handoff-read   새 판(같은 데이터 폴더): 묻는 창을 프로세스 전체에서 막은 채, 넘겨주기 없이 옛 항목을 읽을 수 있는지
+                   (대조군) 본 뒤 작업 프로세스와 같은 길(runtime_config._load_config → secret_store → mac_keychain)로 읽는다.
+                   AUTOSAVER_SMOKE_HANDOFF_EXPECT  next: 다음 빌드 (대조군은 못 읽어야 함)
+                                                   same: 같은 빌드가 다시 켜짐 = 업데이트 실패 (대조군은 읽어야 함)
+                                                   stale: 하루 지난 파일 (쓰지 않고 지워야 함)
+    값은 CI 가 만든 AUTOSAVER_SMOKE_HANDOFF_TOKEN 으로 만들고 찍지 않는다. 실제 설정 항목(계정 settings)은 건드리지 않는다.
+    """
+    import stat
+
+    import mac_keychain
+
+    token = os.environ.get("AUTOSAVER_SMOKE_HANDOFF_TOKEN", "")
+    if len(token) < 16:
+        raise RuntimeError("AUTOSAVER_SMOKE_HANDOFF_TOKEN 이 없습니다")
+    want = {"LMS_PASSWORD": "lms-" + token, "GEMINI_API_KEY": "gemini-" + token}
+    mac_keychain.ACCOUNT = "smoke-handoff"  # 실제 설정 항목(settings) 대신
+    root = Path(os.environ["AUTOSAVER_SMOKE_ROOT"])
+    path = mac_keychain.handoff_path()
+    if path.parent != root:
+        raise RuntimeError(f"넘겨주기 파일이 점검 폴더 밖입니다: {path}")
+    if phase == "handoff-write":
+        for key, value in want.items():
+            mac_keychain.protect(key, value)
+        import updater
+
+        if updater._mac_hand_off_secrets() != path or not path.is_file():
+            raise RuntimeError(f"넘겨주기 파일을 적지 않았습니다 ({mac_keychain.last_handoff})")
+        mode = stat.S_IMODE(path.stat().st_mode)
+        if mode != 0o600:
+            raise RuntimeError(f"넘겨주기 파일 권한이 {oct(mode)} 입니다 (0600 이어야 함)")
+        return f"옛 판: 값 {len(want)}개를 0600 파일로 넘김"
+
+    expect = os.environ.get("AUTOSAVER_SMOKE_HANDOFF_EXPECT", "next")
+    _ct, sec, _cf = mac_keychain._load_api()
+    sec.SecKeychainSetUserInteractionAllowed(0)  # 물어야 하면 창 대신 실패 (넘겨주기 안의 _no_prompt 가 풀지 않는지도 본다)
+    try:
+        if not path.is_file():
+            raise RuntimeError("넘겨주기 파일이 없습니다")
+        try:
+            mac_keychain._read_item()
+            control = "읽힘"
+        except mac_keychain.KeychainError as exc:
+            control = f"못 읽음 OSStatus {exc.status}"
+        if (expect == "same") != (control == "읽힘"):
+            raise RuntimeError(f"대조군: 넘겨주기 없이 옛 항목을 {control} — '{expect}' 에서 기대와 다릅니다")
+        # 화면 서버·작업 프로세스와 같은 길: config.json 에는 표시만 있다
+        Path(os.environ["AUTOSAVER_CONFIG_PATH"]).write_text(
+            json.dumps({key: "keychain:" + key for key in want}), encoding="utf-8"
+        )
+        import runtime_config
+
+        got = runtime_config._load_config()
+        leftovers = sorted(p.name for p in root.iterdir() if "handoff" in p.name)
+        if leftovers:
+            raise RuntimeError(f"넘겨주기 파일이 남았습니다: {leftovers} ({mac_keychain.last_handoff})")
+        if expect == "stale":
+            if any(got.get(key) for key in want):
+                raise RuntimeError("하루 지난 넘겨주기 파일의 값을 썼습니다")
+            return f"하루 지난 파일은 쓰지 않고 지움 (대조군 {control}; {mac_keychain.last_handoff})"
+        if {key: got.get(key) for key in want} != want:
+            raise RuntimeError(f"넘겨받은 값이 다릅니다 ({mac_keychain.last_handoff})")
+        # 기억이 아니라 키체인에서 다시: 이 빌드가 묻지 않고 읽어야 한다
+        back = json.loads(mac_keychain._read_item() or "{}")
+        if {key: back.get(key) for key in want} != want:
+            raise RuntimeError("키체인 항목을 다시 읽은 값이 다릅니다")
+        return f"{expect}: 묻지 않고 넘겨받음 (대조군 {control}; {mac_keychain.last_handoff})"
+    finally:
+        sec.SecKeychainSetUserInteractionAllowed(1)
+
+
 def run(app) -> int:
     """app: 이미 불러온 app.py 모듈 (__main__). 0 이면 통과."""
     app._bind_worker_output()  # 창 없는 EXE 에서도 print 가 터지지 않게
@@ -129,6 +212,12 @@ def run(app) -> int:
         print(f"[{'OK' if ok else 'FAIL'}] {name} ({took * 1000:.0f}ms) {detail}", flush=True)
 
     phase = os.environ.get("AUTOSAVER_SMOKE_KEYCHAIN", "")
+    if sys.platform == "darwin" and phase in ("handoff-write", "handoff-read"):
+        # 앱 안 업데이트의 키체인 넘겨주기만 본다 (mac.yml '키체인 넘겨주기 점검'). 다른 점검은 건너뜀
+        check(f"키체인 넘겨주기 ({phase})", lambda: _mac_handoff(phase))
+        ok = results[-1][0]
+        print(f"SMOKE {'PASS' if ok else 'FAIL'} (키체인 {phase})", flush=True)
+        return 0 if ok else 1
     if sys.platform == "darwin" and phase in ("write", "read", "droppart", "addpart", "delete", "readui"):
         # 키체인 허락이 다음 빌드로 이어지는지만 본다 (mac.yml '키체인 허락 유지 점검'·'키체인 실험'). 다른 점검은 건너뜀
         method = os.environ.get("AUTOSAVER_SMOKE_KEYCHAIN_METHOD", "default")

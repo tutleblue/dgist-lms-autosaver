@@ -11,6 +11,7 @@
 
 맥(Daling.app)도 2)·3) 까지 같고, 4) 는 앱에 묶은 install.sh(docs/install.sh 와 같은 파일)가 한다:
 앱이 꺼지기를 기다려 받은 DMG 의 Daling.app 으로 바꿔 끼우고 다시 켠다 (_start_mac_install).
+그 직전에 키체인 값을 0600 파일로 새 판에 넘긴다 — 새 판이 '키체인 암호 입력' 을 다시 묻지 않게 (_mac_hand_off_secrets).
 리눅스는 1) 만 하고 daling-<버전>-linux-x86_64.AppImage 를 찾아 브라우저로 연다 (.github/workflows/linux.yml 이 만든다).
 
 예전 방식(저장소 main 의 VERSION 과 비교)은 저장소가 1.8.6 에 멈춰 있어 늘 '최신' 으로 나왔다(2026-09-28).
@@ -316,7 +317,12 @@ def _run_update(on_ready_to_exit) -> None:
 
         _set_job(stage="설치", message="설치를 시작합니다. 잠시 뒤 앱이 다시 켜집니다.")
         if sys.platform == "darwin":
-            _start_mac_install(dest)
+            handoff = _mac_hand_off_secrets()
+            try:
+                _start_mac_install(dest, handoff)
+            except Exception:
+                _mac_drop_handoff()
+                raise
             # 다시 켜진 앱이 '업데이트를 마쳤어요' 를 보여 줄 수 있게 적어 둔다 (web_ui.get_whats_new)
             _write_update_marker(local_version(), latest)
         else:
@@ -382,7 +388,33 @@ def mac_install_log_path() -> Path:
         return Path(tempfile.gettempdir()) / "bungeoppang-update" / "update-mac.log"
 
 
-def _start_mac_install(dmg: Path) -> None:
+def _mac_hand_off_secrets() -> Path | None:
+    """새 판이 처음 켤 때 '키체인 암호 입력' 창을 띄우지 않게, 이 앱이 읽어 둔 비밀 값을 0600 파일로 넘긴다.
+
+    사설 인증서·ad-hoc 서명이면 키체인 항목에 partition_id = 'cdhash:<만든 빌드>' 가 붙어 새 판은 옛 항목을 못 읽는다
+    (2026-10-15 CI 실측, FEATURES.md 'macOS 판'). 새 판은 이 파일이 있으면 옛 항목을 묻지 않고 지우고 제 항목을
+    다시 만든 뒤 파일을 지운다(mac_keychain._restore_handoff). 못 넘기면 새 판이 예전처럼 한 번 묻는다.
+    """
+    try:
+        import mac_keychain
+
+        if mac_keychain.write_handoff():
+            return mac_keychain.handoff_path()
+    except Exception:
+        pass
+    return None
+
+
+def _mac_drop_handoff() -> None:
+    try:
+        import mac_keychain
+
+        mac_keychain.drop_handoff()
+    except Exception:
+        pass
+
+
+def _start_mac_install(dmg: Path, handoff: Path | None = None) -> None:
     """확인한 DMG 로 바꿔 끼우는 install.sh 를 앱과 따로 띄운다. 앱이 꺼지면(on_ready_to_exit) 일을 시작한다."""
     # 바꿔 끼우는 동안 앱 묶음 안의 파일을 읽지 않게 밖으로 꺼내 둔다
     script = dmg.parent / "install.sh"
@@ -394,6 +426,9 @@ def _start_mac_install(dmg: Path) -> None:
         DALING_UPDATE="1",  # 앱이 스스로 꺼지는 중이니 먼저 기다린다
         LANG=env.get("LANG") or "ko_KR.UTF-8",
     )
+    if handoff:
+        # 바꿔 끼우지 못하고 끝나면 install.sh 가 지운다 (옛 판은 키체인을 그대로 읽으니 필요 없다)
+        env["DALING_HANDOFF"] = str(handoff)
     log_path = mac_install_log_path()
     log_path.parent.mkdir(parents=True, exist_ok=True)
     with open(log_path, "ab") as log:

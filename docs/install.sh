@@ -16,6 +16,7 @@
 #
 # 맥 앱 안 업데이트도 이 파일을 쓴다 (앱에 묶여 있다, updater._start_mac_install). 그때 받는 환경 변수:
 #   DALING_DMG=<앱이 받아 SHA-256 을 확인한 DMG>  DALING_DEST=<지금 앱이 있는 폴더>  DALING_UPDATE=1(앱이 꺼지기를 먼저 기다림)
+#   DALING_HANDOFF=<옛 판이 새 판에 넘기려고 적은 키체인 값 파일(0600)> — 바꿔 끼우지 못하고 끝나면 지운다
 #   DALING_NO_OPEN=1 이면 설치한 뒤 켜지 않는다 (CI 점검용)
 #
 # 주의: 파이프로 받는 동안 반쯤 받은 스크립트가 돌지 않게, 모든 일을 main 안에 두고 맨 끝에서 부른다.
@@ -107,6 +108,15 @@ mac_arch() {
   if [ "$(sysctl -n hw.optional.arm64 2>/dev/null || echo 0)" = 1 ]; then echo arm64; else echo x86_64; fi
 }
 
+# 앱 안 업데이트: 옛 판(updater._mac_hand_off_secrets)이 키체인 값을 새 판에 넘기려고 적은 0600 파일.
+# 바꿔 끼우지 못하고 끝나면 지운다 — 옛 판은 키체인을 그대로 읽고, 평문 파일이 다음 실행까지 남지 않게.
+drop_handoff() {
+  if [ "${swapped:-0}" != 1 ] && [ -n "${DALING_HANDOFF:-}" ]; then
+    case "$DALING_HANDOFF" in */keychain-handoff.json) rm -f "$DALING_HANDOFF" ;; esac
+  fi
+  return 0
+}
+
 install_mac() {
   # 앱은 macOS 12 이상에서만 열린다 (Info.plist 의 LSMinimumSystemVersion). 그 아래면 깔기 전에 알린다.
   # 판을 못 읽으면(sw_vers 없음) 막지 않고 넘어간다
@@ -119,7 +129,8 @@ install_mac() {
   arch="$(mac_arch)"
   tmp="$(mktemp -d "${TMPDIR:-/tmp}/daling.XXXXXX")"
   mnt="$tmp/mnt"
-  trap 'hdiutil detach "$mnt" -quiet >/dev/null 2>&1 || true; rm -rf "$tmp"' EXIT
+  swapped=0
+  trap 'hdiutil detach "$mnt" -quiet >/dev/null 2>&1 || true; rm -rf "$tmp"; drop_handoff' EXIT
   trap 'exit 130' INT TERM
   if [ -n "${DALING_DMG:-}" ]; then
     # 앱 안 업데이트(updater.py _start_mac_install): 앱이 이미 받아 SHA-256 을 확인한 DMG 를 쓴다
@@ -183,6 +194,7 @@ install_mac() {
              "could not move the old $dest/Daling.app aside. Move it to the Trash and try again."
   fi
   mv "$dest/.Daling.app.new" "$dest/Daling.app"
+  swapped=1
   rm -rf "$dest/.Daling.app.old" 2>/dev/null || true
   [ -n "${DALING_DMG:-}" ] && rm -f "$DALING_DMG"
 
