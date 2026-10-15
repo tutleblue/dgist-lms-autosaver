@@ -276,8 +276,5 @@ def persist_test(phase: str, account: str = "smoke-persist") -> str:
         raise RuntimeError("점검 항목이 없습니다 (write 단계가 안 돌았거나 다른 키체인에 썼습니다)")
     if not str(json.loads(raw or "{}").get("SMOKE", "")).startswith("persist-"):
         raise RuntimeError("점검 항목 내용이 다릅니다")
-    try:
-        _delete_item(account)
-    except KeychainError:
-        pass  # 지우기 허락은 따로일 수 있다. CI 는 임시 키체인째 지운다
+    # 지우지 않는다: '키체인 실험' 은 3판이 이어서 읽는다. CI 는 임시 키체인째 지운다
     return "다음 빌드가 묻지 않고 읽음"

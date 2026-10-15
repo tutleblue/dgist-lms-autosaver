@@ -73,6 +73,7 @@ hiddenimports = [
     "certifi",
     # 맥 전용
     "mac_keychain",
+    "mac_keychain_lab",  # CI '키체인 실험' 전용 (smoke 에서만 부름)
     "smoke_test",
     "webview.platforms.cocoa",
     "AppKit",
