@@ -5333,8 +5333,9 @@ class DashboardHandler(SimpleHTTPRequestHandler):
 
                 profile = ai_cli.load_profile(workspace.root / "ai_profile.json")
                 try:
-                    if not ai_cli.pick(profile.get("provider") or None):
-                        raise ai_cli.AIError("no cli")
+                    # 실험실 스위치가 꺼져 있으면 AI CLI 로 보내지 않는다(예전 길로)
+                    if not ai_cli.enabled(profile) or not ai_cli.pick(profile.get("provider") or None):
+                        raise ai_cli.AIError("off or no cli")
                     res = ai_cli.translate(text, str(payload.get("target") or "ko"), profile.get("provider") or None,
                                            model=profile.get("model") or "")
                     result = {"text": res["text"], "engine": res.get("modelLabel") or ai_cli.LABELS[res["provider"]]}
@@ -5755,6 +5756,8 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                     self.send_json({"ok": True, "profile": ai_cli.save_profile(profile_path, payload)})
                     return
                 profile = ai_cli.load_profile(profile_path)
+                if not ai_cli.enabled(profile):
+                    raise ai_cli.AIError("AI 도우미가 꺼져 있어요. 설정 → AI 도우미(실험실)에서 켜 주세요.")
                 provider = profile.get("provider") or None
                 model = profile.get("model") or ""
                 if route == "/api/ai/search":

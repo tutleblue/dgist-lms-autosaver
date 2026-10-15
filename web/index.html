@@ -943,7 +943,7 @@
                         <button class="button ghost compact" id="previewMailButton" type="button">미리보기</button>
                         <!-- AI 초안: 설정에서 고른 AI CLI 로 본문을 써 준다 (app.js 'AI 도우미') -->
                         <!-- 'AI 초안' 대신 지금 쓰는 모델 이름(Opus 5.5, GPT-6-Astra …)을 보인다. 모델은 열린 칸에서 바꾼다 -->
-                        <button class="button ghost compact" id="aiDraftToggle" type="button" title="AI 초안 · 모델 바꾸기">
+                        <button class="button ghost compact" id="aiDraftToggle" type="button" title="AI 초안 · 모델 바꾸기" hidden>
                           <span class="icon" data-icon="sparkle"></span>
                           <span id="aiDraftModelName">AI 초안</span>
                         </button>
@@ -1504,10 +1504,15 @@
             <header class="st-head">
               <span class="st-tile violet"><span class="icon" data-icon="sparkle"></span></span>
               <div>
-                <h3>AI 도우미</h3>
+                <h3>AI 도우미 <span class="labs-badge">실험실</span></h3>
                 <p>번역 · 말로 찾기 · 메일 초안. 이 PC 에 로그인해 둔 CLI 계정을 써요.</p>
               </div>
+              <!-- 실험실 스위치: 끄면 메일 쓰기의 모델 단추·검색의 'AI 에게 물어보기'·번역의 AI 가 모두 사라진다 -->
+              <label class="labs-switch" title="AI 도우미 켜기/끄기">
+                <span class="toggle"><input type="checkbox" id="aiEnabled" /><span class="track"></span></span>
+              </label>
             </header>
+            <div class="ai-body" id="aiBody" hidden>
             <div class="ai-providers" id="aiProviders" role="radiogroup" aria-label="쓸 AI"></div>
             <div class="ai-profile">
               <label>이름<input id="aiName" type="text" autocomplete="off" placeholder="홍길동" /></label>
@@ -1519,6 +1524,7 @@
             <div class="ai-profile-foot">
               <span class="ai-privacy">메일 초안·번역·검색을 누를 때만 그 내용이 고른 AI 로 보내져요.</span>
               <button type="button" class="button compact" id="aiProfileSave">저장</button>
+            </div>
             </div>
           </section>
 

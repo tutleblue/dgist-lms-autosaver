@@ -11067,3 +11067,12 @@ html[data-demo] .demo-stripe {
 .ai-chip span { font-weight: 400; color: var(--text-faint); font-size: 11.5px; }
 .ai-chip.on { border-style: solid; border-color: var(--accent); background: var(--accent-soft); }
 #aiDraftModelName { white-space: nowrap; }
+
+/* 실험실 표시·스위치 (AI 도우미) */
+.labs-badge {
+  display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: 999px; vertical-align: 2px;
+  font-size: 10.5px; font-weight: 700; letter-spacing: 0; background: var(--violet-soft); color: var(--violet);
+}
+#stAi .st-head { align-items: center; }
+#stAi .labs-switch { margin-left: auto; flex: none; cursor: pointer; }
+.ai-body { display: flex; flex-direction: column; }

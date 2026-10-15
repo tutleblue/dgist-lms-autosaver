@@ -13702,7 +13702,9 @@ async function loadAiStatus(force = false) {
   paintAiModelPicker();
   return state.ai.status;
 }
-const aiReady = () => Object.values(state.ai.status?.available || {}).some(Boolean);
+// 실험실 스위치(ai_profile.json enabled)가 켜져 있고 CLI 가 하나라도 있을 때만 AI 기능을 보인다
+const aiOn = () => state.ai.status?.profile?.enabled === "1";
+const aiReady = () => aiOn() && Object.values(state.ai.status?.available || {}).some(Boolean);
 
 /* --- 자연어 검색 --- */
 function withAiSearch(query, grouped) {
@@ -13717,7 +13719,7 @@ function withAiSearch(query, grouped) {
     const found = s.note ? "AI 가 찾은 것 · " + s.note : "AI 가 찾은 것";
     out.unshift({ key: "ai", label: s.loading || s.error ? "AI 검색" : found, total: items.length, items });
   }
-  if (query.trim().length >= 2 && (aiReady() || !state.ai.status) && !(s && s.q === query && (s.loading || s.items?.length))) {
+  if (query.trim().length >= 2 && aiReady() && !(s && s.q === query && (s.loading || s.items?.length))) {
     out.push({
       key: "ai",
       label: "AI 에게 물어보기",
@@ -13805,6 +13807,13 @@ function paintAiSettings() {
   const box = $("#aiProviders");
   const st = state.ai.status;
   if (!box || !st) return;
+  const on = aiOn();
+  const sw = $("#aiEnabled");
+  if (sw) sw.checked = on;
+  if ($("#aiBody")) $("#aiBody").hidden = !on;
+  // 메일 쓰기의 모델 단추와 초안 칸도 스위치를 따른다
+  if ($("#aiDraftToggle")) $("#aiDraftToggle").hidden = !on;
+  if (!on && $("#aiDraftBox")) $("#aiDraftBox").hidden = true;
   const chosen = st.profile?.provider || "";
   box.innerHTML = AI_PROVIDERS.map(([key, label]) => {
     const has = key ? Boolean(st.available?.[key]) : aiReady();
@@ -13819,7 +13828,12 @@ function paintAiSettings() {
 }
 
 async function saveAiProfile(extra = {}) {
-  const payload = { provider: state.ai.status?.profile?.provider || "", model: state.ai.status?.profile?.model || "", ...extra };
+  const payload = {
+    provider: state.ai.status?.profile?.provider || "",
+    model: state.ai.status?.profile?.model || "",
+    enabled: state.ai.status?.profile?.enabled || "",
+    ...extra,
+  };
   AI_PROFILE_FIELDS.forEach(([key, sel]) => {
     if ($(sel)) payload[key] = $(sel).value.trim();
   });
@@ -14035,6 +14049,20 @@ $("#aiModelSelect")?.addEventListener("change", async (event) => {
     paintAiDraftContext();
     showToast(currentAiModel().label + " 로 쓸게요");
   } catch (error) {
+    showToast(humanError(error));
+  }
+});
+
+
+/* 실험실 스위치 */
+$("#aiEnabled")?.addEventListener("change", async (event) => {
+  const on = event.target.checked;
+  try {
+    await saveAiProfile({ enabled: on ? "1" : "" });
+    state.ai.search = null;
+    showToast(on ? "AI 도우미를 켰어요 (실험실)" : "AI 도우미를 껐어요");
+  } catch (error) {
+    event.target.checked = !on;
     showToast(humanError(error));
   }
 });

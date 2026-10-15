@@ -293,7 +293,8 @@ def draft(request: str, profile: dict, context: dict, provider: str | None = Non
 
 
 # ===== 내 정보 (메일 초안에 매번 쓰는 학번·소개) =====
-PROFILE_KEYS = ("name", "studentId", "dept", "intro", "signature", "provider", "model")
+# enabled: 실험실 스위치. "1" 이면 켬, 빈 값이면 끔(처음엔 꺼져 있다 — 2026-10-15 사용자: 실험실 기능으로, 껐다 켤 수 있게)
+PROFILE_KEYS = ("name", "studentId", "dept", "intro", "signature", "provider", "model", "enabled")
 
 
 def load_profile(path: Path) -> dict:
@@ -314,5 +315,10 @@ def save_profile(path: Path, payload: dict) -> dict:
         data["provider"] = ""  # 빈 값 = 자동(설치된 것 중 앞에서부터)
     if not _SAFE_MODEL.match(data["model"] or "x"):
         data["model"] = ""
+    data["enabled"] = "1" if data["enabled"] in ("1", "true", "True") else ""
     atomic_write_json(path, data)
     return data
+
+
+def enabled(profile: dict) -> bool:
+    return profile.get("enabled") == "1"

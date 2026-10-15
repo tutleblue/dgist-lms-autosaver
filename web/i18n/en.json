@@ -1921,5 +1921,9 @@
  "분반": "Sec.",
  "AI 초안 · 모델 바꾸기": "AI draft · change model",
  "로 쓸게요": "selected",
- "쓸 모델": "Model to use"
+ "쓸 모델": "Model to use",
+ "AI 도우미 켜기/끄기": "Turn AI assistant on/off",
+ "AI 도우미를 껐어요": "AI assistant turned off",
+ "AI 도우미를 켰어요 (실험실)": "AI assistant turned on (Labs)",
+ "실험실": "Labs"
 }
