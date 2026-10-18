@@ -21,7 +21,7 @@ DGIST 학생용 데스크톱 앱 "붕어빵"(저장소 이름 dgist-lms-autosave
 | 개설강좌·학점 | data.go.kr API + DGIST 조회 | `timetable_import.py`, `dgist_api.py` |
 | 학교 공지 | DGIST 홈페이지 게시판 | `notice_board.py` |
 | 셔틀 시간표 | DGIST 홈페이지 | `shuttle.py` |
-| 조직도(주소록) | 사용자가 넣은 파일 | `directory.py` |
+| 조직도(주소록) | 사용자가 넣은 파일 + 설치 파일의 교원 주소록(`data/seed_directory_faculty.json`) | `directory.py`, `web_ui.directory_people` |
 | FGLP 파견 대학 | 내장 데이터 | `fglp.py` |
 
 모은 것을 보내는 곳은 Google Drive, Google Calendar, 삼성 노트, 내 컴퓨터(문서 폴더)입니다.
@@ -516,6 +516,7 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
   - 부서 사람: `POST /mail/org/dgist.ac.kr/groups/{id}/entries` 본문 `_method=GET&perPage=500&currentPage=N`. 155개 부서, 약 160초, 4,824명.
   - 필드: `cn`(이름) `mail` `department` `title`/`jobname`(교원·직원·연구원) `identity`(학부생·대학원생…). 값은 모두 배열.
 - `/api/directory?q=&limit=` 는 `limit`(최대 50)을 따르고, 조직도는 파일 도장이 바뀔 때만 다시 읽는다(`_directory_cache`).
+- 교원 주소록 (2026-10-15): 새 사용자는 조직도를 넣을 길이 없어 교수·조교 주소가 비어 있었다. `web_ui.directory_people` 이 내 `directory.json` 에 설치 파일의 `data/seed_directory_faculty.json`(교원 247명: 이름·메일·소속·직위)을 메일 주소 기준으로 겹치지 않게 더한다. 교수 주소는 학교 홈페이지에 공개된 정보라 공개 배포물에 넣고, 학생·직원까지 든 전체 조직도(4,824명, 학생 3,518)는 포탈 로그인 뒤에만 보이는 정보라 넣지 않는다(사용자 결정). 체험 중에는 섞지 않는다(가짜 데이터에 실명 금지). 새로 만들기: `python scripts/build_faculty_seed.py [조직도 파일]`. `/api/directory` 의 `imported` 는 내가 넣은 인원(0 이면 설정에 '교수 247명').
 
 ## 화면 전환 성능 (2026-09-27)
 - 메일함 진입 비용은 JS 가 아니라 배치(layout)였다: 메일 41통 = 요소 1,200개, 배치 한 번 24ms × 여러 번. `.email-list-row { content-visibility: auto; contain-intrinsic-size: auto 88px }` 로 163ms → 44ms(중앙값, 9회).
@@ -539,7 +540,7 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 - `THEMES` 맨 앞 `auto`(기본값): `prefers-color-scheme` 이 어두우면 `dark`, 밝으면 `claude`. `resolveTheme` 로 실제 테마를 정한다.
 - 시스템 설정이 바뀌면 `followSystemTheme`: change 이벤트 + 창 focus + 3초마다 비교 (이벤트가 안 오는 경우가 있었음).
 - 고른 테마는 `ui_prefs.json`(`GET/POST /api/ui-prefs`)에 둔다. 앱 창 저장소는 끌 때마다 지워져 예전에는 켤 때마다 '기본' 으로 돌아갔다. localStorage 키는 `autosaver-theme-v2`(옛 키는 고르지 않아도 '기본' 이 적혀 있어 무시).
-- 설정의 '조직도 파일 넣기' 줄은 사용자 요청으로 뺐다(2026-09-28). 조직도(`directory.json`)와 자동완성은 그대로. 다시 넣으려면 `index.html` 에 `#directoryImportButton`·`#directoryFileInput`·`#directoryStatus` 를 두면 `bindDirectory` 가 붙는다.
+- 설정의 '조직도 파일 넣기' 줄은 사용자 요청으로 뺐다가(2026-09-28) 다시 넣었다(2026-10-15, 설정 › 연결된 계정의 학교 메일 아래 '주소록' 줄 `#directoryRow`). 교원 주소록만으로는 조교·학생 주소를 못 찾아서다.
 - 대시보드 첫 줄(`setHeroGreeting`)은 인사말 대신 '9월 28일 월요일' (쉬는 날은 ' · 추석' 처럼 이름). 사용자가 인사 문구를 오글거린다고 해서 뺐다(2026-09-28). 둘째 줄 `heroSummary` 는 그대로.
 - 저장 위치 스위치(드라이브·내 컴퓨터·범위·클라우드)는 바꾸는 즉시 `/api/config` 에 저장한다(`saveSavePlaceSoon`, 250ms 묶음). 예전에는 '설정 저장' 을 눌러야 해서, 설정 화면을 다시 열 때 `populateSettings` 가 저장된 값(off)으로 되돌려 '켰다 꺼졌다' 했다(2026-09-28).
 
@@ -638,7 +639,7 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 
 - 마감 확인 작업(1시간마다)에서 `GET /learn/api/public/v1/courses/{id}/users?fields=courseRoleId,user.name,user.userName` 로 학생을 뺀 사람(Instructor→교수, TeachingAssistant·CourseBuilder→조교, Grader→채점 조교)을 받아 `course_staff.json` 에 둔다. 지난 학기 일부 과목은 403(전에 받은 것 유지).
 - LMS 는 이메일을 주지 않는다(이름·학번만). 이 학교는 이름 전체를 `name.given` 에 넣고 `family` 는 '.' 이다.
-- `/api/course-staff`: 조직도에서 이름으로 이메일을 붙인다. 동명이인이면 교수는 교원, 조교는 대학원생 → 그래도 여럿이면 주고받은 메일에 나온 사람. 그래도 모르면 `email` 을 비우고 `candidates` 를 준다(화면에서 골라 씀). 실측 44명 중 35명 자동, 7명 후보, 2명 조직도에 없음.
+- `/api/course-staff`: 조직도에서 이름으로 이메일을 붙인다. 동명이인이면 교수는 교원, 조교는 대학원생 → 그래도 여럿이면 주고받은 메일에 나온 사람. 그래도 모르면 `email` 을 비우고 `candidates` 를 준다(화면에서 골라 씀). 실측 44명 중 35명 자동, 7명 후보, 2명 조직도에 없음. 조직도에 이름이 없으면(새 사용자는 교원만 있음) 주고받은 메일에서 이름이 같은 `@dgist.ac.kr` 주소가 하나뿐일 때 그 주소를 쓴다(2026-10-15 실측: 조직도 없이 이번 학기 교수 6/6, 조교 1/6, 조직도와 다른 주소 0).
 - 화면: 강의 카드 `courseStaffLine` (누르면 `mailCourseStaff` → 받는 사람 '이름/과목 조교', 제목 '[과목] '). 받는 사람 자동완성은 `staffContacts` 를 연락처에 더하고 '일반물리Ⅱ 조교' 꼬리표(`.ac-tag`)를 붙인다. 여러 낱말 검색은 낱말마다 맞아야 한다.
 
 ## 메일 미리보기 CSS (2026-10-02)

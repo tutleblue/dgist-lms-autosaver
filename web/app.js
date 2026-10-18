@@ -8961,7 +8961,8 @@ function bindDirectory() {
     try {
       const res = await api("/api/directory?q=");
       const status = $("#directoryStatus");
-      if (status) status.textContent = res.total ? `${res.total}명 등록됨` : "아직 없음";
+      // 넣은 조직도가 없으면 설치 파일에 든 교원만 있다 (web_ui.directory_people)
+      if (status) status.textContent = res.imported ? `${res.total}명 등록됨` : res.total ? `교수 ${res.total}명` : "아직 없음";
     } catch (error) {
       /* 무시 */
     }
@@ -11136,7 +11137,7 @@ const TOUR_STEPS = [
       "오늘·어제로 묶어 보고, 안읽음·중요·첨부로 거르기",
       "메일을 왼쪽 폴더로 끌어 옮기거나 휴지통으로",
       "⋮ 메뉴: 일정에 추가, 다시 알림, 인쇄",
-      "답장 안 온 보낸 메일을 찾아 리마인드",
+      "답이 없는 보낸 메일은 ⋮ › 리마인드 메일 쓰기",
     ],
   },
   {

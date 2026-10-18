@@ -1346,6 +1346,15 @@
                 <input name="schoolEmailPassword" type="password" placeholder="비밀번호 (바꿀 때만)" autocomplete="off" aria-label="메일 비밀번호" />
               </div>
             </div>
+            <!-- 주소록: 교수 주소는 설치 파일에 들어 있고, 조교·학생까지 찾으려면 조직도 파일을 넣는다 (bindDirectory, web_ui.directory_people) -->
+            <div class="st-dir" id="directoryRow">
+              <div class="st-dir-text">
+                <strong><span class="icon" data-icon="user"></span>주소록 <span class="st-pill" id="directoryStatus">확인 중</span></strong>
+                <small>교수님 주소는 기본으로 들어 있어요. 조교·학생까지 찾으려면 조직도 파일(CSV·JSON)을 넣으세요.</small>
+              </div>
+              <button class="button compact ghost" id="directoryImportButton" type="button">파일 넣기</button>
+              <input type="file" id="directoryFileInput" accept=".json,.csv" hidden />
+            </div>
 
             <div class="st-acct">
               <span class="st-logo st-logo-google" aria-hidden="true">

@@ -32,7 +32,7 @@
 <div class="narrow">
 
 <h1 class="page">개인정보처리방침</h1>
-<p class="meta">Daling (예전 이름 붕어빵, DGIST LMS AutoSaver) · 시행일 2026년 10월 15일</p>
+<p class="meta">Daling (예전 이름 붕어빵, DGIST LMS AutoSaver) · 시행일 2026년 10월 18일</p>
 
 <p>Daling(이하 "앱")은 DGIST 학생이 강의자료·과제 마감·학교 메일·학사일정을 한곳에서 보고, 이용자 본인의 Google Drive와 Google Calendar로 정리하도록 돕는 Windows·macOS·Linux 데스크톱 앱입니다. 이 방침은 앱이 어떤 정보를 다루고, 어디에 보관하며, 어디로 보내는지 설명합니다.</p>
 
@@ -53,6 +53,7 @@
     <tr><td>Google OAuth 토큰</td><td>이용자가 연결한 Google Drive·Calendar에 접근</td><td>이용자 PC (<code>token.json</code>)</td></tr>
     <tr><td>강의자료 파일과 목록</td><td>과목·주차별 정리, 중복 확인</td><td>이용자 PC, 이용자 본인의 Google Drive</td></tr>
     <tr><td>학교 메일, 마감·일정</td><td>앱 화면에 보여 주기, 캘린더로 옮기기</td><td>이용자 PC, 이용자 본인의 Google Calendar</td></tr>
+    <tr><td>주소록: DGIST 교원의 이름·학교 메일·소속·직위(교원만, 학생·직원은 넣지 않음), 이용자가 넣은 조직도 파일 (선택)</td><td>메일 받는 사람 찾기, 과목 교수·조교의 메일 주소 채우기</td><td>교원 주소록은 앱에 들어 있음. 이용자가 넣은 조직도는 이용자 PC (<code>directory.json</code>)</td></tr>
     <tr><td>Gemini API 키 (선택)</td><td>이용자가 켠 경우 자료 요약·번역</td><td>이용자 PC, Windows DPAPI, macOS 키체인 또는 Linux 키링(Secret Service)으로 암호화</td></tr>
     <tr><td>AI 도우미 '내 정보' (선택): 이름·학번·소속·자기소개·서명, 고른 AI</td><td>AI 도우미로 메일 초안을 쓸 때 넣기</td><td>이용자 PC (<code>ai_profile.json</code>)</td></tr>
   </tbody>
@@ -123,7 +124,7 @@
 
 <section class="en" id="english" lang="en">
   <h2>Privacy Policy (English)</h2>
-  <p class="meta">Daling (formerly Bungeoppang / DGIST LMS AutoSaver) · Effective October 15, 2026</p>
+  <p class="meta">Daling (formerly Bungeoppang / DGIST LMS AutoSaver) · Effective October 18, 2026</p>
   <p>Daling ("the app") is a desktop app for Windows, macOS and Linux that helps DGIST students see course materials, assignment deadlines, school e-mail and the academic calendar in one place, and organize them into their own Google Drive and Google Calendar. The app runs entirely on the user's PC. There is no developer-operated server; no data is sent to or collected by the developer. The app contains no analytics, advertising or telemetry, and sells no data.</p>
 
   <h3>Data the app handles</h3>
@@ -131,6 +132,7 @@
     <li><strong>DGIST account ID and password</strong> — used to sign in to the DGIST LMS and school mail. Stored only on the user's computer, encrypted with Windows DPAPI, the macOS Keychain or the Linux keyring.</li>
     <li><strong>Google OAuth token</strong> — used to access the Google Drive and Calendar the user connected. Stored only on the user's PC.</li>
     <li><strong>Course files, deadlines, school e-mail</strong> — stored on the user's PC and, when the user turns it on, in the user's own Google Drive and Google Calendar.</li>
+    <li><strong>Address book</strong> — the app ships with the names, school e-mail addresses, departments and positions of DGIST faculty (faculty only; no students or staff) to fill in mail recipients and course staff. A directory file the user adds (optional) stays only on the user's PC (<code>directory.json</code>).</li>
     <li><strong>Gemini API key (optional)</strong> — used only if the user enables summaries or translation. Stored on the user's computer, encrypted with Windows DPAPI, the macOS Keychain or the Linux keyring.</li>
     <li><strong>AI assistant profile (optional)</strong> — name, student ID, department, short intro, signature and the chosen AI. Used to fill in mail drafts. Stored only on the user's PC (<code>ai_profile.json</code>).</li>
   </ul>

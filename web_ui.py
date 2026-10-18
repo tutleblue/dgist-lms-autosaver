@@ -3312,21 +3312,38 @@ def get_shuttle(workspace: UserWorkspace, refresh: bool = False) -> dict[str, An
 
 
 _directory_cache: dict[str, Any] = {}
+FACULTY_SEED = "seed_directory_faculty.json"
 
 
-def search_directory_api(workspace: UserWorkspace, query: str, limit: int = 8) -> dict[str, Any]:
-    """조직도에서 사람 찾기. 받은 메일 연락처와 합쳐서 돌려준다.
+def directory_people(workspace: UserWorkspace) -> list[dict[str, Any]]:
+    """조직도 = 내가 넣은 directory.json + 설치 파일에 든 교원 주소록.
 
-    조직도는 4,800여 명·600KB 라 글자를 칠 때마다 다시 읽지 않고 파일 도장이 바뀔 때만 읽는다.
+    새 사용자는 조직도를 넣을 데가 없어 교수·조교 주소가 비어 있었다(2026-10-15). 교수 주소는 학교
+    홈페이지에 공개된 정보라 교원만 설치 파일에 넣는다(scripts/build_faculty_seed.py). 학생·직원까지 든
+    전체 조직도는 포탈 로그인 뒤에만 보이는 정보라 공개 배포물에 넣지 않고, 각자 설정에서 넣은 파일만 쓴다.
+    체험 중에는 가짜 사람만 보이게(실명 금지) 교원 주소록을 섞지 않는다.
+    4,800여 명·600KB 라 글자를 칠 때마다 다시 읽지 않고 파일 도장이 바뀔 때만 읽는다.
     """
     import directory
 
-    stamp = (str(workspace.directory_path), _file_stamp(workspace.directory_path))
+    stamp = (str(workspace.directory_path), _file_stamp(workspace.directory_path), demo_mode.active())
     if _directory_cache.get("stamp") != stamp:
-        _directory_cache.update(stamp=stamp, people=directory.load_directory(workspace.directory_path))
-    people = _directory_cache["people"]
+        mine = directory.load_directory(workspace.directory_path)
+        people = list(mine)
+        if not demo_mode.active():
+            seen = {str(p.get("email", "")).lower() for p in mine}
+            people += [p for p in directory.load_directory(SEED_DIR / FACULTY_SEED) if str(p.get("email", "")).lower() not in seen]
+        _directory_cache.update(stamp=stamp, people=people, imported=len(mine))
+    return _directory_cache["people"]
+
+
+def search_directory_api(workspace: UserWorkspace, query: str, limit: int = 8) -> dict[str, Any]:
+    """조직도에서 사람 찾기. imported 는 내가 넣은 조직도 인원(0 이면 설치 파일의 교원만)."""
+    import directory
+
+    people = directory_people(workspace)
     hits = directory.search_directory(people, query, limit=max(1, min(int(limit or 8), 50)))
-    return {"ok": True, "total": len(people), "results": hits}
+    return {"ok": True, "total": len(people), "imported": _directory_cache.get("imported", 0), "results": hits}
 
 
 _COURSE_META_RE = re.compile(r"^(.*?)\s*\((.*)\)\s*_([0-9A-Za-z]+)\s*\[\s*(\d{4})_([^\]]+?)\s*\]")
@@ -3381,7 +3398,6 @@ def course_people_index(workspace: UserWorkspace, staff_rows: list[dict[str, Any
       과목 정보(instructorsMembership)에는 대표 교수 한 명만 들어 있다(2026-10-09 실측) → 내 과목 조교만.
     이름으로 맞추므로 메일 주소는 조직도(이름)·보낸 사람 이름 둘 다로 찾는다.
     """
-    import directory
     import timetable_import
 
     term_value = timetable_import.current_term_value()
@@ -3431,7 +3447,7 @@ def course_people_index(workspace: UserWorkspace, staff_rows: list[dict[str, Any
     for row in staff_rows:
         add(row["name"], {"role": row["role"], "title": row["title"], "section": row["section"], "mine": True})
 
-    people = directory.load_directory(workspace.directory_path)
+    people = directory_people(workspace)
     dir_name = {str(p.get("email", "")).lower(): str(p.get("name", "")) for p in people if p.get("email")}
     # 조직도에서 학생으로 나온 주소에는 '교수' 꼬리표를 달지 않는다 (이름만 같은 학생이 교수로 보이지 않게)
     students = {
@@ -3472,35 +3488,54 @@ def get_course_staff(workspace: UserWorkspace) -> dict[str, Any]:
     조교는 학생·대학원생, 교수는 교원 쪽을 고른다. 그래도 하나로 안 좁혀지면 이메일을 비워 둔다
     (엉뚱한 사람에게 메일이 가는 것보다 낫다).
     """
-    import directory
-
     path = workspace.root / "course_staff.json"
     raw = read_json(path, {})
     if not isinstance(raw, dict):
         raw = {}
-    stamp = (str(workspace.directory_path), _file_stamp(workspace.directory_path))
-    if _directory_cache.get("stamp") != stamp:
-        _directory_cache.update(stamp=stamp, people=directory.load_directory(workspace.directory_path))
-    people = _directory_cache["people"]
+    people = directory_people(workspace)
     by_name: dict[str, list[dict[str, Any]]] = {}
     for p in people:
         key = re.sub(r"\s+", "", str(p.get("name") or "")).lower()
         if key:
             by_name.setdefault(key, []).append(p)
+    faculty_emails = {str(p.get("email", "")).lower() for p in people if str(p.get("role", "")) == "교원"}
 
     # 주고받은 메일에 나온 주소: 동명이인 중 실제로 메일을 주고받은 사람을 고르는 데 쓴다
     mail = read_json(workspace.emails_log, {}) if hasattr(workspace, "emails_log") else {}
     known: set[str] = set()
+    # 이름 → 메일에서 본 학교 주소. 조직도에 없는 사람(새 사용자는 교원만 있다)의 주소를 찾는 데 쓴다
+    mail_names: dict[str, set[str]] = {}
+
+    def seen(addr: Any, who: Any) -> None:
+        addr = str(addr or "").strip().lower()
+        known.add(addr)
+        key = _norm_person(str(who or ""))
+        if addr.endswith("@dgist.ac.kr") and len(key) >= 2:
+            mail_names.setdefault(key, set()).add(addr)
+
     if isinstance(mail, dict):
         for c in mail.get("contacts") or []:
-            known.add(str(c.get("email", "")).lower())
+            seen(c.get("email"), c.get("name"))
         for m in mail.get("emails") or []:
-            known.add(str(m.get("fromEmail", "")).lower())
-            known.add(str(m.get("toEmail", "")).lower())
+            seen(m.get("fromEmail"), m.get("fromName"))
+            if m.get("folder") == "sent":
+                seen(m.get("toEmail"), m.get("toName"))
+            else:
+                known.add(str(m.get("toEmail") or "").strip().lower())
 
     def find_email(name: str, role: str) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
         """(확실한 한 사람, 동명이인 후보들)"""
         cands = by_name.get(re.sub(r"\s+", "", name).lower(), [])
+        if role != "교수":
+            # 새 사용자 조직도는 교원뿐이라, 조교 이름이 교수 이름과 같으면 그 교수가 유일한 후보가 되어 조교 메일이
+            # 교수에게 갔다(검토 실측: 대학원생 17명이 교원과 이름이 같음). 조교 찾기에는 교원을 쓰지 않는다.
+            cands = [p for p in cands if str(p.get("role", "")) != "교원"]
+        if not cands:
+            # 조교에게 메일을 받았으면 그 주소를 쓴다. 이름이 같은 학교 주소가 둘 이상이면 고르지 않는다
+            found = mail_names.get(_norm_person(name)) or set()
+            if role != "교수":
+                found = found - faculty_emails  # 이름이 같은 교수님과 주고받은 메일 주소를 조교에게 붙이지 않게
+            return ({"email": next(iter(found)), "dept": ""}, []) if len(found) == 1 else (None, [])
         if len(cands) > 1:
             if role == "교수":
                 narrowed = [p for p in cands if "학생" not in str(p.get("dept", "")) + str(p.get("role", ""))]

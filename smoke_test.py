@@ -222,10 +222,19 @@ def run(app) -> int:
                 raise RuntimeError("끈 뒤에도 체험 폴더가 남음")
             return f"자료 {files} · 메일 {mails} · 바깥 연결 막힘 · 끄면 지워짐"
 
+        def faculty_directory():
+            # 새 사용자도 교수 주소가 채워지게 설치 파일에 넣은 교원 주소록 (web_ui.directory_people).
+            # 점검 폴더는 비어 있으니 내가 넣은 조직도는 0명이어야 한다.
+            data = _json(base, "/api/directory?q=")
+            if data.get("imported") or int(data.get("total") or 0) < 200:
+                raise RuntimeError(f"교원 주소록이 안 읽힘: total={data.get('total')} imported={data.get('imported')}")
+            return f"교원 {data['total']}명"
+
         check("GET /healthz", healthz)
         check("GET /", index)
         check("GET /app.js", app_js)
         check("체험 모드", demo_mode_check)
+        check("교원 주소록", faculty_directory)
         # 네트워크 없이 파일만 읽는 것들 (설정·업데이트 내용·소개·화면 설정)
         for route in ("/api/config", "/api/whats-new", "/api/tutorial", "/api/ui-prefs", "/api/task"):
             check(f"GET {route}", lambda route=route: f"{len(_json(base, route))}개 항목")
