@@ -406,6 +406,7 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 | `/api/mail/flow` | 메일 쓰기 흐름 `{to, courseIndex}` → 받는 사람(교수·조교·외국인·과목)과 한국어·영어 글 조각 |
 | `/api/mail/me` | 메일에 쓰는 내 정보 저장 `{name, nameEn, studentId, dept, flow}` (보낸 키만) |
 | `/api/ai/polish` | 메일 가운데 용건만 AI 로 다듬기 `{text, lang, flow}` (실험실 스위치를 따른다) |
+| `/api/ai/continue` | 메일 쓰기 칸의 `/ai` 지시 자리에 들어갈 글 `{instruction, before, after, lang, flow}` (실험실 스위치, 체험 모드에선 막음) |
 | `/api/directory/import` | 조직도 넣기 |
 | `/api/assignment/open`, `/api/open-url` | 외부 페이지 열기 |
 | `/api/update/apply`, `/api/restart` | 업데이트, 재시작 |
@@ -992,3 +993,23 @@ Microsoft Store 정책 10.3.1(로그인 앱은 심사용 시험 계정을 줄 �
   (`ai_profile.json` 의 `flow`="off" 면 끔).
 - 시험 주의: 받는 사람이 찬 메일 쓰기를 열면 기존 자동 저장이 학교 메일 임시 보관함에 저장본을 만든다. 개발 서버에서 시험할 땐 그 탭에서
   `window.saveDraftToServer = async () => {}` 로 막고, 생긴 것은 `/api/mail/discard-draft`(지운 표시만, EXPUNGE 없음)로 치운다.
+- 커서 뒤도 본다(1.12.30): 앞쪽 줄만 보고 다음 단계를 고르다 보니, 이미 쓴 'Thank you …' 위 빈 줄에 같은 문장을 또 띄웠다(사용자 화면).
+  이제 커서 뒤 내 글(원본 메일 인용 전까지)에 고른 단계와 같거나 앞선 단계(용건 포함)의 줄이 있으면 띄우지 않는다.
+
+### /ai: 그 자리에서 AI 가 이어 쓰기 (1.12.30)
+사용자: 본문도 자동완성 느낌으로 — '/ai' 로 시작해 하고 싶은 말을 쓰다가 Ctrl+Enter 를 치면 AI 가 그 자리에 자연스럽게 이어 붙이고,
+글이 한 글자씩 타자 치듯 나오게.
+- 커서 앞에서 가장 가까운 '/ai'(줄 처음이나 띄어쓰기 뒤)부터 커서까지가 지시(`findAiPrompt`, 여러 줄 가능). 그 줄 끝에 흐린 안내
+  ('Ctrl+Enter — AI 가 이어 써요', AI 가 꺼져 있으면 '설정 › 실험실에서 켜면…')가 `[data-ghost="hint"]` 로 뜬다(흐름 미리보기를 꺼도).
+  Ctrl+Enter, 안내에서 Tab·클릭 = 실행.
+- 실행: 지시 글을 지우고(되돌리기 한 단계) 그 자리에 `[data-ghost="ai"]` 칸('… 가 쓰는 중…', 점이 움직임)을 둔다 →
+  `/api/ai/continue {instruction, before(커서 앞 6000자), after(뒤 3000자), lang, flow}` → `ai_cli.continue_text`.
+  프롬프트: 커서 자리 글만, 앞 글에 바로 이어지게(문장 중간이면 그 문장을 끝맺음), 뒤에 있는 감사·서명·인사는 다시 쓰지 않기,
+  메일 언어로(지시가 한국어여도), 사실만·모르면 [ ], 달력·상황별 안내. 서버가 앞 줄 되풀이·뒤에 이미 있는 감사·서명을 한 번 더 뗀다.
+- 받은 글은 그 칸에 한 글자씩(짧으면 22ms/자, 길어도 4초 안) 흘리고, 끝나면 `execCommand('insertText')` 한 번으로 진짜 글이 된다
+  → Ctrl+Z 한 번에 AI 글이 빠지고, 한 번 더 누르면 지운 '/ai …' 지시가 돌아온다(실측). 흘리는 중 아무 키·클릭 = 바로 끝까지,
+  기다리는 중 Esc = 취소(지시 글 되돌림). 창이 뒤에 있으면 rAF 가 멈춰 글이 반쯤에서 섰다 → 시간이 지나면 마저 넣는 타이머를 함께 건다.
+  CLI 는 답을 한 번에 줘서 진짜 실시간 흘림은 아니다(기다리는 동안 '쓰는 중').
+- 실측(Opus 5.5): 'I am writing to ' 뒤 한국어 지시 → 'inform you that I will be unable to attend class tomorrow, Tuesday, October 20, …'
+  두 문단 9.5초. 한국어 메일은 같은 날 41초가 걸린 적도 있다(CLI 응답 편차).
+- 실험실 스위치를 따르고(`/api/ai/continue` 도 꺼져 있으면 거절), 체험 모드에서는 막는다.

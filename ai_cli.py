@@ -311,6 +311,57 @@ def polish(text: str, lang: str, flow: dict, provider: str | None = None, model:
     return {**res, "text": "\n".join(lines).strip()}
 
 
+def continue_text(instruction: str, before: str, after: str, lang: str, flow: dict,
+                  provider: str | None = None, model: str = "") -> dict:
+    """메일 쓰기 칸의 '/ai 지시' 자리에 들어갈 글 (2026-10-19 사용자: /ai 로 시작해 쓰다가 Ctrl+Enter 하면
+    그 자리에 자연스럽게 이어 붙여 주기). 앞 글(before)에 바로 이어지고 뒤 글(after)과 겹치지 않게.
+    """
+    lang = "en" if lang == "en" else "ko"
+    to = flow.get("to") if isinstance(flow.get("to"), dict) else {}
+    courses = to.get("courses") if isinstance(to.get("courses"), list) else []
+    course = courses[0] if courses and isinstance(courses[0], dict) else {}
+    role = {"professor": "교수", "ta": "조교", "staff": "직원"}.get(str(to.get("kind") or ""), "")
+    facts = "\n".join(f"- {k}: {v}" for k, v in (
+        ("받는 사람", f"{to.get('name') or ''} {role}".strip()),
+        ("과목", " / ".join(x for x in (course.get("title"), course.get("titleEn")) if x)),
+        ("학수번호", course.get("courseNo")), ("분반", course.get("section")),
+    ) if v)
+    language = "English (polite academic English for a professor)" if lang == "en" else "한국어 (교수님께 쓰는 정중한 합쇼체, 과하지 않게)"
+    before = before[-6000:]
+    prompt = (
+        "당신은 메일 편집기 안의 자동완성입니다. 대학생이 교수·조교에게 쓰는 메일에서, 커서 자리에 들어갈 글만 씁니다.\n"
+        "- 학생의 지시를 메일 글로 바꿔 쓰세요(지시 문장을 그대로 옮기지 않음).\n"
+        "- [커서 앞 글]에 바로 이어지게 쓰고, 앞 글을 되풀이하지 마세요. 앞 글이 문장 중간(예: 'I am writing to ', "
+        "'다름이 아니라 ')에서 끝났으면 그 문장을 이어서 끝맺으세요.\n"
+        "- [커서 뒤 글]에 이미 있는 것(감사 인사·서명·다음 문단)은 쓰지 마세요. 인사·자기소개가 앞에 있으면 다시 쓰지 마세요.\n"
+        f"- 언어: {language}. 지시가 다른 언어여도 이 언어로 씁니다.\n"
+        "- 목록 기호 없이 문장으로, 문단은 빈 줄로 나눕니다. 지시가 짧으면 한두 문장으로 짧게.\n"
+        "- 지시와 메일에 있는 사실(날짜·시간·장소·이름·행사명)만 쓰고, 없는 사실은 지어내지 마세요. 꼭 필요한데 모르면 [ ].\n"
+        "- 출력은 넣을 글만(설명·따옴표·머리말 없이). 요일은 아래 달력으로 맞추세요.\n\n"
+        f"[상황별로 들어가면 좋은 것]\n{SITUATION_GUIDE}\n\n"
+        f"[달력] {_calendar()}\n\n[받는 사람·과목]\n{facts or '- (모름)'}\n\n"
+        f"[커서 앞 글]\n<<<\n{before}\n>>>\n\n[커서 뒤 글]\n<<<\n{after[:3000]}\n>>>\n\n"
+        f"[학생의 지시]\n{instruction[:3000]}"
+    )
+    res = run(prompt, provider, model=model)
+    text = res["text"].strip()
+    text = re.sub(r"^```[a-z]*\s*|\s*```$", "", text).strip()
+    if len(text) > 1 and text[0] == text[-1] and text[0] in "\"'“”":
+        text = text[1:-1].strip()
+    # 앞 줄을 되풀이해 시작하면(예: 'I am writing to let you know…') 겹친 부분을 뗀다
+    tail = before.rstrip().splitlines()[-1].strip() if before.strip() else ""
+    if tail and len(tail) >= 4 and text.lower().startswith(tail.lower()):
+        text = text[len(tail):].lstrip()
+    # 뒤에 이미 감사 인사·서명이 있으면 모델이 붙인 것을 뗀다
+    lines = text.splitlines()
+    if re.search(r"(thank you|감사)", after, re.I):
+        while lines and re.match(r"^\s*(sincerely|best regards|kind regards|regards|thank you|thanks|.{0,6}드림|감사합니다)\b", lines[-1], re.I):
+            lines.pop()
+            while lines and not lines[-1].strip():
+                lines.pop()
+    return {**res, "text": "\n".join(lines).strip()}
+
+
 def draft(request: str, profile: dict, context: dict, provider: str | None = None, model: str = "") -> dict:
     """메일 초안 + 받는 사람·참조 추천 (밀착형: 글만 주는 게 아니라 누구에게 보낼지까지).
 

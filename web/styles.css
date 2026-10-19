@@ -11096,6 +11096,18 @@ html[data-demo] .demo-stripe {
   user-select: none; -webkit-user-select: none;
 }
 .flow-ghost:hover { color: var(--text-soft); }
+/* /ai: 줄 끝 안내, AI 가 쓰는 중·타자 치듯 나오는 글 */
+.flow-ghost.ai-hint { font-size: 12.5px; color: var(--accent-strong); opacity: .75; }
+.ai-typing { white-space: pre-wrap; color: var(--text); user-select: none; -webkit-user-select: none; }
+.ai-typing::after {
+  content: ""; display: inline-block; width: 2px; height: 1.05em; margin-left: 1px; vertical-align: -0.15em;
+  background: var(--accent); animation: aiCaret 1s steps(1) infinite;
+}
+.ai-typing.waiting { color: var(--accent-strong); font-size: 13px; }
+.ai-typing.waiting::after { content: "…"; width: auto; height: auto; background: none; animation: aiDots 1.2s steps(1) infinite; }
+@keyframes aiCaret { 50% { opacity: 0; } }
+@keyframes aiDots { 0% { content: "."; } 33% { content: ".."; } 66% { content: "..."; } }
+@media (prefers-reduced-motion: reduce) { .ai-typing::after { animation: none; } }
 .flow-measure { position: fixed; left: -10000px; top: 0; width: 700px; opacity: 0; pointer-events: none; }
 .me-flow-switch { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-soft); cursor: pointer; }
 @media (max-width: 760px) { .mail-flow-hint { display: none; } }

@@ -4941,7 +4941,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         # 내 컴퓨터(문서·다운로드 폴더)에 가짜 자료를 쓰지 않는다
         "/api/save-local", "/api/export-ics",
         # AI CLI 는 바깥 서비스에 묻는다
-        "/api/ai/search", "/api/ai/draft", "/api/ai/polish",
+        "/api/ai/search", "/api/ai/draft", "/api/ai/polish", "/api/ai/continue",
     }
     DEMO_MAIL_POST = {
         "/api/mark-read": "mark-read", "/api/mark-all-read": "mark-all-read", "/api/delete-email": "delete",
@@ -5846,7 +5846,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             except Exception as exc:
                 self.send_json({"ok": False, "message": str(exc)}, HTTPStatus.BAD_REQUEST)
             return
-        if route in ("/api/ai/profile", "/api/ai/search", "/api/ai/draft", "/api/ai/polish"):
+        if route in ("/api/ai/profile", "/api/ai/search", "/api/ai/draft", "/api/ai/polish", "/api/ai/continue"):
             # AI CLI 도우미 (ai_cli.py). 답이 10초쯤 걸리지만 서버가 요청마다 스레드를 써서 화면은 멈추지 않는다.
             import ai_cli
 
@@ -5869,6 +5869,12 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                     flow = payload.get("flow") if isinstance(payload.get("flow"), dict) else {}
                     res = ai_cli.polish(str(payload.get("text") or ""), str(payload.get("lang") or "ko"), flow,
                                         provider, model=model)
+                elif route == "/api/ai/continue":
+                    # 메일 쓰기 칸의 '/ai 지시' 자리에 들어갈 글 (앞 글에 이어지고 뒤 글과 겹치지 않게)
+                    flow = payload.get("flow") if isinstance(payload.get("flow"), dict) else {}
+                    res = ai_cli.continue_text(str(payload.get("instruction") or ""), str(payload.get("before") or ""),
+                                               str(payload.get("after") or ""), str(payload.get("lang") or "ko"), flow,
+                                               provider, model=model)
                 else:
                     context = payload.get("context") if isinstance(payload.get("context"), dict) else {}
                     # 이름·학번·소속은 직접 적은 값이 없으면 LMS·조직도에서 가져온 값으로

@@ -13818,6 +13818,7 @@ function paintAiSettings() {
   // 메일 쓰기의 모델 단추·초안 칸·용건 다듬기도 스위치를 따른다
   if ($("#aiDraftToggle")) $("#aiDraftToggle").hidden = !on;
   if ($("#mailFlowPolish")) $("#mailFlowPolish").hidden = !on;
+  if ($("#mailFlowAiHint")) $("#mailFlowAiHint").hidden = !on;
   if (!on && $("#aiDraftBox")) $("#aiDraftBox").hidden = true;
   const chosen = st.profile?.provider || "";
   box.innerHTML = AI_PROVIDERS.map(([key, label]) => {
@@ -14130,6 +14131,9 @@ function resetMailFlow() {
   flow.course = 0;
   flow.muted = false;
   removeGhost();
+  // 쓰던 /ai 답은 이 새 메일에 붙이지 않는다
+  Object.assign(aiJob, { box: null, typing: false, text: "", prompt: "" });
+  aiJob.seq += 1;
   const bar = $("#mailFlowBar");
   if (bar) bar.hidden = true;
   loadMailFlow();
@@ -14194,11 +14198,15 @@ function paintFlowBar() {
   bar.querySelectorAll("[data-flow-lang]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.flowLang === flow.lang)));
   const polish = $("#mailFlowPolish");
   if (polish) polish.hidden = !aiOn();
+  const aiHint = $("#mailFlowAiHint");
+  if (aiHint) aiHint.hidden = !aiOn();
 }
 
 /* --- 회색 글씨 --- */
+// 흐름 회색 글씨("1")와 /ai 안내("hint")만 뗀다. AI 가 쓰는 중인 칸("ai")은 aiJob 이 따로 다룬다
+const FLOW_GHOSTS = '[data-ghost="1"], [data-ghost="hint"]';
 function removeGhost() {
-  $("#composeRich")?.querySelectorAll("[data-ghost]").forEach((n) => n.remove());
+  $("#composeRich")?.querySelectorAll(FLOW_GHOSTS).forEach((n) => n.remove());
   flow.ghost = null;
 }
 
@@ -14247,7 +14255,7 @@ function flowKind(line, stage, tests) {
   return FLOW_TEST_ORDER.find((k) => tests[k] && FLOW_STAGE[k] >= stage && tests[k].test(line)) || "content";
 }
 
-function nextFlowSegment(lines) {
+function nextFlowSegment(lines, afterLines = []) {
   const tests = flowTests();
   let stage = -1;
   for (const raw of lines) {
@@ -14256,13 +14264,23 @@ function nextFlowSegment(lines) {
     if (FLOW_QUOTE.test(line)) break;
     stage = Math.max(stage, FLOW_STAGE[flowKind(line, stage, tests)]);
   }
-  return (flow.data?.segments?.[flow.lang] || []).find((s) => FLOW_STAGE[s.kind] > stage) || null;
+  const seg = (flow.data?.segments?.[flow.lang] || []).find((s) => FLOW_STAGE[s.kind] > stage);
+  if (!seg) return null;
+  // 커서 뒤에 이미 그 단계(또는 그 앞 단계·용건)의 글이 있으면 제안하지 않는다. 앞쪽만 보고 골라서, 이미 쓴
+  // 'Thank you …' 위 빈 줄에 같은 문장을 또 띄웠다(2026-10-19 사용자 화면)
+  for (const raw of afterLines) {
+    const line = raw.replaceAll(FLOW_MARK, "").trim();
+    if (!line) continue;
+    if (FLOW_QUOTE.test(line)) break;
+    if (FLOW_STAGE[flowKind(line, stage, tests)] <= FLOW_STAGE[seg.kind]) return null;
+  }
+  return seg;
 }
 
 function refreshGhost() {
   const rich = $("#composeRich");
   removeGhost();
-  if (!rich || rich.hidden || flow.muted || !flow.data || !flowOn() || document.activeElement !== rich) return;
+  if (!rich || rich.hidden || flow.muted || aiJob.box || document.activeElement !== rich) return;
   const sel = window.getSelection();
   if (!sel?.rangeCount || !sel.isCollapsed) return;
   const caret = sel.getRangeAt(0);
@@ -14275,13 +14293,20 @@ function refreshGhost() {
   after.setEnd(rich, rich.childNodes.length);
   const lines = rangeText(before, true).split("\n");
   const here = lines.pop().replaceAll(FLOW_MARK, "").trim();
-  const rest = rangeText(after, false).split("\n")[0].replaceAll(FLOW_MARK, "").trim();
-  if (here || rest) return; // 빈 줄에서만
-  const seg = nextFlowSegment(lines);
+  const afterLines = rangeText(after, false).split("\n");
+  const rest = afterLines.shift().replaceAll(FLOW_MARK, "").trim();
+  let seg = null;
+  if (!rest && findAiPrompt(rich, caret)) {
+    // '/ai …' 를 쓰는 중: 줄 끝에 'Ctrl+Enter' 안내를 흐리게 (흐름 미리보기를 꺼도 보인다)
+    seg = { kind: "aihint", text: aiReady() ? tr("  Ctrl+Enter — AI 가 이어 써요") : tr("  AI 도우미(설정 › 실험실)를 켜면 /ai 로 이어 쓸 수 있어요") };
+  } else {
+    if (here || rest || !flow.data || !flowOn()) return; // 흐름 미리보기는 빈 줄에서만
+    seg = nextFlowSegment(lines, afterLines);
+  }
   if (!seg) return;
   const ghost = document.createElement("span");
-  ghost.className = "flow-ghost";
-  ghost.dataset.ghost = "1";
+  ghost.className = seg.kind === "aihint" ? "flow-ghost ai-hint" : "flow-ghost";
+  ghost.dataset.ghost = seg.kind === "aihint" ? "hint" : "1";
   ghost.contentEditable = "false";
   ghost.textContent = seg.text;
   caret.insertNode(ghost);
@@ -14295,9 +14320,15 @@ function refreshGhost() {
 
 function acceptGhost() {
   const rich = $("#composeRich");
-  const ghost = rich?.querySelector("[data-ghost]");
+  const ghost = rich?.querySelector(FLOW_GHOSTS);
   const seg = flow.ghost;
   if (!ghost || !seg) return false;
+  if (seg.kind === "aihint") {
+    // /ai 안내에서 Tab·클릭 = Ctrl+Enter 와 같다 (안내 글 자체는 넣지 않는다)
+    removeGhost();
+    runAiContinue();
+    return true;
+  }
   const at = document.createRange();
   at.setStartBefore(ghost);
   at.collapse(true);
@@ -14318,6 +14349,27 @@ function acceptGhost() {
   const rich = $("#composeRich");
   if (!rich) return;
   rich.addEventListener("keydown", (event) => {
+    // AI 가 쓰는 중: 기다리는 동안 Esc = 취소(지시 글을 되돌림), 타자 치는 동안 아무 키 = 바로 끝까지 넣고 그 키는 그대로
+    if (aiJob.box) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
+        if (aiJob.typing) finishAiTyping();
+        else cancelAiContinue();
+        return;
+      }
+      if (aiJob.typing && !["Shift", "Control", "Alt", "Meta", "CapsLock"].includes(event.key)) finishAiTyping();
+    }
+    if (event.key === "Enter" && (event.ctrlKey || event.metaKey) && !event.isComposing) {
+      const sel = window.getSelection();
+      if (sel?.rangeCount && findAiPrompt(rich, sel.getRangeAt(0))) {
+        event.preventDefault();
+        event.stopPropagation();
+        removeGhost();
+        runAiContinue();
+        return;
+      }
+    }
     const plainTab = event.key === "Tab" && !event.shiftKey && !event.ctrlKey && !event.altKey && !event.metaKey && !event.isComposing;
     if (plainTab && !flow.ghost) {
       // 회색 글씨가 뜨기 전(클릭 직후)에 Tab 을 쳐도 바로 받는다. 안 그러면 포커스가 옆 칸으로 넘어갔다
@@ -14367,11 +14419,191 @@ function acceptGhost() {
   });
   // 회색 글씨를 누르면 바로 넣는다
   rich.addEventListener("mousedown", (event) => {
-    if (!event.target.closest?.("[data-ghost]")) return;
+    if (aiJob.typing && event.target.closest?.('[data-ghost="ai"]')) {
+      event.preventDefault();
+      finishAiTyping();
+      return;
+    }
+    if (!event.target.closest?.(FLOW_GHOSTS)) return;
     event.preventDefault();
     acceptGhost();
   });
 })();
+
+/* --- /ai: 그 자리에서 AI 가 이어 쓰기 (2026-10-19 사용자) ---
+   '/ai' 를 치고 하고 싶은 말(한국어 메모도 됨)을 이어 쓴 뒤 Ctrl+Enter(안내에서 Tab·클릭도) → 지시 글은 지워지고,
+   메일 앞뒤 글에 자연스럽게 이어지는 글이 그 자리에 한 글자씩 타자 치듯 나온다.
+   - CLI 는 답을 한 번에 주므로(10초 안팎) 기다리는 동안 '쓰는 중' 을 보이고, 받은 뒤 글자를 흘려 보여 준다.
+   - 흘리는 동안의 글은 [data-ghost="ai"] 칸이라 저장·보내기에 섞이지 않는다. 다 나오면 execCommand 한 번으로
+     진짜 글로 넣어 Ctrl+Z 한 번이면 빠지고, 한 번 더 누르면 지운 지시 글이 돌아온다. */
+const aiJob = { box: null, typing: false, text: "", prompt: "", seq: 0 };
+
+// 커서 앞에서 가장 가까운 '/ai' (줄 처음이나 띄어쓰기 뒤) → 그 '/' 부터 커서까지의 범위
+function findAiPrompt(rich, caret) {
+  if (!rich || !caret || !rich.contains(caret.startContainer)) return null;
+  const walker = document.createTreeWalker(rich, NodeFilter.SHOW_TEXT, {
+    acceptNode: (n) => (n.parentElement?.closest("[data-ghost]") ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT),
+  });
+  const nodes = [];
+  while (walker.nextNode()) nodes.push(walker.currentNode);
+  for (let i = nodes.length - 1; i >= 0; i -= 1) {
+    const node = nodes[i];
+    if (caret.comparePoint(node, 0) > 0) continue; // 커서 뒤
+    const text = node === caret.startContainer ? node.data.slice(0, caret.startOffset) : node.data;
+    const re = /(^|[\s ])\/ai(?=[\s ]|$)/gi;
+    let at = -1;
+    let m;
+    while ((m = re.exec(text))) at = m.index + m[1].length;
+    if (at < 0) continue;
+    const range = document.createRange();
+    range.setStart(node, at);
+    range.setEnd(caret.startContainer, caret.startOffset);
+    return range;
+  }
+  return null;
+}
+
+function aiFlowTo() {
+  const to = flow.data?.to || {};
+  const courses = to.courses || [];
+  const ordered = courses[flow.course] ? [courses[flow.course], ...courses.filter((_, i) => i !== flow.course)] : courses;
+  return { ...to, courses: ordered };
+}
+
+async function runAiContinue() {
+  const rich = $("#composeRich");
+  const sel = window.getSelection();
+  if (!rich || aiJob.box || !sel?.rangeCount) return;
+  const prompt = findAiPrompt(rich, sel.getRangeAt(0));
+  if (!prompt) return;
+  await loadAiStatus();
+  if (!aiReady()) {
+    showToast("AI 도우미가 꺼져 있거나 AI CLI 가 없어요. 설정 → AI 도우미에서 켜 주세요.");
+    return;
+  }
+  removeGhost();
+  const raw = rangeText(prompt, true).replaceAll(FLOW_MARK, "");
+  const instruction = raw.replace(/^\s*\/ai/i, "").trim();
+  if (!instruction) {
+    showToast("/ai 뒤에 무엇을 쓸지 적어 주세요. 예: /ai 10월 20일 기업탐방 때문에 결석, 공결 되는지 여쭤보기");
+    return;
+  }
+  const beforeRange = document.createRange();
+  beforeRange.setStart(rich, 0);
+  beforeRange.setEnd(prompt.startContainer, prompt.startOffset);
+  const afterRange = document.createRange();
+  afterRange.setStart(prompt.endContainer, prompt.endOffset);
+  afterRange.setEnd(rich, rich.childNodes.length);
+  const before = rangeText(beforeRange, true).replaceAll(FLOW_MARK, "");
+  const after = rangeText(afterRange, false).replaceAll(FLOW_MARK, "");
+  // 지시 글을 지우고(되돌리기 한 단계) 그 자리에 '쓰는 중' 칸을 둔다
+  rich.focus();
+  sel.removeAllRanges();
+  sel.addRange(prompt);
+  document.execCommand("delete");
+  const spot = window.getSelection().getRangeAt(0).cloneRange();
+  const box = document.createElement("span");
+  box.className = "ai-typing waiting";
+  box.dataset.ghost = "ai";
+  box.contentEditable = "false";
+  box.textContent = tr(`${providerLabel()} 가 쓰는 중`);
+  spot.insertNode(box);
+  const at = document.createRange();
+  at.setStartBefore(box);
+  at.collapse(true);
+  window.getSelection().removeAllRanges();
+  window.getSelection().addRange(at);
+  const seq = ++aiJob.seq;
+  Object.assign(aiJob, { box, typing: false, text: "", prompt: raw.trim() });
+  try {
+    const res = await api("/api/ai/continue", {
+      method: "POST",
+      body: JSON.stringify({ instruction, before: before.slice(-6000), after: after.slice(0, 3000), lang: flow.lang || "ko", flow: { to: aiFlowTo() } }),
+    });
+    if (seq !== aiJob.seq || aiJob.box !== box) return; // 그사이 취소됨
+    let text = String(res.text || "").trim();
+    if (!text) throw new Error("AI 가 빈 답을 줬어요. 다시 눌러 주세요.");
+    // 'I am writing to' 처럼 띄어쓰기 없이 끝난 앞 글에 붙일 때는 한 칸 띄운다
+    const prev = before.slice(-1);
+    if (prev && !/[\s (\[“"']/.test(prev)) text = " " + text;
+    aiJob.text = text;
+    typeOutAi(seq);
+  } catch (error) {
+    if (seq !== aiJob.seq) return;
+    cancelAiContinue();
+    showToast(humanError(error));
+  }
+}
+
+// 받은 글을 한 글자씩 (짧으면 천천히, 길어도 4초 안에 끝나게)
+function typeOutAi(seq) {
+  const box = aiJob.box;
+  const text = aiJob.text;
+  if (!box) return;
+  box.classList.remove("waiting");
+  box.textContent = "";
+  aiJob.typing = true;
+  const duration = Math.min(4000, Math.max(700, text.length * 22));
+  const started = performance.now();
+  const step = (now) => {
+    if (seq !== aiJob.seq || aiJob.box !== box || !aiJob.typing) return;
+    const n = Math.min(text.length, Math.ceil(((now - started) / duration) * text.length));
+    box.textContent = text.slice(0, n);
+    if (n >= text.length) finishAiTyping();
+    else window.requestAnimationFrame(step);
+  };
+  window.requestAnimationFrame(step);
+  // 창이 뒤에 있으면 그림 틀(rAF)이 멈춘다(실측: 미리보기 창에서 글이 반쯤에서 서 있었다). 시간이 지나면 마저 넣는다
+  window.setTimeout(() => {
+    if (seq === aiJob.seq && aiJob.box === box) finishAiTyping();
+  }, duration + 600);
+}
+
+// 흘리던 칸을 진짜 글로 바꾼다 (한 번에 넣어야 Ctrl+Z 한 번으로 빠진다)
+function finishAiTyping() {
+  const rich = $("#composeRich");
+  const box = aiJob.box;
+  const text = aiJob.text;
+  Object.assign(aiJob, { box: null, typing: false, text: "" });
+  aiJob.seq += 1;
+  if (!box) return;
+  if (!rich?.contains(box) || !text) {
+    box.remove();
+    return;
+  }
+  const back = document.activeElement !== rich ? document.activeElement : null;
+  const at = document.createRange();
+  at.setStartBefore(box);
+  at.collapse(true);
+  box.remove();
+  rich.focus();
+  const sel = window.getSelection();
+  sel.removeAllRanges();
+  sel.addRange(at);
+  document.execCommand("insertText", false, text);
+  if (back && back !== document.body) back.focus();
+  else scheduleGhost(0);
+}
+
+// 기다리다 취소·실패: 지운 지시 글을 그 자리에 되돌린다
+function cancelAiContinue() {
+  const rich = $("#composeRich");
+  const box = aiJob.box;
+  const prompt = aiJob.prompt;
+  Object.assign(aiJob, { box: null, typing: false, text: "" });
+  aiJob.seq += 1;
+  if (!box) return;
+  if (!rich?.contains(box)) return;
+  const at = document.createRange();
+  at.setStartBefore(box);
+  at.collapse(true);
+  box.remove();
+  rich.focus();
+  const sel = window.getSelection();
+  sel.removeAllRanges();
+  sel.addRange(at);
+  if (prompt) document.execCommand("insertText", false, prompt);
+}
 
 ["input", "change"].forEach((type) =>
   $("#composeTo")?.addEventListener(type, () => {

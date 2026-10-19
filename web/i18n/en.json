@@ -1953,5 +1953,11 @@
  "인사·서명 미리 보이기를 껐어요": "Greeting and signature suggestions are off",
  "조교님": "TA",
  "회색 글씨 넣기": "inserts gray text",
- "교수님 메일의 인사·자기소개·서명이 회색으로 떠. Tab 만 누르면 써져": "Greeting, self-intro and signature for professors appear in gray. Just press Tab."
+ "교수님 메일의 인사·자기소개·서명이 회색으로 떠. Tab 만 누르면 써져": "Greeting, self-intro and signature for professors appear in gray. Just press Tab.",
+ "/ai 뒤에 무엇을 쓸지 적어 주세요. 예: /ai 10월 20일 기업탐방 때문에 결석, 공결 되는지 여쭤보기": "Write what you want after /ai. e.g. /ai absent on Oct 20 for a company visit, ask if it can be excused",
+ "AI 가 이어 쓰기": "AI continues",
+ "AI 도우미(설정 › 실험실)를 켜면 /ai 로 이어 쓸 수 있어요": "Turn on the AI helper (Settings › Labs) to continue with /ai",
+ "Ctrl+Enter — AI 가 이어 써요": "Ctrl+Enter — AI continues",
+ "{0} 가 쓰는 중": "{0} is writing",
+ "쓰고": "then"
 }
