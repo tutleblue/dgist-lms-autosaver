@@ -677,6 +677,35 @@ async def fetch_course_staff(page, courses):
     return saved
 
 
+async def fetch_my_profile(page):
+    """내 이름·학번·학교 메일을 lms_profile.json 에 둔다 (메일 쓰기의 자기소개·서명용).
+
+    2026-10-19 사용자: '학번, 이름 같은 것도 LMS 에서 받을 수 있잖아, 자동화하고'. 실측: /users/me 가
+    userName·studentId(학번), name.given(한글 이름, family 는 '.'), contact.email, job.department 를 준다.
+    전화번호·성별 같은 건 쓸 데가 없어 fields 로 아예 받지 않는다.
+    """
+    from runtime_config import LMS_PROFILE_PATH
+
+    resp = await page.request.get(
+        f"{LMS_URL}/learn/api/public/v1/users/me?fields=userName,studentId,name,contact.email,job.department"
+    )
+    if resp.status != 200:
+        print(f"[내 정보] LMS 가 {resp.status} 를 줬습니다")
+        return None
+    me = await resp.json()
+    student_id = str(me.get("studentId") or me.get("userName") or "").strip()
+    data = {
+        "name": _lms_person_name(me),
+        "studentId": student_id if re.fullmatch(r"\d{6,12}", student_id) else "",
+        "email": str((me.get("contact") or {}).get("email") or "").strip(),
+        "department": str((me.get("job") or {}).get("department") or "").strip(),
+        "fetchedAt": datetime.now().isoformat(timespec="seconds"),
+    }
+    atomic_write_json(LMS_PROFILE_PATH, data, ensure_ascii=False, indent=2)
+    print("내 정보(이름·학번) 확인")
+    return data
+
+
 async def crawl_deadlines_only():
     """파일 다운로드 없이 마감일/캘린더만 갱신."""
     from browser_setup import ensure_browser, launch_lms_browser
@@ -700,6 +729,10 @@ async def crawl_deadlines_only():
             await fetch_course_staff(page, courses)
         except Exception as exc:
             print(f"교수·조교 목록을 받지 못했습니다: {exc}")
+        try:
+            await fetch_my_profile(page)
+        except Exception as exc:
+            print(f"내 정보를 받지 못했습니다: {exc}")
         await browser.close()
         return payload
 
@@ -842,6 +875,10 @@ async def crawl_lms(fast=None):
             await fetch_course_staff(page, unique_courses)
         except Exception as e:
             print(f"[교수·조교] 수집 실패: {e}")
+        try:
+            await fetch_my_profile(page)
+        except Exception as e:
+            print(f"[내 정보] 수집 실패: {e}")
 
         await browser.close()
         _page = None

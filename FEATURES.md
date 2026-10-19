@@ -378,6 +378,7 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 | `/api/local-autosave/job` | 내 컴퓨터 자동 저장 진행 |
 | `/api/dgist-api/status` | 공공데이터 키 확인 |
 | `/api/update/check` | 업데이트 확인 |
+| `/api/mail/me` | 메일에 쓰는 내 정보: `manual`(직접 적은 값)·`auto`(LMS·조직도)·`me`(합친 값, 학년·영문 소속 포함) |
 
 ### POST
 
@@ -402,6 +403,9 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 | `/api/mail/star`, `/api/mail/move`, `/api/mail/folder-create`, `/api/mail/reminder`, `/api/mail/translate` | 메일 기능 |
 | `/api/mail/open-link` | 메일 본문 링크를 기본 브라우저로 (http·https 만) |
 | `/api/send-email` | 메일 보내기 |
+| `/api/mail/flow` | 메일 쓰기 흐름 `{to, courseIndex}` → 받는 사람(교수·조교·외국인·과목)과 한국어·영어 글 조각 |
+| `/api/mail/me` | 메일에 쓰는 내 정보 저장 `{name, nameEn, studentId, dept, flow}` (보낸 키만) |
+| `/api/ai/polish` | 메일 가운데 용건만 AI 로 다듬기 `{text, lang, flow}` (실험실 스위치를 따른다) |
 | `/api/directory/import` | 조직도 넣기 |
 | `/api/assignment/open`, `/api/open-url` | 외부 페이지 열기 |
 | `/api/update/apply`, `/api/restart` | 업데이트, 재시작 |
@@ -431,6 +435,8 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 | `last_sync.json` | 마지막 자료 동기화 시각 |
 | `health.json` | 종류별 마지막 성공·실패 |
 | `local_autosave.json` | 내 컴퓨터에 자동 복사한 파일의 크기·수정 시각 (사용자가 고쳤는지 판단용) |
+| `lms_profile.json` | 내 이름·학번·학교 메일·LMS 소속 (LMS `/users/me`, 전화번호 등은 받지 않음) |
+| `ai_profile.json` | 직접 적은 내 정보(이름·영문 이름·학번·소속), 흐름 끄기, AI 고르기·실험실 스위치 |
 
 그 밖의 위치:
 - 설치 폴더: `%LOCALAPPDATA%\Programs\붕어빵`
@@ -935,11 +941,54 @@ Microsoft Store 정책 10.3.1(로그인 앱은 심사용 시험 계정을 줄 �
 
 - `ai_cli.py`: 이 PC 에 로그인해 둔 CLI 를 그대로 부른다(앱은 키를 받지 않는다). 질문은 **표준입력**으로(배치 파일 인자 해석 위험 회피), 빈 임시 폴더에서, 창 없이, 180초 제한. claude `-p --disallowedTools …`, gemini `-p "Answer the request above."`, codex `exec --skip-git-repo-check --ephemeral -s read-only -o <파일> -`.
 - 실측: 한 줄 질문 claude 9초·codex 10초, 말로 찾기 13~15초(목록 799개), 초안 15초, codex 번역 11초. gemini 는 로그인 전이면 'Please set an Auth method' → '로그인 필요' 로 알린다.
-- 설정 'AI 도우미'(`#stAi`): 쓸 AI(자동·Claude·Gemini·Codex, 설치 여부 표시) + 내 정보(이름·학번·소속·소개·서명) → `ai_profile.json`. 설정 폼 저장과 따로 저장(입력칸에 name 속성 없음).
+- 설정 'AI 도우미'(`#stAi`): 쓸 AI(자동·Claude·Gemini·Codex, 설치 여부 표시) → `ai_profile.json`. 내 정보 칸은 2026-10-19 '메일에 쓰는 내 정보'(`#stMe`)로 옮겼다(AI 를 꺼도 메일 쓰기 흐름이 쓴다). 저장은 보낸 키만 바꾼다(`save_profile` 이 기존 값과 합침) — 예전처럼 한 카드가 다른 카드의 값을 비우지 않게.
 - 번역: `/api/mail/translate` 가 고른 AI CLI 를 먼저, 안 되면 예전 길(Ollama → Gemini 키).
 - 말로 찾기: 통합 검색 팝업 맨 아래 'AI 에게 물어보기'. `buildSearchResults(q, {all:true})` 로 모든 후보를 모아 순번 id 로 보내고, 돌아온 id 만 원래 결과로 연다(모델이 지어낸 id 는 버려짐). `keepOpen` 항목은 팝업을 닫지 않는다.
-- 메일 초안: 쓰기 화면 'AI 초안' → 한 줄 요청. 받는 사람 주소로 `state.coursePeople` 에서 과목·분반·역할(내 수업 먼저)을 찾아 함께 보낸다. 외국인 교수면 영어로 쓴다. 'AI 없이 내 소개 넣기' 단추도 있다.
+- 메일 초안: 쓰기 화면 'AI 초안' → 한 줄 요청. 받는 사람 주소로 `state.coursePeople` 에서 과목·분반·역할(내 수업 먼저)을 찾아 함께 보낸다. 이름이 로마자인 교수면 영어로 쓴다. 2026-10-19 부터 내 정보는 `mail_me`(LMS 이름·학번, 영문 이름·학년·영문 소속)로, 프롬프트에 메일 꼴(아래 '메일 쓰기 흐름'과 같은 첫머리·끝)·상황별로 넣을 것·21일 달력을 넣는다. 'AI 없이 내 소개 넣기' 단추는 흐름(Tab)이 대신해 뺐다.
 - 체험 모드에서는 `/api/ai/search`·`/api/ai/draft` 를 막는다. 자동 실행은 없다(누를 때만 바깥으로 나감). 상태 확인은 첫 화면 4초 뒤.
 - AI 모델 고르기·받는 사람 추천(2026-10-15 '밀착형 AI'): 메일 쓰기 단추에 'AI 초안' 대신 지금 모델 이름(Opus 5.5, GPT-6-Astra …). 초안 칸의 고르기에서 Claude(opus·sonnet·fable·haiku 별칭)·Gemini(2.5 Pro 등)·Codex(`~/.codex/models_cache.json` 의 visibility=list, 기본은 config.toml model) 모델을 바꾼다 → `ai_profile.json` 의 provider·model. 모델 이름은 `_SAFE_MODEL` 글자만(배치 파일 인자). 안 골랐으면 화면에 보이는 그 CLI 기본 모델을 서버도 똑같이 쓴다.
 - 초안이 받는 사람(to)·참조(cc)도 고른다. 후보는 내가 듣는 과목의 교수·조교 중 주소를 아는 사람(`aiDraftCandidates`, 최대 80명: 주소·이름·역할·과목·분반)이고, 후보 밖 주소는 버린다. 받는 사람 칸이 비면 바로 채우고, 나머지는 칩(누르면 넣기/빼기). 제목은 제목 칸에 바로. 실측: 받는 사람 빈칸 + '일반물리 교수님께 결석 양해' → 3분반 교수 자동, 조교 참조 추천, Opus 5.5 14.8초.
 - AI 도우미 실험실 스위치(2026-10-15): 설정 'AI 도우미' 카드 머리의 '실험실' 표시 옆 스위치(`#aiEnabled`) → `ai_profile.json` 의 `enabled`("1"/빈 값, 처음엔 꺼짐). 끄면 메일 쓰기의 모델 단추·초안 칸, 검색의 'AI 에게 물어보기', 카드 상세(`#aiBody`)가 숨고, 서버도 `/api/ai/search`·`/api/ai/draft` 를 거절하며 메일 번역은 AI CLI 를 건너뛰고 예전 길(Ollama → Gemini 키)로 간다.
+
+## 메일 쓰기 흐름: 회색 글씨 자동완성 (2026-10-19)
+
+사용자: 'AI 초안'을 채팅처럼 통째로 받아 붙이는 것보다, 교수님 메일의 처음(인사·자기소개)과 끝(감사·서명)은 늘 비슷하니
+그 흐름이 회색 글씨로 보이고 클릭하거나 Tab 을 치면 바로 써지게. AI 는 가운데 용건 정리에만. 외국인 교수님이면 영어,
+한국인 교수님이면 한국어. 이름·학번은 LMS 에서 받아 자동으로.
+
+- 내 정보: `lms_crawler.fetch_my_profile` 가 교수·조교 목록과 같은 로그인에서(마감 확인 1시간·자료 동기화 끝)
+  `GET /learn/api/public/v1/users/me?fields=userName,studentId,name,contact.email,job.department` → `lms_profile.json`.
+  실측: studentId 에 9자리 학번, name.given 한글 이름(family '.'), job.department '융복합대학'. 전화번호는 fields 로 아예 안 받는다.
+  `web_ui.mail_me` = 직접 적은 값(`ai_profile.json`) > LMS > 조직도(학교 메일 주소로 찾음, 소속 '기초학부(학생)'). 영문 이름은 LMS 에
+  없어 `mail_flow.romanize_name` 이 추정(이름은 음절별 로마자, 성은 흔한 표기: 홍길동 → Gildong Hong). 학년은 학번 앞 네 자리
+  (3월 전이면 지난 학년도). 영문 소속은 기초학부 → School of Undergraduate Studies.
+- 받는 사람(`mail_flow.recipient`): 받는 사람 칸 첫 주소 → 이번 학기 교수·조교(`get_course_staff`)에서 역할·과목·분반, 학수번호는
+  `timetable.json` 의 `courseNo`(과목명 또는 교수 이름이 같은 칸), 영어 과목명은 LMS 과목 이름의 괄호 속(General PhysicsⅡ → General
+  Physics II). 과목에 없으면 조직도 교원/직원. **외국인 판별 = 이름에 한글이 없고 로마자가 있음**(실측: 교원 247명 중 11명이 로마자,
+  예 'Carlos Scarinci', 'DEVECIOGLU DENIZ OLGU'). 영어 호칭은 성: 'Scarinci', 대문자로 시작하는 학교 명부 꼴은 앞 단어
+  ('Devecioglu'), 한국인 교수님께 영어로 쓰면 'Professor Kim'.
+- 글 조각(`mail_flow.segments`, 서버에서 만든다 — app.js 에 한국어 메일 글을 두면 영어 화면 번역표가 그것까지 번역하려 든다):
+  greeting → intro → leadin → (내 용건) → closing → signoff. 영어 꼴은 사용자가 실제로 보낸 메일 그대로
+  (Dear Professor … / I hope this email finds you well. My name is … (Student ID: …), a first-year student in the School of
+  Undergraduate Studies taking your … class (BS101, Section 04). / I am writing to … / Thank you for your time and understanding. /
+  Sincerely, 이름·소속·Student ID). 한국어: 안녕하세요, ○○○ 교수님. / 다변수 미적분학(BS101) 04분반을 수강 중인 기초학부 1학년
+  ○○○(학번)입니다. / 다름이 아니라 … / 바쁘신 와중에 메일 읽어 주셔서 감사합니다. / ○○○ 드림. 조교면 '조교님'·'Best regards,'.
+  모르는 값은 문장에서 빼고 만든다(빈 [ ] 를 남기지 않음).
+- 화면(app.js '메일 쓰기 흐름'): 본문 위 한 줄(`#mailFlowBar`: 받는 사람·과목, 한국어/English, 'Tab 회색 글씨 넣기', AI 켜졌으면
+  '용건 다듬기'). 회색 글씨는 본문 안 `<span data-ghost contenteditable=false>` 로, **빈 줄에서만** 뜬다. 이미 쓴 줄을 단계별
+  정규식(서버가 `match` 로 준다)으로 앞에서부터 읽어 다음 단계를 고른다 — 앞으로만 간다(용건 줄이 '…입니다.' 로 끝나도 자기소개로
+  되돌리지 않음), 자기소개 줄은 내 이름·학번으로도 알아본다, '-----'·'>' 로 시작하는 원본 메일 줄에서 멈춘다(답장).
+  Tab·클릭 = 넣기(`execCommand('insertText')` 한 번 — \n 은 문단이 되고 Ctrl+Z 한 번에 통째로 빠진다, 실측), Esc = 다시 칠 때까지 숨기기,
+  다른 키 = 떼고 그대로 입력. 클릭 직후 0.1초 안에 Tab 을 쳐도 그 자리에서 계산해 받는다(안 그러면 포커스가 옆 칸으로 갔다, 실측).
+  한글 조합 중(keyCode 229·compositionstart)엔 뗀다. 저장·보내기·HTML 전환은 `richHtml()` 이 `[data-ghost]` 를 한 번 더 거른다.
+- 빈 줄 판정: 커서 앞·뒤 범위를 복제해 화면 밖 상자(`.flow-measure`, opacity 0 — visibility:hidden 이면 innerText 가 글을 빼먹는다)
+  에서 innerText 로 읽는다. 끝에 붙은 빈 `<div><br></div>` 는 innerText 에서 줄바꿈을 안 만들어, 복제본 끝(뒤 범위는 앞)에
+  표시 글자(U+2063)를 넣고 읽는다.
+- 용건 다듬기(`ai_cli.polish`, `/api/ai/polish`): 고른 글, 없으면 자기소개 다음('I am writing to'·'다름이 아니라' 줄 포함)부터
+  감사 인사 앞까지를 보낸다(문단 안쪽만 골라 감사 인사 앞 빈 줄을 지킨다). 프롬프트: 용건만, 인사·소개·서명 금지, 메모의 사실 그대로,
+  모르면 [ ], 21일 달력(요일), 상황별로 넣을 것(결석·연장·성적 문의·질문·면담·자료). 결과는 한 번에 바꿔 Ctrl+Z 한 번이면 메모로 돌아간다.
+  실측(Opus 5.5): 한국어 메모 → 영어 3문단 9.5초, 한국어 3문단 11.6초 — 사용자가 직접 쓴 메일과 거의 같은 내용·순서.
+- 설정 '메일에 쓰는 내 정보'(`#stMe`): 이름·영문 이름·학번·소속(비우면 흐린 글씨로 LMS·조직도 값), '메일 쓸 때 인사·서명 미리 보이기'
+  (`ai_profile.json` 의 `flow`="off" 면 끔).
+- 시험 주의: 받는 사람이 찬 메일 쓰기를 열면 기존 자동 저장이 학교 메일 임시 보관함에 저장본을 만든다. 개발 서버에서 시험할 땐 그 탭에서
+  `window.saveDraftToServer = async () => {}` 로 막고, 생긴 것은 `/api/mail/discard-draft`(지운 표시만, EXPUNGE 없음)로 치운다.

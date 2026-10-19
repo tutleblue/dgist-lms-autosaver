@@ -11068,6 +11068,38 @@ html[data-demo] .demo-stripe {
 .ai-chip.on { border-style: solid; border-color: var(--accent); background: var(--accent-soft); }
 #aiDraftModelName { white-space: nowrap; }
 
+/* 메일 쓰기 흐름 (2026-10-19): 본문 위 한 줄 + 본문 안 회색 글씨 */
+.mail-flow {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 6px 16px; border-bottom: 1px solid var(--border);
+  font-size: 12px; color: var(--text-soft);
+}
+.mail-flow-who { min-width: 0; margin-right: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mail-flow-who strong { color: var(--text); font-weight: 600; }
+.mail-flow-course { height: 26px; font-size: 12px; padding: 0 6px; border-radius: 8px; max-width: 220px; }
+.flow-seg { display: inline-flex; padding: 2px; border-radius: 9px; background: var(--bg-deep); }
+.flow-seg button {
+  border: 0; background: none; font: inherit; font-size: 12px; color: var(--text-soft);
+  padding: 3px 10px; border-radius: 7px; cursor: pointer;
+}
+.flow-seg button[aria-pressed="true"] { background: var(--surface); color: var(--text); font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+.mail-flow-hint { color: var(--text-faint); white-space: nowrap; }
+.mail-flow-hint kbd {
+  font: inherit; font-size: 11px; padding: 0 5px; border-radius: 5px;
+  border: 1px solid var(--border-strong); background: var(--surface); color: var(--text-soft);
+}
+#mailFlowPolish { height: 28px; }
+#mailFlowPolish .icon { width: 14px; height: 14px; }
+#mailFlowPolish.busy { opacity: .6; pointer-events: none; }
+.flow-ghost {
+  color: var(--text-faint); white-space: pre-wrap; cursor: pointer;
+  user-select: none; -webkit-user-select: none;
+}
+.flow-ghost:hover { color: var(--text-soft); }
+.flow-measure { position: fixed; left: -10000px; top: 0; width: 700px; opacity: 0; pointer-events: none; }
+.me-flow-switch { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-soft); cursor: pointer; }
+@media (max-width: 760px) { .mail-flow-hint { display: none; } }
+
 /* 실험실 표시·스위치 (AI 도우미) */
 .labs-badge {
   display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: 999px; vertical-align: 2px;

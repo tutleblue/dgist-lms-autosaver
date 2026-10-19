@@ -234,6 +234,8 @@ LAST_SYNC_PATH = str(AUTOSAVER_DATA_ROOT / "last_sync.json")
 COURSES_STATE_PATH = str(AUTOSAVER_DATA_ROOT / "courses_state.json")
 # 과목별 교수·조교 (LMS 코스 사용자에서 학생을 뺀 것). 메일 받는 사람 찾기와 강의 카드에 쓴다.
 COURSE_STAFF_PATH = str(AUTOSAVER_DATA_ROOT / "course_staff.json")
+# 내 이름·학번·학교 메일 (LMS /users/me). 메일 쓰기의 자기소개·서명에 쓴다. 전화번호 등은 받지 않는다.
+LMS_PROFILE_PATH = str(AUTOSAVER_DATA_ROOT / "lms_profile.json")
 
 SYNC_MODE = os.environ.get("AUTOSAVER_SYNC_MODE", "fast").strip().lower()
 

@@ -59,6 +59,9 @@ hiddenimports = [
     # 삼성 노트는 리눅스에 없다. 그래도 화면 서버가 불러 '없음' 으로 답하므로 모듈은 넣는다 (WinRT 는 안 넣음)
     "samsung_notes",
     "course_meta",
+    # 메일 쓰기 흐름·AI 도우미 (web_ui 함수 안에서 늦게 불러온다)
+    "mail_flow",
+    "ai_cli",
     # 구글 라이브러리는 늦게 불러오는 곳이 있어 PyInstaller 가 놓친다
     "googleapiclient.discovery",
     "googleapiclient.http",

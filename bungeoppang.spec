@@ -67,6 +67,9 @@ hiddenimports = [
     # 삼성 노트로 PDF 보내기 (WinRT Launcher)
     "samsung_notes",
     "course_meta",
+    # 메일 쓰기 흐름·AI 도우미 (web_ui 함수 안에서 늦게 불러온다)
+    "mail_flow",
+    "ai_cli",
     "winrt.windows.storage",
     "winrt.windows.system",
     "winrt.windows.foundation",

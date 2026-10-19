@@ -3597,6 +3597,62 @@ def get_course_staff(workspace: UserWorkspace) -> dict[str, Any]:
     return {"ok": True, "term": now_term, "courses": out, "past": past, "people": people}
 
 
+MAIL_ME_KEYS = ("name", "nameEn", "studentId", "dept", "flow")
+
+
+def mail_me(workspace: UserWorkspace) -> dict[str, Any]:
+    """메일에 쓰는 내 정보: 직접 적은 값(ai_profile.json) > LMS(lms_profile.json) > 조직도.
+
+    AI 도우미를 꺼도 메일 쓰기 흐름(인사·자기소개·서명)은 쓰므로 AI 스위치와 상관없이 준다.
+    설정 파일은 비밀값을 풀지 않으려고 read_config 대신 그대로 읽는다(학교 메일 주소만 필요).
+    """
+    import ai_cli
+    import mail_flow
+
+    manual = ai_cli.load_profile(workspace.root / "ai_profile.json")
+    raw_config = read_json(workspace.config_path, {})
+    school_email = str((raw_config or {}).get("SCHOOL_EMAIL") or "") if isinstance(raw_config, dict) else ""
+    auto = mail_flow.auto_profile(workspace.root, directory_people(workspace), school_email)
+    return {
+        "ok": True,
+        "manual": {k: manual.get(k, "") for k in MAIL_ME_KEYS},
+        "auto": auto,
+        "me": mail_flow.my_profile(manual, auto),
+    }
+
+
+def save_mail_me(workspace: UserWorkspace, payload: dict[str, Any]) -> dict[str, Any]:
+    """설정 '메일에 쓰는 내 정보' 저장. 같은 파일의 AI 고르기·스위치 값은 그대로 둔다."""
+    import ai_cli
+
+    path = workspace.root / "ai_profile.json"
+    current = ai_cli.load_profile(path)
+    current.update({k: str(payload.get(k) or "").strip() for k in MAIL_ME_KEYS if k in payload})
+    ai_cli.save_profile(path, current)
+    return mail_me(workspace)
+
+
+def mail_flow_for(workspace: UserWorkspace, payload: dict[str, Any]) -> dict[str, Any]:
+    """메일 쓰기 흐름: 받는 사람 칸(첫 주소) → 인사·자기소개·마무리·서명 조각(한국어·영어)."""
+    import mail_flow
+
+    raw = str(payload.get("to") or "").split(",")[0]
+    m = re.search(r"[\w.+-]+@[\w-]+(\.[\w-]+)+", raw)
+    email = m.group(0).lower() if m else ""
+    # 주소가 없는 글(받는 사람 칸에 이름을 치는 중)은 쓰지 않는다. 치는 동안 언어가 영어↔한국어로 바뀌었다
+    typed = raw.split("<")[0].strip().strip('"') if "<" in raw and email else ""
+    staff = get_course_staff(workspace).get("courses") or {}
+    table = read_json(workspace.timetable_path, {})
+    entries = table.get("entries") if isinstance(table, dict) and isinstance(table.get("entries"), list) else []
+    me = mail_me(workspace)["me"]
+    to = mail_flow.recipient(email, typed, staff, directory_people(workspace), entries)
+    try:
+        index = int(payload.get("courseIndex") or 0)
+    except (TypeError, ValueError):
+        index = 0
+    return mail_flow.build(me, to, index)
+
+
 def import_directory(workspace: UserWorkspace, people: list[dict[str, Any]]) -> dict[str, Any]:
     import directory
 
@@ -4730,6 +4786,9 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         if route == "/api/course-staff":
             self.send_json(get_course_staff(workspace))
             return
+        if route == "/api/mail/me":
+            self.send_json(mail_me(workspace))
+            return
         if route == "/api/diagnostics":
             # 문의·오류 제보 메일에 붙일 앱 정보. 메일 주소·비밀번호·파일 경로 같은 개인 정보는 넣지 않는다.
             import platform
@@ -4882,7 +4941,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         # 내 컴퓨터(문서·다운로드 폴더)에 가짜 자료를 쓰지 않는다
         "/api/save-local", "/api/export-ics",
         # AI CLI 는 바깥 서비스에 묻는다
-        "/api/ai/search", "/api/ai/draft",
+        "/api/ai/search", "/api/ai/draft", "/api/ai/polish",
     }
     DEMO_MAIL_POST = {
         "/api/mark-read": "mark-read", "/api/mark-all-read": "mark-all-read", "/api/delete-email": "delete",
@@ -5780,7 +5839,14 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         if route == "/api/tutorial/done":
             self.send_json(mark_tutorial_done(workspace, self.read_body_json()))
             return
-        if route in ("/api/ai/profile", "/api/ai/search", "/api/ai/draft"):
+        if route in ("/api/mail/me", "/api/mail/flow"):
+            try:
+                payload = self.read_body_json() or {}
+                self.send_json(save_mail_me(workspace, payload) if route == "/api/mail/me" else mail_flow_for(workspace, payload))
+            except Exception as exc:
+                self.send_json({"ok": False, "message": str(exc)}, HTTPStatus.BAD_REQUEST)
+            return
+        if route in ("/api/ai/profile", "/api/ai/search", "/api/ai/draft", "/api/ai/polish"):
             # AI CLI 도우미 (ai_cli.py). 답이 10초쯤 걸리지만 서버가 요청마다 스레드를 써서 화면은 멈추지 않는다.
             import ai_cli
 
@@ -5798,9 +5864,17 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 if route == "/api/ai/search":
                     index = payload.get("index") if isinstance(payload.get("index"), list) else []
                     res = ai_cli.search(str(payload.get("query") or ""), index, provider, model=model)
+                elif route == "/api/ai/polish":
+                    # 메일 쓰기 흐름의 가운데(용건)만 다듬는다. 인사·소개·서명은 화면이 이미 넣었다.
+                    flow = payload.get("flow") if isinstance(payload.get("flow"), dict) else {}
+                    res = ai_cli.polish(str(payload.get("text") or ""), str(payload.get("lang") or "ko"), flow,
+                                        provider, model=model)
                 else:
                     context = payload.get("context") if isinstance(payload.get("context"), dict) else {}
-                    res = ai_cli.draft(str(payload.get("request") or ""), profile, context, provider, model=model)
+                    # 이름·학번·소속은 직접 적은 값이 없으면 LMS·조직도에서 가져온 값으로
+                    me = mail_me(workspace)["me"]
+                    merged = {**profile, **{k: str(me.get(k) or "") for k in ("name", "nameEn", "studentId", "dept", "deptEn", "year")}}
+                    res = ai_cli.draft(str(payload.get("request") or ""), merged, context, provider, model=model)
                 res["engine"] = res.get("modelLabel") or ai_cli.LABELS.get(res.get("provider"), "")
                 self.send_json(res)
             except ai_cli.AIError as exc:

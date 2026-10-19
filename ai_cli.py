@@ -237,6 +237,80 @@ def search(query: str, index: list[dict], provider: str | None = None, model: st
     return {**res, "ids": ids, "note": note}
 
 
+def _calendar(days: int = 21) -> str:
+    """오늘부터 며칠의 날짜·요일. 모델이 '다음 주 화요일'을 날짜로 바꿀 때 요일을 틀리지 않게(달력 계산을 맡기지 않는다)."""
+    from datetime import date, timedelta
+
+    ko = "월화수목금토일"
+    today = date.today()
+    return ", ".join(
+        f"{d.isoformat()}({ko[d.weekday()]}/{d.strftime('%a')})" for d in (today + timedelta(n) for n in range(days))
+    )
+
+
+# 용건에 무엇이 들어가야 하는지 (교수님께 보내는 메일에서 자주 빠지는 것)
+SITUATION_GUIDE = (
+    "- 결석·지각·조퇴: 날짜(요일)와 시간, 사유, 학교 공식 행사면 주관 부서·행사 이름, 미리 알리는 것임을 밝히고, "
+    "출석 인정(공결)이 되는지와 증빙 서류가 필요한지 정중히 묻는다. 조교에게 먼저 연락했으면 그 사실도.\n"
+    "- 과제·시험 연장이나 재응시: 사유, 원래 마감, 바라는 새 마감, 불이익을 감수하겠다는 태도.\n"
+    "- 성적·채점 문의: 어느 과제·문항인지, 무엇이 궁금한지. 따지지 말고 확인을 부탁하는 말투.\n"
+    "- 수업 내용 질문: 어느 강의·쪽·문제인지 구체적으로, 내가 이해한 데까지.\n"
+    "- 면담 요청: 목적, 가능한 시간 2~3개, 장소(연구실·온라인).\n"
+    "- 자료·공지 문의: 무엇을 어디서 찾았는데 없었는지."
+)
+
+
+def polish(text: str, lang: str, flow: dict, provider: str | None = None, model: str = "") -> dict:
+    """메일 가운데 용건만 다듬는다 (2026-10-19 사용자: AI 는 내용 정리 같은 필요한 곳에만).
+
+    text: 사용자가 대충 적은 용건(한국어 메모여도 된다). 인사·자기소개·마무리·서명은 이미 메일에 있어 쓰지 않는다.
+    flow: 받는 사람(이름·교수/조교·외국인)·과목(이름·학수번호·분반) — 화면이 /api/mail/flow 에서 받은 것.
+    """
+    lang = "en" if lang == "en" else "ko"
+    to = flow.get("to") if isinstance(flow.get("to"), dict) else {}
+    courses = to.get("courses") if isinstance(to.get("courses"), list) else []
+    course = courses[0] if courses and isinstance(courses[0], dict) else {}
+    role = {"professor": "교수", "ta": "조교", "staff": "직원"}.get(str(to.get("kind") or ""), "")
+    facts = "\n".join(f"- {k}: {v}" for k, v in (
+        ("받는 사람", f"{to.get('name') or ''} {role}".strip()),
+        ("과목", " / ".join(x for x in (course.get("title"), course.get("titleEn")) if x)),
+        ("학수번호", course.get("courseNo")), ("분반", course.get("section")),
+    ) if v)
+    if lang == "en":
+        rule = (
+            "Write in natural, polite academic English for a professor. Start with \"I am writing to \" "
+            "(if the notes already start that way, continue it). 2-4 short paragraphs, plain sentences, no bullet points. "
+            "Typical flow: what happens and when (weekday, date, time) and why -> relevant background "
+            "(e.g. already emailed the TA but no reply yet) -> the request (e.g. whether the absence can be excused, "
+            "and offer to prepare supporting documents if needed)."
+        )
+    else:
+        rule = (
+            "교수님께 보내는 정중한 한국어(합쇼체, 과하지 않게)로. '다름이 아니라 ' 로 시작(메모가 이미 그렇게 시작하면 이어서). "
+            "2~4문단, 목록 기호 없이 문장으로. 흐름: 무슨 일이 언제(요일·날짜·시간) 왜 → 관련 사정(예: 조교님께 먼저 메일을 "
+            "드렸지만 아직 답을 받지 못함) → 부탁(예: 출석 인정이 가능한지, 필요한 서류가 있으면 바로 준비하겠다)."
+        )
+    prompt = (
+        "당신은 대학생이 교수·조교에게 보내는 메일의 '용건 부분'만 다듬는 비서입니다.\n"
+        "인사, 자기소개, 마무리 인사, 서명은 이미 메일에 있으니 절대 쓰지 마세요. 용건 문단만 출력합니다(설명·따옴표 없이).\n"
+        f"{rule}\n"
+        "메모에 있는 사실(날짜·시간·장소·이름·행사명)은 그대로 쓰고, 없는 사실을 지어내지 마세요. "
+        "꼭 필요한데 모르는 것은 [ ] 로 비워 두세요. 요일은 아래 달력으로 맞추세요.\n\n"
+        f"[상황별로 들어가면 좋은 것]\n{SITUATION_GUIDE}\n\n"
+        f"[달력] {_calendar()}\n\n[받는 사람·과목]\n{facts or '- (모름)'}\n\n"
+        f"[학생이 적은 메모]\n{text[:4000]}"
+    )
+    res = run(prompt, provider, model=model)
+    body = res["text"].strip().strip("`").strip()
+    # 모델이 그래도 인사·서명을 붙이면 떼어 낸다(이미 메일에 있다)
+    lines = body.splitlines()
+    while lines and re.match(r"^\s*(dear|hello|hi|안녕하세요)\b", lines[0], re.I):
+        lines.pop(0)
+    while lines and re.match(r"^\s*(sincerely|best regards|kind regards|regards|.{0,6}드림)\s*,?\s*$", lines[-1], re.I):
+        lines.pop()
+    return {**res, "text": "\n".join(lines).strip()}
+
+
 def draft(request: str, profile: dict, context: dict, provider: str | None = None, model: str = "") -> dict:
     """메일 초안 + 받는 사람·참조 추천 (밀착형: 글만 주는 게 아니라 누구에게 보낼지까지).
 
@@ -246,7 +320,9 @@ def draft(request: str, profile: dict, context: dict, provider: str | None = Non
     import json
 
     me = "\n".join(f"- {k}: {v}" for k, v in (
-        ("이름", profile.get("name")), ("학번", profile.get("studentId")), ("소속", profile.get("dept")),
+        ("이름", profile.get("name")), ("영문 이름", profile.get("nameEn")), ("학번", profile.get("studentId")),
+        ("소속", profile.get("dept")), ("소속(영문)", profile.get("deptEn")),
+        ("학년", f"{profile.get('year')}학년" if str(profile.get("year") or "0") != "0" else ""),
         ("자기소개", profile.get("intro")), ("서명", profile.get("signature")),
     ) if v)
     ctx = "\n".join(f"- {k}: {v}" for k, v in (
@@ -264,8 +340,14 @@ def draft(request: str, profile: dict, context: dict, provider: str | None = Non
         "1) 받는 사람(to)과 참조(cc)를 '후보' 목록에서 고르세요. 예: 과목 일로 교수님께 보내면 그 과목 조교를 참조로, "
         "조교에게 보내면 필요할 때만 교수님을 참조로. 지금 받는 사람 칸이 이미 맞으면 그대로 두세요. 후보에 없는 주소는 쓰지 마세요.\n"
         "2) 제목은 '[과목 분반] 학번 이름 용건' 꼴로 짧게.\n"
-        "3) 본문은 정중하고 간결하게: 인사 → 자기소개(소속·학번·이름, 과목·분반) → 용건 → 마무리 → 서명. "
-        "받는 사람이 외국인 교수(영문 이름)면 영어로 씁니다. 사실을 지어내지 말고 모르는 부분은 [ ] 로 비워 두세요.\n"
+        "3) 본문은 정중하고 간결하게: 인사 → 자기소개(소속·학년·이름·학번, 과목·학수번호·분반) → 용건 → 마무리 → 서명. "
+        "받는 사람 이름이 로마자(외국인 교수)면 영어로, 한글이면 한국어로 씁니다. 사실을 지어내지 말고 모르는 부분은 [ ] 로 비워 두세요.\n"
+        "   영어 꼴: 'Dear Professor <성>,' / 'I hope this email finds you well. My name is <영문 이름> (Student ID: <학번>), "
+        "a <first-year> student in the <소속(영문)> taking your <과목> class (<학수번호>, Section <분반>).' / "
+        "'I am writing to …' / 'Thank you for your time and understanding.' / 'Sincerely,' 다음 줄부터 영문 이름, 소속, Student ID.\n"
+        "   한국어 꼴: '안녕하세요, <이름> 교수님.' / '<과목>(<학수번호>) <분반>분반을 수강 중인 <소속> <학년> <이름>(<학번>)입니다.' / "
+        "'다름이 아니라 …' / '바쁘신 와중에 메일 읽어 주셔서 감사합니다.' / '<이름> 드림'.\n"
+        f"   상황별로 들어가면 좋은 것:\n{SITUATION_GUIDE}\n   요일은 이 달력으로 맞추세요: {_calendar()}\n"
         '출력은 JSON 한 줄만: {"to": ["주소"], "cc": ["주소"], "why": "누구에게 왜(한 줄)", "subject": "제목", "body": "본문(줄바꿈 \n)"}\n\n'
         f"[내 정보]\n{me or '- (입력 안 됨)'}\n\n[상황]\n{ctx or '- (없음)'}\n\n"
         f"[후보: 주소 | 이름 | 역할 | 과목 분반]\n{cand_lines or '- (없음)'}\n\n"
@@ -294,7 +376,9 @@ def draft(request: str, profile: dict, context: dict, provider: str | None = Non
 
 # ===== 내 정보 (메일 초안에 매번 쓰는 학번·소개) =====
 # enabled: 실험실 스위치. "1" 이면 켬, 빈 값이면 끔(처음엔 꺼져 있다 — 2026-10-15 사용자: 실험실 기능으로, 껐다 켤 수 있게)
-PROFILE_KEYS = ("name", "studentId", "dept", "intro", "signature", "provider", "model", "enabled")
+# nameEn: 영문 이름(LMS 가 주지 않아 한글 이름을 로마자로 바꿔 제안하고, 여기 적으면 그 값을 쓴다)
+# flow: 메일 쓰기 흐름(회색 글씨) — "off" 면 끔, 빈 값이면 켬
+PROFILE_KEYS = ("name", "nameEn", "studentId", "dept", "intro", "signature", "provider", "model", "enabled", "flow")
 
 
 def load_profile(path: Path) -> dict:
@@ -310,12 +394,15 @@ def load_profile(path: Path) -> dict:
 def save_profile(path: Path, payload: dict) -> dict:
     from runtime_config import atomic_write_json
 
-    data = {k: str(payload.get(k) or "")[:2000] for k in PROFILE_KEYS}
+    # 보낸 키만 바꾼다. 내 정보(설정 '메일에 쓰는 내 정보')와 AI 고르기(설정 'AI 도우미')가 같은 파일을 따로 저장한다
+    existing = load_profile(path)
+    data = {k: str(payload.get(k, existing.get(k)) or "")[:2000] for k in PROFILE_KEYS}
     if data["provider"] not in PROVIDERS:
         data["provider"] = ""  # 빈 값 = 자동(설치된 것 중 앞에서부터)
     if not _SAFE_MODEL.match(data["model"] or "x"):
         data["model"] = ""
     data["enabled"] = "1" if data["enabled"] in ("1", "true", "True") else ""
+    data["flow"] = "off" if data["flow"] == "off" else ""
     atomic_write_json(path, data)
     return data
 

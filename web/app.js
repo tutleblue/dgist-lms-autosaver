@@ -695,6 +695,7 @@ function applyView(view) {
   if (view === "settings") {
     populateSettings();
     renderStorage();
+    loadMailMe(true);
   }
   if (view === "emails") {
     showMailPane("list");
@@ -1580,6 +1581,7 @@ function openCompose({ to = "", cc = "", bcc = "", subject = "", body = "", inRe
   const account = state.config?.schoolEmail || "";
   $("#composeFrom").textContent = account ? `보내는 사람: ${account}` : "설정에서 학교 이메일을 먼저 입력해 주세요.";
   showMailPane("compose");
+  resetMailFlow();
   form.elements[to ? "subject" : "to"].focus();
 }
 
@@ -2096,11 +2098,17 @@ function composeIsRich() {
   return !$("#htmlModeToggle")?.checked;
 }
 
+/** 서식 칸의 HTML. 메일 쓰기 흐름의 회색 글씨([data-ghost])는 미리보기라 저장·보내기에 절대 섞이지 않게 뗀다 */
+function richHtml(rich) {
+  const html = rich?.innerHTML || "";
+  return html.includes("data-ghost") ? html.replace(/<span[^>]*data-ghost[^>]*>[\s\S]*?<\/span>/g, "") : html;
+}
+
 /** 어느 칸에 쓰든 본문 내용을 가져온다 */
 function composeBody() {
   const rich = $("#composeRich");
   const area = document.querySelector('#composeForm [name="body"]');
-  return composeIsRich() ? rich?.innerHTML || "" : area?.value || "";
+  return composeIsRich() ? richHtml(rich) : area?.value || "";
 }
 
 function setComposeBody(html) {
@@ -2172,7 +2180,7 @@ function bindRichToolbar() {
   $("#htmlModeToggle")?.addEventListener("change", (event) => {
     const html = event.target.checked;
     if (html) {
-      if (area) area.value = rich.innerHTML;
+      if (area) area.value = richHtml(rich);
     } else {
       rich.innerHTML = area?.value || "";
     }
@@ -2183,7 +2191,7 @@ function bindRichToolbar() {
 
   // 서식 모드에서 타이핑하면 textarea에도 반영 (전송은 textarea를 안 봐도 되지만 안전하게)
   rich.addEventListener("input", () => {
-    if (area && composeIsRich()) area.value = rich.innerHTML;
+    if (area && composeIsRich()) area.value = richHtml(rich);
   });
 }
 
@@ -2483,6 +2491,7 @@ async function restoreDraftIfAny() {
     toggle.dispatchEvent(new Event("change"));
   }
   setComposeBody(draft.body);
+  resetMailFlow();
   autosave.lastSig = draftSignature(collectDraft());
   draftNote(when ? `${when}에 저장한 내용` : "");
   return true;
@@ -11177,6 +11186,7 @@ const TOUR_STEPS = [
     text: "웹메일을 따로 열 필요 없이 여기서 보내.",
     tips: [
       "'물리 조교'처럼 쳐도 그 과목 교수·조교 주소를 찾아 줘",
+      "교수님 메일의 인사·자기소개·서명이 회색으로 떠. Tab 만 누르면 써져",
       "내 PC나 Drive 파일을 첨부",
       "쓰다 멈추면 알아서 임시저장",
     ],
@@ -13796,13 +13806,6 @@ const AI_PROVIDERS = [
   ["gemini", "Gemini"],
   ["codex", "Codex"],
 ];
-const AI_PROFILE_FIELDS = [
-  ["name", "#aiName"],
-  ["studentId", "#aiStudentId"],
-  ["dept", "#aiDept"],
-  ["intro", "#aiIntro"],
-  ["signature", "#aiSignature"],
-];
 
 function paintAiSettings() {
   const box = $("#aiProviders");
@@ -13812,8 +13815,9 @@ function paintAiSettings() {
   const sw = $("#aiEnabled");
   if (sw) sw.checked = on;
   if ($("#aiBody")) $("#aiBody").hidden = !on;
-  // 메일 쓰기의 모델 단추와 초안 칸도 스위치를 따른다
+  // 메일 쓰기의 모델 단추·초안 칸·용건 다듬기도 스위치를 따른다
   if ($("#aiDraftToggle")) $("#aiDraftToggle").hidden = !on;
+  if ($("#mailFlowPolish")) $("#mailFlowPolish").hidden = !on;
   if (!on && $("#aiDraftBox")) $("#aiDraftBox").hidden = true;
   const chosen = st.profile?.provider || "";
   box.innerHTML = AI_PROVIDERS.map(([key, label]) => {
@@ -13822,10 +13826,6 @@ function paintAiSettings() {
     return `<button type="button" class="ai-provider${chosen === key ? " on" : ""}${has ? "" : " missing"}" data-provider="${key}" role="radio" aria-checked="${chosen === key}">
       <strong>${escapeHtml(label)}</strong><span>${escapeHtml(note)}</span></button>`;
   }).join("");
-  AI_PROFILE_FIELDS.forEach(([key, sel]) => {
-    const el = $(sel);
-    if (el && document.activeElement !== el) el.value = st.profile?.[key] || "";
-  });
 }
 
 async function saveAiProfile(extra = {}) {
@@ -13835,9 +13835,6 @@ async function saveAiProfile(extra = {}) {
     enabled: state.ai.status?.profile?.enabled || "",
     ...extra,
   };
-  AI_PROFILE_FIELDS.forEach(([key, sel]) => {
-    if ($(sel)) payload[key] = $(sel).value.trim();
-  });
   const res = await api("/api/ai/profile", { method: "POST", body: JSON.stringify(payload) });
   state.ai.status = { ...(state.ai.status || {}), profile: res.profile };
   paintAiSettings();
@@ -13856,14 +13853,6 @@ $("#aiProviders")?.addEventListener("click", async (event) => {
   try {
     await saveAiProfile({ provider: key, model: "" });
     showToast(key ? `${btn.querySelector("strong").textContent} 를 쓸게요` : "설치된 AI 를 자동으로 고를게요");
-  } catch (error) {
-    showToast(humanError(error));
-  }
-});
-$("#aiProfileSave")?.addEventListener("click", async () => {
-  try {
-    await saveAiProfile();
-    showToast("내 정보를 저장했어요");
   } catch (error) {
     showToast(humanError(error));
   }
@@ -13910,10 +13899,10 @@ function aiDraftCandidates() {
 
 function paintAiDraftContext() {
   const ctx = aiDraftContext();
-  const p = state.ai.status?.profile || {};
+  const p = state.mailMe?.me || {};
   const bits = [];
   if (ctx.course) bits.push(`${ctx.course}${ctx.section ? ` ${ctx.section}` : ""} ${ctx.role}`.trim());
-  bits.push(p.studentId || p.name ? `내 정보: ${[p.name, p.studentId].filter(Boolean).join(" · ")}` : "내 정보 없음 (설정 → AI 도우미)");
+  bits.push(p.studentId || p.name ? `내 정보: ${[p.name, p.studentId].filter(Boolean).join(" · ")}` : "내 정보 없음 (설정 → 메일에 쓰는 내 정보)");
   bits.push(providerLabel());
   const el = $("#aiDraftContext");
   if (el) el.textContent = bits.join(" · ");
@@ -13924,28 +13913,13 @@ $("#aiDraftToggle")?.addEventListener("click", async () => {
   if (!box) return;
   box.hidden = !box.hidden;
   if (box.hidden) return;
-  await loadAiStatus();
+  await Promise.all([loadAiStatus(), loadMailMe()]);
   paintAiDraftContext();
   $("#aiDraftRequest")?.focus();
 });
 $("#composeTo")?.addEventListener("change", () => !$("#aiDraftBox")?.hidden && paintAiDraftContext());
 
-// AI 없이: 내 소개(+과목·분반)를 본문 맨 앞에. 매번 쓰는 '안녕하세요, ○○ 수강 중인 …' 을 한 번에.
-$("#aiIntroButton")?.addEventListener("click", async () => {
-  await loadAiStatus();
-  const p = state.ai.status?.profile || {};
-  const ctx = aiDraftContext();
-  const courseName = [ctx.course, ctx.section].filter(Boolean).join(" ");
-  const course = courseName ? courseName + "을 수강 중인 " : "";
-  const intro = p.intro || (p.name ? `안녕하세요, ${course}${[p.dept, p.studentId].filter(Boolean).join(" ")} ${p.name}입니다.` : "");
-  if (!intro) {
-    showToast("설정 → AI 도우미에 이름·학번·소개를 먼저 적어 주세요.");
-    return;
-  }
-  const lines = [intro, "", ""];
-  if (p.signature) lines.push("", p.signature);
-  setComposeBody(escapeHtml(lines.join("\n")).replace(/\n/g, "<br>") + composeBody());
-});
+// (예전 '내 소개 넣기' 단추는 메일 쓰기 흐름 — 회색 글씨를 Tab 으로 넣기 — 가 대신한다)
 
 $("#aiDraftRun")?.addEventListener("click", async () => {
   const request = ($("#aiDraftRequest")?.value || "").trim();
@@ -14067,3 +14041,463 @@ $("#aiEnabled")?.addEventListener("change", async (event) => {
     showToast(humanError(error));
   }
 });
+
+
+/* ===== 메일 쓰기 흐름 (mail_flow.py) =====
+   2026-10-19 사용자: 'AI 초안'을 채팅처럼 받아 붙이기보다 자동완성처럼 — 처음(인사·자기소개)과 끝(감사·서명)은 늘
+   비슷하니 다음에 올 글이 회색으로 보이고, 클릭하거나 Tab 을 치면 바로 써지게. AI 는 가운데 용건 다듬기에만.
+   - 글 조각은 서버(mail_flow.py)가 받는 사람(교수·조교, 이름이 로마자면 영어)과 LMS 에서 받은 내 이름·학번으로 만든다.
+   - 회색 글씨는 본문 안의 contenteditable=false 꼬리표([data-ghost]). 글자를 치기 전·포커스를 잃을 때 떼고,
+     저장·보내기는 richHtml() 이 한 번 더 거른다.
+   - 빈 줄에서만 보인다(쓰는 중인 문장 뒤에 끼어들지 않게). 이미 쓴 줄을 보고 다음 단계를 고른다:
+     인사 → 자기소개 → 'I am writing to'/'다름이 아니라' → (내 용건) → 감사 → 서명. */
+state.mailMe = null;
+const flow = { data: null, key: "", lang: "", course: 0, muted: false, timer: 0, toTimer: 0, seq: 0, ghost: null };
+const FLOW_STAGE = { greeting: 0, intro: 1, leadin: 2, content: 3, closing: 4, signoff: 5 };
+const FLOW_TEST_ORDER = ["signoff", "closing", "leadin", "intro", "greeting"];
+// 답장·전달에 붙는 원본 메일('----- 원본 메일 …', '>' 인용)부터는 내 글이 아니다
+const FLOW_QUOTE = /^\s*(>|-{3,}|_{3,})/;
+const FLOW_MARK = "⁣";
+const ME_FIELDS = { name: "#meName", nameEn: "#meNameEn", studentId: "#meStudentId", dept: "#meDept" };
+
+async function loadMailMe(force = false) {
+  if (state.mailMe && !force) return state.mailMe;
+  try {
+    state.mailMe = await api("/api/mail/me");
+  } catch (error) {
+    state.mailMe = null;
+  }
+  paintMailMe();
+  return state.mailMe;
+}
+const flowOn = () => state.mailMe?.manual?.flow !== "off";
+
+/* --- 설정: 메일에 쓰는 내 정보 --- */
+function paintMailMe() {
+  const d = state.mailMe;
+  if (!d) return;
+  Object.entries(ME_FIELDS).forEach(([key, sel]) => {
+    const el = $(sel);
+    if (!el || document.activeElement === el) return;
+    el.value = d.manual?.[key] || "";
+    // 비워 두면 쓸 값(LMS·조직도에서 가져온 것)을 흐린 글씨로 보인다
+    el.placeholder = d.me?.[key] ? String(d.me[key]) : "";
+  });
+  const src = $("#meSource");
+  if (src) {
+    const from = d.auto?.from;
+    src.textContent =
+      from === "lms" ? "이름·학번은 LMS 에서 가져왔어요. 영문 이름은 추정이라 확인해 주세요." :
+      from === "directory" ? "이름은 조직도에서 가져왔어요. 학번은 다음 LMS 동기화 때 채워져요." :
+      "LMS 동기화를 한 번 하면 이름·학번이 채워져요.";
+  }
+  const on = $("#meFlowOn");
+  if (on) on.checked = flowOn();
+}
+
+$("#meSave")?.addEventListener("click", async () => {
+  const payload = {};
+  Object.entries(ME_FIELDS).forEach(([key, sel]) => {
+    payload[key] = ($(sel)?.value || "").trim();
+  });
+  try {
+    state.mailMe = await api("/api/mail/me", { method: "POST", body: JSON.stringify(payload) });
+    paintMailMe();
+    flow.data = null; // 다음에 메일을 쓸 때 새 정보로
+    showToast("내 정보를 저장했어요");
+  } catch (error) {
+    showToast(humanError(error));
+  }
+});
+$("#meFlowOn")?.addEventListener("change", async (event) => {
+  const on = event.target.checked;
+  try {
+    state.mailMe = await api("/api/mail/me", { method: "POST", body: JSON.stringify({ flow: on ? "" : "off" }) });
+    paintMailMe();
+    flow.data = null;
+    showToast(on ? "메일 쓸 때 인사·서명을 미리 보여 줄게요" : "인사·서명 미리 보이기를 껐어요");
+  } catch (error) {
+    event.target.checked = !on;
+    showToast(humanError(error));
+  }
+});
+
+/* --- 받는 사람 → 흐름 조각 --- */
+function resetMailFlow() {
+  flow.data = null;
+  flow.key = "";
+  flow.lang = "";
+  flow.course = 0;
+  flow.muted = false;
+  removeGhost();
+  const bar = $("#mailFlowBar");
+  if (bar) bar.hidden = true;
+  loadMailFlow();
+}
+
+async function loadMailFlow(force = false) {
+  const form = $("#composeForm");
+  if (!form) return;
+  await loadMailMe();
+  if (!flowOn()) {
+    flow.data = null;
+    paintFlowBar();
+    return;
+  }
+  const to = String(form.elements.to.value || "").split(",")[0].trim();
+  if (flow.key && flow.key.split("|")[0] !== to) flow.course = 0;
+  const key = `${to}|${flow.course}`;
+  if (!force && flow.data && flow.key === key) return;
+  const seq = ++flow.seq;
+  try {
+    const res = await api("/api/mail/flow", { method: "POST", body: JSON.stringify({ to, courseIndex: flow.course }) });
+    if (seq !== flow.seq) return;
+    // 받는 사람이 바뀌면 언어도 다시 고른다(외국인 교수님 → 영어). 같은 사람이면 내가 고른 언어를 지킨다
+    if (!flow.data || flow.data.to?.email !== res.to?.email || !flow.lang) flow.lang = res.lang || "ko";
+    flow.data = res;
+    flow.key = key;
+  } catch (error) {
+    if (seq === flow.seq) flow.data = null;
+  }
+  paintFlowBar();
+  if (document.activeElement === $("#composeRich")) scheduleGhost(0);
+}
+
+function courseFlowLabel(c) {
+  return [c.title, c.section ? `${c.section}분반` : ""].filter(Boolean).join(" ");
+}
+
+function paintFlowBar() {
+  const bar = $("#mailFlowBar");
+  if (!bar) return;
+  const d = flow.data;
+  bar.hidden = !d || !flowOn();
+  if (bar.hidden) return;
+  const to = d.to || {};
+  const courses = to.courses || [];
+  const role = { professor: "교수님", ta: "조교님" }[to.kind] || "";
+  const who = $("#mailFlowWho");
+  if (who) {
+    const course = courses.length === 1 ? ` · <span data-no-i18n>${escapeHtml(courseFlowLabel(courses[0]))}</span>` : "";
+    who.innerHTML = to.name
+      ? `<strong data-no-i18n>${escapeHtml(to.name)}</strong>${role ? ` <span>${role}</span>` : ""}${course}`
+      : `<span>받는 사람을 넣으면 인사·소개를 맞춰 드려요</span>`;
+  }
+  const sel = $("#mailFlowCourse");
+  if (sel) {
+    // 한 교수님이 내 과목 둘을 맡으면 어느 과목인지 고른다
+    sel.hidden = courses.length < 2;
+    sel.innerHTML = courses
+      .map((c, i) => `<option value="${i}"${i === flow.course ? " selected" : ""}>${escapeHtml(courseFlowLabel(c))}</option>`)
+      .join("");
+  }
+  bar.querySelectorAll("[data-flow-lang]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.flowLang === flow.lang)));
+  const polish = $("#mailFlowPolish");
+  if (polish) polish.hidden = !aiOn();
+}
+
+/* --- 회색 글씨 --- */
+function removeGhost() {
+  $("#composeRich")?.querySelectorAll("[data-ghost]").forEach((n) => n.remove());
+  flow.ghost = null;
+}
+
+function scheduleGhost(delay = 120) {
+  window.clearTimeout(flow.timer);
+  flow.timer = window.setTimeout(refreshGhost, delay);
+}
+
+// 범위의 글을 줄바꿈 그대로 읽는다: 화면 밖에 잠깐 붙여 innerText 로. 끝(뒤쪽 범위는 앞)에 표시 글자를 넣는데,
+// 끝에 붙은 빈 줄(<div><br></div>)은 innerText 에서 줄바꿈을 만들지 않아 '빈 줄에 있다'를 알 수 없었기 때문이다.
+function rangeText(range, markAtEnd) {
+  const frag = range.cloneContents();
+  frag.querySelectorAll("[data-ghost]").forEach((n) => n.remove());
+  const pick = (n) => (markAtEnd ? n.lastChild : n.firstChild);
+  let node = frag;
+  while (pick(node) && (pick(node).nodeType === 3 || (pick(node).nodeType === 1 && !/^(BR|IMG|HR)$/.test(pick(node).nodeName)))) {
+    node = pick(node);
+  }
+  if (node.nodeType === 3) node.data = markAtEnd ? node.data + FLOW_MARK : FLOW_MARK + node.data;
+  else if (markAtEnd) node.appendChild(document.createTextNode(FLOW_MARK));
+  else node.insertBefore(document.createTextNode(FLOW_MARK), node.firstChild);
+  const box = document.createElement("div");
+  box.className = "flow-measure";
+  box.style.whiteSpace = getComputedStyle($("#composeRich")).whiteSpace;
+  box.appendChild(frag);
+  document.body.appendChild(box);
+  const text = box.innerText;
+  box.remove();
+  return text;
+}
+
+function flowTests() {
+  const tests = {};
+  (flow.data?.segments?.[flow.lang] || []).forEach((s) => {
+    try {
+      tests[s.kind] = new RegExp(s.match, "i");
+    } catch (error) {
+      /* 서버가 준 꼴이 이 브라우저에서 안 되면 그 단계만 못 알아본다 */
+    }
+  });
+  return tests;
+}
+
+// 줄 하나가 어느 단계인지. 앞으로만 간다(용건을 쓴 뒤에 '…입니다.' 로 끝나는 줄을 자기소개로 되돌려 보지 않는다)
+function flowKind(line, stage, tests) {
+  return FLOW_TEST_ORDER.find((k) => tests[k] && FLOW_STAGE[k] >= stage && tests[k].test(line)) || "content";
+}
+
+function nextFlowSegment(lines) {
+  const tests = flowTests();
+  let stage = -1;
+  for (const raw of lines) {
+    const line = raw.replaceAll(FLOW_MARK, "").trim();
+    if (!line) continue;
+    if (FLOW_QUOTE.test(line)) break;
+    stage = Math.max(stage, FLOW_STAGE[flowKind(line, stage, tests)]);
+  }
+  return (flow.data?.segments?.[flow.lang] || []).find((s) => FLOW_STAGE[s.kind] > stage) || null;
+}
+
+function refreshGhost() {
+  const rich = $("#composeRich");
+  removeGhost();
+  if (!rich || rich.hidden || flow.muted || !flow.data || !flowOn() || document.activeElement !== rich) return;
+  const sel = window.getSelection();
+  if (!sel?.rangeCount || !sel.isCollapsed) return;
+  const caret = sel.getRangeAt(0);
+  if (!rich.contains(caret.startContainer)) return;
+  const before = document.createRange();
+  before.setStart(rich, 0);
+  before.setEnd(caret.startContainer, caret.startOffset);
+  const after = document.createRange();
+  after.setStart(caret.startContainer, caret.startOffset);
+  after.setEnd(rich, rich.childNodes.length);
+  const lines = rangeText(before, true).split("\n");
+  const here = lines.pop().replaceAll(FLOW_MARK, "").trim();
+  const rest = rangeText(after, false).split("\n")[0].replaceAll(FLOW_MARK, "").trim();
+  if (here || rest) return; // 빈 줄에서만
+  const seg = nextFlowSegment(lines);
+  if (!seg) return;
+  const ghost = document.createElement("span");
+  ghost.className = "flow-ghost";
+  ghost.dataset.ghost = "1";
+  ghost.contentEditable = "false";
+  ghost.textContent = seg.text;
+  caret.insertNode(ghost);
+  const at = document.createRange();
+  at.setStartBefore(ghost);
+  at.collapse(true);
+  sel.removeAllRanges();
+  sel.addRange(at);
+  flow.ghost = seg;
+}
+
+function acceptGhost() {
+  const rich = $("#composeRich");
+  const ghost = rich?.querySelector("[data-ghost]");
+  const seg = flow.ghost;
+  if (!ghost || !seg) return false;
+  const at = document.createRange();
+  at.setStartBefore(ghost);
+  at.collapse(true);
+  ghost.remove();
+  flow.ghost = null;
+  rich.focus();
+  const sel = window.getSelection();
+  sel.removeAllRanges();
+  sel.addRange(at);
+  // execCommand 로 넣어야 되돌리기(Ctrl+Z)와 자동 저장(input 이벤트)이 그대로 된다. 줄바꿈까지 한 번에 넣어야
+  // Ctrl+Z 한 번에 통째로 빠진다(실측: 크롬은 insertText 의 \n 을 문단으로 나누고, 되돌리기는 한 단계)
+  document.execCommand("insertText", false, seg.text + "\n".repeat(seg.after || 0));
+  scheduleGhost(0);
+  return true;
+}
+
+(() => {
+  const rich = $("#composeRich");
+  if (!rich) return;
+  rich.addEventListener("keydown", (event) => {
+    const plainTab = event.key === "Tab" && !event.shiftKey && !event.ctrlKey && !event.altKey && !event.metaKey && !event.isComposing;
+    if (plainTab && !flow.ghost) {
+      // 회색 글씨가 뜨기 전(클릭 직후)에 Tab 을 쳐도 바로 받는다. 안 그러면 포커스가 옆 칸으로 넘어갔다
+      flow.muted = false;
+      window.clearTimeout(flow.timer);
+      refreshGhost();
+    }
+    if (!flow.ghost) return;
+    if (event.isComposing || event.keyCode === 229) {
+      removeGhost();
+      return;
+    }
+    if (event.key === "Tab" && !event.shiftKey && !event.ctrlKey && !event.altKey && !event.metaKey) {
+      event.preventDefault();
+      acceptGhost();
+      return;
+    }
+    if (event.key === "Escape") {
+      // 다시 글을 칠 때까지 숨긴다
+      event.preventDefault();
+      event.stopPropagation();
+      flow.muted = true;
+      removeGhost();
+      return;
+    }
+    if (["Shift", "Control", "Alt", "Meta", "CapsLock"].includes(event.key)) return;
+    removeGhost();
+  });
+  rich.addEventListener("input", (event) => {
+    if (event.isComposing) return;
+    flow.muted = false;
+    scheduleGhost();
+  });
+  rich.addEventListener("compositionstart", removeGhost);
+  rich.addEventListener("compositionend", () => scheduleGhost());
+  rich.addEventListener("keyup", (event) => {
+    if (!event.isComposing && /^(Arrow|Home|End|Page|Enter|Backspace|Delete)/.test(event.key)) scheduleGhost();
+  });
+  rich.addEventListener("mouseup", () => scheduleGhost(0));
+  rich.addEventListener("focus", () => {
+    if (!flow.data) loadMailFlow();
+    scheduleGhost(0);
+  });
+  rich.addEventListener("blur", () => {
+    window.clearTimeout(flow.timer);
+    removeGhost();
+  });
+  // 회색 글씨를 누르면 바로 넣는다
+  rich.addEventListener("mousedown", (event) => {
+    if (!event.target.closest?.("[data-ghost]")) return;
+    event.preventDefault();
+    acceptGhost();
+  });
+})();
+
+["input", "change"].forEach((type) =>
+  $("#composeTo")?.addEventListener(type, () => {
+    window.clearTimeout(flow.toTimer);
+    flow.toTimer = window.setTimeout(() => loadMailFlow(), type === "change" ? 0 : 500);
+  }),
+);
+
+// 흐름 줄의 단추는 누르는 동안 본문 포커스를 뺏지 않는다(커서 자리를 지켜야 회색 글씨가 그 자리에 다시 뜬다)
+$("#mailFlowBar")?.addEventListener("mousedown", (event) => {
+  if (event.target.closest("button")) event.preventDefault();
+});
+$("#mailFlowBar")?.addEventListener("click", (event) => {
+  const b = event.target.closest("[data-flow-lang]");
+  if (!b) return;
+  flow.lang = b.dataset.flowLang;
+  flow.muted = false;
+  paintFlowBar();
+  scheduleGhost(0);
+});
+$("#mailFlowCourse")?.addEventListener("change", (event) => {
+  flow.course = Number(event.target.value) || 0;
+  loadMailFlow(true);
+});
+
+/* --- AI 는 가운데 용건만: 대충 적은 메모(한국어여도) → 받는 사람에 맞는 말투·언어로 --- */
+const unitIsBlock = (node) => /^(DIV|P|BLOCKQUOTE|UL|OL|H[1-6]|PRE|TABLE|HR)$/.test(node.nodeName);
+
+// 본문 맨 위 단위(줄·블록)로 나눈다. 크롬 편집 칸은 첫 줄을 맨 글자로, 다음 줄부터 <div> 로 둔다.
+function flowUnits(rich) {
+  const units = [];
+  let cur = null;
+  const flush = () => {
+    if (cur) units.push(cur);
+    cur = null;
+  };
+  Array.from(rich.childNodes).forEach((node) => {
+    if (node.nodeType === 1 && node.dataset.ghost) return;
+    if (node.nodeType === 1 && unitIsBlock(node)) {
+      flush();
+      units.push({ nodes: [node], text: node.innerText || "" });
+      return;
+    }
+    if (!cur) cur = { nodes: [], text: "" };
+    cur.nodes.push(node);
+    if (node.nodeName === "BR") flush();
+    else cur.text += node.nodeType === 3 ? node.data : node.innerText || node.textContent || "";
+  });
+  flush();
+  return units;
+}
+
+// 자기소개 다음('I am writing to'·'다름이 아니라' 줄 포함)부터 감사 인사 앞까지
+function flowContentRange(rich) {
+  const tests = flowTests();
+  let stage = -1;
+  const picked = [];
+  for (const unit of flowUnits(rich)) {
+    const line = unit.text.replace(/\s+/g, " ").trim();
+    if (!line) continue;
+    if (FLOW_QUOTE.test(line)) break;
+    const kind = flowKind(line, stage, tests);
+    stage = Math.max(stage, FLOW_STAGE[kind]);
+    if (stage >= FLOW_STAGE.closing) break;
+    if (kind === "leadin" || kind === "content") picked.push(unit);
+  }
+  if (!picked.length) return null;
+  // 문단 경계가 아니라 문단 '안쪽' 글만 고른다. 경계째 바꾸면 감사 인사 앞 빈 줄이 함께 먹혔다(실측)
+  const isBlock = (n) => n.nodeType === 1 && n.nodeName !== "BR" && unitIsBlock(n);
+  const range = document.createRange();
+  const first = picked[0].nodes[0];
+  if (isBlock(first)) range.setStart(first, 0);
+  else range.setStartBefore(first);
+  const lastNodes = picked[picked.length - 1].nodes;
+  const last = lastNodes[lastNodes.length - 1];
+  if (isBlock(last)) range.setEnd(last, last.childNodes.length);
+  else if (last.nodeName === "BR") range.setEndBefore(last);
+  else range.setEndAfter(last);
+  return range;
+}
+
+$("#mailFlowPolish")?.addEventListener("click", async () => {
+  const rich = $("#composeRich");
+  const btn = $("#mailFlowPolish");
+  if (!rich || !flow.data || btn.disabled) return;
+  await loadAiStatus();
+  if (!aiReady()) {
+    showToast("AI 도우미가 꺼져 있거나 AI CLI 가 없어요. 설정 → AI 도우미에서 켜 주세요.");
+    return;
+  }
+  removeGhost();
+  // 고른 글이 있으면 그것만, 없으면 가운데 용건 전체
+  const sel = window.getSelection();
+  const chosen = sel?.rangeCount && !sel.isCollapsed && rich.contains(sel.getRangeAt(0).commonAncestorContainer);
+  const range = chosen ? sel.getRangeAt(0).cloneRange() : flowContentRange(rich);
+  const text = range ? rangeText(range, true).replaceAll(FLOW_MARK, "").trim() : "";
+  if (!text) {
+    showToast("가운데에 용건을 먼저 대충 적어 주세요. 한국어 메모도 괜찮아요.");
+    return;
+  }
+  btn.disabled = true;
+  btn.classList.add("busy");
+  showToast(`${providerLabel()} 가 용건을 다듬는 중… 10~20초쯤 걸려요`);
+  try {
+    const to = flow.data.to || {};
+    const courses = to.courses || [];
+    const ordered = courses[flow.course] ? [courses[flow.course], ...courses.filter((_, i) => i !== flow.course)] : courses;
+    const res = await api("/api/ai/polish", {
+      method: "POST",
+      body: JSON.stringify({ text, lang: flow.lang, flow: { to: { ...to, courses: ordered } } }),
+    });
+    const out = String(res.text || "").trim();
+    if (!out) throw new Error("AI 가 빈 답을 줬어요. 다시 눌러 주세요.");
+    rich.focus();
+    const s = window.getSelection();
+    s.removeAllRanges();
+    s.addRange(range);
+    // 고른 부분을 한 번에 바꾼다 (Ctrl+Z 한 번이면 내 메모로 돌아간다)
+    document.execCommand("insertText", false, out.split("\n").map((line) => line.trim()).join("\n"));
+    showToast(`${res.engine || "AI"} 가 다듬었어요 (${res.seconds}초). [ ] 칸을 채우고, 마음에 안 들면 Ctrl+Z`);
+  } catch (error) {
+    showToast(humanError(error));
+  } finally {
+    btn.disabled = false;
+    btn.classList.remove("busy");
+  }
+});
+
+window.setTimeout(() => loadMailMe(), 4500);
