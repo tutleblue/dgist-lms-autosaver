@@ -1,0 +1,1352 @@
+{
+  "harvard-university": {
+    "wikidata": "Q13371",
+    "koName": "하버드 대학교",
+    "website": "https://www.harvard.edu",
+    "summer": "https://summer.harvard.edu/",
+    "founded": "1636",
+    "students": 21189,
+    "studentsYear": "2024",
+    "kinds": [
+      "사립",
+      "연구중심"
+    ],
+    "wiki": "https://ko.wikipedia.org/wiki/%ED%95%98%EB%B2%84%EB%93%9C_%EB%8C%80%ED%95%99%EA%B5%90",
+    "photos": [
+      {
+        "file": "harvard-university-1.jpg",
+        "fileName": "Aerial of the Harvard Business School campus.jpeg",
+        "author": "HBS1908",
+        "license": "CC BY-SA 3.0",
+        "source": "https://commons.wikimedia.org/wiki/File:Aerial%20of%20the%20Harvard%20Business%20School%20campus.jpeg"
+      },
+      {
+        "file": "harvard-university-2.jpg",
+        "fileName": "Harvard Medical School (54954429258).jpg",
+        "author": "ajay_suresh",
+        "license": "CC BY 4.0",
+        "source": "https://commons.wikimedia.org/wiki/File:Harvard%20Medical%20School%20%2854954429258%29.jpg"
+      },
+      {
+        "file": "harvard-university-3.jpg",
+        "fileName": "Sanders theater 2009y.JPG",
+        "author": "chensiyuan",
+        "license": "CC BY-SA 4.0",
+        "source": "https://commons.wikimedia.org/wiki/File:Sanders%20theater%202009y.JPG"
+      }
+    ]
+  },
+  "stanford-university": {
+    "wikidata": "Q41506",
+    "koName": "스탠퍼드 대학교",
+    "website": "https://stanford.edu",
+    "summer": "https://summer.stanford.edu/",
+    "founded": "1885",
+    "students": 16963,
+    "studentsYear": "2021",
+    "kinds": [
+      "사립",
+      "연구중심"
+    ],
+    "wiki": "https://ko.wikipedia.org/wiki/%EC%8A%A4%ED%83%A0%ED%8D%BC%EB%93%9C_%EB%8C%80%ED%95%99%EA%B5%90",
+    "photos": [
+      {
+        "file": "stanford-university-1.jpg",
+        "fileName": "Stanford University Arches with Memorial Church in the background.jpg",
+        "author": "Jawed",
+        "license": "CC BY-SA 4.0",
+        "source": "https://commons.wikimedia.org/wiki/File:Stanford%20University%20Arches%20with%20Memorial%20Church%20in%20the%20background.jpg"
+      },
+      {
+        "file": "stanford-university-2.jpg",
+        "fileName": "Stanford University Green Library Bing Wing.jpg",
+        "author": "LPS.1",
+        "license": "CC0",
+        "source": "https://commons.wikimedia.org/wiki/File:Stanford%20University%20Green%20Library%20Bing%20Wing.jpg"
+      },
+      {
+        "file": "stanford-university-3.jpg",
+        "fileName": "Claw Fountain at Stanford Univerisity.JPG",
+        "author": "Oleg Alexandrov",
+        "license": "CC BY-SA 3.0",
+        "source": "https://commons.wikimedia.org/wiki/File:Claw%20Fountain%20at%20Stanford%20Univerisity.JPG"
+      }
+    ]
+  },
+  "johns-hopkins-university": {
+    "wikidata": "Q193727",
+    "koName": "존스 홉킨스 대학교",
+    "website": "https://jhu.edu",
+    "summer": "https://summer.jhu.edu/international-students/",
+    "founded": "1876",
+    "students": 21186,
+    "studentsYear": "2021",
+    "kinds": [
+      "사립"
+    ],
+    "wiki": "https://ko.wikipedia.org/wiki/%EC%A1%B4%EC%8A%A4_%ED%99%89%ED%82%A8%EC%8A%A4_%EB%8C%80%ED%95%99%EA%B5%90",
+    "photos": [
+      {
+        "file": "johns-hopkins-university-1.jpg",
+        "fileName": "The Beach, JHU.jpg",
+        "author": "Iracaz",
+        "license": "CC BY-SA 3.0",
+        "source": "https://commons.wikimedia.org/wiki/File:The%20Beach%2C%20JHU.jpg"
+      },
+      {
+        "file": "johns-hopkins-university-2.jpg",
+        "fileName": "View from Levering Plaza.jpg",
+        "author": "Iracaz",
+        "license": "CC BY-SA 3.0",
+        "source": "https://commons.wikimedia.org/wiki/File:View%20from%20Levering%20Plaza.jpg"
+      },
+      {
+        "file": "johns-hopkins-university-3.jpg",
+        "fileName": "George-peabody-library.jpg",
+        "author": "Matthew Petroff",
+        "license": "CC BY-SA 3.0",
+        "source": "https://commons.wikimedia.org/wiki/File:George-peabody-library.jpg"
+      }
+    ]
+  },
+  "university-of-virginia": {
+    "wikidata": "Q213439",
+    "koName": "버지니아 대학교",
+    "website": "https://virginia.edu",
+    "summer": "https://summer.virginia.edu/",
+    "founded": "1819",
+    "students": 23994,
+    "studentsYear": "2021",
+    "kinds": [
+      "국공립"
+    ],
+    "wiki": "https://ko.wikipedia.org/wiki/%EB%B2%84%EC%A7%80%EB%8B%88%EC%95%84_%EB%8C%80%ED%95%99%EA%B5%90",
+    "photos": [
+      {
+        "file": "university-of-virginia-1.jpg",
+        "fileName": "University of Virginia Rotunda in 2006.jpg",
+        "author": "Aaron Josephson",
+        "license": "Public domain",
+        "source": "https://commons.wikimedia.org/wiki/File:University%20of%20Virginia%20Rotunda%20in%202006.jpg"
+      },
+      {
+        "file": "university-of-virginia-2.jpg",
+        "fileName": "The Rotunda and Lawn University of Virginia Charlottesville VA March 2011.jpg",
+        "author": "Phil Roeder",
+        "license": "CC BY 2.0",
+        "source": "https://commons.wikimedia.org/wiki/File:The%20Rotunda%20and%20Lawn%20University%20of%20Virginia%20Charlottesville%20VA%20March%202011.jpg"
+      },
+      {
+        "file": "university-of-virginia-3.jpg",
+        "fileName": "Rotunda at University of Virginia.jpg",
+        "author": "Bestbudbrian",
+        "license": "CC BY-SA 3.0",
+        "source": "https://commons.wikimedia.org/wiki/File:Rotunda%20at%20University%20of%20Virginia.jpg"
+      }
+    ]
+  },
+  "boston-university": {
+    "wikidata": "Q49110",
+    "koName": "보스턴 대학교",
+    "website": "https://bu.edu/",
+    "summer": "https://www.bu.edu/summer/",
+    "founded": "1869",
+    "students": 29338,
+    "studentsYear": "2021",
+    "kinds": [
+      "연구중심",
+      "사립"
+    ],
+    "wiki": "https://ko.wikipedia.org/wiki/%EB%B3%B4%EC%8A%A4%ED%84%B4_%EB%8C%80%ED%95%99%EA%B5%90",
+    "photos": [
+      {
+        "file": "boston-university-1.jpg",
+        "fileName": "Boston at sunset.jpg",
+        "author": "Robmyskis",
+        "license": "Public domain",
+        "source": "https://commons.wikimedia.org/wiki/File:Boston%20at%20sunset.jpg"
+      },
+      {
+        "file": "boston-university-2.jpg",
+        "fileName": "BU Boathouse.jpg",
+        "author": "Jalans (talk) (Uploads)",
+        "license": "CC BY-SA 3.0",
+        "source": "https://commons.wikimedia.org/wiki/File:BU%20Boathouse.jpg"
+      },
+      {
+        "file": "boston-university-3.jpg",
+        "fileName": "Boston University College of Arts and Sciences.jpg",
+        "author": "Fletcher6",
+        "license": "CC BY-SA 3.0",
+        "source": "https://commons.wikimedia.org/wiki/File:Boston%20University%20College%20of%20Arts%20and%20Sciences.jpg"
+      }
+    ]
+  },
+  "purdue-university": {
+    "wikidata": "Q217741",
+    "koName": "퍼듀 대학교",
+    "website": "https://purdue.edu",
+    "summer": "https://www.purdue.edu/thinksummer/",
+    "founded": "1869",
+    "students": 59034,
+    "studentsYear": "2021",
+    "kinds": [
+      "국공립",
+      "연구중심"
+    ],
+    "wiki": "https://ko.wikipedia.org/wiki/%ED%8D%BC%EB%93%80_%EB%8C%80%ED%95%99%EA%B5%90",
+    "photos": [
+      {
+        "file": "purdue-university-1.jpg",
+        "fileName": "Engineering Fountain Purdue University 2016 03.jpg",
+        "author": "Julian Herzog (Website)",
+        "license": "CC BY 4.0",
+        "source": "https://commons.wikimedia.org/wiki/File:Engineering%20Fountain%20Purdue%20University%202016%2003.jpg"
+      },
+      {
+        "file": "purdue-university-2.jpg",
+        "fileName": "Purdue University, West Lafayette, Indiana, Estados Unidos, 2012-10-15, DD 23.jpg",
+        "author": "Diego Delso",
+        "license": "CC BY-SA 3.0",
+        "source": "https://commons.wikimedia.org/wiki/File:Purdue%20University%2C%20West%20Lafayette%2C%20Indiana%2C%20Estados%20Unidos%2C%202012-10-15%2C%20DD%2023.jpg"
+      },
+      {
+        "file": "purdue-university-3.jpg",
+        "fileName": "Purdue University, West Lafayette, Indiana, Estados Unidos, 2012-10-15, DD 12.jpg",
+        "author": "Diego Delso",
+        "license": "CC BY-SA 3.0",
+        "source": "https://commons.wikimedia.org/wiki/File:Purdue%20University%2C%20West%20Lafayette%2C%20Indiana%2C%20Estados%20Unidos%2C%202012-10-15%2C%20DD%2012.jpg"
+      }
+    ]
+  },
+  "uc-berkeley": {
+    "wikidata": "Q168756",
+    "koName": "캘리포니아 대학교 버클리",
+    "website": "https://berkeley.edu",
+    "summer": "https://summer.berkeley.edu/",
+    "founded": "1868",
+    "students": 41155,
+    "studentsYear": "2021",
+    "kinds": [
+      "국공립"
+    ],
+    "wiki": "https://ko.wikipedia.org/wiki/%EC%BA%98%EB%A6%AC%ED%8F%AC%EB%8B%88%EC%95%84_%EB%8C%80%ED%95%99%EA%B5%90_%EB%B2%84%ED%81%B4%EB%A6%AC",
+    "photos": [
+      {
+        "file": "uc-berkeley-1.jpg",
+        "fileName": "Sather Gate at University of California, Berkeley, California LCCN2013633500 (edited).jpg",
+        "author": "Carol M. Highsmith",
+        "license": "Public domain",
+        "source": "https://commons.wikimedia.org/wiki/File:Sather%20Gate%20at%20University%20of%20California%2C%20Berkeley%2C%20California%20LCCN2013633500%20%28edited%29.jpg"
+      },
+      {
+        "file": "uc-berkeley-2.jpg",
+        "fileName": "UCB Doe Memorial Library oblique view dllu.jpg",
+        "author": "Daniel L. Lu (user:dllu)",
+        "license": "CC BY-SA 4.0",
+        "source": "https://commons.wikimedia.org/wiki/File:UCB%20Doe%20Memorial%20Library%20oblique%20view%20dllu.jpg"
+      },
+      {
+        "file": "uc-berkeley-3.jpg",
+        "fileName": "South Hall--UC Berkeley--Panoramic.jpg",
+        "author": "User:Falcorian",
+        "license": "CC BY-SA 4.0",
+        "source": "https://commons.wikimedia.org/wiki/File:South%20Hall--UC%20Berkeley--Panoramic.jpg"
+      }
+    ]
+  },
+  "ucla": {
+    "wikidata": "Q174710",
+    "koName": "캘리포니아 대학교 로스앤젤레스 캠퍼스",
+    "website": "https://ucla.edu",
+    "summer": "https://summer.ucla.edu/",
+    "founded": "1919",
+    "students": 46000,
+    "studentsYear": "2021",
+    "kinds": [
+      "국공립"
+    ],
+    "wiki": "https://ko.wikipedia.org/wiki/%EC%BA%98%EB%A6%AC%ED%8F%AC%EB%8B%88%EC%95%84_%EB%8C%80%ED%95%99%EA%B5%90_%EB%A1%9C%EC%8A%A4%EC%95%A4%EC%A0%A4%EB%A0%88%EC%8A%A4",
+    "photos": [
+      {
+        "file": "ucla-1.jpg",
+        "fileName": "Royce Hall post rain.jpg",
+        "author": "Alton",
+        "license": "CC BY-SA 3.0",
+        "source": "https://commons.wikimedia.org/wiki/File:Royce%20Hall%20post%20rain.jpg"
+      },
+      {
+        "file": "ucla-2.jpg",
+        "fileName": "Legally Blonde filming location at Kerckhoff Hall at UCLA.jpg",
+        "author": "Logan Ward",
+        "license": "CC BY 2.0",
+        "source": "https://commons.wikimedia.org/wiki/File:Legally%20Blonde%20filming%20location%20at%20Kerckhoff%20Hall%20at%20UCLA.jpg"
+      },
+      {
+        "file": "ucla-3.jpg",
+        "fileName": "UCLA School of Law south entrance.jpg",
+        "author": "Coolcaesar at English Wikipedia",
+        "license": "CC BY-SA 3.0",
+        "source": "https://commons.wikimedia.org/wiki/File:UCLA%20School%20of%20Law%20south%20entrance.jpg"
+      }
+    ]
+  },
+  "university-of-wisconsin-madison": {
+    "wikidata": "Q838330",
+    "koName": "위스콘신 대학교 매디슨",
+    "website": "https://wisc.edu",
+    "summer": "https://summer.wisc.edu/",
+    "founded": "1848",
+    "students": 0,
+    "studentsYear": "",
+    "kinds": [
+      "국공립",
+      "연구중심"
+    ],
+    "wiki": "https://ko.wikipedia.org/wiki/%EC%9C%84%EC%8A%A4%EC%BD%98%EC%8B%A0_%EB%8C%80%ED%95%99%EA%B5%90_%EB%A7%A4%EB%94%94%EC%8A%A8",
+    "photos": [
+      {
+        "file": "university-of-wisconsin-madison-1.jpg",
+        "fileName": "Agriculture Hall Madison.jpg",
+        "author": "James Steakley",
+        "license": "CC BY-SA 3.0",
+        "source": "https://commons.wikimedia.org/wiki/File:Agriculture%20Hall%20Madison.jpg"
+      },
+      {
+        "file": "university-of-wisconsin-madison-2.jpg",
+        "fileName": "Bascom Mall, University of Wisconsin, Madison, WI - 54302232407.jpg",
+        "author": "w_lemay",
+        "license": "CC BY-SA 2.0",
+        "source": "https://commons.wikimedia.org/wiki/File:Bascom%20Mall%2C%20University%20of%20Wisconsin%2C%20Madison%2C%20WI%20-%2054302232407.jpg"
+      },
+      {
+        "file": "university-of-wisconsin-madison-3.jpg",
+        "fileName": "Madison 06-16-2012 029 (7398597206).jpg",
+        "author": "Richard Hurd from Green Bay, USA",
+        "license": "CC BY 2.0",
+        "source": "https://commons.wikimedia.org/wiki/File:Madison%2006-16-2012%20029%20%287398597206%29.jpg"
+      }
+    ]
+  },
+  "arizona-state-university": {
+    "wikidata": "Q670897",
+    "koName": "애리조나 주립 대학교",
+    "website": "https://www.asu.edu/",
+    "summer": "https://summer.asu.edu/",
+    "founded": "1885",
+    "students": 0,
+    "studentsYear": "",
+    "kinds": [
+      "국공립"
+    ],
+    "wiki": "https://ko.wikipedia.org/wiki/%EC%95%A0%EB%A6%AC%EC%A1%B0%EB%82%98_%EC%A3%BC%EB%A6%BD_%EB%8C%80%ED%95%99%EA%B5%90",
+    "photos": [
+      {
+        "file": "arizona-state-university-1.jpg",
+        "fileName": "2021 Arizona State University, Tempe Campus, Old Main.jpg",
+        "author": "Beyond My Ken",
+        "license": "CC BY-SA 4.0",
+        "source": "https://commons.wikimedia.org/wiki/File:2021%20Arizona%20State%20University%2C%20Tempe%20Campus%2C%20Old%20Main.jpg"
+      },
+      {
+        "file": "arizona-state-university-2.jpg",
+        "fileName": "Tempe-Grady Gammage Memorial Auditorium-1950 crop.JPG",
+        "author": "Marine 69-71",
+        "license": "CC BY-SA 4.0",
+        "source": "https://commons.wikimedia.org/wiki/File:Tempe-Grady%20Gammage%20Memorial%20Auditorium-1950%20crop.JPG"
+      },
+      {
+        "file": "arizona-state-university-3.jpg",
+        "fileName": "ASU Downtown - SoJ SWC - 2008-12-29.jpg",
+        "author": "Cygnusloop99",
+        "license": "CC BY-SA 3.0",
+        "source": "https://commons.wikimedia.org/wiki/File:ASU%20Downtown%20-%20SoJ%20SWC%20-%202008-12-29.jpg"
+      }
+    ]
+  },
+  "university-of-cambridge": {
+    "wikidata": "Q35794",
+    "koName": "케임브리지 대학교",
+    "website": "https://www.cam.ac.uk/",
+    "summer": "https://www.pace.cam.ac.uk/course-type/international-summer-programme",
+    "founded": "1209",
+    "students": 18977,
+    "studentsYear": "",
+    "kinds": [
+      "국공립",
+      "연구중심"
+    ],
+    "wiki": "https://ko.wikipedia.org/wiki/%EC%BC%80%EC%9E%84%EB%B8%8C%EB%A6%AC%EC%A7%80_%EB%8C%80%ED%95%99%EA%B5%90",
+    "photos": [
+      {
+        "file": "university-of-cambridge-1.jpg",
+        "fileName": "20130808 Castle End from Kings Bridge.jpg",
+        "author": "Dmitry Tonkonog",
+        "license": "CC BY-SA 3.0",
+        "source": "https://commons.wikimedia.org/wiki/File:20130808%20Castle%20End%20from%20Kings%20Bridge.jpg"
+      },
+      {
+        "file": "university-of-cambridge-2.jpg",
+        "fileName": "Bridge of Sighs, St John's College, Cambridge, UK - Diliff.jpg",
+        "author": "Diliff",
+        "license": "CC BY-SA 3.0",
+        "source": "https://commons.wikimedia.org/wiki/File:Bridge%20of%20Sighs%2C%20St%20John%27s%20College%2C%20Cambridge%2C%20UK%20-%20Diliff.jpg"
+      },
+      {
+        "file": "university-of-cambridge-3.jpg",
+        "fileName": "Cmglee Cambridge Trinity College Great Court.jpg",
+        "author": "Cmglee",
+        "license": "CC BY-SA 3.0",
+        "source": "https://commons.wikimedia.org/wiki/File:Cmglee%20Cambridge%20Trinity%20College%20Great%20Court.jpg"
+      }
+    ]
+  },
+  "maastricht-university": {
+    "wikidata": "Q1137652",
+    "koName": "마스트리흐트 대학교",
+    "website": "https://www.maastrichtuniversity.nl/",
+    "summer": "https://www.maastrichtsummerschool.nl/",
+    "founded": "1976",
+    "students": 21085,
+    "studentsYear": "",
+    "kinds": [
+      "국공립",
+      "연구중심"
+    ],
+    "wiki": "https://ko.wikipedia.org/wiki/%EB%A7%88%EC%8A%A4%ED%8A%B8%EB%A6%AC%ED%9D%90%ED%8A%B8_%EB%8C%80%ED%95%99%EA%B5%90",
+    "photos": [
+      {
+        "file": "maastricht-university-1.jpg",
+        "fileName": "2018-Maastricht, Bonnefantenklooster, Ezelmarkt.jpg",
+        "author": "Kleon3",
+        "license": "CC BY-SA 4.0",
+        "source": "https://commons.wikimedia.org/wiki/File:2018-Maastricht%2C%20Bonnefantenklooster%2C%20Ezelmarkt.jpg"
+      },
+      {
+        "file": "maastricht-university-2.jpg",
+        "fileName": "2018-Maastricht, Bonnefantenkerk, interieur.jpg",
+        "author": "Kleon3",
+        "license": "CC BY-SA 4.0",
+        "source": "https://commons.wikimedia.org/wiki/File:2018-Maastricht%2C%20Bonnefantenkerk%2C%20interieur.jpg"
+      },
+      {
+        "file": "maastricht-university-3.jpg",
+        "fileName": "2019 Maastricht-Randwyck, MUMC+ (11).jpg",
+        "author": "Kleon3",
+        "license": "CC BY-SA 4.0",
+        "source": "https://commons.wikimedia.org/wiki/File:2019%20Maastricht-Randwyck%2C%20MUMC%2B%20%2811%29.jpg"
+      }
+    ]
+  },
+  "hkust": {
+    "wikidata": "Q1333303",
+    "koName": "홍콩 과학 기술 대학",
+    "website": "https://hkust.edu.hk",
+    "summer": "https://summercampus.hkust.edu.hk/summer-school",
+    "founded": "1991",
+    "students": 29927,
+    "studentsYear": "",
+    "kinds": [
+      "국공립",
+      "연구중심"
+    ],
+    "wiki": "https://ko.wikipedia.org/wiki/%ED%99%8D%EC%BD%A9_%EA%B3%BC%EA%B8%B0%EB%8C%80%ED%95%99",
+    "photos": [
+      {
+        "file": "hkust-1.jpg",
+        "fileName": "HKUST campus view looking from above.jpg",
+        "author": "Hkust pao",
+        "license": "CC BY-SA 3.0",
+        "source": "https://commons.wikimedia.org/wiki/File:HKUST%20campus%20view%20looking%20from%20above.jpg"
+      },
+      {
+        "file": "hkust-2.jpg",
+        "fileName": "Hong Kong University of Science & Technology (2889127648).jpg",
+        "author": "cogdogblog",
+        "license": "CC0",
+        "source": "https://commons.wikimedia.org/wiki/File:Hong%20Kong%20University%20of%20Science%20%26%20Technology%20%282889127648%29.jpg"
+      },
+      {
+        "file": "hkust-3.jpg",
+        "fileName": "HKUSTlibraryfront.JPG",
+        "author": "Cucumbertubb at English Wikipedia",
+        "license": "CC BY-SA 3.0",
+        "source": "https://commons.wikimedia.org/wiki/File:HKUSTlibraryfront.JPG"
+      }
+    ]
+  },
+  "chinese-university-of-hong-kong": {
+    "wikidata": "Q15570",
+    "koName": "홍콩 중문 대학",
+    "website": "https://cuhk.edu.hk",
+    "summer": "https://www.oalglobal.cuhk.edu.hk/2017/01/05/summer-abroad-fair-cuhk/",
+    "founded": "1963",
+    "students": 19861,
+    "studentsYear": "",
+    "kinds": [
+      "국공립",
+      "연구중심"
+    ],
+    "wiki": "https://ko.wikipedia.org/wiki/%ED%99%8D%EC%BD%A9_%EC%A4%91%EB%AC%B8_%EB%8C%80%ED%95%99",
+    "photos": [
+      {
+        "file": "chinese-university-of-hong-kong-1.jpg",
+        "fileName": "2023年8月-中大航拍.jpg",
+        "author": "建園春秋",
+        "license": "CC BY-SA 4.0",
+        "source": "https://commons.wikimedia.org/wiki/File:2023%E5%B9%B48%E6%9C%88-%E4%B8%AD%E5%A4%A7%E8%88%AA%E6%8B%8D.jpg"
+      },
+      {
+        "file": "chinese-university-of-hong-kong-2.jpg",
+        "fileName": "Chinese University of Hong Kong 香港中文大學.JPG",
+        "author": "Citobun",
+        "license": "CC BY-SA 3.0",
+        "source": "https://commons.wikimedia.org/wiki/File:Chinese%20University%20of%20Hong%20Kong%20%E9%A6%99%E6%B8%AF%E4%B8%AD%E6%96%87%E5%A4%A7%E5%AD%B8.JPG"
+      },
+      {
+        "file": "chinese-university-of-hong-kong-3.jpg",
+        "fileName": "Lake Ad Excellentiam tree view 201602.jpg",
+        "author": "Wpcpey",
+        "license": "CC BY 3.0",
+        "source": "https://commons.wikimedia.org/wiki/File:Lake%20Ad%20Excellentiam%20tree%20view%20201602.jpg"
+      }
+    ]
+  },
+  "nanyang-technological-university": {
+    "wikidata": "Q721064",
+    "koName": "난양 이공대학",
+    "website": "https://ntu.edu.sg",
+    "summer": "https://www.ntu.edu.sg/education/student-exchanges/inbound-summer",
+    "founded": "1991",
+    "students": 0,
+    "studentsYear": "",
+    "kinds": [
+      "국공립"
+    ],
+    "wiki": "https://ko.wikipedia.org/wiki/%EB%82%9C%EC%96%91_%EC%9D%B4%EA%B3%B5%EB%8C%80%ED%95%99",
+    "photos": [
+      {
+        "file": "nanyang-technological-university-1.jpg",
+        "fileName": "666 02 Learning Hub Surrounding context of the Learning Hub CREDIT Hufton and Crow.jpg",
+        "author": "ENIAC78",
+        "license": "CC BY-SA 4.0",
+        "source": "https://commons.wikimedia.org/wiki/File:666%2002%20Learning%20Hub%20Surrounding%20context%20of%20the%20Learning%20Hub%20CREDIT%20Hufton%20and%20Crow.jpg"
+      },
+      {
+        "file": "nanyang-technological-university-2.jpg",
+        "fileName": "2016-08-18 Nanyang Technological University Library Outpost SG WMN0001.jpg",
+        "author": "WNakamura",
+        "license": "CC BY-SA 4.0",
+        "source": "https://commons.wikimedia.org/wiki/File:2016-08-18%20Nanyang%20Technological%20University%20Library%20Outpost%20SG%20WMN0001.jpg"
+      },
+      {
+        "file": "nanyang-technological-university-3.jpg",
+        "fileName": "NTU North Spine.jpg",
+        "author": "",
+        "license": "CC BY-SA 3.0",
+        "source": "https://commons.wikimedia.org/wiki/File:NTU%20North%20Spine.jpg"
+      }
+    ]
+  },
+  "hokkaido-university": {
+    "wikidata": "Q1057199",
+    "koName": "홋카이도 대학",
+    "website": "https://www.hokudai.ac.jp/",
+    "summer": "https://hokkaidosummerinstitute.oia.hokudai.ac.jp/en/program_overview/",
+    "founded": "1918",
+    "students": 17770,
+    "studentsYear": "2025",
+    "kinds": [
+      "국공립"
+    ],
+    "wiki": "https://ko.wikipedia.org/wiki/%ED%99%8B%EC%B9%B4%EC%9D%B4%EB%8F%84_%EB%8C%80%ED%95%99",
+    "photos": [
+      {
+        "file": "hokkaido-university-1.jpg",
+        "fileName": "Gingko Ave. in Fall.jpg",
+        "author": "HokudaiENG",
+        "license": "CC BY-SA 4.0",
+        "source": "https://commons.wikimedia.org/wiki/File:Gingko%20Ave.%20in%20Fall.jpg"
+      },
+      {
+        "file": "hokkaido-university-2.jpg",
+        "fileName": "Hokkaido-Univ-Museum-01.jpg",
+        "author": "J o",
+        "license": "CC BY-SA 3.0",
+        "source": "https://commons.wikimedia.org/wiki/File:Hokkaido-Univ-Museum-01.jpg"
+      },
+      {
+        "file": "hokkaido-university-3.jpg",
+        "fileName": "Hokkaido-Univ-Furukawa-Hall-01.jpg",
+        "author": "J o",
+        "license": "CC BY-SA 3.0",
+        "source": "https://commons.wikimedia.org/wiki/File:Hokkaido-Univ-Furukawa-Hall-01.jpg"
+      }
+    ]
+  },
+  "insa-lyon": {
+    "wikidata": "Q1633859",
+    "koName": "",
+    "website": "https://www.insa-lyon.fr",
+    "summer": "",
+    "founded": "1957",
+    "students": 6067,
+    "studentsYear": "2023",
+    "kinds": [
+      "공과대학"
+    ],
+    "wiki": "https://en.wikipedia.org/wiki/Institut_national_des_sciences_appliqu%C3%A9es_de_Lyon",
+    "photos": [
+      {
+        "file": "insa-lyon-1.jpg",
+        "fileName": "Villeurbanne - INSA Lyon - Bâtiment et esplanade premier cycle.jpg",
+        "author": "Romainbehar",
+        "license": "CC0",
+        "source": "https://commons.wikimedia.org/wiki/File:Villeurbanne%20-%20INSA%20Lyon%20-%20B%C3%A2timent%20et%20esplanade%20premier%20cycle.jpg"
+      },
+      {
+        "file": "insa-lyon-2.jpg",
+        "fileName": "Cône de Lübeck INSA Lyon.jpg",
+        "author": "Xavier Caré",
+        "license": "CC BY-SA 3.0",
+        "source": "https://commons.wikimedia.org/wiki/File:C%C3%B4ne%20de%20L%C3%BCbeck%20INSA%20Lyon.jpg"
+      }
+    ]
+  },
+  "aalto-university": {
+    "wikidata": "Q300980",
+    "koName": "알토 대학교",
+    "website": "https://www.aalto.fi/",
+    "summer": "https://www.aalto.fi/en/aaltosummer",
+    "founded": "2010",
+    "students": 12000,
+    "studentsYear": "",
+    "kinds": [
+      "국공립"
+    ],
+    "wiki": "https://ko.wikipedia.org/wiki/%EC%95%8C%ED%86%A0_%EB%8C%80%ED%95%99%EA%B5%90",
+    "photos": [
+      {
+        "file": "aalto-university-1.jpg",
+        "fileName": "Aalto yliopisto Otaniemi 2018.jpg",
+        "author": "Aatu Dorochenko",
+        "license": "CC BY-SA 4.0",
+        "source": "https://commons.wikimedia.org/wiki/File:Aalto%20yliopisto%20Otaniemi%202018.jpg"
+      },
+      {
+        "file": "aalto-university-2.jpg",
+        "fileName": "Otaniemi,Espoo, Aalto University.jpg",
+        "author": "Ranerana",
+        "license": "CC BY-SA 4.0",
+        "source": "https://commons.wikimedia.org/wiki/File:Otaniemi%2CEspoo%2C%20Aalto%20University.jpg"
+      },
+      {
+        "file": "aalto-university-3.jpg",
+        "fileName": "Otaniemi campus library.jpg",
+        "author": "Juutilai",
+        "license": "CC BY-SA 3.0",
+        "source": "https://commons.wikimedia.org/wiki/File:Otaniemi%20campus%20library.jpg"
+      }
+    ]
+  },
+  "ulm-university": {
+    "wikidata": "Q835662",
+    "koName": "울름 대학교",
+    "website": "https://www.uni-ulm.de/",
+    "summer": "",
+    "founded": "1967",
+    "students": 9814,
+    "studentsYear": "2024",
+    "kinds": [
+      "국공립"
+    ],
+    "wiki": "https://ko.wikipedia.org/wiki/%EC%9A%B8%EB%A6%84_%EB%8C%80%ED%95%99%EA%B5%90",
+    "photos": [
+      {
+        "file": "ulm-university-1.jpg",
+        "fileName": "Uniulmnord.jpg",
+        "author": "",
+        "license": "CC BY-SA 3.0",
+        "source": "https://commons.wikimedia.org/wiki/File:Uniulmnord.jpg"
+      },
+      {
+        "file": "ulm-university-2.jpg",
+        "fileName": "Universität Ulm.jpg",
+        "author": "Candidus",
+        "license": "CC BY-SA 3.0",
+        "source": "https://commons.wikimedia.org/wiki/File:Universit%C3%A4t%20Ulm.jpg"
+      },
+      {
+        "file": "ulm-university-3.jpg",
+        "fileName": "Universitätsklinikum Ulm Chirurgie.jpg",
+        "author": "Kittelträger",
+        "license": "CC BY-SA 4.0",
+        "source": "https://commons.wikimedia.org/wiki/File:Universit%C3%A4tsklinikum%20Ulm%20Chirurgie.jpg"
+      }
+    ]
+  },
+  "ko-university": {
+    "wikidata": "Q1193155",
+    "koName": "",
+    "website": "https://www.ku.edu.tr",
+    "summer": "",
+    "founded": "1993",
+    "students": 5130,
+    "studentsYear": "",
+    "kinds": [
+      "사립",
+      "연구중심"
+    ],
+    "wiki": "https://en.wikipedia.org/wiki/Ko%C3%A7_University",
+    "photos": [
+      {
+        "file": "ko-university-1.jpg",
+        "fileName": "KoçUniversity2.jpg",
+        "author": "Jorge1767",
+        "license": "Public domain",
+        "source": "https://commons.wikimedia.org/wiki/File:Ko%C3%A7University2.jpg"
+      },
+      {
+        "file": "ko-university-2.jpg",
+        "fileName": "Koç Üniversitesi Ana Kampüs Bilim Kapısı.JPG",
+        "author": "Khutuck",
+        "license": "CC BY-SA 3.0",
+        "source": "https://commons.wikimedia.org/wiki/File:Ko%C3%A7%20%C3%9Cniversitesi%20Ana%20Kamp%C3%BCs%20Bilim%20Kap%C4%B1s%C4%B1.JPG"
+      },
+      {
+        "file": "ko-university-3.jpg",
+        "fileName": "Koç University Rumelifeneri Campus.jpg",
+        "author": "Delphic Ephemera",
+        "license": "CC0",
+        "source": "https://commons.wikimedia.org/wiki/File:Ko%C3%A7%20University%20Rumelifeneri%20Campus.jpg"
+      }
+    ]
+  },
+  "university-of-groningen": {
+    "wikidata": "Q850730",
+    "koName": "흐로닝언 대학교",
+    "website": "https://www.rug.nl/",
+    "summer": "",
+    "founded": "1614",
+    "students": 34000,
+    "studentsYear": "2020",
+    "kinds": [],
+    "wiki": "https://ko.wikipedia.org/wiki/%ED%9D%90%EB%A1%9C%EB%8B%9D%EC%96%B8_%EB%8C%80%ED%95%99%EA%B5%90",
+    "photos": [
+      {
+        "file": "university-of-groningen-1.jpg",
+        "fileName": "Academiegebouw Groningen 1202 - 1205.jpg",
+        "author": "C messier",
+        "license": "CC BY-SA 4.0",
+        "source": "https://commons.wikimedia.org/wiki/File:Academiegebouw%20Groningen%201202%20-%201205.jpg"
+      },
+      {
+        "file": "university-of-groningen-2.jpg",
+        "fileName": "RuG Linnaeusborg panorama.JPG",
+        "author": "Eg-T2g",
+        "license": "CC BY-SA 3.0",
+        "source": "https://commons.wikimedia.org/wiki/File:RuG%20Linnaeusborg%20panorama.JPG"
+      },
+      {
+        "file": "university-of-groningen-3.jpg",
+        "fileName": "Feringa Buiding.jpg",
+        "author": "Xspeed L",
+        "license": "CC BY 4.0",
+        "source": "https://commons.wikimedia.org/wiki/File:Feringa%20Buiding.jpg"
+      }
+    ]
+  },
+  "universiti-malaya": {
+    "wikidata": "Q1142924",
+    "koName": "말라야 대학교",
+    "website": "https://www.um.edu.my/",
+    "summer": "",
+    "founded": "1934",
+    "students": 0,
+    "studentsYear": "",
+    "kinds": [
+      "국공립"
+    ],
+    "wiki": "https://ko.wikipedia.org/wiki/%EB%A7%90%EB%9D%BC%EC%95%BC_%EB%8C%80%ED%95%99%EA%B5%90",
+    "photos": [
+      {
+        "file": "universiti-malaya-1.jpg",
+        "fileName": "Universiti Malaya KL gate.jpg",
+        "author": "*angys*",
+        "license": "CC BY-SA 4.0",
+        "source": "https://commons.wikimedia.org/wiki/File:Universiti%20Malaya%20KL%20gate.jpg"
+      },
+      {
+        "file": "universiti-malaya-2.jpg",
+        "fileName": "University of Malaya City View.jpg",
+        "author": "Chaoyang Sunrise",
+        "license": "CC BY-SA 4.0",
+        "source": "https://commons.wikimedia.org/wiki/File:University%20of%20Malaya%20City%20View.jpg"
+      },
+      {
+        "file": "universiti-malaya-3.jpg",
+        "fileName": "Gambar Dewan Tunku Canselor, Universiti Malaya.jpg",
+        "author": "Lpsoldier007 at ms.wikipedia",
+        "license": "GFDL",
+        "source": "https://commons.wikimedia.org/wiki/File:Gambar%20Dewan%20Tunku%20Canselor%2C%20Universiti%20Malaya.jpg"
+      }
+    ]
+  },
+  "national-yang-ming-chiao-tung-university": {
+    "wikidata": "Q85877927",
+    "koName": "국립 양명 자오퉁 대학",
+    "website": "https://www.nycu.edu.tw/",
+    "summer": "",
+    "founded": "2021",
+    "students": 18835,
+    "studentsYear": "2022",
+    "kinds": [
+      "국공립",
+      "연구중심"
+    ],
+    "wiki": "https://ko.wikipedia.org/wiki/%EA%B5%AD%EB%A6%BD_%EC%96%91%EB%B0%8D_%EC%9E%90%EC%98%A4%ED%89%81_%EB%8C%80%ED%95%99",
+    "photos": [
+      {
+        "file": "national-yang-ming-chiao-tung-university-1.jpg",
+        "fileName": "2019.03.13 Aerial view of NYCU Guangfu Campus.jpg",
+        "author": "國立交通大學 國立交通大學",
+        "license": "CC0",
+        "source": "https://commons.wikimedia.org/wiki/File:2019.03.13%20Aerial%20view%20of%20NYCU%20Guangfu%20Campus.jpg"
+      },
+      {
+        "file": "national-yang-ming-chiao-tung-university-2.jpg",
+        "fileName": "NYCU Dining hall 2.jpg",
+        "author": "國立交通大學 國立交通大學",
+        "license": "CC0",
+        "source": "https://commons.wikimedia.org/wiki/File:NYCU%20Dining%20hall%202.jpg"
+      },
+      {
+        "file": "national-yang-ming-chiao-tung-university-3.jpg",
+        "fileName": "NYCU HSS building I 01.jpg",
+        "author": "國立交通大學 國立交通大學",
+        "license": "CC0",
+        "source": "https://commons.wikimedia.org/wiki/File:NYCU%20HSS%20building%20I%2001.jpg"
+      }
+    ]
+  },
+  "osaka-university": {
+    "wikidata": "Q651233",
+    "koName": "오사카 대학",
+    "website": "https://www.osaka-u.ac.jp/en",
+    "summer": "",
+    "founded": "1931",
+    "students": 23234,
+    "studentsYear": "2025",
+    "kinds": [],
+    "wiki": "https://ko.wikipedia.org/wiki/%EC%98%A4%EC%82%AC%EC%B9%B4_%EB%8C%80%ED%95%99",
+    "photos": [
+      {
+        "file": "osaka-university-1.jpg",
+        "fileName": "Osaka University Faculty of Medicine.jpg",
+        "author": "ignis",
+        "license": "CC BY-SA 3.0",
+        "source": "https://commons.wikimedia.org/wiki/File:Osaka%20University%20Faculty%20of%20Medicine.jpg"
+      },
+      {
+        "file": "osaka-university-2.jpg",
+        "fileName": "Osaka University Minoh Campus 2021-08 ac (2).jpg",
+        "author": "Asturio Cantabrio",
+        "license": "CC BY-SA 4.0",
+        "source": "https://commons.wikimedia.org/wiki/File:Osaka%20University%20Minoh%20Campus%202021-08%20ac%20%282%29.jpg"
+      },
+      {
+        "file": "osaka-university-3.jpg",
+        "fileName": "Osaka University toyonaka daigaku-hall.jpg",
+        "author": "Soraie8288",
+        "license": "CC BY-SA 4.0",
+        "source": "https://commons.wikimedia.org/wiki/File:Osaka%20University%20toyonaka%20daigaku-hall.jpg"
+      }
+    ]
+  },
+  "dalian-university-of-technology": {
+    "wikidata": "Q1477368",
+    "koName": "다롄 이공대학",
+    "website": "http://www.dlut.edu.cn",
+    "summer": "",
+    "founded": "1949",
+    "students": 0,
+    "studentsYear": "",
+    "kinds": [],
+    "wiki": "https://ko.wikipedia.org/wiki/%EB%8B%A4%EB%A1%84_%EC%9D%B4%EA%B3%B5%EB%8C%80%ED%95%99",
+    "photos": [
+      {
+        "file": "dalian-university-of-technology-1.jpg",
+        "fileName": "Dalian University of Technology.jpg",
+        "author": "Michael Saechang",
+        "license": "CC BY-SA 2.0",
+        "source": "https://commons.wikimedia.org/wiki/File:Dalian%20University%20of%20Technology.jpg"
+      },
+      {
+        "file": "dalian-university-of-technology-2.jpg",
+        "fileName": "Lingxi Library.JPG",
+        "author": "JesseW900",
+        "license": "CC BY-SA 4.0",
+        "source": "https://commons.wikimedia.org/wiki/File:Lingxi%20Library.JPG"
+      },
+      {
+        "file": "dalian-university-of-technology-3.jpg",
+        "fileName": "Dalian University of Technology - Science Park B Bldg.jpg",
+        "author": "Yoshi Canopus",
+        "license": "CC BY-SA 3.0",
+        "source": "https://commons.wikimedia.org/wiki/File:Dalian%20University%20of%20Technology%20-%20Science%20Park%20B%20Bldg.jpg"
+      }
+    ]
+  },
+  "uc-irvine": {
+    "wikidata": "Q868421",
+    "koName": "캘리포니아 대학교 어바인",
+    "website": "https://uci.edu",
+    "summer": "https://summer.uci.edu/",
+    "founded": "1965",
+    "students": 36303,
+    "studentsYear": "2020",
+    "kinds": [
+      "국공립",
+      "연구중심"
+    ],
+    "wiki": "https://ko.wikipedia.org/wiki/%EC%BA%98%EB%A6%AC%ED%8F%AC%EB%8B%88%EC%95%84_%EB%8C%80%ED%95%99%EA%B5%90_%EC%96%B4%EB%B0%94%EC%9D%B8",
+    "photos": [
+      {
+        "file": "uc-irvine-1.jpg",
+        "fileName": "Campus of the University of California, Irvine (aerial view, circa 2006).jpg",
+        "author": "Complex01",
+        "license": "CC BY-SA 3.0",
+        "source": "https://commons.wikimedia.org/wiki/File:Campus%20of%20the%20University%20of%20California%2C%20Irvine%20%28aerial%20view%2C%20circa%202006%29.jpg"
+      },
+      {
+        "file": "uc-irvine-2.jpg",
+        "fileName": "Humanities Gateway.jpg",
+        "author": "SinisterLizard",
+        "license": "CC BY-SA 4.0",
+        "source": "https://commons.wikimedia.org/wiki/File:Humanities%20Gateway.jpg"
+      },
+      {
+        "file": "uc-irvine-3.jpg",
+        "fileName": "UC Irvine Reines Hall.jpg",
+        "author": "Allyunion at English Wikipedia",
+        "license": "CC BY-SA 4.0",
+        "source": "https://commons.wikimedia.org/wiki/File:UC%20Irvine%20Reines%20Hall.jpg"
+      }
+    ]
+  },
+  "university-of-british-columbia": {
+    "wikidata": "Q391028",
+    "koName": "브리티시컬럼비아 대학교",
+    "website": "https://www.ubc.ca/",
+    "summer": "https://vancouversummerprogram.ubc.ca/",
+    "founded": "1908",
+    "students": 71201,
+    "studentsYear": "2023",
+    "kinds": [
+      "국공립",
+      "연구중심"
+    ],
+    "wiki": "https://ko.wikipedia.org/wiki/%EB%B8%8C%EB%A6%AC%ED%8B%B0%EC%8B%9C%EC%BB%AC%EB%9F%BC%EB%B9%84%EC%95%84_%EB%8C%80%ED%95%99%EA%B5%90",
+    "photos": [
+      {
+        "file": "university-of-british-columbia-1.jpg",
+        "fileName": "Irving K. Barber Library.jpg",
+        "author": "CjayD",
+        "license": "CC BY 2.0",
+        "source": "https://commons.wikimedia.org/wiki/File:Irving%20K.%20Barber%20Library.jpg"
+      },
+      {
+        "file": "university-of-british-columbia-2.jpg",
+        "fileName": "Rosegarden ubc.jpg",
+        "author": "keepitsurreal",
+        "license": "CC BY-SA 2.0",
+        "source": "https://commons.wikimedia.org/wiki/File:Rosegarden%20ubc.jpg"
+      },
+      {
+        "file": "university-of-british-columbia-3.jpg",
+        "fileName": "Koerner Library UBC.jpg",
+        "author": "Xicotencatl",
+        "license": "CC BY-SA 3.0",
+        "source": "https://commons.wikimedia.org/wiki/File:Koerner%20Library%20UBC.jpg"
+      }
+    ]
+  },
+  "utrecht-university": {
+    "wikidata": "Q221653",
+    "koName": "위트레흐트 대학교",
+    "website": "https://www.uu.nl/",
+    "summer": "https://utrechtsummerschool.nl/",
+    "founded": "1636",
+    "students": 0,
+    "studentsYear": "",
+    "kinds": [],
+    "wiki": "https://ko.wikipedia.org/wiki/%EC%9C%84%ED%8A%B8%EB%A0%88%ED%9D%90%ED%8A%B8_%EB%8C%80%ED%95%99%EA%B5%90",
+    "photos": [
+      {
+        "file": "utrecht-university-1.jpg",
+        "fileName": "Utrecht Academiegebouw.jpg",
+        "author": "Zairon",
+        "license": "CC BY-SA 4.0",
+        "source": "https://commons.wikimedia.org/wiki/File:Utrecht%20Academiegebouw.jpg"
+      },
+      {
+        "file": "utrecht-university-2.jpg",
+        "fileName": "David-de-Wied-gebouw Leuvenlaan-4 De-Uithof Utrecht Nederland.JPG",
+        "author": "Antoine",
+        "license": "CC BY-SA 3.0",
+        "source": "https://commons.wikimedia.org/wiki/File:David-de-Wied-gebouw%20Leuvenlaan-4%20De-Uithof%20Utrecht%20Nederland.JPG"
+      },
+      {
+        "file": "utrecht-university-3.jpg",
+        "fileName": "Minnaertgebouw3.jpg",
+        "author": "Gil.cavalcanti",
+        "license": "CC BY-SA 3.0",
+        "source": "https://commons.wikimedia.org/wiki/File:Minnaertgebouw3.jpg"
+      }
+    ]
+  },
+  "rwth-aachen-university": {
+    "wikidata": "Q273263",
+    "koName": "아헨 라인 베스트팔렌 공과대학교",
+    "website": "https://www.rwth-aachen.de/",
+    "summer": "https://www.academy.rwth-aachen.de/en/education-formats/summer-schools",
+    "founded": "1870",
+    "students": 47521,
+    "studentsYear": "2021",
+    "kinds": [
+      "국공립"
+    ],
+    "wiki": "https://ko.wikipedia.org/wiki/%EC%95%84%ED%97%A8_%EA%B3%B5%EA%B3%BC%EB%8C%80%ED%95%99%EA%B5%90",
+    "photos": [
+      {
+        "file": "rwth-aachen-university-1.jpg",
+        "fileName": "RWTH Aachen Hauptgebäude.jpg",
+        "author": "א (Aleph)",
+        "license": "CC BY-SA 2.5",
+        "source": "https://commons.wikimedia.org/wiki/File:RWTH%20Aachen%20Hauptgeb%C3%A4ude.jpg"
+      },
+      {
+        "file": "rwth-aachen-university-2.jpg",
+        "fileName": "AC BD RWTH Rogowski Institut.jpg",
+        "author": "Sascha Faber",
+        "license": "CC BY-SA 4.0",
+        "source": "https://commons.wikimedia.org/wiki/File:AC%20BD%20RWTH%20Rogowski%20Institut.jpg"
+      },
+      {
+        "file": "rwth-aachen-university-3.jpg",
+        "fileName": "RWTH-Hörsaalzentrum CARL.JPG",
+        "author": "ArthurMcGill",
+        "license": "CC BY 3.0",
+        "source": "https://commons.wikimedia.org/wiki/File:RWTH-H%C3%B6rsaalzentrum%20CARL.JPG"
+      }
+    ]
+  },
+  "esme": {
+    "wikidata": "Q1572655",
+    "koName": "ESME 수드리아",
+    "website": "https://www.esme.fr",
+    "summer": "https://www.esme.fr/en/summer-school/",
+    "founded": "1905",
+    "students": 1200,
+    "studentsYear": "2018",
+    "kinds": [
+      "사립"
+    ],
+    "wiki": "https://ko.wikipedia.org/wiki/ESME_%EC%88%98%EB%93%9C%EB%A6%AC%EC%95%84",
+    "photos": [
+      {
+        "file": "esme-1.jpg",
+        "fileName": "Campus Paris Ivry-sur-Seine ESME Sudria.jpg",
+        "author": "YtoSu",
+        "license": "CC BY-SA 4.0",
+        "source": "https://commons.wikimedia.org/wiki/File:Campus%20Paris%20Ivry-sur-Seine%20ESME%20Sudria.jpg"
+      }
+    ]
+  },
+  "national-taiwan-university": {
+    "wikidata": "Q32746",
+    "koName": "국립대만대학교",
+    "website": "https://www.ntu.edu.tw",
+    "summer": "https://oia.ntu.edu.tw/short-term-programs/",
+    "founded": "1928",
+    "students": 33882,
+    "studentsYear": "2023",
+    "kinds": [
+      "연구중심",
+      "국공립"
+    ],
+    "wiki": "https://ko.wikipedia.org/wiki/%EA%B5%AD%EB%A6%BD%EB%8C%80%EB%A7%8C%EB%8C%80%ED%95%99%EA%B5%90",
+    "photos": [
+      {
+        "file": "national-taiwan-university-1.jpg",
+        "fileName": "National Taiwan University Library with sky.jpg",
+        "author": "yc ku",
+        "license": "CC BY 2.0",
+        "source": "https://commons.wikimedia.org/wiki/File:National%20Taiwan%20University%20Library%20with%20sky.jpg"
+      },
+      {
+        "file": "national-taiwan-university-2.jpg",
+        "fileName": "NTU Royal Palm Boulevard 20140407.jpg",
+        "author": "Daderot",
+        "license": "CC0",
+        "source": "https://commons.wikimedia.org/wiki/File:NTU%20Royal%20Palm%20Boulevard%2020140407.jpg"
+      },
+      {
+        "file": "national-taiwan-university-3.jpg",
+        "fileName": "NTU main gate 20201212.jpg",
+        "author": "Solomon203",
+        "license": "CC BY-SA 4.0",
+        "source": "https://commons.wikimedia.org/wiki/File:NTU%20main%20gate%2020201212.jpg"
+      }
+    ]
+  },
+  "waseda-university": {
+    "wikidata": "Q274486",
+    "koName": "와세다 대학",
+    "website": "https://www.waseda.jp/",
+    "summer": "https://www.waseda.jp/inst/gip/summer-session",
+    "founded": "1882",
+    "students": 47094,
+    "studentsYear": "2021",
+    "kinds": [
+      "사립"
+    ],
+    "wiki": "https://ko.wikipedia.org/wiki/%EC%99%80%EC%84%B8%EB%8B%A4_%EB%8C%80%ED%95%99",
+    "photos": [
+      {
+        "file": "waseda-university-1.jpg",
+        "fileName": "Okuma lecture hall Waseda University 2007-02.jpg",
+        "author": "user:Kure",
+        "license": "CC BY-SA 3.0",
+        "source": "https://commons.wikimedia.org/wiki/File:Okuma%20lecture%20hall%20Waseda%20University%202007-02.jpg"
+      },
+      {
+        "file": "waseda-university-2.jpg",
+        "fileName": "Okuma1.jpg",
+        "author": "Irina Gelbukh",
+        "license": "CC BY-SA 3.0",
+        "source": "https://commons.wikimedia.org/wiki/File:Okuma1.jpg"
+      },
+      {
+        "file": "waseda-university-3.jpg",
+        "fileName": "Waseda University 2014.JPG",
+        "author": "Kakidai",
+        "license": "CC BY-SA 4.0",
+        "source": "https://commons.wikimedia.org/wiki/File:Waseda%20University%202014.JPG"
+      }
+    ]
+  },
+  "university-of-calgary": {
+    "wikidata": "Q1067471",
+    "koName": "캘거리 대학교",
+    "website": "https://www.ucalgary.ca/",
+    "summer": "",
+    "founded": "1966",
+    "students": 33000,
+    "studentsYear": "2020",
+    "kinds": [
+      "국공립",
+      "연구중심"
+    ],
+    "wiki": "https://ko.wikipedia.org/wiki/%EC%BA%98%EA%B1%B0%EB%A6%AC_%EB%8C%80%ED%95%99%EA%B5%90",
+    "photos": [
+      {
+        "file": "university-of-calgary-1.jpg",
+        "fileName": "Calgary, Canada April 2022 - University of Calgary 12.jpg",
+        "author": "Sharon Hahn Darlin",
+        "license": "CC BY 2.0",
+        "source": "https://commons.wikimedia.org/wiki/File:Calgary%2C%20Canada%20April%202022%20-%20University%20of%20Calgary%2012.jpg"
+      },
+      {
+        "file": "university-of-calgary-2.jpg",
+        "fileName": "Information and Communications Technology Building - University of Calgary - DSC00155.JPG",
+        "author": "Daderot",
+        "license": "CC0",
+        "source": "https://commons.wikimedia.org/wiki/File:Information%20and%20Communications%20Technology%20Building%20-%20University%20of%20Calgary%20-%20DSC00155.JPG"
+      },
+      {
+        "file": "university-of-calgary-3.jpg",
+        "fileName": "Science B - University of Calgary - DSC00133.JPG",
+        "author": "Daderot",
+        "license": "CC0",
+        "source": "https://commons.wikimedia.org/wiki/File:Science%20B%20-%20University%20of%20Calgary%20-%20DSC00133.JPG"
+      }
+    ]
+  },
+  "dublin-city-university": {
+    "wikidata": "Q1202897",
+    "koName": "더블린시티 대학교",
+    "website": "https://www.dcu.ie/",
+    "summer": "https://english.dcu.ie/courses/international-summer-school/",
+    "founded": "1975",
+    "students": 0,
+    "studentsYear": "",
+    "kinds": [
+      "국공립"
+    ],
+    "wiki": "https://ko.wikipedia.org/wiki/%EB%8D%94%EB%B8%94%EB%A6%B0%EC%8B%9C%ED%8B%B0_%EB%8C%80%ED%95%99%EA%B5%90",
+    "photos": [
+      {
+        "file": "dublin-city-university-1.jpg",
+        "fileName": "DCU Glasnevin Library in 2009.jpg",
+        "author": "SSCOhA",
+        "license": "CC BY-SA 4.0",
+        "source": "https://commons.wikimedia.org/wiki/File:DCU%20Glasnevin%20Library%20in%202009.jpg"
+      },
+      {
+        "file": "dublin-city-university-2.jpg",
+        "fileName": "DCU Glasnevin Library.jpg",
+        "author": "SSCOhA",
+        "license": "CC BY-SA 4.0",
+        "source": "https://commons.wikimedia.org/wiki/File:DCU%20Glasnevin%20Library.jpg"
+      },
+      {
+        "file": "dublin-city-university-3.jpg",
+        "fileName": "The helix2.JPG",
+        "author": "Beta at English Wikipedia",
+        "license": "Public domain",
+        "source": "https://commons.wikimedia.org/wiki/File:The%20helix2.JPG"
+      }
+    ]
+  },
+  "rmit-university": {
+    "wikidata": "Q1057890",
+    "koName": "로열 멜버른 공과대학교",
+    "website": "https://www.rmit.edu.au/",
+    "summer": "",
+    "founded": "1887",
+    "students": 0,
+    "studentsYear": "",
+    "kinds": [
+      "국공립"
+    ],
+    "wiki": "https://ko.wikipedia.org/wiki/%EB%A1%9C%EC%97%B4_%EB%A9%9C%EB%B2%84%EB%A5%B8_%EA%B3%B5%EA%B3%BC%EB%8C%80%ED%95%99%EA%B5%90",
+    "photos": [
+      {
+        "file": "rmit-university-1.jpg",
+        "fileName": "Night Melbourne.jpg",
+        "author": "Tinghao Wang",
+        "license": "CC BY-SA 4.0",
+        "source": "https://commons.wikimedia.org/wiki/File:Night%20Melbourne.jpg"
+      },
+      {
+        "file": "rmit-university-2.jpg",
+        "fileName": "RMITSpiritualCentreCityCampus.jpg",
+        "author": "AshGreen (talk)",
+        "license": "Public domain",
+        "source": "https://commons.wikimedia.org/wiki/File:RMITSpiritualCentreCityCampus.jpg"
+      },
+      {
+        "file": "rmit-university-3.jpg",
+        "fileName": "RMITEllisCourt.jpg",
+        "author": "AshGreen",
+        "license": "CC BY 3.0",
+        "source": "https://commons.wikimedia.org/wiki/File:RMITEllisCourt.jpg"
+      }
+    ]
+  },
+  "grenoble-inp-uga": {
+    "wikidata": "Q1665121",
+    "koName": "그르노블 공과대학교",
+    "website": "https://www.grenoble-inp.fr",
+    "summer": "",
+    "founded": "1900",
+    "students": 7646,
+    "studentsYear": "2023",
+    "kinds": [
+      "공과대학",
+      "국공립",
+      "연구중심"
+    ],
+    "wiki": "https://ko.wikipedia.org/wiki/%EA%B7%B8%EB%A5%B4%EB%85%B8%EB%B8%94_%EA%B3%B5%EA%B3%BC%EB%8C%80%ED%95%99%EA%B5%90",
+    "photos": [
+      {
+        "file": "grenoble-inp-uga-1.jpg",
+        "fileName": "Avenue Félix Viallet entre de l'INPG.jpg",
+        "author": "JPC38",
+        "license": "CC BY-SA 4.0",
+        "source": "https://commons.wikimedia.org/wiki/File:Avenue%20F%C3%A9lix%20Viallet%20entre%20de%20l%27INPG.jpg"
+      },
+      {
+        "file": "grenoble-inp-uga-2.jpg",
+        "fileName": "ENSIMAG - Saint-Martin-d'Hères.JPG",
+        "author": "Binnette",
+        "license": "CC BY-SA 3.0",
+        "source": "https://commons.wikimedia.org/wiki/File:ENSIMAG%20-%20Saint-Martin-d%27H%C3%A8res.JPG"
+      },
+      {
+        "file": "grenoble-inp-uga-3.jpg",
+        "fileName": "Ensimag-campus-grenoble.jpg",
+        "author": "Patricia.Rigaud",
+        "license": "CC BY-SA 3.0",
+        "source": "https://commons.wikimedia.org/wiki/File:Ensimag-campus-grenoble.jpg"
+      }
+    ]
+  },
+  "polytechnic-university-of-valencia": {
+    "wikidata": "Q2003976",
+    "koName": "",
+    "website": "https://www.upv.es/",
+    "summer": "",
+    "founded": "1971",
+    "students": 28450,
+    "studentsYear": "2021",
+    "kinds": [
+      "국공립"
+    ],
+    "wiki": "https://en.wikipedia.org/wiki/Polytechnic_University_of_Valencia",
+    "photos": [
+      {
+        "file": "polytechnic-university-of-valencia-1.jpg",
+        "fileName": "Caminosupv ETSICCP UPV edificio 4G.jpg",
+        "author": "CAMINOSUPV",
+        "license": "CC0",
+        "source": "https://commons.wikimedia.org/wiki/File:Caminosupv%20ETSICCP%20UPV%20edificio%204G.jpg"
+      },
+      {
+        "file": "polytechnic-university-of-valencia-2.jpg",
+        "fileName": "Caminosupv ETSICCP UPV edificio 4Q.jpg",
+        "author": "CAMINOSUPV",
+        "license": "CC0",
+        "source": "https://commons.wikimedia.org/wiki/File:Caminosupv%20ETSICCP%20UPV%20edificio%204Q.jpg"
+      }
+    ]
+  },
+  "tu-wien": {
+    "wikidata": "Q689400",
+    "koName": "빈 공과대학교",
+    "website": "https://www.tuwien.at/",
+    "summer": "",
+    "founded": "1815",
+    "students": 29341,
+    "studentsYear": "2017",
+    "kinds": [
+      "국공립",
+      "공과대학"
+    ],
+    "wiki": "https://ko.wikipedia.org/wiki/%EB%B9%88_%EA%B3%B5%EA%B3%BC%EB%8C%80%ED%95%99%EA%B5%90",
+    "photos": [
+      {
+        "file": "tu-wien-1.jpg",
+        "fileName": "Technische Universität Wien mainbuilding mainentrance northview.jpg",
+        "author": "Peter Haas",
+        "license": "CC BY-SA 3.0 at",
+        "source": "https://commons.wikimedia.org/wiki/File:Technische%20Universit%C3%A4t%20Wien%20mainbuilding%20mainentrance%20northview.jpg"
+      },
+      {
+        "file": "tu-wien-2.jpg",
+        "fileName": "Plus-Energie-Bürohochhaus TU Getreidemarkt.jpg",
+        "author": "Dawid Michulec",
+        "license": "CC BY-SA 4.0",
+        "source": "https://commons.wikimedia.org/wiki/File:Plus-Energie-B%C3%BCrohochhaus%20TU%20Getreidemarkt.jpg"
+      },
+      {
+        "file": "tu-wien-3.jpg",
+        "fileName": "Wien, Karlskirche und TU.jpg",
+        "author": "Fyona A. Hallé",
+        "license": "CC BY-SA 3.0 at",
+        "source": "https://commons.wikimedia.org/wiki/File:Wien%2C%20Karlskirche%20und%20TU.jpg"
+      }
+    ]
+  }
+}

@@ -139,6 +139,6 @@ def translate(text: str) -> dict:
             errors.append(f"로컬 모델: {exc}")
 
     raise RuntimeError(
-        "번역할 방법이 없습니다. 설정에서 Gemini 키를 넣거나 Ollama 를 켜 주세요."
+        "번역할 방법이 없습니다. 설정 → AI 도우미(실험실)를 켜거나 Ollama 를 켜 주세요."
         + (f" ({' / '.join(errors)})" if errors else "")
     )

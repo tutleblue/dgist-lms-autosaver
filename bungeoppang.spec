@@ -26,7 +26,7 @@ PROJECT = Path(SPECPATH)
 # 따로 챙기지 않아도 바로 로그인할 수 있다.
 datas = [
     (str(PROJECT / "web"), "web"),
-    (str(PROJECT / "uni_photos.json"), "."),
+    (str(PROJECT / "uni_info.json"), "."),  # FGLP 대학 홈페이지·기본 정보·사진 목록 (tools/fetch_uni_info.py)
     (str(PROJECT / "VERSION"), "."),
     (str(PROJECT / "config.example.py"), "."),
 ]

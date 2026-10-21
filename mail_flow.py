@@ -235,7 +235,7 @@ MATCH = {
         "greeting": r"(안녕하(세요|십니까)|^.{0,24}(교수님|조교님|선생님|담당자님)(께)?\s*[,.!]?$)",
         "intro": r"(수강\s*중|\d학년)",
         "leadin": r"^(다름이\s*아니(오)?라|다름이\s*아니고|이렇게\s*(메일|연락))",
-        "closing": r"(감사(합니다|드립니다)|읽어\s*주셔서)",
+        "closing": r"(감사(합니다|드립니다)|읽어\s*주셔서|확인해\s*주셔서|좋은\s*하루|건강하시)",
         "signoff": r"(드림|올림)\s*$",
     },
     "en": {
@@ -266,6 +266,125 @@ def _course_en(c: dict[str, Any] | None, mine: bool) -> str:
     return f"your {title} class{tail}" if mine else f"{title}{tail}"
 
 
+def _eul(text: str) -> str:
+    """'일반화학Ⅱ(CHEM102) 2분반' → '을', '물리학' → '을', '화학' → '을', '수학' 같은 받침 없는 끝 → '를'.
+
+    한글 끝 글자의 받침으로 고르고, 끝이 괄호·로마 숫자·영문이면 그 앞 한글을 본다. 끝까지 한글이 없으면 '을(를)'.
+    """
+    t = re.sub(r"\([^)]*\)\s*$", "", str(text or "")).strip()
+    for ch in reversed(t):
+        if "가" <= ch <= "힣":
+            return "을" if (ord(ch) - 0xAC00) % 28 else "를"
+        if ch.isdigit():
+            # 숫자 읽기: 0 영·1 일·3 삼·6 육·7 칠·8 팔 은 받침이 있다
+            return "을" if ch in "013678" else "를"
+    return "을(를)"
+
+
+# ===== 부서 이름 → 영어 (2026-10-21 사용자: '영어로 쓸 때도 DGIST 장학을 DGIST Scholarship 으로, 그런 디테일을') =====
+# 영어 메일 첫 줄에 'Dear DGIST상담경력개발팀,' 처럼 한글이 그대로 들어갔다. 학교 부서 이름의 핵심 낱말과 끝말(팀·과·센터…)을
+# 영어로 옮겨 'Dear DGIST Counseling and Career Development Team,' 으로 쓴다. 모르는 부서면 'Dear Sir or Madam,'.
+OFFICE_CORE_EN = [  # 긴 낱말부터 (학사지원 이 학사 보다 먼저 맞게)
+    ("상담경력개발", "Counseling and Career Development"), ("학사지원", "Academic Affairs"), ("학생지원", "Student Affairs"),
+    ("국제협력", "International Affairs"), ("연구지원", "Research Support"), ("산학협력", "Industry-Academic Cooperation"),
+    ("창업지원", "Startup Support"), ("정보전산", "IT Services"), ("교육혁신", "Educational Innovation"),
+    ("학부교육", "Undergraduate Education"), ("기초학부", "School of Undergraduate Studies"), ("대학원", "Graduate School"),
+    ("생활관", "Residence Hall"), ("기숙사", "Dormitory"), ("도서관", "Library"), ("장학", "Scholarship"),
+    ("입학", "Admissions"), ("교무", "Academic Affairs"), ("학사", "Academic Affairs"), ("학생", "Student Affairs"),
+    ("국제", "International Affairs"), ("총무", "General Affairs"), ("인사", "Human Resources"), ("재무", "Finance"),
+    ("회계", "Finance"), ("연구", "Research"), ("창업", "Startup Support"), ("전산", "IT Services"), ("보건", "Health"),
+    ("홍보", "Public Relations"), ("시설", "Facilities"), ("안전", "Safety"), ("상담", "Counseling"), ("경력개발", "Career Development"),
+]
+OFFICE_SUFFIX_EN = [("사무국", "Office"), ("본부", "Division"), ("센터", "Center"), ("팀", "Team"), ("과", "Office"),
+                    ("처", "Office"), ("실", "Office"), ("단", "Group")]
+# 끝말을 붙이지 않는 이름 (이미 '…관·…원·…학부' 로 끝나는 곳)
+OFFICE_WHOLE = {"Residence Hall", "Dormitory", "Library", "Graduate School", "School of Undergraduate Studies"}
+
+
+# 학과·전공 주소 (2026-10-21 '인공지능전공' 이 사람 이름으로 잡혀 'Dear Gongjineungjeongong In,' 이 나왔다).
+# DGIST 학과·전공의 영어 이름. 끝말(학과·전공)을 뗀 낱말로 찾는다.
+ACADEMIC_SUFFIX = ("학과", "전공", "학부", "대학원", "연구소", "연구실")
+DEPT_FIELD_EN = {
+    "인공지능": "Artificial Intelligence",
+    "전기전자컴퓨터공학": "Electrical Engineering and Computer Science",
+    "로봇및기계전자공학": "Robotics and Mechatronics Engineering",
+    "로봇공학": "Robotics Engineering",
+    "에너지공학": "Energy Science and Engineering",
+    "뇌과학": "Brain Sciences",
+    "뇌인지과학": "Brain and Cognitive Sciences",
+    "뉴바이오": "New Biology",
+    "화학물리": "Physics and Chemistry",
+    "의생명공학": "Biomedical Engineering",
+    "반도체공학": "Semiconductor Engineering",
+    "신소재공학": "Materials Science and Engineering",
+    "기초학부": "School of Undergraduate Studies",
+}
+
+
+def looks_like_person(name: str) -> bool:
+    """한국 사람 이름처럼 보이는가: 띄어쓰기 없이 2~4글자 한글이고 흔한 성으로 시작하며 부서·학과가 아니다."""
+    text = re.sub(r"\s+", "", re.sub(r"\s*/.*$", "", str(name or "")))
+    if not re.fullmatch(r"[가-힣]{2,4}", text) or office_core(text):
+        return False
+    return text[:1] in SURNAMES or text[:2] in SURNAMES
+
+
+def dept_name_en(core: str) -> str:
+    """'인공지능전공' → 'DGIST Department of Artificial Intelligence'. 모르면 ''."""
+    # '뇌과학과' 는 '뇌과학+과', '화학물리학과' 는 '화학물리+학과' — 끝말을 둘 다 떼어 보고 표에 있는 쪽을 쓴다
+    for suf in ("전공", "학과", "과"):
+        if core.endswith(suf):
+            field = DEPT_FIELD_EN.get(core[: -len(suf)])
+            if field:
+                return f"DGIST Department of {field}"
+    if core.endswith(("학과", "전공")):
+        return ""
+    if core in DEPT_FIELD_EN:
+        return f"DGIST {DEPT_FIELD_EN[core]}"
+    return ""
+
+
+def office_core(name: str) -> str:
+    """'DGIST상담경력개발팀/대구경북과학기술원' → '상담경력개발팀'. 부서처럼 보이지 않으면 ''."""
+    text = re.sub(r"\s*/.*$", "", str(name or ""))
+    text = re.sub(r"^\s*(DGIST|디지스트)\s*", "", text, flags=re.I).strip()
+    if not HANGUL.search(text):
+        return ""
+    if any(text == k for k, _ in OFFICE_CORE_EN):  # '장학'·'생활관' 처럼 부서 낱말만 적힌 주소
+        return text
+    if len(text) >= 3 and text.endswith(ACADEMIC_SUFFIX):  # '인공지능전공'·'뇌과학과'·'기초학부'
+        return text
+    if any(text.endswith(k) for k, _ in OFFICE_SUFFIX_EN) or any(k in text for k, _ in OFFICE_CORE_EN):
+        # 두세 글자 사람 이름('장학수') 이 '장학' 으로 잡히지 않게: 부서 끝말이 없고 4글자 이하면 사람으로 본다
+        if not any(text.endswith(k) for k, _ in OFFICE_SUFFIX_EN) and len(text) <= 4:
+            return ""
+        return text
+    return ""
+
+
+def office_en(name: str) -> str:
+    """'상담경력개발팀' → 'DGIST Counseling and Career Development Team', '장학' → 'DGIST Scholarship Office'."""
+    core = office_core(name)
+    if not core:
+        return ""
+    if core.endswith(ACADEMIC_SUFFIX):
+        return dept_name_en(core)
+    suffix = next((en for ko, en in OFFICE_SUFFIX_EN if core.endswith(ko)), "")
+    body = core[: -len(next(ko for ko, en in OFFICE_SUFFIX_EN if core.endswith(ko)))] if suffix else core
+    words = []
+    rest = body
+    while rest:
+        hit = next(((ko, en) for ko, en in OFFICE_CORE_EN if rest.startswith(ko)), None)
+        if not hit:
+            return ""  # 모르는 낱말이 섞이면 지어내지 않는다
+        words.append(hit[1])
+        rest = rest[len(hit[0]):]
+    en = " and ".join(dict.fromkeys(words)) if len(words) > 1 and "Counseling" in words and "Career Development" in words else " ".join(dict.fromkeys(words))
+    if en in OFFICE_WHOLE:
+        return f"DGIST {en}"
+    return f"DGIST {en} {suffix or 'Office'}"
+
+
 def segments(me: dict[str, Any], to: dict[str, Any], course_index: int = 0) -> dict[str, list[dict[str, Any]]]:
     """한국어·영어 흐름 조각. 모르는 값은 빼고 문장을 만든다(빈 [ ] 를 남기지 않는다)."""
     courses = to.get("courses") or []
@@ -275,26 +394,46 @@ def segments(me: dict[str, Any], to: dict[str, Any], course_index: int = 0) -> d
     my_name, my_en, sid = me.get("name") or "", me.get("nameEn") or "", me.get("studentId") or ""
     year, dept = int(me.get("year") or 0), me.get("dept") or ""
 
-    # --- 한국어 ---
+    # --- 한국어 (2026-10-21 사용자: '한국어 예문이 마음에 안 든다, 공식 메일 작성법대로 다시') ---
+    # 대학 공식 메일의 순서: 호칭(○○○ 교수님께,) → 인사(안녕하십니까.) → 자기소개(저는 … 수강하고 있는 소속 학년 이름
+    # (학번 …)입니다.) → 용건(다름이 아니라 …) → 감사·축원 → 서명(소속 학년 이름 올림 / 학번). 교수님께는 '올림',
+    # 그 밖에는 '드림'. 조교님은 한 단계 덜 딱딱하게(안녕하세요). 예전 꼴은 '안녕하세요, ○○ 교수님.' 으로 시작해
+    # 가볍게 읽혔고, 자기소개가 과목부터 늘어놓아 누가 쓰는지가 늦게 나왔다.
+    me_ko = " ".join(b for b in (dept, f"{year}학년" if year else "", my_name) if b)
+    sid_ko = f"(학번 {sid})" if sid else ""
     if kind == "professor":
-        hello = f"안녕하세요, {name} 교수님." if name else "안녕하세요, 교수님."
-        thanks = "바쁘신 와중에 메일 읽어 주셔서 감사합니다."
+        hello = f"{name} 교수님께,\n안녕하십니까." if name else "교수님께,\n안녕하십니까."
+        thanks = "바쁘신 와중에 읽어 주셔서 감사합니다.\n늘 건강하시고 좋은 하루 보내십시오."
+        sign = f"{me_ko} 올림" if my_name else ""
     elif kind == "ta":
-        hello = f"안녕하세요, {name} 조교님." if name else "안녕하세요, 조교님."
-        thanks = "바쁘신 와중에 읽어 주셔서 감사합니다."
+        hello = f"{name} 조교님께,\n안녕하세요." if name else "조교님께,\n안녕하세요."
+        thanks = "바쁘신 와중에 확인해 주셔서 감사합니다.\n좋은 하루 보내세요."
+        sign = f"{me_ko} 드림" if my_name else ""
     else:
-        hello = f"안녕하세요, {name}님." if name and not to.get("foreign") and len(name) <= 5 else "안녕하세요."
-        thanks = "감사합니다."
-    who_ko = " ".join(b for b in (dept, f"{year}학년" if year else "", f"{my_name}({sid})" if sid and my_name else my_name) if b)
-    taking = f"{_course_ko(course)}을 수강 중인 " if course else ""
+        polite = bool(name) and not to.get("foreign") and looks_like_person(name)
+        # '상담경력개발팀'·'학사지원과' 같은 부서 주소는 '○○팀 담당자님께,' (조직도 이름 '…팀/대구경북과학기술원' 은 앞만)
+        office = office_core(name) if name and not to.get("foreign") else ""
+        if office:
+            hello = f"{office} 담당자님께,\n안녕하십니까."
+        else:
+            hello = f"{name}님께,\n안녕하십니까." if polite else "안녕하십니까."
+        thanks = "읽어 주셔서 감사합니다.\n좋은 하루 보내십시오."
+        sign = f"{me_ko} 드림" if my_name else ""
+    if sign and sid:
+        sign += f"\n학번 {sid}"
     # 이름을 아직 모르면(새 설치, LMS 동기화 전) 자기소개는 건너뛴다 — '기초학부입니다.' 만 남는 문장이 나왔다
-    intro_ko = f"{taking}{who_ko}입니다." if my_name else ""
+    if my_name and course:
+        intro_ko = f"저는 {_course_ko(course)}{_eul(_course_ko(course))} 수강하고 있는 {me_ko}{sid_ko}입니다."
+    elif my_name:
+        intro_ko = f"저는 {me_ko}{sid_ko}입니다."
+    else:
+        intro_ko = ""
     ko = [
-        {"kind": "greeting", "text": hello, "after": 1},
+        {"kind": "greeting", "text": hello, "after": 2},
         {"kind": "intro", "text": intro_ko, "after": 2},
-        {"kind": "leadin", "text": "다름이 아니라 ", "after": 0},
-        {"kind": "closing", "text": thanks, "after": 1},
-        {"kind": "signoff", "text": f"{my_name} 드림" if my_name else "", "after": 0},
+        {"kind": "leadin", "text": "다름이 아니라, ", "after": 0},
+        {"kind": "closing", "text": thanks, "after": 2},
+        {"kind": "signoff", "text": sign, "after": 0},
     ]
 
     # --- 영어 (사용자가 보낸 메일 꼴) ---
@@ -306,12 +445,24 @@ def segments(me: dict[str, Any], to: dict[str, Any], course_index: int = 0) -> d
         thank_en = "Thank you for your time and understanding."
         bye = "Sincerely,"
     elif kind == "ta":
-        dear = f"Dear {name}," if name else "Dear TA,"
+        # 한국인 조교님은 이름을 로마자로 (Dear 김민수 → Dear Minsu Kim)
+        ta_en = romanize_name(name) if looks_like_person(name) else ("" if HANGUL.search(name or "") else name)
+        dear = f"Dear {ta_en}," if ta_en else "Dear TA,"
         wish = "I hope you are doing well."
         thank_en = "Thank you for your help."
         bye = "Best regards,"
     else:
-        dear = f"Dear {name}," if name else "Dear Sir or Madam,"
+        # 부서면 영어 부서 이름(Dear DGIST Scholarship Office,), 한국인이면 로마자 이름, 모르면 Sir or Madam
+        office_name = office_en(name) if name and HANGUL.search(name) else ""
+        person_en = romanize_name(name) if looks_like_person(name) else ""
+        if office_name:
+            dear = f"Dear {office_name},"
+        elif person_en:
+            dear = f"Dear {person_en},"
+        elif name and not HANGUL.search(name):
+            dear = f"Dear {name},"
+        else:
+            dear = "Dear Sir or Madam,"
         wish = "I hope this email finds you well."
         thank_en = "Thank you for your time."
         bye = "Best regards,"

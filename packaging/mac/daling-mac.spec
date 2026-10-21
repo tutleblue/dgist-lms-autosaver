@@ -33,7 +33,7 @@ print(f"[Daling mac] {TARGET_ARCH} 로 묶습니다")
 # 화면 파일·사진·버전은 Windows 판과 똑같이 넣는다
 datas = [
     (str(PROJECT / "web"), "web"),
-    (str(PROJECT / "uni_photos.json"), "."),
+    (str(PROJECT / "uni_info.json"), "."),  # FGLP 대학 홈페이지·기본 정보·사진 목록 (tools/fetch_uni_info.py)
     (str(PROJECT / "VERSION"), "."),
     (str(PROJECT / "config.example.py"), "."),
     # 앱 안 업데이트가 받은 DMG 로 바꿔 끼울 때 쓴다 (updater._start_mac_install). 사이트의 한 줄 설치와 같은 파일

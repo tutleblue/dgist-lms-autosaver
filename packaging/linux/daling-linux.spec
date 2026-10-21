@@ -24,7 +24,7 @@ VERSION = (PROJECT / "VERSION").read_text(encoding="utf-8").strip()
 # 화면 파일·사진·버전은 Windows·맥 판과 똑같이 넣는다
 datas = [
     (str(PROJECT / "web"), "web"),
-    (str(PROJECT / "uni_photos.json"), "."),
+    (str(PROJECT / "uni_info.json"), "."),  # FGLP 대학 홈페이지·기본 정보·사진 목록 (tools/fetch_uni_info.py)
     (str(PROJECT / "VERSION"), "."),
     (str(PROJECT / "config.example.py"), "."),
 ]

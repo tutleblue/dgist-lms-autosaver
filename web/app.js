@@ -46,6 +46,10 @@ const icons = {
   star: '<svg viewBox="0 0 24 24"><path d="m12 3 2.9 5.9 6.5.9-4.7 4.6 1.1 6.5-5.8-3-5.8 3 1.1-6.5L2.6 9.8l6.5-.9Z"/></svg>',
   moonStar: '<svg viewBox="0 0 24 24"><path d="M18 5h4"/><path d="M20 3v4"/><path d="M21.5 13.5A9 9 0 1 1 10.5 2.5a7 7 0 0 0 11 11Z"/></svg>',
   box: '<svg viewBox="0 0 24 24"><path d="M21 8v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8"/><path d="M2 4h20v4H2z"/><path d="M10 12h4"/></svg>',
+  // FGLP 학교 상세의 바깥 링크 (홈페이지 · 지도 · 새 창)
+  globe: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>',
+  map: '<svg viewBox="0 0 24 24"><path d="M14.1 5.55a2 2 0 0 0 1.8 0l3.66-1.83A1 1 0 0 1 21 4.62v12.76a1 1 0 0 1-.55.9l-4.55 2.27a2 2 0 0 1-1.8 0l-4.2-2.1a2 2 0 0 0-1.8 0l-3.66 1.83A1 1 0 0 1 3 19.38V6.62a1 1 0 0 1 .55-.9L8.1 3.45a2 2 0 0 1 1.8 0z"/><path d="M15 5.76v15"/><path d="M9 3.24v15"/></svg>',
+  external: '<svg viewBox="0 0 24 24"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>',
 };
 
 const state = {
@@ -631,7 +635,8 @@ const SYNC_KIND_LABEL = { sync: "자료", deadlines: "마감", emails: "메일" 
 async function waitForTask(maxMs = 180000, lane = "main") {
   const until = Date.now() + maxMs;
   while (Date.now() < until) {
-    await new Promise((r) => window.setTimeout(r, 900));
+    // 메일은 2초 남짓이면 끝난다. 0.9초마다 물으면 끝난 뒤 최대 0.9초를 그냥 기다렸다
+    await new Promise((r) => window.setTimeout(r, lane === "mail" ? 300 : 900));
     try {
       const task = await api("/api/task");
       // 메일은 따로 도는 칸이라 메일만 기다린다 (자료 동기화가 끝나길 기다리지 않는다)
@@ -5661,13 +5666,10 @@ function bindInterestChips() {
 
 function renderSecretBadges() {
   const config = state.config || {};
+  // 시간표 캡처 읽기는 Gemini 키가 있어야 된다. 키 넣는 칸을 없앴으니(2026-10-21) 이미 저장된 키가 있을 때만 단추를 보인다.
   {
-    const el = $("#geminiSavedBadge");
+    const el = $("#timetableImportImage");
     if (el) el.hidden = !config.hasGeminiKey;
-  }
-  {
-    const el = $("#dgistKeySavedBadge");
-    if (el) el.hidden = !config.hasDgistApiKey;
   }
   {
     const el = $("#emailPwSavedBadge");
@@ -6662,27 +6664,6 @@ function bindEvents() {
     }
   });
 
-  $("#toggleGeminiKey")?.addEventListener("click", () => {
-    const input = $("#configForm").elements.geminiKey;
-    input.type = input.type === "password" ? "text" : "password";
-  });
-
-  $("#clearGeminiKey")?.addEventListener("click", async () => {
-    const confirmed = await uiConfirm("저장된 Gemini 키를 지웁니다. 메일 요약·번역이 멈춰요.", { title: "Gemini 키 지우기", danger: true, ok: "지우기" });
-    if (!confirmed) return;
-    try {
-      await api("/api/config", {
-        method: "POST",
-        body: JSON.stringify({ clearGeminiKey: true }),
-      });
-      showToast("Gemini API 키를 삭제했습니다.");
-      await refreshAll();
-      await loadConfig();
-      renderSecretBadges();
-    } catch (error) {
-      showToast(error.message);
-    }
-  });
 
   $("#openSettingsFromRail")?.addEventListener("click", openSettings);
 
@@ -9892,8 +9873,15 @@ const CONTINENTS = [
 ];
 
 /** 지금 보고 있는 칸 [서경, 남위, 동경, 북위] */
+// 학교를 고르면 지도가 그 학교로 다가간다(사용자: '목록에서 고르면 지도도 따라 움직여야지').
+// 가로 36도 ≈ 한 나라·지역이 보이는 넓이. 상세를 닫으면 보던 대륙으로 돌아간다.
+const FGLP_FOCUS_SPAN = 36;
+
 function fglpBox() {
-  const c = CONTINENTS.find((x) => x.key === (state.fglpView || "world")) || CONTINENTS[0];
+  const f = state.fglpFocus;
+  const c = f
+    ? { cx: Math.min(180 - FGLP_FOCUS_SPAN / 2, Math.max(-180 + FGLP_FOCUS_SPAN / 2, f.lon)), cy: f.lat, span: FGLP_FOCUS_SPAN }
+    : CONTINENTS.find((x) => x.key === (state.fglpView || "world")) || CONTINENTS[0];
   const map = $("#fglpMap");
   const rect = map ? map.getBoundingClientRect() : { width: 2, height: 1 };
   const ratio = rect.height > 0 ? rect.width / rect.height : 2;
@@ -9915,15 +9903,17 @@ function fglpBox() {
   return [c.cx - c.span / 2, s, c.cx + c.span / 2, n];
 }
 
-/** 위경도 → 지금 보는 칸 안에서의 % 좌표 */
-function projectLatLon(lat, lon, box) {
-  const [w, s, e, n] = box || fglpBox();
-  return { x: ((lon - w) / (e - w)) * 100, y: ((n - lat) / (n - s)) * 100 };
+/** 위경도 → 세계지도 전체 안에서의 % 좌표.
+    핀은 지도 그림과 같은 판(.wm-stage) 위에 붙어 있다. 예전에는 핀을 '보는 칸' 기준으로
+    다시 그려서, 대륙을 바꾸면 점은 새 자리에 먼저 뜨고 지도만 0.42초 뒤따라 미끄러졌다
+    (사용자: '점이 먼저 생기고 지도가 움직여서 어색'). 이제 판 하나를 옮기니 둘이 함께 간다. */
+function projectLatLon(lat, lon) {
+  return { x: ((lon + 180) / 360) * 100, y: ((90 - lat) / 180) * 100 };
 }
 
-/** 지도 그림을 지금 보는 칸에 맞춰 늘리고 옮긴다 */
+/** 지도 판(그림 + 핀)을 지금 보는 칸에 맞춰 늘리고 옮긴다 */
 function placeWorldImg(box) {
-  const img = $("#fglpMap")?.querySelector(".wm-img");
+  const img = $("#fglpMap")?.querySelector(".wm-stage");
   if (!img) return;
   const [w, s, e, n] = box || fglpBox();
   const wideDeg = e - w;
@@ -9939,17 +9929,25 @@ function renderFglp() {
   if (!map) return;
   if (!map.dataset.drawn) {
     // 3840x1920 그림이라 풀어 놓는 데 300ms 가 든다. 화면을 멈추지 않게 따로 푼다.
-    map.innerHTML = `<img class="wm-img" src="${WORLD_IMG}" alt="세계지도" draggable="false" decoding="async" />
-      <div class="wm-pins" id="fglpPins"></div>`;
+    map.innerHTML = `<div class="wm-stage">
+        <img class="wm-img" src="${WORLD_IMG}" alt="세계지도" draggable="false" decoding="async" />
+        <div class="wm-pins" id="fglpPins"></div>
+      </div>`;
     map.dataset.drawn = "1";
+    // 큰 그림이 풀리기 전에 점만 빈 바탕에 먼저 뜨지 않게, 그림이 준비되면 판째로 나타난다
+    const stage = map.querySelector(".wm-stage");
+    const shown = () => stage.classList.add("ready");
+    const img = map.querySelector(".wm-img");
+    if (img.decode) img.decode().then(shown, shown);
+    else img.addEventListener("load", shown, { once: true });
+    window.setTimeout(shown, 2500);
     // 창 크기가 바뀌면 보이는 각도도 달라진다
     let timer = 0;
     new ResizeObserver(() => {
       window.clearTimeout(timer);
-      timer = window.setTimeout(() => {
-        placeWorldImg();
-        renderFglpAll();
-      }, 140);
+      // 핀이 지도 판에 붙어 있으니 판만 다시 맞추면 된다. 예전처럼 renderFglpAll 을 부르면
+      // 상세를 여는 순간(페이지가 길어져 스크롤 막대가 생기며 지도 폭이 2px 줄어듦) 상세가 도로 닫혔다.
+      timer = window.setTimeout(() => placeWorldImg(), 140);
     }).observe(map);
     loadFglp();
     return;
@@ -10044,22 +10042,24 @@ function renderFglpAll() {
 
   const pins = $("#fglpPins");
   if (pins) {
-    const box = fglpBox();
-    // 핀과 지도 그림은 반드시 같은 칸을 봐야 한다
-    placeWorldImg(box);
-    pins.innerHTML = schools
+    placeWorldImg();
+    // 핀은 세계 좌표라 대륙을 바꿔도 다시 그릴 필요가 없다. 탭(FGLP/학점교류)이 바뀔 때만 새로 그리고,
+    // 그때는 점이 하나씩 피어나게 한다(--i 로 조금씩 늦게).
+    const sig = kind + ":" + schools.length;
+    if (pins.dataset.sig !== sig) {
+      pins.dataset.sig = sig;
+      pins.innerHTML = schools
       .map((s, i) => {
-        const pt = projectLatLon(s.lat, s.lon, box);
-        // 보고 있는 칸 밖이면 숨긴다
-        const out = pt.x < -2 || pt.x > 102 || pt.y < -2 || pt.y > 102;
-        return `<button type="button" class="wm-pin k-${s.kind} ${out ? "off" : ""}" data-fglp="${i}"
-          style="left:${pt.x.toFixed(2)}%;top:${pt.y.toFixed(2)}%"
+        const pt = projectLatLon(s.lat, s.lon);
+        return `<button type="button" class="wm-pin k-${s.kind}" data-fglp="${i}"
+          style="left:${pt.x.toFixed(3)}%;top:${pt.y.toFixed(3)}%;--i:${i}"
           title="${escapeHtml(s.name)} · ${escapeHtml(s.country)}">
           <span class="wm-pin-dot"></span>
           <span class="wm-pin-label">${escapeHtml(shortText(s.name, 22))}</span>
         </button>`;
       })
       .join("");
+    }
   }
 
   const list = $("#fglpList");
@@ -10118,30 +10118,63 @@ function showFglpDetail(index) {
   if (index === null || index === undefined) {
     box.hidden = true;
     box.innerHTML = "";
+    if (state.fglpFocus) {
+      state.fglpFocus = null;
+      placeWorldImg();
+    }
     return;
   }
   const s = fglpSchools()[index];
   if (!s) return;
+  state.fglpFocus = { lat: s.lat, lon: s.lon };
+  placeWorldImg();
+  // 목록에서 골랐으면 지도가 화면 밖일 수 있다 → 지도가 보이게
+  const map = $("#fglpMap");
+  const r = map?.getBoundingClientRect();
+  if (r && (r.bottom < 60 || r.top > window.innerHeight - 60)) map.scrollIntoView({ block: "nearest" });
   const prog = state.fglp?.program || {};
   box.hidden = false;
+  // 사진은 lazy 로 받지 않는다: 가로로 넘기는 칸 안에서는 다음 장이 끝내 안 불러와졌다(검은 칸). 한 학교 석 장뿐이다.
+  const photos = s.photos || [];
+  const slides = photos
+    .map((p, i) => {
+      const by = p.by || tr("위키미디어 커먼스");
+      const credit = tr(`사진 ${by} · ${p.license || ""}`);
+      return `<figure class="fd-slide">
+          <img src="${p.src}" alt="${escapeHtml(s.name)} ${i + 1}" />
+          <figcaption><button type="button" class="fd-credit" data-fglp-link="${escapeHtml(p.source || "")}">${escapeHtml(credit)}</button></figcaption>
+        </figure>`;
+    })
+    .join("");
+  const where = [s.city, s.country].filter(Boolean).map(escapeHtml).join(", ");
+  const local = fglpLocalTime(s.tz);
+  const timeHtml = local ? `<p class="fd-time">${escapeHtml(local)}</p>` : "";
+  const koHtml = s.koName && s.koName !== s.name ? `<p class="fd-ko">${escapeHtml(s.koName)}</p>` : "";
+  // 여러 장이면 옆으로 넘긴다(끌기·트랙패드). 스크롤 막대 대신 ‹ › 단추
+  const arrows =
+    photos.length > 1
+      ? `<button type="button" class="fd-nav prev" data-fglp-slide="-1" aria-label="${tr("이전 사진")}">‹</button>
+         <button type="button" class="fd-nav next" data-fglp-slide="1" aria-label="${tr("다음 사진")}">›</button>`
+      : "";
+  const gallery = photos.length
+    ? `<div class="fd-gallery-wrap"><div class="fd-gallery${photos.length > 1 ? " many" : ""}">${slides}</div>${arrows}</div>`
+    : "";
+  const facts = fglpFacts(s);
+  const factsHtml = facts.length ? `<div class="fd-facts">${facts.map((f) => `<span>${escapeHtml(f)}</span>`).join("")}</div>` : "";
   box.innerHTML = `
-    ${
-      s.photo
-        ? `<figure class="fd-photo">
-             <img src="${s.photo}" alt="${escapeHtml(s.name)} 캠퍼스" />
-             <figcaption>사진 ${escapeHtml(s.photoBy || "위키미디어")} · ${escapeHtml(s.photoLicense || "")}</figcaption>
-           </figure>`
-        : ""
-    }
+    ${gallery}
     <div class="fd-head">
       <div>
         <h3>${escapeHtml(s.name)}</h3>
-        <p class="fd-where">${escapeHtml(s.city)}, ${escapeHtml(s.country)}</p>
+        ${koHtml}
+        <p class="fd-where">${where}</p>
+        ${timeHtml}
       </div>
       <button type="button" class="icon-button" data-fglp-back aria-label="닫기">
         <span class="icon" data-icon="x"></span>
       </button>
     </div>
+    ${factsHtml}
     ${
       s.language
         ? `<dl class="fd-list"><div><dt>어학 기준</dt><dd><b>${escapeHtml(s.language)}</b></dd></div>
@@ -10149,13 +10182,120 @@ function showFglpDetail(index) {
            <div><dt>학점</dt><dd>${escapeHtml(prog.gpa || "-")}</dd></div></dl>`
         : `<p class="fd-hint">학점교류 대학입니다. 위의 공통 안내를 참고하세요.</p>`
     }
+    ${fglpLinksHtml(s)}
     <p class="fd-hint">대학별 정원은 공개 문서에 없습니다. 국제협력팀에 확인하세요.</p>`;
   installIcons(box);
+}
+
+/* --- 학교 상세에 덧붙이는 것 (2026-10-21: 홈페이지로 가기 · 사진 여러 장 · 기본 정보) ---
+   값은 tools/fetch_uni_info.py 가 위키데이터에서 받아 앱에 넣어 둔 것. 없는 값은 비운다. */
+const DGIST_LATLON = [35.7055, 128.4547];
+
+function fglpDistanceKm(lat, lon) {
+  const rad = (d) => (d * Math.PI) / 180;
+  const [a1, b1] = DGIST_LATLON.map(rad);
+  const a2 = rad(lat);
+  const b2 = rad(lon);
+  const h = Math.sin((a2 - a1) / 2) ** 2 + Math.cos(a1) * Math.cos(a2) * Math.sin((b2 - b1) / 2) ** 2;
+  return 2 * 6371 * Math.asin(Math.sqrt(h));
+}
+
+/* 시간대의 UTC 와의 차이(분). 그 순간의 벽시계를 Intl 로 읽어 계산하므로 서머타임이 저절로 반영된다. */
+function tzOffsetMinutes(tz, when) {
+  const parts = {};
+  const fmt = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    hourCycle: "h23",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  fmt.formatToParts(when).forEach((p) => {
+    parts[p.type] = p.value;
+  });
+  const asUtc = Date.UTC(+parts.year, +parts.month - 1, +parts.day, +parts.hour, +parts.minute);
+  return Math.round((asUtc - Math.floor(when.getTime() / 60000) * 60000) / 60000);
+}
+
+function fglpLocalTime(tz) {
+  if (!tz) return "";
+  try {
+    const now = new Date();
+    const locale = document.documentElement.lang === "en" ? "en-US" : "ko-KR";
+    const clock = new Intl.DateTimeFormat(locale, { timeZone: tz, hour: "numeric", minute: "2-digit" }).format(now);
+    const diff = (tzOffsetMinutes(tz, now) - tzOffsetMinutes("Asia/Seoul", now)) / 60;
+    const abs = Math.abs(diff);
+    const hours = abs % 1 ? abs.toFixed(1) : String(abs);
+    let gap = tr("한국과 같은 시각");
+    if (diff < 0) gap = tr(`한국보다 ${hours}시간 늦음`);
+    if (diff > 0) gap = tr(`한국보다 ${hours}시간 빠름`);
+    return tr(`현지 ${clock}`) + " (" + gap + ")";
+  } catch (error) {
+    return "";
+  }
+}
+
+function fglpFacts(s) {
+  const out = [];
+  if (s.founded) out.push(tr(`${s.founded}년 설립`));
+  (s.kinds || []).forEach((k) => out.push(tr(k)));
+  if (s.students) {
+    const n = Number(s.students).toLocaleString();
+    const year = s.studentsYear;
+    out.push(year ? tr(`학생 ${n}명 (${year})`) : tr(`학생 ${n}명`));
+  }
+  if (Number.isFinite(s.lat) && Number.isFinite(s.lon)) {
+    const km = Math.round(fglpDistanceKm(s.lat, s.lon) / 100) * 100;
+    const kmText = km.toLocaleString();
+    out.push(tr(`DGIST에서 약 ${kmText}km`));
+  }
+  return out;
+}
+
+function fglpLinksHtml(s) {
+  // fglp.known_links 와 같은 모양이어야 서버가 열어 준다
+  const map = Number.isFinite(s.lat) ? `https://www.openstreetmap.org/?mlat=${s.lat}&mlon=${s.lon}#map=15/${s.lat}/${s.lon}` : "";
+  const links = [
+    { url: s.website, icon: "globe", label: tr("홈페이지") },
+    { url: s.summer, icon: "calendar", label: tr("여름학기 안내") },
+    { url: s.wiki, icon: "book", label: tr("위키백과") },
+    { url: map, icon: "map", label: tr("지도") },
+  ].filter((l) => l.url);
+  if (!links.length) return "";
+  const btns = links
+    .map(
+      (l) => `<button type="button" class="fd-link" data-fglp-link="${escapeHtml(l.url)}" title="${escapeHtml(l.url)}">
+        <span class="icon" data-icon="${l.icon}"></span><span class="fd-link-text">${escapeHtml(l.label)}</span><span class="icon fd-ext" data-icon="external"></span></button>`,
+    )
+    .join("");
+  return `<div class="fd-links">${btns}</div>`;
 }
 
 function bindFglp() {
   // 지도 핀과 목록이 같은 번호를 쓰므로 한 곳에서 받는다
   const pick = (event) => {
+    // 학교 홈페이지·여름학기·위키백과·지도·사진 출처: 기본 브라우저로 (서버가 fglp 자료에 있는 주소만 연다)
+    const out = event.target.closest("[data-fglp-link]");
+    if (out) {
+      const url = out.dataset.fglpLink;
+      if (url) {
+        api("/api/open-url", { method: "POST", body: JSON.stringify({ url }) }).catch((error) => showToast(humanError(error)));
+      }
+      return;
+    }
+    const slide = event.target.closest("[data-fglp-slide]");
+    if (slide) {
+      const strip = slide.parentElement.querySelector(".fd-gallery");
+      const step = strip.querySelector(".fd-slide")?.offsetWidth || strip.clientWidth;
+      const atEnd = strip.scrollLeft + strip.clientWidth >= strip.scrollWidth - 4;
+      const dir = Number(slide.dataset.fglpSlide);
+      // 끝에서 한 번 더 누르면 처음으로. behavior:"smooth" 는 미리보기 WebView 에서 아예 움직이지 않아 바로 옮긴다
+      if (dir > 0 && atEnd) strip.scrollLeft = 0;
+      else strip.scrollBy({ left: dir * (step + 6) });
+      return;
+    }
     const back = event.target.closest("[data-fglp-back]");
     if (back) {
       showFglpDetail(null);
@@ -10172,6 +10312,7 @@ function bindFglp() {
     const btn = event.target.closest("[data-fglp-view]");
     if (!btn) return;
     state.fglpView = btn.dataset.fglpView;
+    state.fglpFocus = null;
     // 지도와 핀이 같은 박자로 미끄러진다
     placeWorldImg();
     renderFglpAll();
@@ -11070,7 +11211,6 @@ const TOUR_STEPS = [
     title: "주간 시간표",
     text: "시간표를 한 번 넣어 두면 대시보드·시계·알림이 모두 이걸 기준으로 움직여.",
     tips: [
-      "에브리타임 캡처로 한 번에 가져오기 (Gemini 키 필요)",
       "'시간표 편집'에서 개설과목을 찾아 넣기",
       "수업을 누르면 시간·장소를 고칠 수 있어",
       "과목마다 다른 색으로 칠해 줘",
@@ -13761,11 +13901,13 @@ async function loadAiStatus(force = false) {
   }
   paintAiSettings();
   paintAiModelPicker();
+  paintAiModelButton();
   return state.ai.status;
 }
-// 실험실 스위치(ai_profile.json enabled)가 켜져 있고 CLI 가 하나라도 있을 때만 AI 기능을 보인다
-const aiOn = () => state.ai.status?.profile?.enabled === "1";
-const aiReady = () => aiOn() && Object.values(state.ai.status?.available || {}).some(Boolean);
+// 실험실 켜기 스위치는 없앴다(2026-10-20 사용자: '어차피 /ai 쳐서 쓸 거니까, 메일 창에서 만지게').
+// AI CLI 가 하나라도 깔려 있으면 /ai·모델 단추가 보인다. 내용은 /ai·단추를 눌렀을 때만 AI 로 간다.
+const aiReady = () => Object.values(state.ai.status?.available || {}).some(Boolean);
+const aiOn = aiReady;
 
 /* --- 자연어 검색 --- */
 function withAiSearch(query, grouped) {
@@ -13858,18 +14000,15 @@ const AI_PROVIDERS = [
 ];
 
 function paintAiSettings() {
-  const box = $("#aiProviders");
   const st = state.ai.status;
-  if (!box || !st) return;
+  if (!st) return;
   const on = aiOn();
-  const sw = $("#aiEnabled");
-  if (sw) sw.checked = on;
-  if ($("#aiBody")) $("#aiBody").hidden = !on;
-  // 메일 쓰기의 모델 단추·초안 칸·용건 다듬기도 스위치를 따른다
+  // 메일 쓰기의 모델 단추·/ai 안내는 AI CLI 가 있으면 보인다 (설정 카드가 없어도 칠한다)
   if ($("#aiDraftToggle")) $("#aiDraftToggle").hidden = !on;
-  if ($("#mailFlowPolish")) $("#mailFlowPolish").hidden = !on;
   if ($("#mailFlowAiHint")) $("#mailFlowAiHint").hidden = !on;
-  if (!on && $("#aiDraftBox")) $("#aiDraftBox").hidden = true;
+  if ($("#aiDraftBox")) $("#aiDraftBox").hidden = true; // 채팅식 초안 칸은 쓰지 않는다(2026-10-21)
+  const box = $("#aiProviders");
+  if (!box) return;
   const chosen = st.profile?.provider || "";
   box.innerHTML = AI_PROVIDERS.map(([key, label]) => {
     const has = key ? Boolean(st.available?.[key]) : aiReady();
@@ -13959,14 +14098,11 @@ function paintAiDraftContext() {
   if (el) el.textContent = bits.join(" · ");
 }
 
+// 'AI 초안' 칸 대신 모델 고르기 메뉴를 연다 (2026-10-21, 아래 'AI 모델 고르기')
 $("#aiDraftToggle")?.addEventListener("click", async () => {
-  const box = $("#aiDraftBox");
-  if (!box) return;
-  box.hidden = !box.hidden;
-  if (box.hidden) return;
-  await Promise.all([loadAiStatus(), loadMailMe()]);
-  paintAiDraftContext();
-  $("#aiDraftRequest")?.focus();
+  if (aiMenu.el && !aiMenu.el.hidden) return closeAiMenu();
+  await loadAiStatus();
+  openAiMenu();
 });
 $("#composeTo")?.addEventListener("change", () => !$("#aiDraftBox")?.hidden && paintAiDraftContext());
 
@@ -14246,8 +14382,6 @@ function paintFlowBar() {
       .join("");
   }
   bar.querySelectorAll("[data-flow-lang]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.flowLang === flow.lang)));
-  const polish = $("#mailFlowPolish");
-  if (polish) polish.hidden = !aiOn();
   const aiHint = $("#mailFlowAiHint");
   if (aiHint) aiHint.hidden = !aiOn();
 }
@@ -14348,7 +14482,8 @@ function refreshGhost() {
   let seg = null;
   if (!rest && findAiPrompt(rich, caret)) {
     // '/ai …' 를 쓰는 중: 줄 끝에 'Ctrl+Enter' 안내를 흐리게 (흐름 미리보기를 꺼도 보인다)
-    seg = { kind: "aihint", text: aiReady() ? tr("  Ctrl+Enter — AI 가 이어 써요") : tr("  AI 도우미(설정 › 실험실)를 켜면 /ai 로 이어 쓸 수 있어요") };
+    seg = { kind: "aihint", text: aiReady() ? aiHintText(rich, caret) : tr("  AI CLI(Claude·Gemini·Codex)를 설치하면 /ai 로 이어 쓸 수 있어요") };
+    if (!seg.text) return;
   } else {
     if (here || rest || !flow.data || !flowOn()) return; // 흐름 미리보기는 빈 줄에서만
     seg = nextFlowSegment(lines, afterLines);
@@ -14359,6 +14494,13 @@ function refreshGhost() {
   ghost.dataset.ghost = seg.kind === "aihint" ? "hint" : "1";
   ghost.contentEditable = "false";
   ghost.textContent = seg.text;
+  if (seg.kind !== "aihint") {
+    // 안내 줄 대신 회색 글씨 바로 옆에 Tab 키를 띄운다 (2026-10-21 사용자: 'Tab 회색 글씨 넣기' 글은 빼고 은유로)
+    const key = document.createElement("kbd");
+    key.className = "flow-ghost-key";
+    key.textContent = "Tab";
+    ghost.appendChild(key);
+  }
   caret.insertNode(ghost);
   const at = document.createRange();
   at.setStartBefore(ghost);
@@ -14526,16 +14668,26 @@ async function runAiContinue() {
   if (!rich || aiJob.box || !sel?.rangeCount) return;
   const prompt = findAiPrompt(rich, sel.getRangeAt(0));
   if (!prompt) return;
+  closeAiModelPop();
   await loadAiStatus();
   if (!aiReady()) {
-    showToast("AI 도우미가 꺼져 있거나 AI CLI 가 없어요. 설정 → AI 도우미에서 켜 주세요.");
+    showToast("AI CLI(Claude·Gemini·Codex)가 이 컴퓨터에 없어요. 하나를 설치하고 터미널에서 한 번 로그인해 주세요.");
     return;
   }
   removeGhost();
+  // '/ai [할 말]' 의 닫는 ']' 가 커서 바로 뒤에 있으면 그것까지 지시 글로 지운다
+  if (prompt.endContainer.nodeType === Node.TEXT_NODE && prompt.endContainer.data[prompt.endOffset] === "]") {
+    prompt.setEnd(prompt.endContainer, prompt.endOffset + 1);
+  }
   const raw = rangeText(prompt, true).replaceAll(FLOW_MARK, "");
-  const instruction = raw.replace(/^\s*\/ai/i, "").trim();
+  const cmd = parseAiCommand(raw);
+  if (cmd.token && !cmd.choice) {
+    showToast(`'${cmd.token}' 모델을 못 찾았어요. with 뒤에 모델 이름을 고르세요 (예: opus5.5)`);
+    return;
+  }
+  const instruction = cmd.instruction;
   if (!instruction) {
-    showToast("/ai 뒤에 무엇을 쓸지 적어 주세요. 예: /ai 10월 20일 기업탐방 때문에 결석, 공결 되는지 여쭤보기");
+    showToast("[ ] 안에 무엇을 쓸지 적어 주세요. 예: /ai [10월 20일 기업탐방 때문에 결석, 공결 되는지 여쭤보기]");
     return;
   }
   const beforeRange = document.createRange();
@@ -14556,7 +14708,9 @@ async function runAiContinue() {
   box.className = "ai-typing waiting";
   box.dataset.ghost = "ai";
   box.contentEditable = "false";
-  box.textContent = tr(`${providerLabel()} 가 쓰는 중`);
+  // 쓰는 동안 그 회사 로고가 움직인다 (Claude 별꽃은 돌며 숨 쉬고, Gemini 는 반짝, OpenAI 는 천천히 돈다)
+  const who = cmd.choice || { provider: currentAiModel().provider, label: providerLabel() };
+  box.innerHTML = `${aiLogo(who.provider, "busy")}<span>${escapeHtml(tr(`${who.label} 가 쓰는 중`))}</span>`;
   spot.insertNode(box);
   const at = document.createRange();
   at.setStartBefore(box);
@@ -14568,7 +14722,11 @@ async function runAiContinue() {
   try {
     const res = await api("/api/ai/continue", {
       method: "POST",
-      body: JSON.stringify({ instruction, before: before.slice(-6000), after: after.slice(0, 3000), lang: flow.lang || "ko", flow: { to: aiFlowTo() } }),
+      body: JSON.stringify({
+        instruction, before: before.slice(-6000), after: after.slice(0, 3000), lang: flow.lang || "ko", flow: { to: aiFlowTo() },
+        // '/ai with opus5.5 [ … ]' 로 고른 모델은 이번 한 번만 (평소 모델은 쓰기 창의 모델 단추)
+        provider: cmd.choice?.provider || "", model: cmd.choice?.id || "",
+      }),
     });
     if (seq !== aiJob.seq || aiJob.box !== box) return; // 그사이 취소됨
     let text = String(res.text || "").trim();
@@ -14679,107 +14837,349 @@ $("#mailFlowCourse")?.addEventListener("change", (event) => {
   loadMailFlow(true);
 });
 
-/* --- AI 는 가운데 용건만: 대충 적은 메모(한국어여도) → 받는 사람에 맞는 말투·언어로 --- */
-const unitIsBlock = (node) => /^(DIV|P|BLOCKQUOTE|UL|OL|H[1-6]|PRE|TABLE|HR)$/.test(node.nodeName);
+window.setTimeout(() => loadMailMe(), 4500);
 
-// 본문 맨 위 단위(줄·블록)로 나눈다. 크롬 편집 칸은 첫 줄을 맨 글자로, 다음 줄부터 <div> 로 둔다.
-function flowUnits(rich) {
-  const units = [];
-  let cur = null;
-  const flush = () => {
-    if (cur) units.push(cur);
-    cur = null;
-  };
-  Array.from(rich.childNodes).forEach((node) => {
-    if (node.nodeType === 1 && node.dataset.ghost) return;
-    if (node.nodeType === 1 && unitIsBlock(node)) {
-      flush();
-      units.push({ nodes: [node], text: node.innerText || "" });
-      return;
-    }
-    if (!cur) cur = { nodes: [], text: "" };
-    cur.nodes.push(node);
-    if (node.nodeName === "BR") flush();
-    else cur.text += node.nodeType === 3 ? node.data : node.innerText || node.textContent || "";
-  });
-  flush();
-  return units;
+/* ===== /ai 명령: '/ai [할 말]', '/ai with opus5.5 [할 말]' (2026-10-20 사용자) =====
+   '명령어 치듯이 [ ] 안에 쓰게, 모델은 /ai with ____ 로 — 예: /ai with opus5.5'. [ ] 없이 '/ai 할 말' 도 예전처럼 된다.
+   with 를 치면 커서 아래에 쓸 수 있는 모델 목록이 뜨고(설치된 CLI 만), 고르면 'opus5.5 []' 가 들어가 [ ] 안에 커서가 선다.
+   고른 모델은 이번 한 번만 쓰고, 평소 모델은 쓰기 창 위의 모델 단추에서 바꾼다. */
+const aiAlias = (label) => String(label || "").toLowerCase().replace(/\s+/g, "");
+
+function aiModelChoices() {
+  const models = state.ai.status?.models || {};
+  const out = [];
+  Object.entries(models).forEach(([provider, info]) =>
+    (info.models || []).forEach((m) => out.push({ provider, id: m.id, label: m.label, alias: aiAlias(m.label) })),
+  );
+  return out;
 }
 
-// 자기소개 다음('I am writing to'·'다름이 아니라' 줄 포함)부터 감사 인사 앞까지
-function flowContentRange(rich) {
-  const tests = flowTests();
-  let stage = -1;
-  const picked = [];
-  for (const unit of flowUnits(rich)) {
-    const line = unit.text.replace(/\s+/g, " ").trim();
-    if (!line) continue;
-    if (FLOW_QUOTE.test(line)) break;
-    const kind = flowKind(line, stage, tests);
-    stage = Math.max(stage, FLOW_STAGE[kind]);
-    if (stage >= FLOW_STAGE.closing) break;
-    if (kind === "leadin" || kind === "content") picked.push(unit);
+function resolveAiModel(token) {
+  const t = aiAlias(token);
+  if (!t) return null;
+  const list = aiModelChoices();
+  return list.find((c) => c.alias === t || c.id.toLowerCase() === t) || list.find((c) => c.alias.startsWith(t)) || null;
+}
+
+// '/ai with opus5.5 [할 말]' → { token: 'opus5.5', choice, instruction: '할 말', bracket: true }
+function parseAiCommand(raw) {
+  let rest = String(raw || "").replace(/^\s*\/ai/i, "");
+  let token = "";
+  const w = rest.match(/^\s+with\s+([^\s[\]]+)/i);
+  if (w) {
+    token = w[1];
+    rest = rest.slice(w[0].length);
   }
-  if (!picked.length) return null;
-  // 문단 경계가 아니라 문단 '안쪽' 글만 고른다. 경계째 바꾸면 감사 인사 앞 빈 줄이 함께 먹혔다(실측)
-  const isBlock = (n) => n.nodeType === 1 && n.nodeName !== "BR" && unitIsBlock(n);
-  const range = document.createRange();
-  const first = picked[0].nodes[0];
-  if (isBlock(first)) range.setStart(first, 0);
-  else range.setStartBefore(first);
-  const lastNodes = picked[picked.length - 1].nodes;
-  const last = lastNodes[lastNodes.length - 1];
-  if (isBlock(last)) range.setEnd(last, last.childNodes.length);
-  else if (last.nodeName === "BR") range.setEndBefore(last);
-  else range.setEndAfter(last);
-  return range;
+  const open = rest.indexOf("[");
+  let instruction = rest;
+  if (open >= 0) {
+    const close = rest.lastIndexOf("]");
+    instruction = rest.slice(open + 1, close > open ? close : undefined);
+  }
+  return { token, choice: token ? resolveAiModel(token) : null, instruction: instruction.trim(), bracket: open >= 0 };
 }
 
-$("#mailFlowPolish")?.addEventListener("click", async () => {
+// 줄 끝 회색 안내: 막 '/ai' 만 쳤으면 쓰는 법, 'with ' 뒤 모델을 고르는 중이면 안내 없이 목록만
+function aiHintText(rich, caret) {
+  const prompt = findAiPrompt(rich, caret);
+  if (!prompt) return "";
+  const raw = rangeText(prompt, true).replaceAll(FLOW_MARK, "");
+  if (/^\s*\/ai\s+with(\s+[^\s[\]]*)?$/i.test(raw)) return "";
+  const cmd = parseAiCommand(raw);
+  if (!cmd.bracket && !cmd.instruction && !cmd.token) return keyLabel(tr("  [prompt]  ·  with 모델  ·  Ctrl+Enter"));
+  const who = cmd.choice?.label || providerLabel();
+  return keyLabel(tr(`  Ctrl+Enter — ${who} 가 이어 써요`));
+}
+
+/* --- with 뒤 모델 고르기 목록 --- */
+const aiPop = { el: null, items: [], index: 0, partial: "" };
+
+function closeAiModelPop() {
+  if (aiPop.el) aiPop.el.hidden = true;
+  aiPop.items = [];
+}
+
+// 커서가 '/ai with ' 바로 뒤(또는 모델 이름을 치는 중)인가
+function aiWithContext() {
   const rich = $("#composeRich");
-  const btn = $("#mailFlowPolish");
-  if (!rich || !flow.data || btn.disabled) return;
-  await loadAiStatus();
-  if (!aiReady()) {
-    showToast("AI 도우미가 꺼져 있거나 AI CLI 가 없어요. 설정 → AI 도우미에서 켜 주세요.");
-    return;
-  }
-  removeGhost();
-  // 고른 글이 있으면 그것만, 없으면 가운데 용건 전체
   const sel = window.getSelection();
-  const chosen = sel?.rangeCount && !sel.isCollapsed && rich.contains(sel.getRangeAt(0).commonAncestorContainer);
-  const range = chosen ? sel.getRangeAt(0).cloneRange() : flowContentRange(rich);
-  const text = range ? rangeText(range, true).replaceAll(FLOW_MARK, "").trim() : "";
-  if (!text) {
-    showToast("가운데에 용건을 먼저 대충 적어 주세요. 한국어 메모도 괜찮아요.");
+  if (!rich || !sel?.rangeCount || !sel.isCollapsed) return null;
+  const caret = sel.getRangeAt(0);
+  const prompt = findAiPrompt(rich, caret);
+  if (!prompt) return null;
+  const raw = rangeText(prompt, true).replaceAll(FLOW_MARK, "");
+  const m = raw.match(/^\s*\/ai\s+with\s+([^\s[\]]*)$/i);
+  return m ? { caret, partial: m[1] } : null;
+}
+
+function paintAiModelPop() {
+  const ctx = aiWithContext();
+  if (ctx && !state.ai.status) {
+    loadAiStatus().then(paintAiModelPop); // 처음이면 모델 목록부터 받아 온다
     return;
   }
-  btn.disabled = true;
-  btn.classList.add("busy");
-  showToast(`${providerLabel()} 가 용건을 다듬는 중… 10~20초쯤 걸려요`);
-  try {
-    const to = flow.data.to || {};
-    const courses = to.courses || [];
-    const ordered = courses[flow.course] ? [courses[flow.course], ...courses.filter((_, i) => i !== flow.course)] : courses;
-    const res = await api("/api/ai/polish", {
-      method: "POST",
-      body: JSON.stringify({ text, lang: flow.lang, flow: { to: { ...to, courses: ordered } } }),
+  if (!ctx || !aiReady()) return closeAiModelPop();
+  const want = aiAlias(ctx.partial);
+  const items = aiModelChoices().filter((c) => !want || c.alias.includes(want) || c.id.toLowerCase().includes(want));
+  if (!items.length) return closeAiModelPop();
+  if (!aiPop.el) {
+    aiPop.el = document.createElement("div");
+    aiPop.el.className = "ai-model-pop";
+    aiPop.el.setAttribute("role", "listbox");
+    document.body.appendChild(aiPop.el);
+    // 누를 때 글 칸의 커서를 잃지 않게 mousedown 에서 고른다
+    aiPop.el.addEventListener("mousedown", (event) => {
+      const row = event.target.closest("[data-i]");
+      if (!row) return;
+      event.preventDefault();
+      chooseAiModel(Number(row.dataset.i));
     });
-    const out = String(res.text || "").trim();
-    if (!out) throw new Error("AI 가 빈 답을 줬어요. 다시 눌러 주세요.");
-    rich.focus();
-    const s = window.getSelection();
-    s.removeAllRanges();
-    s.addRange(range);
-    // 고른 부분을 한 번에 바꾼다 (Ctrl+Z 한 번이면 내 메모로 돌아간다)
-    document.execCommand("insertText", false, out.split("\n").map((line) => line.trim()).join("\n"));
-    showToast(keyLabel(tr(`${res.engine || "AI"} 가 다듬었어요 (${res.seconds}초). [ ] 칸을 채우고, 마음에 안 들면 Ctrl+Z`)));
+  }
+  if (aiPop.partial !== ctx.partial) aiPop.index = 0;
+  aiPop.partial = ctx.partial;
+  aiPop.items = items;
+  aiPop.index = Math.min(aiPop.index, items.length - 1);
+  const names = { claude: "Claude", gemini: "Gemini", codex: "Codex" };
+  aiPop.el.innerHTML =
+    items
+      .map(
+        (c, i) => `<div class="ai-model-opt${i === aiPop.index ? " on" : ""}" data-i="${i}" role="option" aria-selected="${i === aiPop.index}">
+          ${aiLogo(c.provider)}<code>${escapeHtml(c.alias)}</code><span>${escapeHtml(c.label)}</span></div>`,
+      )
+      .join("") + `<div class="ai-model-foot">${escapeHtml(keyLabel(tr("↑↓ 고르기 · Tab 넣기 · 그다음 [ ] 안에 쓰고 Ctrl+Enter")))}</div>`;
+  const rect = ctx.caret.getBoundingClientRect();
+  const fallback = $("#composeRich").getBoundingClientRect();
+  const top = (rect.bottom || fallback.top + 24) + 6;
+  const left = Math.min(rect.left || fallback.left, window.innerWidth - 320);
+  Object.assign(aiPop.el.style, { top: `${Math.round(top)}px`, left: `${Math.round(Math.max(8, left))}px` });
+  aiPop.el.hidden = false;
+}
+
+function chooseAiModel(i) {
+  const c = aiPop.items[i];
+  if (!c) return;
+  const rich = $("#composeRich");
+  const sel = window.getSelection();
+  rich.focus();
+  // 치던 모델 이름을 지우고 'opus5.5 []' 를 넣은 뒤 커서를 [ ] 안에 둔다 (되돌리기 한 번에 빠진다)
+  for (let k = 0; k < aiPop.partial.length; k += 1) sel.modify("extend", "backward", "character");
+  document.execCommand("insertText", false, `${c.alias} []`);
+  sel.modify("move", "backward", "character");
+  closeAiModelPop();
+  scheduleGhost(0);
+}
+
+(() => {
+  const rich = $("#composeRich");
+  if (!rich) return;
+  // 목록이 떠 있을 때는 화살표·Tab·Enter·Esc 를 먼저 받는다 (다른 키 처리보다 앞서게 capture)
+  rich.addEventListener(
+    "keydown",
+    (event) => {
+      if (!aiPop.items.length || aiPop.el?.hidden || event.isComposing) return;
+      const n = aiPop.items.length;
+      let handled = true;
+      if (event.key === "ArrowDown") aiPop.index = (aiPop.index + 1) % n;
+      else if (event.key === "ArrowUp") aiPop.index = (aiPop.index - 1 + n) % n;
+      else if (event.key === "Tab" || (event.key === "Enter" && !event.ctrlKey && !event.metaKey)) chooseAiModel(aiPop.index);
+      else if (event.key === "Escape") closeAiModelPop();
+      else handled = false;
+      if (!handled) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      if (aiPop.items.length && !aiPop.el.hidden) paintAiModelPop();
+    },
+    true,
+  );
+  rich.addEventListener("input", () => window.requestAnimationFrame(paintAiModelPop));
+  rich.addEventListener("click", () => window.requestAnimationFrame(paintAiModelPop));
+  rich.addEventListener("blur", () => window.setTimeout(closeAiModelPop, 120));
+})();
+
+/* ===== AI 모델 고르기 (2026-10-21 사용자: '채팅 창처럼 말고 명령어처럼, 모델은 회사 → 세부 모델로 고르게,
+   각 회사 실제 로고로 — Claude 는 더 역동적이잖아') =====
+   - 'AI 초안' 입력 칸(채팅처럼 한 줄 적고 누르던 것)은 없앴다. AI 는 본문에서 '/ai [할 말]' 로만 부른다.
+   - 쓰기 창 위 모델 단추 → 회사 목록(설치됨 초록 점·지금 쓰는 것 ✓) → 옆으로 세부 모델(설명·꼬리표, CLI 기본, 직접 입력).
+   - 로고: Simple Icons(CC0)의 Claude·Google Gemini·OpenAI 그림(web/img/ai/). 색·움직임을 주려고 경로를 여기 넣었다.
+     AI 가 쓰는 동안 Claude 는 별꽃이 돌며 숨 쉬고, Gemini 는 반짝이고, OpenAI 는 천천히 돈다. */
+const AI_LOGO_PATHS = {"claude": "m4.7144 15.9555 4.7174-2.6471.079-.2307-.079-.1275h-.2307l-.7893-.0486-2.6956-.0729-2.3375-.0971-2.2646-.1214-.5707-.1215-.5343-.7042.0546-.3522.4797-.3218.686.0608 1.5179.1032 2.2767.1578 1.6514.0972 2.4468.255h.3886l.0546-.1579-.1336-.0971-.1032-.0972L6.973 9.8356l-2.55-1.6879-1.3356-.9714-.7225-.4918-.3643-.4614-.1578-1.0078.6557-.7225.8803.0607.2246.0607.8925.686 1.9064 1.4754 2.4893 1.8336.3643.3035.1457-.1032.0182-.0728-.164-.2733-1.3539-2.4467-1.445-2.4893-.6435-1.032-.17-.6194c-.0607-.255-.1032-.4674-.1032-.7285L6.287.1335 6.6997 0l.9957.1336.419.3642.6192 1.4147 1.0018 2.2282 1.5543 3.0296.4553.8985.2429.8318.091.255h.1579v-.1457l.1275-1.706.2368-2.0947.2307-2.6957.0789-.7589.3764-.9107.7468-.4918.5828.2793.4797.686-.0668.4433-.2853 1.8517-.5586 2.9021-.3643 1.9429h.2125l.2429-.2429.9835-1.3053 1.6514-2.0643.7286-.8196.85-.9046.5464-.4311h1.0321l.759 1.1293-.34 1.1657-1.0625 1.3478-.8804 1.1414-1.2628 1.7-.7893 1.36.0729.1093.1882-.0183 2.8535-.607 1.5421-.2794 1.8396-.3157.8318.3886.091.3946-.3278.8075-1.967.4857-2.3072.4614-3.4364.8136-.0425.0304.0486.0607 1.5482.1457.6618.0364h1.621l3.0175.2247.7892.522.4736.6376-.079.4857-1.2142.6193-1.6393-.3886-3.825-.9107-1.3113-.3279h-.1822v.1093l1.0929 1.0686 2.0035 1.8092 2.5075 2.3314.1275.5768-.3218.4554-.34-.0486-2.2039-1.6575-.85-.7468-1.9246-1.621h-.1275v.17l.4432.6496 2.3436 3.5214.1214 1.0807-.17.3521-.6071.2125-.6679-.1214-1.3721-1.9246L14.38 17.959l-1.1414-1.9428-.1397.079-.674 7.2552-.3156.3703-.7286.2793-.6071-.4614-.3218-.7468.3218-1.4753.3886-1.9246.3157-1.53.2853-1.9004.17-.6314-.0121-.0425-.1397.0182-1.4328 1.9672-2.1796 2.9446-1.7243 1.8456-.4128.164-.7164-.3704.0667-.6618.4008-.5889 2.386-3.0357 1.4389-1.882.929-1.0868-.0062-.1579h-.0546l-6.3385 4.1164-1.1293.1457-.4857-.4554.0608-.7467.2307-.2429 1.9064-1.3114Z", "gemini": "M11.04 19.32Q12 21.51 12 24q0-2.49.93-4.68.96-2.19 2.58-3.81t3.81-2.55Q21.51 12 24 12q-2.49 0-4.68-.93a12.3 12.3 0 0 1-3.81-2.58 12.3 12.3 0 0 1-2.58-3.81Q12 2.49 12 0q0 2.49-.96 4.68-.93 2.19-2.55 3.81a12.3 12.3 0 0 1-3.81 2.58Q2.49 12 0 12q2.49 0 4.68.96 2.19.93 3.81 2.55t2.55 3.81", "codex": "M22.2819 9.8211a5.9847 5.9847 0 0 0-.5157-4.9108 6.0462 6.0462 0 0 0-6.5098-2.9A6.0651 6.0651 0 0 0 4.9807 4.1818a5.9847 5.9847 0 0 0-3.9977 2.9 6.0462 6.0462 0 0 0 .7427 7.0966 5.98 5.98 0 0 0 .511 4.9107 6.051 6.051 0 0 0 6.5146 2.9001A5.9847 5.9847 0 0 0 13.2599 24a6.0557 6.0557 0 0 0 5.7718-4.2058 5.9894 5.9894 0 0 0 3.9977-2.9001 6.0557 6.0557 0 0 0-.7475-7.0729zm-9.022 12.6081a4.4755 4.4755 0 0 1-2.8764-1.0408l.1419-.0804 4.7783-2.7582a.7948.7948 0 0 0 .3927-.6813v-6.7369l2.02 1.1686a.071.071 0 0 1 .038.052v5.5826a4.504 4.504 0 0 1-4.4945 4.4944zm-9.6607-4.1254a4.4708 4.4708 0 0 1-.5346-3.0137l.142.0852 4.783 2.7582a.7712.7712 0 0 0 .7806 0l5.8428-3.3685v2.3324a.0804.0804 0 0 1-.0332.0615L9.74 19.9502a4.4992 4.4992 0 0 1-6.1408-1.6464zM2.3408 7.8956a4.485 4.485 0 0 1 2.3655-1.9728V11.6a.7664.7664 0 0 0 .3879.6765l5.8144 3.3543-2.0201 1.1685a.0757.0757 0 0 1-.071 0l-4.8303-2.7865A4.504 4.504 0 0 1 2.3408 7.872zm16.5963 3.8558L13.1038 8.364 15.1192 7.2a.0757.0757 0 0 1 .071 0l4.8303 2.7913a4.4944 4.4944 0 0 1-.6765 8.1042v-5.6772a.79.79 0 0 0-.407-.667zm2.0107-3.0231l-.142-.0852-4.7735-2.7818a.7759.7759 0 0 0-.7854 0L9.409 9.2297V6.8974a.0662.0662 0 0 1 .0284-.0615l4.8303-2.7866a4.4992 4.4992 0 0 1 6.6802 4.66zM8.3065 12.863l-2.02-1.1638a.0804.0804 0 0 1-.038-.0567V6.0742a4.4992 4.4992 0 0 1 7.3757-3.4537l-.142.0805L8.704 5.459a.7948.7948 0 0 0-.3927.6813zm1.0976-2.3654l2.602-1.4998 2.6069 1.4998v2.9994l-2.5974 1.4997-2.6067-1.4997Z"};
+const AI_BRAND = {
+  claude: { name: "Claude", cli: "Claude Code" },
+  gemini: { name: "Gemini", cli: "Gemini CLI" },
+  codex: { name: "ChatGPT", cli: "Codex CLI" },
+};
+// 세부 모델 설명·꼬리표 (모르는 모델은 이름만)
+const AI_MODEL_NOTES = {
+  fable: ["가장 뛰어난 최신 모델", "최고 성능", "hot"],
+  opus: ["깊은 추론 · 긴 글", "", ""],
+  sonnet: ["성능과 속도의 균형", "추천", "pick"],
+  haiku: ["가장 빠르고 가벼움", "빠름", "fast"],
+  "gemini-3.1-pro-preview": ["최신 · 깊은 추론", "최고 성능", "hot"],
+  "gemini-2.5-pro": ["안정적인 깊은 추론", "추천", "pick"],
+  "gemini-3.5-flash": ["빠른 최신 모델", "빠름", "fast"],
+  "gemini-2.5-flash": ["빠르고 가벼움", "빠름", "fast"],
+};
+
+function aiLogo(provider, cls = "") {
+  const d = AI_LOGO_PATHS[provider];
+  if (!d) return `<span class="ai-logo ${cls}" aria-hidden="true"></span>`;
+  return `<svg class="ai-logo ai-logo-${provider} ${cls}" viewBox="0 0 24 24" aria-hidden="true"><path d="${d}"/></svg>`;
+}
+
+const aiMenu = { el: null, provider: "" };
+
+function closeAiMenu() {
+  if (aiMenu.el) aiMenu.el.hidden = true;
+  $("#aiDraftToggle")?.setAttribute("aria-expanded", "false");
+}
+
+function aiModelRow(id, title, note, tag, tone, chosenId) {
+  const on = chosenId === id;
+  const tagHtml = tag ? `<em class="ai-tag ${tone}">${escapeHtml(tag)}</em>` : "";
+  const noteHtml = note ? `<span>${escapeHtml(note)}</span>` : "";
+  return `<button type="button" class="ai-model${on ? " on" : ""}" data-model="${escapeHtml(id)}">
+      <span class="ai-model-text"><strong>${escapeHtml(title)}${tagHtml}</strong>${noteHtml}</span>
+      ${on ? '<span class="ai-check">✓</span>' : ""}</button>`;
+}
+
+function paintAiMenu() {
+  const st = state.ai.status || {};
+  const now = currentAiModel();
+  const models = st.models || {};
+  const order = ["codex", "gemini", "claude"];
+  if (!aiMenu.provider) aiMenu.provider = now.provider || order.find((p) => st.available?.[p]) || "claude";
+  const providers = order
+    .map((p) => {
+      const has = Boolean(st.available?.[p]);
+      const current = p === now.provider;
+      const brand = AI_BRAND[p];
+      const sub = !has ? tr("설치 안 됨") : current ? now.label : brand.cli;
+      const mark = current ? '<span class="ai-check">✓</span>' : '<span class="ai-chev">›</span>';
+      const cls = `ai-prov${current ? " current" : ""}${p === aiMenu.provider ? " open" : ""}${has ? "" : " missing"}`;
+      return `<button type="button" class="${cls}" data-prov="${p}">
+        <span class="ai-prov-dot${has ? " on" : ""}"></span>${aiLogo(p)}
+        <span class="ai-prov-text"><strong>${escapeHtml(brand.name)}</strong><span>${escapeHtml(sub)}</span></span>${mark}
+      </button>`;
+    })
+    .join("");
+  const p = aiMenu.provider;
+  const brand = AI_BRAND[p];
+  const list = models[p]?.models || [];
+  const chosenId = now.provider === p ? st.profile?.model || "" : null;
+  let modelRows;
+  if (st.available?.[p]) {
+    const defaultTitle = tr("기본 ({0} 설정)").replace("{0}", brand.cli);
+    const rows = [aiModelRow("", defaultTitle, tr("CLI 에 설정된 기본 모델을 그대로 써요"), "", "", chosenId)];
+    list.forEach((m) => {
+      const [note, tag, tone] = AI_MODEL_NOTES[m.id] || ["", "", ""];
+      const title = p === "claude" && !/^claude/i.test(m.label) ? `Claude ${m.label}` : m.label;
+      rows.push(aiModelRow(m.id, title, note ? tr(note) : "", tag ? tr(tag) : "", tone, chosenId));
+    });
+    const ph = escapeHtml(tr("직접 입력… (예: claude-opus-5-5)"));
+    rows.push(`<form class="ai-model-custom" data-custom><input type="text" placeholder="${ph}" maxlength="64" spellcheck="false" /></form>`);
+    modelRows = rows.join("");
+  } else {
+    modelRows = `<p class="ai-model-missing">${escapeHtml(tr("이 컴퓨터에 없어요. 설치하고 터미널에서 한 번 로그인해 주세요."))}</p>`;
+  }
+  aiMenu.el.innerHTML = `
+    <div class="ai-menu-models">
+      <div class="ai-menu-head">${aiLogo(p)}<span>${escapeHtml(brand.name)} · ${escapeHtml(brand.cli)}</span></div>
+      ${modelRows}
+    </div>
+    <div class="ai-menu-provs">
+      <div class="ai-menu-head"><span>${escapeHtml(tr("AI 모델"))}</span></div>
+      ${providers}
+      <p class="ai-menu-foot">${escapeHtml(tr("본문에 /ai [prompt] · 한 번만 바꾸려면 /ai with 모델 [prompt]"))}</p>
+    </div>`;
+}
+
+function openAiMenu() {
+  if (!aiMenu.el) {
+    aiMenu.el = document.createElement("div");
+    aiMenu.el.className = "ai-menu";
+    aiMenu.el.hidden = true;
+    aiMenu.el.setAttribute("role", "menu");
+    document.body.appendChild(aiMenu.el);
+    aiMenu.el.addEventListener("mouseover", (event) => {
+      const prov = event.target.closest("[data-prov]");
+      if (prov && prov.dataset.prov !== aiMenu.provider) {
+        aiMenu.provider = prov.dataset.prov;
+        paintAiMenu();
+      }
+    });
+    aiMenu.el.addEventListener("click", async (event) => {
+      const prov = event.target.closest("[data-prov]");
+      if (prov) {
+        aiMenu.provider = prov.dataset.prov;
+        paintAiMenu();
+        return;
+      }
+      const m = event.target.closest("[data-model]");
+      if (m) await pickAiModel(aiMenu.provider, m.dataset.model);
+    });
+    aiMenu.el.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const v = event.target.querySelector("input")?.value.trim() || "";
+      if (!/^[A-Za-z0-9._:-]{1,64}$/.test(v)) {
+        showToast("모델 이름은 영문·숫자·.-_: 만 64자까지 쓸 수 있어요");
+        return;
+      }
+      await pickAiModel(aiMenu.provider, v);
+    });
+    document.addEventListener("mousedown", (event) => {
+      if (aiMenu.el.hidden) return;
+      if (aiMenu.el.contains(event.target) || event.target.closest("#aiDraftToggle")) return;
+      closeAiMenu();
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && !aiMenu.el.hidden) closeAiMenu();
+    });
+  }
+  aiMenu.provider = "";
+  paintAiMenu();
+  const btn = $("#aiDraftToggle").getBoundingClientRect();
+  aiMenu.el.hidden = false;
+  const w = aiMenu.el.offsetWidth;
+  Object.assign(aiMenu.el.style, {
+    top: `${Math.round(btn.bottom + 8)}px`,
+    left: `${Math.round(Math.max(8, Math.min(btn.left, window.innerWidth - w - 8)))}px`,
+  });
+  $("#aiDraftToggle").setAttribute("aria-expanded", "true");
+}
+
+async function pickAiModel(provider, model) {
+  if (!state.ai.status?.available?.[provider]) {
+    showToast(tr("이 컴퓨터에 없어요. 설치하고 터미널에서 한 번 로그인해 주세요."));
+    return;
+  }
+  try {
+    await saveAiProfile({ provider, model });
+    paintAiModelButton();
+    paintAiMenu();
+    showToast(`${currentAiModel().label} 로 쓸게요`);
+    window.setTimeout(closeAiMenu, 250);
   } catch (error) {
     showToast(humanError(error));
-  } finally {
-    btn.disabled = false;
-    btn.classList.remove("busy");
   }
-});
+}
 
-window.setTimeout(() => loadMailMe(), 4500);
+// 쓰기 창 위 단추: [로고] 모델 이름 ▾
+function paintAiModelButton() {
+  const btn = $("#aiDraftToggle");
+  if (!btn) return;
+  const now = currentAiModel();
+  btn.innerHTML = `${aiLogo(now.provider || "claude")}<span id="aiDraftModelName">${escapeHtml(now.label)}</span><span class="ai-btn-chev" aria-hidden="true">▾</span>`;
+  btn.title = tr("AI 모델 바꾸기 · 본문에 /ai [prompt]");
+  btn.setAttribute("aria-haspopup", "menu");
+}
+
+// Gemini 로고의 파랑→보라 그라데이션 (CSS fill:url(#aiGeminiGrad) 가 쓴다)
+(() => {
+  const defs = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  defs.setAttribute("width", "0");
+  defs.setAttribute("height", "0");
+  defs.setAttribute("aria-hidden", "true");
+  defs.style.position = "absolute";
+  defs.innerHTML = '<defs><linearGradient id="aiGeminiGrad" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#1c7dff"/><stop offset=".55" stop-color="#6e6bf0"/><stop offset="1" stop-color="#c26be8"/></linearGradient></defs>';
+  document.body.appendChild(defs);
+})();

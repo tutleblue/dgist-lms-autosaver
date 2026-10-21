@@ -2873,7 +2873,11 @@ def open_external_url(payload: dict[str, Any]) -> dict[str, Any]:
     if parsed.scheme not in ("http", "https"):
         raise ValueError("열 수 없는 주소입니다.")
     if not (host == "dgist.ac.kr" or host.endswith(ALLOWED_LINK_HOSTS)):
-        raise ValueError("학교(dgist.ac.kr) 사이트만 열 수 있습니다.")
+        # FGLP 파견 대학의 홈페이지·여름학기 안내·위키백과·지도·사진 출처는 앱에 넣어 둔 주소와 똑같을 때만
+        import fglp
+
+        if url not in fglp.known_links():
+            raise ValueError("학교(dgist.ac.kr) 사이트만 열 수 있습니다.")
 
     opened = False
     if not MULTI_USER_MODE:
@@ -4062,7 +4066,67 @@ def append_log(user_id: str, line: str) -> None:
         task_state["logs"] = task_state["logs"][-500:]
 
 
-def run_process(workspace: UserWorkspace, kind: str, command: list[str], extra_env: dict[str, str] | None = None, auto: bool = False) -> None:
+def _mail_in_process(workspace: UserWorkspace) -> bool:
+    """메일 새로고침을 이 서버 안에서 돌려도 되는지.
+
+    작업 프로세스(붕어빵.exe --autosaver-job emails)를 띄우는 데만 약 1초가 들었다(2026-10-21 실측: 작업 3.9초 중
+    메일 서버와 주고받기 2.7초). 메일은 브라우저도 안 띄우고 IMAP 만 쓰니 서버 안 스레드로 충분하다.
+    다만 email_reader 는 모듈 전역(계정·저장 파일)을 쓰므로, 이 서버가 보는 데이터·설정 파일과 같은
+    사람일 때(혼자 쓰는 앱)만. 여러 사람이 쓰는 웹 모드는 예전처럼 프로세스를 따로 띄운다.
+    """
+    if MULTI_USER_MODE:
+        return False
+    try:
+        import runtime_config
+
+        return (
+            Path(workspace.root).resolve() == Path(runtime_config.AUTOSAVER_DATA_ROOT).resolve()
+            and Path(workspace.config_path).resolve() == Path(runtime_config.CONFIG_JSON_PATH).resolve()
+        )
+    except Exception:
+        return False
+
+
+def _run_emails_here(key: str) -> int:
+    """메일 새로고침을 이 스레드에서 돌린다. email_reader 가 print 로 남기는 진행 상황은 이 작업의 로그로.
+
+    print 를 email_reader 모듈 안에서만 바꿔 끼운다. 다른 스레드(메일 보내기 등)가 같은 모듈을 부르면
+    그쪽 출력은 원래 print 로 간다.
+    """
+    import builtins
+    import traceback
+
+    import email_reader
+
+    me = threading.current_thread()
+
+    def log(*args, sep=" ", end="\n", file=None, flush=False):
+        if threading.current_thread() is me and file in (None, sys.stdout, sys.stderr):
+            append_log(key, sep.join(str(a) for a in args))
+        else:
+            builtins.print(*args, sep=sep, end=end, file=file, flush=flush)
+
+    email_reader.print = log
+    try:
+        days, max_count = email_reader.reload_settings()
+        email_reader.refresh_emails(days, max_count)
+        return 0
+    except Exception as exc:
+        # '로그인에 실패' 가 있으면 run_process 가 자동 재시도를 멈춘다. 오류 추적 전체는 남기지 않는다:
+        # 소스 줄 '(서버: {reply})' 이 먼저 걸려 이유가 '{reply}' 로 적혔다(2026-10-21 실측). 실제 말과 위치만.
+        frame = traceback.extract_tb(exc.__traceback__)[-1:] or [None]
+        where = f" ({Path(frame[0].filename).name}:{frame[0].lineno})" if frame[0] else ""
+        append_log(key, f"작업이 실패했습니다: {exc}{where}")
+        return 1
+    finally:
+        email_reader.close_active()
+        try:
+            del email_reader.print
+        except AttributeError:
+            pass
+
+
+def run_process(workspace: UserWorkspace, kind: str, command: list[str] | None, extra_env: dict[str, str] | None = None, auto: bool = False) -> None:
     key = task_key(workspace.user_id, kind)
     env = os.environ.copy()
     env["PYTHONIOENCODING"] = "utf-8"
@@ -4091,7 +4155,10 @@ def run_process(workspace: UserWorkspace, kind: str, command: list[str], extra_e
             }
         )
 
-    try:
+    if command is None:
+        return_code = _run_emails_here(key)
+    else:
+      try:
         process = subprocess.Popen(
             command,
             cwd=str(PROJECT_ROOT),
@@ -4109,7 +4176,7 @@ def run_process(workspace: UserWorkspace, kind: str, command: list[str], extra_e
         for line in process.stdout:
             append_log(key, line)
         return_code = process.wait()
-    except Exception as exc:  # pragma: no cover - defensive runtime guard
+      except Exception as exc:  # pragma: no cover - defensive runtime guard
         append_log(key, f"[오류] {exc}")
         return_code = -1
 
@@ -4234,6 +4301,12 @@ def start_task(workspace: UserWorkspace, kind: str, sync_mode: str = "fast", aut
     if kind not in ("sync", "verify", "deadlines", "emails", "google-oauth"):
         return False, "알 수 없는 작업입니다."
 
+    if kind == "emails" and _mail_in_process(workspace):
+        # 메일은 따로 된 프로세스를 띄우지 않고 이 서버 안에서 돈다 (_run_emails_here 설명)
+        ensure_data_files(workspace)
+        threading.Thread(target=run_process, args=(workspace, kind, None, None, auto), daemon=True).start()
+        return True, "작업을 시작했습니다."
+
     if getattr(sys, "frozen", False):
         # EXE 에서는 sys.executable 이 '붕어빵.exe' 다.
         # `-c "..."` 를 붙여도 무시되고 앱이 통째로 다시 켜지므로(창이 계속 늘어남),
@@ -4303,6 +4376,13 @@ def stop_task(workspace: UserWorkspace, lane: str = "") -> tuple[bool, str]:
         with task_lock:
             process = current_processes.get(key)
             running = bool(task_states.setdefault(key, default_task_state())["running"])
+        if running and process is None and key == task_key(workspace.user_id, "emails"):
+            import email_reader
+
+            if email_reader.abort_refresh():  # 서버 안에서 도는 메일 새로고침 (_run_emails_here)
+                append_log(key, f"[{now_iso()}] 사용자가 작업 중지를 요청했습니다.")
+                stopped.append(key)
+            continue
         if not running or process is None or process.poll() is not None:
             continue
         process.terminate()
@@ -4695,7 +4775,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                             "ok": False,
                             "items": [],
                             "needsKey": True,
-                            "message": "DGIST 오픈API 인증키가 없습니다. 설정에서 등록해 주세요.",
+                            "message": "학교 공식 정보를 지금은 불러올 수 없어요.",
                         }
                     )
                     return
@@ -5874,10 +5954,16 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                     self.send_json({"ok": True, "profile": ai_cli.save_profile(profile_path, payload)})
                     return
                 profile = ai_cli.load_profile(profile_path)
-                if not ai_cli.enabled(profile):
-                    raise ai_cli.AIError("AI 도우미가 꺼져 있어요. 설정 → AI 도우미(실험실)에서 켜 주세요.")
+                # 실험실 켜기 스위치는 없앴다(2026-10-20 사용자: '어차피 /ai 쳐서 쓸 거니까'). AI 는 사용자가 /ai·단추로
+                # 부를 때만 돈다는 원칙은 그대로라, 따로 켜 둘 필요가 없다.
                 provider = profile.get("provider") or None
                 model = profile.get("model") or ""
+                # '/ai with opus5.5 [ … ]' 처럼 이번 한 번만 고른 모델. 아는 CLI·안전한 글자일 때만 받는다(인자로 넘어감)
+                once_provider = str(payload.get("provider") or "")
+                once_model = str(payload.get("model") or "")
+                if once_provider in ai_cli.PROVIDERS:
+                    provider = once_provider
+                    model = once_model if ai_cli._SAFE_MODEL.match(once_model or "x") and once_model else ""
                 if route == "/api/ai/search":
                     index = payload.get("index") if isinstance(payload.get("index"), list) else []
                     res = ai_cli.search(str(payload.get("query") or ""), index, provider, model=model)

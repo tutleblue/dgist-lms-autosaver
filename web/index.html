@@ -1085,11 +1085,8 @@
                             <button type="button" data-flow-lang="ko" aria-pressed="false">한국어</button>
                             <button type="button" data-flow-lang="en" aria-pressed="false">English</button>
                           </div>
-                          <span class="mail-flow-hint"><kbd>Tab</kbd> 회색 글씨 넣기<span id="mailFlowAiHint" hidden> · <kbd>/ai</kbd> 쓰고 <kbd>Ctrl+Enter</kbd> AI 가 이어 쓰기</span></span>
-                          <button type="button" class="button ghost compact" id="mailFlowPolish" title="가운데 용건만 AI 가 다듬어요. 대충 적어도 돼요 (한국어 메모도 영어 메일로)" hidden>
-                            <span class="icon" data-icon="sparkle"></span>
-                            용건 다듬기
-                          </button>
+                          <!-- 회색 글씨는 본문 안 글씨 옆에 Tab 키를 띄워 알린다(flow-ghost). 여기는 /ai 쓰는 법만 (2026-10-21 사용자) -->
+                          <span class="mail-flow-hint" id="mailFlowAiHint" hidden><kbd>/ai</kbd> [prompt] + <kbd>Ctrl+Enter</kbd></span>
                         </div>
 
                         <!-- 본문: 서식 모드면 편집 영역, HTML 모드면 textarea -->
@@ -1545,27 +1542,7 @@
             </div>
           </section>
 
-          <!-- AI 도우미: 번역·말로 찾기·메일 초안·용건 다듬기에 쓸 AI CLI -->
-          <section class="st-card" id="stAi">
-            <header class="st-head">
-              <span class="st-tile violet"><span class="icon" data-icon="sparkle"></span></span>
-              <div>
-                <h3>AI 도우미 <span class="labs-badge">실험실</span></h3>
-                <p>번역 · 말로 찾기 · 메일 초안. 이 PC 에 로그인해 둔 CLI 계정을 써요.</p>
-              </div>
-              <!-- 실험실 스위치: 끄면 메일 쓰기의 모델 단추·검색의 'AI 에게 물어보기'·번역의 AI 가 모두 사라진다 -->
-              <label class="labs-switch" title="AI 도우미 켜기/끄기">
-                <span class="toggle"><input type="checkbox" id="aiEnabled" /><span class="track"></span></span>
-              </label>
-            </header>
-            <div class="ai-body" id="aiBody" hidden>
-            <div class="ai-providers" id="aiProviders" role="radiogroup" aria-label="쓸 AI"></div>
-            <div class="ai-profile-foot">
-              <span class="ai-privacy">메일 초안·용건 다듬기·번역·검색을 누를 때만 그 내용이 고른 AI 로 보내져요.</span>
-            </div>
-            </div>
-          </section>
-
+          <!-- AI 도우미 카드(실험실)는 없앴다(2026-10-20). 모델은 메일 쓰기 창의 모델 단추나 '/ai with 모델 [할 말]' 로 고른다 -->
           <section class="st-card" id="stAuto">
             <header class="st-head">
               <span class="st-tile green"><span class="icon" data-icon="sync"></span></span>
@@ -1708,35 +1685,8 @@
             </div>
           </section>
 
-          <!-- ⑥ 선택 기능: 없어도 앱은 돈다 -->
-          <details class="st-card st-more">
-            <summary class="st-head">
-              <span class="st-tile blue"><span class="icon" data-icon="key"></span></span>
-              <div>
-                <h3>추가 기능 켜기 <span class="st-optional">선택</span></h3>
-                <p>메일 요약·번역, 학교 공식 강좌 정보</p>
-              </div>
-              <span class="icon st-chev" data-icon="chevronDown"></span>
-            </summary>
-            <div class="st-keys">
-              <label class="st-field">
-                <span>
-                  Gemini 키 — 메일 요약·번역·시간표 사진 읽기
-                  <button type="button" class="hint" data-hint="Google AI Studio 에서 무료로 받습니다. 없으면 번역은 이 컴퓨터의 로컬 모델로 합니다.">?</button>
-                  <em class="badge-saved" id="geminiSavedBadge" hidden>저장됨</em>
-                </span>
-                <input name="geminiKey" type="password" placeholder="바꿀 때만 입력" autocomplete="off" />
-              </label>
-              <label class="st-field">
-                <span>
-                  DGIST 공공데이터 키 — 개설강좌·학사일정·학교 행사
-                  <button type="button" class="hint" data-hint="앱에 기본 키가 들어 있어 비워 둬도 됩니다. 내 키를 넣으면 그 키를 먼저 씁니다(공공데이터포털 data.go.kr 에서 무료로 받음).">?</button>
-                  <em class="badge-saved" id="dgistKeySavedBadge" hidden>저장됨</em>
-                </span>
-                <input name="dgistApiKey" type="password" placeholder="비워 두면 앱 기본 키 사용" autocomplete="off" />
-              </label>
-            </div>
-          </details>
+          <!-- ⑥ '추가 기능 켜기'(Gemini 키·DGIST 공공데이터 키 칸)는 뺐다 — 2026-10-21 사용자: API 키를 직접 요청하는 설정은 지워 달라.
+               이미 저장된 키는 write_config 가 그대로 두고 계속 쓴다. 공공데이터 키는 앱에 묶인 기본 키를 쓴다. -->
 
           <!-- ⑦ 앱 -->
           <section class="st-card">

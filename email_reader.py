@@ -109,6 +109,48 @@ class MiniIMAP:
                 literal = self.file.read(int(match.group(1)))
             lines.append((line, literal))
 
+    def pipeline(self, commands: list[str]) -> list[tuple[str, list[tuple[bytes, bytes | None]]]]:
+        """여러 명령을 한 번에 보내고 차례대로 답을 읽는다 (IMAP 파이프라이닝, RFC 3501 5.5).
+
+        이 서버는 명령 하나에 왕복 약 0.1초다. 새로고침 때 폴더 5개 × (SELECT·검색 3번) 20번을
+        하나씩 주고받느라 새 메일이 없어도 2초 넘게 걸렸다(2026-10-21 실측 2.4초 / 전체 2.7초).
+        서버는 받은 순서대로 처리하므로, 앞 SELECT 가 바꾼 폴더에서 뒤 검색이 돈다.
+        """
+        tags = []
+        out = []
+        for command in commands:
+            self.tag_n += 1
+            tag = f"A{self.tag_n:03d}"
+            tags.append(tag)
+            out.append(f"{tag} {command}\r\n")
+        self.sock.sendall("".join(out).encode())
+        results = []
+        for tag in tags:
+            lines: list[tuple[bytes, bytes | None]] = []
+            while True:
+                line = self.file.readline()
+                if not line:
+                    raise ConnectionError("서버 연결이 끊겼습니다.")
+                if line.startswith(tag.encode() + b" "):
+                    results.append((line.split(b" ", 2)[1].decode("ascii", "replace"), lines))
+                    break
+                literal = None
+                match = re.search(rb"\{(\d+)\}\r?\n$", line)
+                if match:
+                    literal = self.file.read(int(match.group(1)))
+                lines.append((line, literal))
+        return results
+
+    @staticmethod
+    def search_ids(status: str, lines: list[tuple[bytes, bytes | None]]) -> list[int]:
+        if status != "OK":
+            return []
+        ids: list[int] = []
+        for line, _ in lines:
+            if line.upper().startswith(b"* SEARCH"):
+                ids += [int(n) for n in line.split()[2:] if n.isdigit()]
+        return sorted(ids)
+
     def login(self, user: str, password: str) -> None:
         quoted_user = '"' + user.replace('\\', '\\\\').replace('"', '\\"') + '"'
         quoted_pw = '"' + password.replace('\\', '\\\\').replace('"', '\\"') + '"'
@@ -1362,7 +1404,9 @@ def fetch_school_emails(days: int | None = None, max_count: int | None = None) -
     max_count = int(max_count or MAIL_KEEP_MAX)
 
     print(f"학교 메일 서버 접속 중... ({SCHOOL_IMAP_HOST}) · 최근 {days}일, 폴더마다 {max_count}통까지")
+    global _ACTIVE_CLIENT
     client = MiniIMAP(SCHOOL_IMAP_HOST, SCHOOL_IMAP_PORT)
+    _ACTIVE_CLIENT = client  # 화면 서버 안에서 돌 때 '멈추기' 가 이 연결을 끊는다 (abort_refresh)
     client.login(SCHOOL_EMAIL, SCHOOL_EMAIL_PASSWORD)
 
     cached = _load_cached_emails()
@@ -1382,13 +1426,27 @@ def fetch_school_emails(days: int | None = None, max_count: int | None = None) -
     emails = []
     reused_total = 0
     fetched_total = 0
+    # 모든 폴더의 SELECT·검색을 한 번에 보낸다 (MiniIMAP.pipeline 설명). 검색 조건은 search_* 와 같다.
+    # 휴지통은 받은 날짜가 아니라 버린 순서로 (search_all 설명 참고)
+    date_str = since.strftime("%d-%b-%Y")
+    batch = []
     for raw, key in targets:
-        if not client.select_folder(raw):
+        batch += [
+            f"SELECT {client._quote(raw)}",
+            "UID SEARCH NOT DELETED" if key == "trash" else f"UID SEARCH NOT DELETED SINCE {date_str}",
+            "UID SEARCH NOT DELETED UNSEEN",
+            "UID SEARCH NOT DELETED FLAGGED",
+        ]
+    answers = client.pipeline(batch)
+    # 지금 열려 있는 폴더: 마지막 SELECT 의 폴더 (실패한 SELECT 는 아무 폴더도 안 연 상태로 둔다)
+    selected = targets[-1][0] if targets and answers[-4][0] == "OK" else None
+    for n, (raw, key) in enumerate(targets):
+        (sel_status, _), found, unseen_ans, flagged_ans = answers[4 * n : 4 * n + 4]
+        if sel_status != "OK":
             continue
-        # 휴지통은 받은 날짜가 아니라 버린 순서로 (search_all 설명 참고)
-        ids = (client.search_all() if key == "trash" else client.search_since(since))[-max_count:]
-        unseen = set(client.search_unseen())
-        flagged = set(client.search_flagged())
+        ids = MiniIMAP.search_ids(*found)[-max_count:]
+        unseen = set(MiniIMAP.search_ids(*unseen_ans))
+        flagged = set(MiniIMAP.search_ids(*flagged_ans))
 
         def stale(msg_id: int) -> bool:
             """예전 방식으로 받아 둔 메일은 본문이 잘려 있어 한 번 다시 받는다."""
@@ -1403,6 +1461,14 @@ def fetch_school_emails(days: int | None = None, max_count: int | None = None) -
         fetched_total += len(fresh)
         if fresh:
             print(f"  [{key}] 새 메일 {len(fresh)}건 받는 중 (이미 있는 {reused}건은 건너뜀)")
+            # 검색은 한꺼번에 했으니, 받을 것이 있는 폴더만 다시 연다
+            if selected != raw:
+                if not client.select_folder(raw):
+                    print(f"    [{key}] 폴더를 다시 열지 못해 새 메일을 건너뜁니다")
+                    fresh = []
+                    ids = [i for i in ids if not stale(i)]
+                else:
+                    selected = raw
         else:
             print(f"  [{key}] 새 메일 없음 ({reused}건 그대로)")
 
@@ -1424,6 +1490,7 @@ def fetch_school_emails(days: int | None = None, max_count: int | None = None) -
                 print(f"    메일 {key}:{msg_id} 처리 실패: {e}")
 
     client.logout()
+    close_active()
     print(
         f"메일 {len(emails)}건 (새로 받은 것 {fetched_total}건, "
         f"그대로 쓴 것 {reused_total}건, 폴더 {len(targets)}개)"
@@ -2100,8 +2167,60 @@ def save_draft(to_addr: str, subject: str, body: str, cc: str = "", bcc: str = "
     return {"ok": True, "replaced": replaced}
 
 
-def refresh_emails() -> dict:
-    emails = fetch_school_emails()
+# 지금 새로고침에 쓰는 연결. 작업이 따로 된 프로세스면 끝날 때 함께 닫히지만, 화면 서버 안에서 돌면
+# (web_ui._run_emails_here) 실패해도 열린 채 남으므로 끝에 닫는다.
+_ACTIVE_CLIENT: "MiniIMAP | None" = None
+
+
+def close_active() -> None:
+    global _ACTIVE_CLIENT
+    client, _ACTIVE_CLIENT = _ACTIVE_CLIENT, None
+    if client is not None:
+        # close() 만으로는 끊기지 않는다: makefile() 이 소켓을 붙잡고 있어 다른 스레드의 readline 이 그대로 기다렸다
+        # (2026-10-21 실측: 멈추기를 눌러도 끝까지 받았다). shutdown 이 막힌 읽기를 깨운다.
+        for step in (lambda: client.sock.shutdown(socket.SHUT_RDWR), client.sock.close):
+            try:
+                step()
+            except OSError:
+                pass
+
+
+def abort_refresh() -> bool:
+    """돌고 있는 새로고침의 연결을 끊는다. 읽던 쪽은 ConnectionError·OSError 로 멈춘다."""
+    if _ACTIVE_CLIENT is None:
+        return False
+    close_active()
+    return True
+
+
+def reload_settings() -> tuple[int, int]:
+    """설정 파일을 지금 다시 읽어 계정·서버·보관 기간을 맞춘다. (보관 일수, 폴더당 통수) 를 돌려준다.
+
+    작업을 따로 된 프로세스로 띄우면 켤 때마다 새로 읽었지만, 화면 서버 안에서 돌리면 이 모듈은 한 번만
+    불러와지므로 설정에서 비밀번호·보관 기간을 바꿔도 옛 값을 쓴다. 그래서 돌 때마다 부른다.
+    """
+    global SCHOOL_EMAIL, SCHOOL_EMAIL_PASSWORD, SCHOOL_IMAP_HOST, SCHOOL_IMAP_PORT, GEMINI_API_KEY, EMAIL_INTERESTS
+    import runtime_config
+
+    cfg = runtime_config._load_config()
+    SCHOOL_EMAIL = str(cfg.get("SCHOOL_EMAIL", ""))
+    SCHOOL_EMAIL_PASSWORD = str(cfg.get("SCHOOL_EMAIL_PASSWORD", ""))
+    SCHOOL_IMAP_HOST = str(cfg.get("SCHOOL_IMAP_HOST", "mail.dgist.ac.kr"))
+    SCHOOL_IMAP_PORT = int(cfg.get("SCHOOL_IMAP_PORT", 993) or 993)
+    GEMINI_API_KEY = str(cfg.get("GEMINI_API_KEY", ""))
+    EMAIL_INTERESTS = str(cfg.get("EMAIL_INTERESTS", "전공 탐색, 취업, 음악, 세미나"))
+
+    def clamp(key: str, default: int, low: int, high: int) -> int:  # runtime_config._int_setting 과 같은 규칙
+        try:
+            return min(high, max(low, int(cfg.get(key, default))))
+        except (TypeError, ValueError):
+            return default
+
+    return clamp("MAIL_KEEP_DAYS", 21, 7, 730), clamp("MAIL_KEEP_MAX", 60, 30, 2000)
+
+
+def refresh_emails(days: int | None = None, max_count: int | None = None) -> dict:
+    emails = fetch_school_emails(days, max_count)
     interests = EMAIL_INTERESTS or "전공 탐색, 취업, 음악, 세미나"
 
     # 브리핑/AI 분류는 받은편지함 중심 (보낸·광고는 규칙 기반만)
