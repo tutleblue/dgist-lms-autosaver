@@ -2015,5 +2015,10 @@
  "Space 로 넘기고, Esc 로 언제든 그만둘 수 있어.": "Press Space to continue, and Esc to stop anytime.",
  "다른 메뉴는 처음 들어갈 때 내가 짧게 알려 줄게. 처음부터 다시 보려면 설정 맨 아래 '앱 소개 다시 보기'.": "I'll give a quick intro the first time you open each menu. To see it all again, use 'Replay tour' at the bottom of Settings.",
  "알겠어": "Got it",
- "작업이 실패했습니다: {0}{1}": "Task failed: {0}{1}"
+ "작업이 실패했습니다: {0}{1}": "Task failed: {0}{1}",
+ "Drive · 이 판에서는 준비 중": "Drive · not available in this version yet",
+ "이 판에서는 아직 Google 연결을 쓸 수 없어요.": "Google sign-in isn't available in this version yet.",
+ "이 판에서는 아직 쓸 수 없어요": "Not available in this version yet",
+ "마감 다시 가져오기": "Fetching deadlines again",
+ "메일 다시 가져오기": "Fetching mail again"
 }

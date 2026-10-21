@@ -3556,9 +3556,11 @@ function renderStatus() {
 /* ===== 설정: 구글 계정 섹션 ===== */
 function renderGoogleSection() {
   const oauth = state.status?.googleOAuth || {};
-  // 준비물이 없을 때만 '파일 고르기'를 띄운다
+  // 구글 로그인 준비물(credentials.json)을 사용자에게 달라고 하지 않는다. 맥·리눅스 판은 준비물이 안 묶여
+  // 'API 를 발급해 파일을 넣으라' 는 칸과 도움말이 떴다(2026-10-21 사용자: API 키를 요구하는 설정은 지워 달라).
+  // 준비물이 없는 판에서는 '아직 쓸 수 없어요' 로만 알리고 단추를 끈다.
   const drop = $("#credDrop");
-  if (drop) drop.hidden = Boolean(oauth.credentialsExists);
+  if (drop) drop.hidden = true;
   const statusText = $("#googleStatusText");
   const loginButton = $("#googleLoginButton");
   const disconnectButton = $("#disconnectGoogleButton");
@@ -3570,11 +3572,13 @@ function renderGoogleSection() {
     loginButton.textContent = "다시 로그인";
     loginButton.classList.remove("primary");
   } else {
-    setAccountPill("#googlePill", "need", "연결 안 됨");
-    statusText.textContent = oauth.credentialsExists ? "" : "로그인 준비 파일이 필요해요";
+    const ready = Boolean(oauth.credentialsExists);
+    setAccountPill("#googlePill", "need", ready ? "연결 안 됨" : "준비 중");
+    statusText.textContent = ready ? "" : "이 판에서는 아직 쓸 수 없어요";
     loginButton.textContent = "Google로 로그인";
-    loginButton.classList.add("primary");
+    loginButton.classList.toggle("primary", ready);
   }
+  loginButton.disabled = !oauth.credentialsExists && !oauth.tokenUsable;
   disconnectButton.hidden = !oauth.tokenExists;
   renderAccountPills();
   renderSaveDestinations();
@@ -6635,8 +6639,7 @@ function bindEvents() {
   $("#googleLoginButton").addEventListener("click", () => {
     const oauth = state.status?.googleOAuth || {};
     if (!oauth.credentialsExists) {
-      $("#googleHelpDialog").showModal();
-      showToast("credentials.json을 먼저 준비해 주세요.");
+      showToast("이 판에서는 아직 Google 연결을 쓸 수 없어요.");
       return;
     }
     api("/api/google/connect", {
@@ -6684,9 +6687,22 @@ function bindEvents() {
   bindQuicklinks();
 
   // 동기화 실패 배너
-  $("#healthRetryButton")?.addEventListener("click", () => {
+  $("#healthRetryButton")?.addEventListener("click", async () => {
     splashFromButton($("#healthRetryButton"));
-    startRun("/api/run", "빠른 동기화", { confirm: true, mode: "fast" });
+    // 실패한 작업을 다시 한다. 예전엔 늘 자료 동기화만 돌려서, 메일 로그인이 막혔다는 경고는 눌러도 그대로였다
+    // (메일은 다시 해 보지도 않았다 — 2026-10-21 맥 사용자 신고). 서버가 거절해 쉬는 중이어도 직접 누르면 다시 해 본다.
+    const h = state.health || {};
+    const kinds = new Set([...Object.keys(h.authFailed || {}), h.lastFailure?.kind].filter(Boolean));
+    if (!kinds.size) kinds.add("sync");
+    if (kinds.has("emails")) await startRun("/api/refresh-emails", "메일 다시 가져오기");
+    if (kinds.has("deadlines")) await startRun("/api/refresh-deadlines", "마감 다시 가져오기");
+    if (kinds.has("sync")) await startRun("/api/run", "빠른 동기화", { confirm: true, mode: "fast" });
+    await Promise.all([
+      kinds.has("emails") ? waitForTask(180000, "mail") : null,
+      kinds.has("deadlines") || kinds.has("sync") ? waitForTask() : null,
+    ]);
+    state.health = null; // 결과를 다시 받아 경고를 새로 그린다
+    await refreshAll();
   });
   $("#healthSettingsButton")?.addEventListener("click", openSettings);
 
@@ -10571,11 +10587,17 @@ function renderSaveDestinations() {
   const drive = $("#driveUploadToggle");
   const local = $("#localSaveToggle");
   if (!drive || !local) return;
-  const googleOk = Boolean(state.status?.googleOAuth?.tokenUsable);
-  const driveOn = drive.checked;
+  const oauth = state.status?.googleOAuth || {};
+  const googleOk = Boolean(oauth.tokenUsable);
+  // 구글 로그인 준비물이 없는 판(맥·리눅스): 켤 수 없게 두고 '준비 중' 으로만 (로그인하라고 조르지 않는다)
+  // 상태를 아직 못 받았으면(켜는 중) 판단하지 않는다. 안 그러면 Windows 에서도 잠깐 꺼진 것으로 바꿔 버린다
+  const unavailable = Boolean(state.status?.googleOAuth) && !googleOk && !oauth.credentialsExists;
+  drive.disabled = unavailable;
+  if (unavailable) drive.checked = false; // 켜진 것처럼 보이지 않게 (저장하면 드라이브를 끈 것으로 남는다 — 이 판에서는 맞는 값)
+  const driveOn = drive.checked && !unavailable;
   $("#driveDest").classList.toggle("on", driveOn && googleOk);
   $("#driveDest").classList.toggle("blocked", driveOn && !googleOk);
-  $("#driveState").textContent = !driveOn ? "꺼짐" : googleOk ? "자동 저장 중" : "로그인 필요";
+  $("#driveState").textContent = unavailable ? "준비 중" : !driveOn ? "꺼짐" : googleOk ? "자동 저장 중" : "로그인 필요";
   $("#driveWarn").hidden = !(driveOn && !googleOk);
 
   const mode = localSaveMode();
@@ -12388,6 +12410,8 @@ function statusLights() {
 
   const drive = cfg.driveUpload === false
     ? { tone: "off", why: "", tip: "Drive · 꺼 둠" }
+    : !oauth.tokenUsable && !oauth.credentialsExists
+      ? { tone: "off", why: "", tip: "Drive · 이 판에서는 준비 중" }
     : !oauth.tokenUsable
       ? { tone: "bad", why: "구글 로그인 필요", tip: "Drive · 로그인 필요" }
       : { tone: "ok", why: "", tip: "Drive · 연결됨" };
