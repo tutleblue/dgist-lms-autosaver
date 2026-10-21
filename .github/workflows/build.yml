@@ -1,12 +1,14 @@
-# Daling 두 운영체제 빌드 — Windows(windows-latest)와 macOS(M칩 macos-latest·인텔 macos-15-intel)를 한 번에
+# Daling 세 운영체제 빌드 — Windows(windows-latest)·macOS(M칩 macos-latest·인텔 macos-15-intel)·리눅스(ubuntu-22.04)를 한 번에
 #
 # 왜 있나: 개발 PC 는 Windows 뿐이고 맥이 없다. PyInstaller 는 다른 운영체제용으로 묶지 못하므로(크로스 빌드 없음)
 #          맥 앱은 GitHub 의 맥 러너에서만 만들고 시험할 수 있다. 코드를 고칠 때마다 두 운영체제에서 묶이고 켜지는지 본다.
 #  - windows: PyInstaller → Inno Setup(서명 없음) → 창 없이 점검(--autosaver-smoke) → 설치 파일을 아티팩트로
 #  - mac:     mac.yml 을 그대로 부른다 (빌드 → 서명(사설 인증서, 없으면 ad-hoc) → 실제 앱 띄워 보기 → 점검 → DMG)
+#  - linux:   linux.yml 을 그대로 부른다 (빌드 → Xvfb 에서 앱 띄워 보기 → 점검 → AppImage·tar.gz). 예전엔 수동으로만 돌아
+#             맥·Windows 만 보고 리눅스가 깨진 채 올라갈 수 있었다(2026-10-21 맥·리눅스 점검)
 #  - 릴리스는 만들지 않는다. 서명된 Windows 릴리스는 release.yml(SignPath), 맥 릴리스 DMG 는 mac.yml 결과를 올린다.
 #  - 아티팩트: Actions 실행 화면 아래 'Artifacts' 에서 daling-windows-setup / daling-mac-dmg-arm64(M칩) /
-#    daling-mac-dmg-x86_64(인텔) 를 받는다.
+#    daling-mac-dmg-x86_64(인텔) / daling-linux-appimage / daling-linux-tar 를 받는다.
 #    맥 DMG 를 브라우저로 받으면 처음 한 번 '그래도 열기' 가 필요하다 (README 'macOS 에서 열기').
 #
 # 공개 저장소라 맥 러너도 무료다. 같은 브랜치에 새로 올리면 앞의 실행은 취소된다.
@@ -16,11 +18,14 @@ on:
   workflow_dispatch:
   push:
     branches: ["main"]
-    # 소개 사이트·문서·디자인 원본만 바뀐 커밋은 앱이 그대로라 빌드하지 않는다
-    paths-ignore:
-      - "docs/**"
-      - "**/*.md"
-      - "design/**"
+    # 소개 사이트·문서·디자인 원본만 바뀐 커밋은 앱이 그대로라 빌드하지 않는다.
+    # 단 docs/install.sh 는 맥 앱 안 업데이트가 묶어 쓰므로(mac.yml 이 점검) 바뀌면 빌드한다 — 뒤에 적은 패턴이 앞을 이긴다
+    paths:
+      - "**"
+      - "!docs/**"
+      - "!**/*.md"
+      - "!design/**"
+      - "docs/install.sh"
 
 permissions:
   contents: read
@@ -110,4 +115,13 @@ jobs:
       attestations: write
       artifact-metadata: write
     uses: ./.github/workflows/mac.yml
+    secrets: inherit
+
+  linux:
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+    uses: ./.github/workflows/linux.yml
     secrets: inherit

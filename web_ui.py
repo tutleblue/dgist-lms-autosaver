@@ -755,6 +755,7 @@ from folder_layout import (  # noqa: E402
     layout_subfolders,
     lms_subfolders,
     normalize_layout,
+    fit_file_name,
     safe_folder as _safe_folder,
 )
 
@@ -846,7 +847,7 @@ def organize_downloads(workspace: UserWorkspace) -> dict[str, Any]:
             missing += 1
             continue
 
-        target = target_dir / _safe_folder(display, 120)
+        target = target_dir / fit_file_name(_safe_folder(display, 120))
         if current.resolve() == target.resolve():
             skipped += 1
             continue
@@ -2558,8 +2559,12 @@ def pick_folder_dialog() -> str:
             return str(result[0] if isinstance(result, (list, tuple)) else result)
     except ImportError:
         pass
-    import tkinter
-    from tkinter import filedialog
+    try:
+        import tkinter
+        from tkinter import filedialog
+    except ImportError:
+        # 리눅스 배포판 파이썬은 tkinter 를 따로 깔아야 한다(python3-tk) — 'No module named _tkinter' 대신 알아듣게
+        raise RuntimeError("폴더 고르기 창을 열 수 없어요. 앱 창에서 다시 해 주세요.") from None
 
     root_widget = tkinter.Tk()
     root_widget.withdraw()
@@ -2627,7 +2632,16 @@ def app_footprint(workspace: UserWorkspace, download_dir: Path) -> dict[str, Any
     parts = []
     if getattr(sys, "frozen", False):
         program = Path(sys.executable).resolve().parent
-        parts.append({"key": "program", "label": "프로그램", "bytes": _cached_dir_size("program", program)})
+        appimage = os.environ.get("APPIMAGE", "")
+        if appimage and Path(appimage).is_file():
+            # 리눅스 AppImage: 실행 폴더는 풀린 임시 마운트라 크기가 디스크와 다르다 — 실제로 차지하는 건 AppImage 파일 하나
+            size = Path(appimage).stat().st_size
+        else:
+            # 맥은 실행 파일이 Daling.app/Contents/MacOS 에 홀로 있고 몸통은 Contents/Frameworks·Resources 에 있다
+            if sys.platform == "darwin" and program.name == "MacOS" and program.parent.name == "Contents":
+                program = program.parent
+            size = _cached_dir_size("program", program)
+        parts.append({"key": "program", "label": "프로그램", "bytes": size})
     try:
         import browser_setup
 
@@ -5797,6 +5811,21 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         if route == "/api/open-url":
             try:
                 self.send_json(open_external_url(self.read_body_json()))
+            except Exception as exc:
+                self.send_json({"ok": False, "message": str(exc)}, HTTPStatus.BAD_REQUEST)
+            return
+        if route == "/api/open-app-url":
+            # 맥 앱 창(WKWebView)은 window.open 을 무시한다 — pywebview cocoa 는 링크를 '눌렀을 때' 만 바깥 브라우저로
+            # 넘긴다(2026-10-21 점검). 그래서 맥에서 강의자료 열기·강의계획서·메일 .eml 저장이 아무 반응이 없었다.
+            # 이 앱 서버의 정해진 길만 기본 브라우저로 연다(Windows·리눅스 창은 window.open 이 이미 이렇게 한다).
+            try:
+                path = str(self.read_body_json().get("path") or "")
+                if not path.startswith(("/api/file?", "/api/mail/eml?", "/api/deadlines.ics")) or "\n" in path:
+                    raise ValueError("열 수 없는 주소입니다.")
+                if MULTI_USER_MODE:
+                    raise ValueError("공유 웹사이트 모드에서는 쓰지 않습니다.")
+                url = f"http://127.0.0.1:{self.server.server_address[1]}{path}"
+                self.send_json({"ok": True, "opened": bool(webbrowser.open(url))})
             except Exception as exc:
                 self.send_json({"ok": False, "message": str(exc)}, HTTPStatus.BAD_REQUEST)
             return

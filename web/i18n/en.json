@@ -1743,9 +1743,9 @@
  "수업·LMS": "Classes & LMS",
  "맥에서는 새 DMG 를 내려받아 Daling 을 응용 프로그램 폴더에 다시 끌어다 놓으면 바뀌어요": "On a Mac, download the new DMG and drag Daling into the Applications folder again to update",
  "맥용 새 버전 파일이 아직 올라오지 않았어요": "The Mac version of this update hasn't been uploaded yet",
- "리눅스에서는 새 AppImage 를 내려받아 실행 권한을 주고 예전 파일과 바꾸면 돼요": "On Linux, download the new AppImage, make it executable and replace the old file to update",
+ "리눅스에서는 새 AppImage 를 내려받아 실행 권한을 주고, Daling 을 끈 뒤 예전 파일과 바꾸면 돼요": "On Linux, download the new AppImage, make it executable, quit Daling and replace the old file to update",
  "리눅스용 새 버전 파일이 아직 올라오지 않았어요": "The Linux version of this update hasn't been uploaded yet",
- "터미널에서 curl -fsSL https://gudaling.dev/install.sh | sh 를 다시 실행하면 새 버전으로 바뀌어요": "Run curl -fsSL https://gudaling.dev/install.sh | sh in a terminal again to update",
+ "Daling 을 끈 뒤 터미널에서 curl -fsSL https://gudaling.dev/install.sh | sh 를 다시 실행하면 새 버전으로 바뀌어요": "Quit Daling, then run curl -fsSL https://gudaling.dev/install.sh | sh in a terminal again to update",
  "다운로드 폴더를 열지 못했어요 (xdg-open 없음)": "Couldn't open the download folder (xdg-open not found)",
  "{0}-{1}학기 기준": "as of term {0}-{1}",
  "다음 마감": "Next due",
@@ -2020,5 +2020,6 @@
  "이 판에서는 아직 Google 연결을 쓸 수 없어요.": "Google sign-in isn't available in this version yet.",
  "이 판에서는 아직 쓸 수 없어요": "Not available in this version yet",
  "마감 다시 가져오기": "Fetching deadlines again",
- "메일 다시 가져오기": "Fetching mail again"
+ "메일 다시 가져오기": "Fetching mail again",
+ "폴더 고르기 창을 열 수 없어요. 앱 창에서 다시 해 주세요.": "Couldn't open the folder picker. Please try again from the app window."
 }

@@ -6,7 +6,7 @@
 # 흐름: PyInstaller(packaging/linux/daling-linux.spec) → node 실행 권한 → 실제 앱을 Xvfb 에서 띄워 화면 서버·창·스크린샷
 #       → 창 없는 점검(--autosaver-smoke) → (키링 왕복) → AppImage(daling-<버전>-linux-x86_64.AppImage) 와 점검
 #       → tar.gz(daling-<버전>-linux-x86_64.tar.gz, install.sh 포함) 와 설치 점검 → 아티팩트
-#  - build/linux 브랜치에 올리거나 Actions 탭에서 수동 실행(workflow_dispatch). 릴리스는 만들지 않는다.
+#  - main 에 올리면 build.yml 이 부르고, build/linux 브랜치나 Actions 탭 수동 실행(workflow_dispatch)도 된다. 릴리스는 만들지 않는다.
 #    (앱의 업데이트 확인 updater.py 는 GitHub 릴리스에 이 이름의 AppImage 가 붙어 있어야 리눅스에 새 버전을 알린다)
 #  - AppImage 는 공식 appimagetool(정적 type2 런타임)로 만든다. 받는 사람에게 libfuse2 가 없어도 된다.
 #
@@ -19,6 +19,8 @@ on:
   push:
     branches: ["build/linux"]
   workflow_dispatch:
+  # build.yml(세 운영체제 함께 빌드)이 이 파일을 그대로 부른다 (mac.yml 과 같은 방식)
+  workflow_call:
 
 permissions:
   contents: read

@@ -35,6 +35,23 @@ import time
 from pathlib import Path
 
 
+# 화면 서버의 GET 길 전부 ('화면 API 전부' 점검). 쿼리가 필요한 길은 빈 값으로 — 400 이 와도 500 이 아니면 된다.
+SWEEP_GET = (
+    "/api/academic-calendar", "/api/ai/status", "/api/config", "/api/config/export", "/api/course-announcements",
+    "/api/course-catalog?q=", "/api/course-staff", "/api/course-state", "/api/course-terms", "/api/deadlines",
+    "/api/deadlines.ics", "/api/demo", "/api/dgist-api/status", "/api/diagnostics", "/api/directory?q=",
+    "/api/drive/get", "/api/drive/list", "/api/email-body?id=1", "/api/emails", "/api/fglp", "/api/file?path=x",
+    "/api/files", "/api/files/bulk", "/api/health", "/api/local-autosave/job", "/api/mail-image",
+    "/api/mail/discard-draft", "/api/mail/eml", "/api/mail/folders", "/api/mail/me", "/api/mail/pending",
+    "/api/my-events", "/api/notices", "/api/place-search?q=", "/api/samsung-notes/job", "/api/samsung-notes/status",
+    "/api/school-events", "/api/selection", "/api/seminars", "/api/shelves", "/api/shuttle", "/api/status",
+    "/api/storage", "/api/task", "/api/timetable", "/api/tutorial", "/api/ui-prefs", "/api/update/check",
+    "/api/update/job", "/api/whats-new", "/api/window",
+)
+# 아래 '빠진 길' 비교는 쿼리 앞까지만 본다
+_SWEEP_PATHS = {r.split("?")[0] for r in SWEEP_GET}
+
+
 def prepare_env() -> Path:
     """사용자 데이터(C:\\lms-autosaver, ~/.lms-autosaver)를 건드리지 않게 빈 임시 폴더를 쓴다."""
     import tempfile
@@ -222,6 +239,57 @@ def run(app) -> int:
                 raise RuntimeError("끈 뒤에도 체험 폴더가 남음")
             return f"자료 {files} · 메일 {mails} · 바깥 연결 막힘 · 끄면 지워짐"
 
+        def api_sweep():
+            # 화면이 부르는 GET 을 모두 한 번씩 (2026-10-21 사용자: 'Windows 기능이 맥·리눅스에서도 다 되는지 점검').
+            # 점검 PC 에는 맥이 없어 기능별 화면 서버 코드가 맥·리눅스에서 도는지를 CI 의 이 점검으로 본다.
+            # 체험 모드로 켜서(바깥 연결 막힘·가짜 자료) 네트워크 없이 돈다. 500·연결 끊김이 하나라도 나면 실패.
+            # 값이 없어 400/404/409 를 주는 것은 정상(빈 입력에 대한 답)이다.
+            import urllib.error
+            import urllib.request
+
+            def post(on: bool) -> None:
+                req = urllib.request.Request(base + "/api/demo", data=json.dumps({"on": on}).encode(),
+                                             headers={"Content-Type": "application/json"}, method="POST")
+                urllib.request.urlopen(req, timeout=20).read()
+
+            # 소스에서 돌 때(개발·CI 소스 점검)는 web_ui.py 의 GET 길을 다시 읽어, 새 길이 이 목록에 빠졌으면 알린다
+            if not frozen:
+                import re
+
+                src = Path(web_ui.__file__).read_text(encoding="utf-8")
+                body = src[src.index("    def _do_GET(self)"):src.index("    def _do_POST(self)")]
+                found = set(re.findall(r'route == "(/api/[^"]+)"', body))
+                for group in re.findall(r"route in \(([^)]*)\)", body):
+                    found |= set(re.findall(r'"(/api/[^"]+)"', group))
+                missing = sorted(found - _SWEEP_PATHS)
+                if missing:
+                    raise RuntimeError(f"점검 목록에 없는 GET 길: {missing} (smoke_test.SWEEP_GET 에 넣어 주세요)")
+            log = web_ui.AUTOSAVER_ROOT / "server_errors.log"
+            before = log.stat().st_size if log.exists() else 0
+            post(True)
+            bad, codes = [], {}
+            try:
+                for route in SWEEP_GET:
+                    try:
+                        status, _body, _ctype = _get(base, route, timeout=30)
+                    except urllib.error.HTTPError as err:
+                        status = err.code
+                    except Exception as exc:  # 연결이 끊기면 서버가 죽은 것
+                        bad.append(f"{route}: {type(exc).__name__} {exc}")
+                        continue
+                    codes[status] = codes.get(status, 0) + 1
+                    if status >= 500:
+                        bad.append(f"{route}: HTTP {status}")
+            finally:
+                post(False)
+            demo_log = log.stat().st_size if log.exists() else 0
+            if bad:
+                raise RuntimeError("; ".join(bad[:8]))
+            if demo_log > before:
+                raise RuntimeError(f"server_errors.log 에 새 오류 {demo_log - before}바이트")
+            summary = " · ".join(f"{c}×{n}" for c, n in sorted(codes.items()))
+            return f"{len(SWEEP_GET)}개 길 ({summary})"
+
         def faculty_directory():
             # 새 사용자도 교수 주소가 채워지게 설치 파일에 넣은 교원 주소록 (web_ui.directory_people).
             # 점검 폴더는 비어 있으니 내가 넣은 조직도는 0명이어야 한다.
@@ -235,6 +303,7 @@ def run(app) -> int:
         check("GET /app.js", app_js)
         check("체험 모드", demo_mode_check)
         check("교원 주소록", faculty_directory)
+        check("화면 API 전부 (체험 모드)", api_sweep)
         # 네트워크 없이 파일만 읽는 것들 (설정·업데이트 내용·소개·화면 설정)
         for route in ("/api/config", "/api/whats-new", "/api/tutorial", "/api/ui-prefs", "/api/task"):
             check(f"GET {route}", lambda route=route: f"{len(_json(base, route))}개 항목")

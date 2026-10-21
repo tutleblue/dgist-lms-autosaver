@@ -658,11 +658,35 @@ class _startup_lock:
     '떠 있는 대시보드 없음' 을 본 뒤 하나는 8765, 하나는 8766 에 서버를 띄워 스케줄러가 둘이 됐다
     (같은 C:\\lms-autosaver 에 메일 두 번 받기·로그인 두 번·삼성 노트 중복). 차례로 들어가면 뒤에 온 쪽은
     앞의 대시보드를 찾아 그 창만 앞으로 가져온다. 뮤텍스는 프로세스가 죽으면 저절로 풀린다.
+    맥·리눅스는 데이터 폴더의 잠금 파일(flock)로 같은 일을 한다 — 예전엔 아무것도 안 해 Dock·로그인 항목에서
+    두 번 켜면 서버·스케줄러가 둘이 될 수 있었다(2026-10-21 맥·리눅스 점검). flock 도 프로세스가 죽으면 풀린다.
     """
 
     def __enter__(self):
         self.handle = None
+        self.lock_file = None
         if os.name != "nt":
+            try:
+                import fcntl
+
+                import runtime_config
+
+                path = Path(runtime_config.AUTOSAVER_DATA_ROOT) / ".start.lock"
+                path.parent.mkdir(parents=True, exist_ok=True)
+                fh = open(path, "a+")
+                deadline = time.time() + 20
+                while True:
+                    try:
+                        fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                        self.lock_file = fh
+                        break
+                    except OSError:
+                        if time.time() > deadline:  # 20초 넘게 못 받으면 예전처럼 그냥 간다
+                            fh.close()
+                            break
+                        time.sleep(0.1)
+            except Exception:
+                self.lock_file = None
             return self
         try:
             import ctypes
@@ -681,6 +705,13 @@ class _startup_lock:
         return self
 
     def __exit__(self, *exc):
+        if self.lock_file:
+            try:
+                import fcntl
+
+                fcntl.flock(self.lock_file, fcntl.LOCK_UN)
+            finally:
+                self.lock_file.close()
         if self.handle:
             import ctypes
 
@@ -787,7 +818,10 @@ def run_worker(job: str) -> int:
         elif job == "emails":
             import email_reader
 
-            email_reader.refresh_emails()
+            try:
+                email_reader.refresh_emails()
+            finally:
+                email_reader.close_session()  # 같이 쓰던 연결을 정중히 닫고 끝낸다 (이 프로세스는 곧 끝난다)
         elif job == "verify":
             import verify
 

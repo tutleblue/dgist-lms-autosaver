@@ -20,6 +20,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 import time
 from pathlib import Path
@@ -194,6 +195,15 @@ def run(prompt: str, provider: str | None = None, timeout: int = TIMEOUT, model:
         if os.name == "nt":
             kwargs["creationflags"] = 0x08000000  # CREATE_NO_WINDOW
         env = dict(os.environ)
+        if sys.platform.startswith("linux") and getattr(sys, "frozen", False):
+            # 리눅스 묶음 앱은 LD_LIBRARY_PATH 가 묶음 안을 가리킨다 — node(claude·gemini·codex)가 묶음의 옛 libstdc++ 를
+            # 집어 죽을 수 있어, 브라우저·xdg-open 처럼 원래 환경으로 띄운다(2026-10-21 맥·리눅스 점검)
+            try:
+                import linux_support
+
+                env = linux_support.system_env()
+            except Exception:
+                pass
         if os.name != "nt":
             env["PATH"] = _child_path(exe)
         env.setdefault("NO_COLOR", "1")

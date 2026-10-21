@@ -53,9 +53,9 @@ MAC_MISSING_NOTE = "맥용 새 버전 파일이 아직 올라오지 않았어요
 # 리눅스 빌드(.github/workflows/linux.yml)가 만드는 AppImage. 리눅스 앱도 스스로 덮어쓰지 않는다:
 # AppImage 는 켜 둔 동안 읽기 전용으로 마운트돼 있고, tar.gz 로 깐 사람은 ~/.local/opt 에 있어 어느 쪽을 바꿀지 앱이 모른다.
 LINUX_ASSET_PATTERN = re.compile(r"^daling-[\d.]+-linux-x86_64\.AppImage$")
-LINUX_MANUAL_NOTE = "리눅스에서는 새 AppImage 를 내려받아 실행 권한을 주고 예전 파일과 바꾸면 돼요"
+LINUX_MANUAL_NOTE = "리눅스에서는 새 AppImage 를 내려받아 실행 권한을 주고, Daling 을 끈 뒤 예전 파일과 바꾸면 돼요"
 # tar.gz·한 줄 설치(~/.local/opt/daling)로 깐 사람에게 AppImage 를 권하면 둘이 생긴다. 같은 명령을 다시 돌리면 바뀐다
-LINUX_SCRIPT_NOTE = "터미널에서 curl -fsSL https://gudaling.dev/install.sh | sh 를 다시 실행하면 새 버전으로 바뀌어요"
+LINUX_SCRIPT_NOTE = "Daling 을 끈 뒤 터미널에서 curl -fsSL https://gudaling.dev/install.sh | sh 를 다시 실행하면 새 버전으로 바뀌어요"
 LINUX_MISSING_NOTE = "리눅스용 새 버전 파일이 아직 올라오지 않았어요"
 # Microsoft Store 판(MSIX, packaging/msix): 새 버전은 Store 가 받아 바꾼다. 여기서 GitHub 설치 파일을 돌리면
 # Store 판과 따로 노는 두 번째 Daling(Inno 설치본)이 깔린다. 그래서 GitHub 에 묻지도, 받지도 않는다.

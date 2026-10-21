@@ -750,6 +750,15 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
   - 글꼴: Windows 글꼴 뒤에 `-apple-system`·Apple SD Gothic Neo·AppleMyungjo·SF Mono. 화면 문구의 'Windows 알림'·'윈도우의 밝은·어두운 모드' 를 운영체제와 상관없는 말로.
   - Info.plist: 외장 디스크·네트워크 드라이브·클라우드(File Provider) 폴더에 쓸 때 보일 설명을 더했다. 마이크·카메라·화면 기록은 쓰지 않는다.
   - universal2 는 하지 않는다: `pydantic_core`·`cryptography`·`cffi` 에 universal2 휠이 없다(2026-10-20 `pip download --platform macosx_11_0_universal2` 실측). 대신 칩마다 따로 묶는다.
+- 맥·리눅스 점검 2차 (2026-10-21, 1.12.34, 읽기 전용 전체 검사 17건 → 아래를 고침):
+  - 맥 앱 창(WKWebView)은 `window.open` 을 무시한다(pywebview cocoa 는 링크를 '눌렀을 때' 만 바깥 브라우저로 넘김) → 강의자료 열기·강의계획서·메일 .eml 저장·인쇄가 맥에서 아무 반응이 없었다. `app.js openOutside` 가 맥 앱에서만 서버(`/api/open-app-url`, `/api/file?`·`/api/mail/eml?`·`/api/deadlines.ics` 만)에 기본 브라우저로 열게 하고, 인쇄는 숨은 iframe 에 그린다.
+  - LMS 브라우저 준비(`browser_setup.shell_ready`)가 판 번호를 안 봐서, Playwright 판이 바뀐 업데이트 뒤 옛 판 폴더를 보고 새 판을 안 받았다 → 묶인 드라이버의 `browsers.json` revision 폴더만 '있다' 로 본다(못 읽으면 예전처럼).
+  - 파일 이름: 맥·리눅스는 255 **바이트**(한글 약 80자)라 180자로만 자르면 긴 한글 자료가 'File name too long' → `folder_layout.fit_file_name`(확장자 두고 240바이트, Windows 는 그대로)을 크롤러·정리에 쓴다.
+  - 두 번 켜기 막기(`app._startup_lock`)가 Windows 뮤텍스뿐이었다 → 맥·리눅스는 데이터 폴더 `.start.lock` 에 `flock`.
+  - 맥에서 고른 첨부 파일 이름은 NFD(풀어 쓴 자모) → 화면(`nfcName`)·보내기(`email_reader`) 두 곳에서 NFC 로.
+  - 리눅스 묶음 앱의 AI CLI(node)는 `linux_support.system_env()` 로 띄운다(묶음의 LD_LIBRARY_PATH 를 물려받지 않게). 앱 크기의 '프로그램' 은 맥 `Contents` 전체·AppImage 파일 크기로. 소개의 삼성 노트 줄은 맥·리눅스에서 뺀다. 리눅스 업데이트 안내에 'Daling 을 끈 뒤'.
+  - CI: `build.yml` 이 `linux.yml` 도 부른다(예전엔 수동만). `docs/install.sh` 만 바뀐 커밋도 빌드한다(`paths` 에서 뒤 패턴이 앞을 이김). `--autosaver-smoke` 에 '화면 API 전부 (체험 모드)': `_do_GET` 의 길 51개를 체험 모드로 다 불러 500·연결 끊김이 없고 `server_errors.log` 가 늘지 않는지 본다(소스에서는 빠진 길이 없는지도).
+  - 고치지 않고 남긴 것: 작업 프로세스가 키체인을 읽을 때 묻는 창(위 '서명 인증서'), 맥·리눅스 자동 시작 없음, macOS 12 의 `color-mix`·`@container` 미지원(화면 일부 색·배치가 단순해질 수 있음).
 - 인텔 맥 (2026-10-21, 사용자 요청): `mac.yml` 매트릭스에 인텔 러너 `macos-15-intel`(GitHub 공식 표에 macos-15-intel·macos-26-intel). `daling-mac.spec` 이 `DALING_MAC_ARCH` 로 `target_arch` 를 고르고, CI 가 묶은 실행 파일과 Playwright node 의 칩을 `lipo -archs` 로 확인한다.
   - 휠: 2026-10-21 `pip download --platform macosx_12_0_<칩> --python-version 3.13` 로 55개 모두 두 칩 휠이 있음을 확인. 단 **cryptography 는 49.0.0 부터 인텔 맥 휠이 없다**(49·50 은 arm64 뿐, 48.0.0 은 universal2) → `requirements-mac.txt` 에서 `platform_machine` 으로 인텔만 48.0.0(쓰는 곳은 google-auth, `>=38.0.3`).
   - Playwright 의 universal2 휠에 든 node 는 x86_64 하나뿐이다(Mach-O 헤더 실측). 인텔 러너의 pip 는 그 휠을(macosx_11_0 이 10_13_x86_64 보다 앞섬), M칩 러너는 arm64 휠을 고르므로 둘 다 맞다.
@@ -757,7 +766,7 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
   - `install.sh` 는 macOS 12 미만이면 깔기 전에 멈춘다(LSMinimumSystemVersion). 판을 못 읽으면 막지 않는다.
   - 사이트 내려받기: 릴리스에 `mac-x86_64.dmg` 가 있을 때만 '인텔 Mac 은 인텔용 DMG' 줄이 보이고 요구 사항이 'M1 이상·인텔 Mac' 으로 바뀐다(`data-dl-wrap`·`data-req-intel`).
   - CI '한 줄 설치·앱 안 업데이트 점검': 지금 릴리스에 이 칩의 DMG 가 없으면(인텔 첫 릴리스 전) 이번 빌드 DMG 로 새로 깔고 같은 DMG 로 업데이트를 흉내 낸다. 키체인 점검·실험은 칩과 상관없어 M칩 러너에서만.
-- CI: `build.yml`(main 푸시·수동)이 Windows(windows-latest, 서명 없는 설치 파일 + `--autosaver-smoke`)와 맥(`mac.yml` 을 `workflow_call` 로)을 함께 돌린다. 공증 자리는 `mac.yml` 주석과 `packaging/mac/entitlements.plist`(강화 런타임 예외 allow-jit·allow-unsigned-executable-memory, 아직 안 씀).
+- CI: `build.yml`(main 푸시·수동)이 Windows(windows-latest, 서명 없는 설치 파일 + `--autosaver-smoke`)와 맥(`mac.yml` 을 `workflow_call` 로)·리눅스(`linux.yml`, 2026-10-21~)를 함께 돌린다. 공증 자리는 `mac.yml` 주석과 `packaging/mac/entitlements.plist`(강화 런타임 예외 allow-jit·allow-unsigned-executable-memory, 아직 안 씀).
 - 창: 첫 크기는 `NSScreen.visibleFrame`(메뉴 막대·Dock 제외)에 맞추고 자리는 pywebview 가 가운데로. 삼성 노트는 없음(`is_available` False → 버튼 숨김).
 - 업데이트: 릴리스의 이 칩용 `daling-<버전>-mac-<arm64|x86_64>.dmg` 만 본다. (2026-10-15~) '지금 업데이트' 는 Windows 처럼 앱이 직접 받아 GitHub digest 로 확인하고, 앱에 묶은 `install.sh`(= `docs/install.sh`)를 따로 띄운 뒤 앱이 꺼진다. install.sh 는 앱이 다 꺼지기를 기다려 DMG 의 앱을 지금 앱이 있는 폴더에 바꿔 끼우고(새 판 복사 → 서명 확인 → 이름만 바꾸기) 다시 켠다. 기록은 `~/.lms-autosaver/update-mac.log`. 예전처럼 브라우저로 받으면 업데이트마다 격리 표시 때문에 '그래도 열기' 를 또 눌러야 했다. 앱이 urllib 로 받은 파일에는 격리 표시가 없다(Info.plist 에 `LSFileQuarantineEnabled` 없음, 샌드박스 아님 — `--autosaver-smoke` 가 확인). DMG 안에서 켰거나(/Volumes) 옮기지 않고 켠(AppTranslocation) 앱은 /Applications(못 쓰면 ~/Applications)에 깐다.
 - 아이콘: `packaging/mac/Daling.icns` ← `python scripts/make_icons.py --mac` (애플 격자: 1024 안 824 네모).
@@ -784,7 +793,7 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 - 맥에서 HTTPServer 의 `getfqdn` 역조회를 건너뛴다(`ExclusiveHTTPServer.server_bind`). 첫 CI 실행에서 '로컬 네트워크의 기기 찾기 허용?' 창이 떴고 서버가 15초 늦게 떴다. 건너뛰고 나서 창이 없어지고 1초 만에 뜬다.
 
 ## 리눅스 판 (2026-10-12)
-- 빌드는 GitHub Actions `.github/workflows/linux.yml`(수동 실행 또는 `build/linux` 푸시). ubuntu-22.04(glibc 2.35 → Ubuntu 22.04·Debian 12·Fedora 36 이상)·Python 3.13·`requirements-linux.txt` → `packaging/linux/daling-linux.spec`(onedir, 실행 파일 `daling`) → Xvfb 로 실제 창 띄워 보기 → `--autosaver-smoke` → `daling-<버전>-linux-x86_64.AppImage`(appimagetool, 정적 런타임이라 libfuse2 불필요)·`.tar.gz`(`install.sh` 가 `~/.local/opt/daling`·`~/.local/bin/daling`·`.desktop`). 첫 실행: 19개 점검이 바이너리·AppImage·tar 설치본 모두 통과, 키링 왕복 20개 통과. 크기는 AppImage 262MB(QtWebEngine 이 크롬 하나를 통째로 든다).
+- 빌드는 GitHub Actions `.github/workflows/linux.yml`(main 푸시 때 `build.yml` 이 부름, 수동 실행 또는 `build/linux` 푸시). ubuntu-22.04(glibc 2.35 → Ubuntu 22.04·Debian 12·Fedora 36 이상)·Python 3.13·`requirements-linux.txt` → `packaging/linux/daling-linux.spec`(onedir, 실행 파일 `daling`) → Xvfb 로 실제 창 띄워 보기 → `--autosaver-smoke` → `daling-<버전>-linux-x86_64.AppImage`(appimagetool, 정적 런타임이라 libfuse2 불필요)·`.tar.gz`(`install.sh` 가 `~/.local/opt/daling`·`~/.local/bin/daling`·`.desktop`). 첫 실행: 19개 점검이 바이너리·AppImage·tar 설치본 모두 통과, 키링 왕복 20개 통과. 크기는 AppImage 262MB(QtWebEngine 이 크롬 하나를 통째로 든다).
 - 창: pywebview Qt(PyQt6·QtWebEngine). WebKitGTK 는 보조 프로세스 경로가 컴파일 때 박혀 묶을 수 없다. Ubuntu 23.10+ 처럼 AppArmor·커널이 사용자 네임스페이스를 막으면 크로미움 샌드박스가 죽으므로 그때만 `QTWEBENGINE_DISABLE_SANDBOX=1`(메일 HTML 은 스크립트 막은 iframe). 화면(DISPLAY·WAYLAND)이 없거나 Qt 를 못 띄우면 기본 브라우저로 열고 서버·스케줄러는 Ctrl+C 까지 돈다 (`linux_support.py`, `app.run_linux_window`).
 - 비밀 설정: `secret_store.py` 가 맥(`mac_keychain`)·리눅스(`linux_secrets`)를 고른다. 리눅스는 Secret Service(GNOME 키링·KWallet, `secretstorage`) 항목 하나(application=Daling, account=settings)에 JSON, config.json 에는 `keychain:<키>`. 쓸 수 없으면 `<데이터 폴더>/secrets.json`(0600)에 두고 `secretfile:<키>`. 잠긴 키링을 여는 창은 앱 본체만 띄운다(작업 프로세스는 안 띄움).
 - 시스템 프로그램(`xdg-open`·`notify-send`·브라우저)에는 묶음의 `LD_LIBRARY_PATH`·Qt 설정을 뺀 환경을 준다(PyInstaller 안내). 알림은 `notify-send`(인자로 넘김, 셸 없음). 인증서는 시스템 CA 묶음.

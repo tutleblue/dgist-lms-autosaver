@@ -176,6 +176,22 @@ async function api(path, options = {}) {
    뒤로·앞으로는 맥에서 ⌘[ / ⌘] (사파리와 같음). 맥의 Option+←/→ 는 글자 칸에서 단어 단위 이동이라 가로채면 안 된다. */
 const IS_MAC = /Mac/.test(navigator.platform || "") || /Mac OS X/.test(navigator.userAgent || "");
 
+/* 맥 앱 창(pywebview·WKWebView)은 window.open 을 무시한다 — 링크를 '눌렀을 때' 만 바깥 브라우저로 넘긴다
+   (2026-10-21 맥·리눅스 점검: 강의자료 열기·강의계획서·.eml 저장이 맥에서 아무 반응이 없었다).
+   앱 서버의 파일 길은 서버가 기본 브라우저로 열고, 바깥 주소는 /api/open-url 로. Windows·리눅스·개발 브라우저는 그대로. */
+const IN_MAC_APP = () => IS_MAC && Boolean(window.pywebview);
+// 맥 파일 고르기는 한글 이름을 풀어 쓴 자모(NFD)로 준다 — 그대로 첨부하면 받는 쪽에서 'ㅎㅏㄴ' 처럼 갈라져 보인다
+const nfcName = (name) => String(name || "").normalize("NFC");
+function openOutside(url) {
+  if (!IN_MAC_APP()) {
+    window.open(url, "_blank");
+    return;
+  }
+  const route = String(url).startsWith("/") ? "/api/open-app-url" : "/api/open-url";
+  const body = route === "/api/open-app-url" ? { path: url } : { url };
+  api(route, { method: "POST", body: JSON.stringify(body) }).catch((error) => showToast(humanError(error)));
+}
+
 /** 'Ctrl+K'·'Ctrl K'(검색창 kbd) → 맥에서는 '⌘K', 'Alt+←/→' → '⌘[ / ⌘]'. 다른 운영체제는 그대로 */
 function keyLabel(text) {
   const s = String(text ?? "");
@@ -1096,7 +1112,7 @@ function renderDeadlines() {
             ? `'${shortText(info.name, 22)}' 제출 페이지를 열었습니다. 파일 업로드와 제출은 LMS에서 직접 해 주세요.`
             : r.message,
         );
-        if (!r.opened && r.url) window.open(r.url, "_blank");
+        if (!r.opened && r.url) openOutside(r.url);
       } catch (error) {
         showToast(error.message);
       }
@@ -1748,7 +1764,7 @@ function bindComposeFiles() {
     const files = [...(event.dataTransfer.files || [])];
     for (const file of files) {
       const content = await fileToBase64(file);
-      state.attachments.push({ filename: file.name, size: file.size, content });
+      state.attachments.push({ filename: nfcName(file.name), size: file.size, content });
     }
     if (files.length) {
       renderAttachments();
@@ -2606,7 +2622,13 @@ async function runMailMore(action, mail) {
     case "print": {
       // 화면에 보이는 그대로 인쇄한다
       await ensureMailBody(mail);
-      const win = window.open("", "_blank");
+      // 맥 앱 창은 새 창을 열지 못한다 → 숨은 틀에 그려서 인쇄한다
+      let frame = null;
+      const win = IN_MAC_APP()
+        ? ((frame = Object.assign(document.createElement("iframe"), { style: "position:fixed;width:0;height:0;border:0" })),
+          document.body.appendChild(frame),
+          frame.contentWindow)
+        : window.open("", "_blank");
       if (!win) return showToast("팝업이 막혀 인쇄창을 열지 못했습니다.");
       const safe = mail.bodyHtml
         ? mail.bodyHtml
@@ -2620,15 +2642,13 @@ async function runMailMore(action, mail) {
       win.document.close();
       win.focus();
       win.print();
+      if (frame) window.setTimeout(() => frame.remove(), 60000);
       break;
     }
 
     case "eml":
       // 서버에서 원본을 받아 .eml 로 저장
-      window.open(
-        `/api/mail/eml?uid=${encodeURIComponent(mail.uid)}&folder=${encodeURIComponent(mail.folder)}`,
-        "_blank",
-      );
+      openOutside(`/api/mail/eml?uid=${encodeURIComponent(mail.uid)}&folder=${encodeURIComponent(mail.folder)}`);
       break;
 
     case "move": {
@@ -3444,7 +3464,7 @@ function renderCourses() {
   grid.querySelectorAll("[data-syllabus]").forEach((btn) => {
     btn.addEventListener("click", (event) => {
       event.stopPropagation();
-      window.open(`/api/file?name=${encodeURIComponent(btn.dataset.syllabus)}`, "_blank");
+      openOutside(`/api/file?name=${encodeURIComponent(btn.dataset.syllabus)}`);
     });
   });
 
@@ -3605,7 +3625,7 @@ async function saveFilesToComputer(localNames) {
   if (!names.length) return;
   if (state.status?.mode === "multi-user") {
     names.slice(0, 10).forEach((name) => {
-      window.open(`/api/file?name=${encodeURIComponent(name)}`, "_blank");
+      openOutside(`/api/file?name=${encodeURIComponent(name)}`);
     });
     if (names.length > 10) showToast("브라우저 모드에서는 한 번에 10개까지 다운로드됩니다.");
     return;
@@ -6414,7 +6434,7 @@ function bindEvents() {
         continue;
       }
       const content = await fileToBase64(file);
-      state.attachments.push({ filename: file.name, size: file.size, content });
+      state.attachments.push({ filename: nfcName(file.name), size: file.size, content });
     }
     event.target.value = "";
     renderAttachments();
@@ -6757,7 +6777,7 @@ function bindEvents() {
 
     const openBtn = event.target.closest("[data-open-file]");
     if (openBtn && !openBtn.disabled) {
-      window.open(`/api/file?name=${encodeURIComponent(openBtn.dataset.openFile)}`, "_blank");
+      openOutside(`/api/file?name=${encodeURIComponent(openBtn.dataset.openFile)}`);
       return;
     }
     const notesBtn = event.target.closest("[data-to-notes]");
@@ -10361,7 +10381,8 @@ function bindFglp() {
 function friendlyPath(path) {
   return String(path || "")
     .replace(/^[A-Za-z]:\\Users\\[^\\]+\\(?:OneDrive[^\\]*\\)?/i, "")
-    .replace(/^\/Users\/[^/]+\/(?:Library\/CloudStorage\/[^/]+\/)?/, "");
+    .replace(/^\/Users\/[^/]+\/(?:Library\/CloudStorage\/[^/]+\/)?/, "")
+    .replace(/^\/home\/[^/]+\//, "");
 }
 
 /** 스위치 + 범위(이번 학기/모든 과목)를 서버 값(off/current/all)으로 */
@@ -11339,7 +11360,8 @@ const TOUR_STEPS = [
     tips: [
       "내 컴퓨터 문서 폴더에 저장",
       "Google Drive 과목 폴더에 올리기",
-      "삼성 노트로 바로 넣기 (필기용)",
+      // 삼성 노트는 이 운영체제에만 있다 — 맥·리눅스 소개에서는 뺀다
+      ...(IS_MAC || /Linux/.test(navigator.platform || "") ? [] : ["삼성 노트로 바로 넣기 (필기용)"]),
     ],
   },
   {
@@ -12108,7 +12130,7 @@ function buildSearchResults(query, opts = {}) {
         .join(" · "),
       run: () => {
         if (f.status === "local") {
-          window.open(`/api/file?name=${encodeURIComponent(f.localName)}`, "_blank");
+          openOutside(`/api/file?name=${encodeURIComponent(f.localName)}`);
         } else {
           setViewFilter("files", f.name);
         }

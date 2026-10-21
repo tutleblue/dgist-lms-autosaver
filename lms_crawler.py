@@ -6,6 +6,7 @@ import re
 import html as html_module
 from datetime import datetime, timedelta, timezone
 from playwright.async_api import async_playwright
+from folder_layout import fit_file_name
 from runtime_config import (
     DEADLINES_LOG,
     DOWNLOADED_FILES_LOG,
@@ -84,7 +85,7 @@ def sanitize_name(value, fallback="item", max_length=48):
 
 def resolve_download_target(file_name, course_name, folder_path, file_metadata):
     """Avoid overwriting same-named files from different courses."""
-    original_name = sanitize_name(file_name, "file", 180)
+    original_name = fit_file_name(sanitize_name(file_name, "file", 180))
 
     # 같은 과목의 같은 파일이 다시 오면(교수가 파일을 고쳐 다시 올린 경우)
     # 새 이름으로 하나 더 만들지 말고 원래 자리에 덮어쓴다.
@@ -106,11 +107,13 @@ def resolve_download_target(file_name, course_name, folder_path, file_metadata):
 
     course_prefix = sanitize_name(course_name, "course", 36)
     stem, ext = os.path.splitext(original_name)
-    local_name = f"{course_prefix}__{stem}{ext}"
+    # 과목 이름을 앞에 붙이면 다시 길어지므로 번호(-N) 자리를 남기고 한 번 더 맞춘다
+    stem = os.path.splitext(fit_file_name(f"{course_prefix}__{stem}{ext}", 228))[0]
+    local_name = f"{stem}{ext}"
     local_path = os.path.join(DOWNLOAD_PATH, local_name)
     counter = 2
     while os.path.exists(local_path) or local_name in file_metadata:
-        local_name = f"{course_prefix}__{stem}-{counter}{ext}"
+        local_name = f"{stem}-{counter}{ext}"
         local_path = os.path.join(DOWNLOAD_PATH, local_name)
         counter += 1
     return local_path, local_name
@@ -182,7 +185,7 @@ def remember_lms_place(file_metadata, course_name, file_name, folder_path, order
     LMS 에서 폴더를 옮기거나 순서를 바꿔도 앱의 기록은 처음 받은 때 그대로였다.
     화면에서 LMS 와 같은 폴더와 순서로 보여 주려면 이 정보가 맞아야 한다.
     """
-    original_name = sanitize_name(file_name, "file", 180)
+    original_name = fit_file_name(sanitize_name(file_name, "file", 180))
     for meta in file_metadata.values():
         if not isinstance(meta, dict):
             continue

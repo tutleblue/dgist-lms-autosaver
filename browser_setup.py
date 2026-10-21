@@ -84,6 +84,19 @@ def browser_label() -> str:
     return "headless shell" if shell_ready() else "없음"
 
 
+def _wanted_revisions() -> set[str]:
+    """묶인 Playwright 드라이버가 쓰는 크로미움·헤드리스 셸 판 번호(browsers.json). 못 읽으면 빈 집합(판을 안 본다)."""
+    try:
+        import json
+
+        import playwright
+
+        data = json.loads((Path(playwright.__file__).parent / "driver" / "package" / "browsers.json").read_text(encoding="utf-8"))
+        return {str(b["revision"]) for b in data.get("browsers", []) if b.get("name") in ("chromium", "chromium-headless-shell")}
+    except Exception:
+        return set()
+
+
 def shell_ready() -> bool:
     """크로미움(또는 헤드리스 셸)이 이미 받아져 있는지."""
     root = browsers_root()
@@ -92,6 +105,12 @@ def shell_ready() -> bool:
     # Windows 는 Edge 가 실패했을 때만 셸로 띄우고, Playwright 1.49+ 의 headless 실행은 chromium_headless_shell 만 쓴다.
     # 개발용 chromium-* 도 '있다' 로 보면, 셸을 휴지통에 보낸 뒤(설정 › 앱 크기) 다시 받지 않고 실행이 깨진다.
     prefixes = ("chromium_headless_shell-",) if os.name == "nt" else ("chromium-", "chromium_headless_shell-")
+    # 묶인 Playwright 가 찾는 판(browsers.json 의 revision)이 있으면 그 판 폴더만 '있다' 로 본다.
+    # 판을 안 보면, 앱 업데이트로 Playwright 판이 바뀐 뒤에도 예전 판 폴더를 보고 받지 않아 맥·리눅스(Edge 가 없음)에서
+    # 동기화마다 'Executable doesn't exist' 로 실패한다(2026-10-21 맥·리눅스 점검).
+    wanted = _wanted_revisions()
+    if wanted:
+        prefixes = tuple(f"{p}{rev}" for p in prefixes for rev in wanted)
     for child in root.iterdir():
         name = child.name.lower()
         if name.startswith(prefixes):
