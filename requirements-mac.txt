@@ -1,4 +1,5 @@
-# macOS(Apple Silicon) 빌드용 고정 버전 — .github/workflows/mac.yml 이 Python 3.13 으로 쓴다.
+# macOS 빌드용 고정 버전 — .github/workflows/mac.yml 이 Python 3.13 으로, M칩(arm64)·인텔(x86_64) 러너에서 각각 쓴다.
+# 칩마다 판이 다른 것은 끝에 '; platform_machine == …' 를 붙인다 (pip 가 빌드하는 러너의 칩을 보고 고른다).
 # requirements-build.txt(Windows .venv 의 pip freeze, 2026-10-02)와 같은 판을 쓰고, Windows 전용
 # (pythonnet·clr_loader·pywin32-ctypes·pefile·winotify·winrt-*)은 빼고 맥 창(Cocoa)에 필요한 pyobjc 를 더했다.
 # 키체인은 Security.framework 를 ctypes 로 부르므로(mac_keychain.py) keyring 같은 패키지는 필요 없다.
@@ -9,7 +10,10 @@ bottle==0.13.4
 certifi==2026.7.22
 cffi==2.1.1
 charset-normalizer==3.5.1
-cryptography==50.0.0
+# cryptography 는 49.0.0 부터 인텔 맥 휠을 내지 않는다(PyPI 실측 2026-10-21: 49·50 은 macosx_11_0_arm64 뿐,
+# 48.0.0 은 macosx_10_9_universal2). 인텔 판만 48.0.0 — 쓰는 곳은 google-auth 뿐이고 cryptography>=38.0.3 이면 된다.
+cryptography==50.0.0; platform_machine == "arm64"
+cryptography==48.0.0; platform_machine == "x86_64"
 distro==1.9.0
 google-api-core==2.34.0
 google-api-python-client==2.199.0

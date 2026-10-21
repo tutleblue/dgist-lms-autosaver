@@ -42,7 +42,7 @@ os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", str(_default_root()))
 
 
 # 맥의 크로미움은 .exe 도 'chrome' 도 아니다. 판마다 이름이 달라 아는 것을 모두 본다.
-#   헤드리스 셸: chrome-headless-shell-mac-arm64/chrome-headless-shell (예전 판은 chrome-mac/headless_shell)
+#   헤드리스 셸: chrome-headless-shell-mac-arm64/chrome-headless-shell (인텔 맥은 …-mac-x64, 예전 판은 chrome-mac/headless_shell)
 #   일반 크로미움: chrome-mac*/Chromium.app/…/MacOS/Chromium, 새 판은 'Google Chrome for Testing'
 _MAC_BROWSER_FILES = ("chrome-headless-shell", "headless_shell", "Chromium", "Google Chrome for Testing")
 # 리눅스도 .exe 가 없다. 헤드리스 셸은 chrome-headless-shell-linux64/chrome-headless-shell (예전 판은

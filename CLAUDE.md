@@ -1,6 +1,6 @@
 # CLAUDE.md — 붕어빵 (DGIST LMS AutoSaver) 작업 안내
 
-DGIST 학생용 Windows 데스크톱 앱입니다. **보이는 이름은 Daling**(2026-10-11, 예전 이름 붕어빵)이고, 실행 파일(`붕어빵.exe`)·설치 폴더(`Programs\붕어빵`)·데이터 폴더·업데이트 파일(`bungeoppang-*-setup.exe`)·사용자 자료 폴더(`문서\붕어빵 파일 정리`, `붕어빵 강의자료`)는 기존 설치본 업데이트를 위해 그대로 둡니다. 로고는 `design/logo/daling-source.webp` → `python scripts/make_icons.py`. LMS 강의자료·과제 마감·학교 메일·학사일정·공지를 자동으로 모아
+DGIST 학생용 **Windows·macOS(M칩·인텔)** 데스크톱 앱입니다(리눅스 판도 CI 로 빌드). 두 운영체제 규칙은 아래 '3. Windows·macOS 둘 다 지원'. **보이는 이름은 Daling**(2026-10-11, 예전 이름 붕어빵)이고, 실행 파일(`붕어빵.exe`)·설치 폴더(`Programs\붕어빵`)·데이터 폴더·업데이트 파일(`bungeoppang-*-setup.exe`)·사용자 자료 폴더(`문서\붕어빵 파일 정리`, `붕어빵 강의자료`)는 기존 설치본 업데이트를 위해 그대로 둡니다. 로고는 `design/logo/daling-source.webp` → `python scripts/make_icons.py`. LMS 강의자료·과제 마감·학교 메일·학사일정·공지를 자동으로 모아
 한 화면에서 보고, Google Drive·Google Calendar·삼성 노트·내 컴퓨터로 보냅니다.
 
 - **기능 전체 지도, API 목록, 데이터 파일, 설정 키는 `FEATURES.md`** 에 있습니다. 기능을 고치기 전에 해당 절을 먼저 읽습니다.
@@ -12,7 +12,8 @@ DGIST 학생용 Windows 데스크톱 앱입니다. **보이는 이름은 Daling*
 |---|---|
 | 저장소 | `C:\Users\jykim\바탕화면\dgist-lms-autosaver-main\dgist-lms-autosaver-main` (git `main`, 원격 `tutleblue/dgist-lms-autosaver`) |
 | 설치된 앱 | `%LOCALAPPDATA%\Programs\붕어빵\붕어빵.exe` |
-| 사용자 데이터 | `C:\lms-autosaver\` (설치 앱과 개발 서버가 **함께** 씀) |
+| 사용자 데이터 | `C:\lms-autosaver\` (설치 앱과 개발 서버가 **함께** 씀). 맥은 `~/Library/Application Support/Daling`(예전부터 쓰던 맥은 `~/.lms-autosaver`), 리눅스 `~/.lms-autosaver` — `runtime_config.default_data_root()` |
+| 맥·Windows CI 빌드 | `.github/workflows/build.yml`(main 푸시·수동) → Windows 설치 파일 + `mac.yml`(M칩·인텔 DMG 두 벌). 결과는 Actions 의 Artifacts. 릴리스에는 두 DMG 와 각 `.sha256` 을 모두 올린다 |
 | 파이썬 | 저장소의 `.venv` (Python 3.14). 시스템 `python`이 아니라 `.venv\Scripts\python.exe`를 씁니다 |
 
 ## 2. 자주 쓰는 명령
@@ -109,6 +110,20 @@ AUTOSAVER_DATA_ROOT=C:/lms-autosaver AUTOSAVER_CONFIG_PATH=C:/lms-autosaver/conf
 
 ### Git
 28. 커밋·푸시는 사용자가 요청할 때만 합니다. 원격보다 앞선 커밋과 커밋 안 한 변경이 많습니다. 푸시에는 `gh auth login`이 필요합니다.
+
+### Windows·macOS 둘 다 지원 (2026-10-20)
+이 프로젝트는 **Windows 와 macOS 를 모두 지원합니다.** 기능을 고치면 두 운영체제에서 다 되게 하고, 한쪽에만 있는 기능은 분기하고 다른 쪽에서는 단추를 숨깁니다(예: 삼성 노트). 개발 PC 에 맥이 없으므로 아래를 지킵니다.
+29. **경로를 손으로 짜지 않습니다.** `C:\`, 백슬래시로 경로 잇기, `%APPDATA%`·`LOCALAPPDATA` 같은 환경변수를 OS 분기 없이 쓰지 않습니다. 경로는 `pathlib` 로 잇습니다. 데이터 폴더는 `runtime_config.default_data_root()` 하나만 씁니다(화면 서버와 작업 프로세스가 같은 함수를 봐야 같은 폴더를 씀). **`~/.lms-autosaver` 를 새로 만드는 코드를 넣지 않습니다**(맥 새 설치가 다음 실행부터 옛 자리로 돌아감). 화면 JS 에서 경로를 비교할 때는 `\` 와 `/` 를 둘 다 다룹니다.
+30. **실행 파일 옆·앱 묶음 안에 쓰지 않습니다.** `sys._MEIPASS`, `PROJECT_ROOT`, 맥 `Daling.app/Contents` 는 읽기만 합니다. 맥은 `.app` 안의 파일이 바뀌면 서명이 깨져 앱이 열리지 않습니다. 쓰기는 데이터 폴더·임시 폴더에만 합니다.
+31. **Windows 전용 API 는 분기 안에서만** 씁니다: `ctypes.windll`, `winreg`, DPAPI, `os.startfile`, `creationflags`, PowerShell·cmd·`.exe` 실행, `winotify`, WinRT, pythonnet. Windows 전용 모듈(`samsung_notes`, `window_chrome`)은 `os.name == "nt"` 안에서 불러옵니다. 맥에서는 파일 열기 `open`, 알림 `osascript`(글은 인자로 넘김), 비밀 값은 `secret_store`(키체인)를 씁니다.
+32. 맥에서 Finder 로 켠 앱은 PATH 가 `/usr/bin:/bin:/usr/sbin:/sbin` 뿐입니다. 바깥 명령(claude·node 등)은 `shutil.which` 만 믿지 말고 `ai_cli._unix_bin_dirs` 처럼 설치 자리를 직접 봅니다.
+33. **글꼴은 Windows 글꼴 뒤에 맥 글꼴을 함께 적습니다**: 산세리프 `"Segoe UI", "Malgun Gothic", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo"`, 명조 `"AppleMyungjo"`, 고정폭 `Consolas, "SF Mono", Menlo` (`styles.css` 의 `--font-sans`·`--font-serif`). 맑은 고딕만 적지 않습니다.
+34. **단축키를 Ctrl 로 고정하지 않습니다.** 처리는 `event.ctrlKey || event.metaKey` 로 함께 받고, 화면에 보이는 안내는 `keyLabel(tr("…Ctrl+K…"))` 로 그립니다(맥에서 ⌘K). 정적 HTML 의 안내는 `macKeyLabels` 가 바꿉니다. 맥의 Option(Alt)+화살표는 글자 칸의 단어 이동이라 가로채지 않습니다. 화면 문구에 'Windows·윈도우' 를 쓰지 않습니다('컴퓨터', '운영체제').
+35. 줄바꿈 `\r\n` 을 가정하지 않습니다(IMAP·.ics 처럼 규격이 정한 곳만). 셸 스크립트는 LF 로 둡니다(`.gitattributes`).
+36. **한 칩 전용 바이너리·패키지를 더하지 않습니다.** 저장소에 `.exe·.dll·.dylib·.so` 를 넣지 않습니다. 맥 판은 **M칩(arm64)·인텔(x86_64) 두 벌**을 따로 묶습니다(`mac.yml` 매트릭스, `daling-mac.spec` 의 `DALING_MAC_ARCH`, 파일 `daling-<버전>-mac-arm64.dmg`·`-mac-x86_64.dmg`). 새 패키지는 `requirements-mac.txt` 에 **두 칩 모두 휠이 있는 판**으로 넣습니다 — `pip download <패키지> --platform macosx_12_0_x86_64 --python-version 3.13 --only-binary=:all:` (arm64 도) 로 확인하고, 한쪽이 끊긴 패키지는 `; platform_machine == "x86_64"` 로 칩마다 판을 나눕니다(예: cryptography 는 49 부터 인텔 휠이 없어 인텔만 48.0.0). Windows 전용이면 `daling-mac.spec` 의 `excludes` 에 넣습니다. universal2 는 `pydantic_core`·`cryptography`·`cffi` 휠이 없어 하지 않습니다(2026-10-20 실측). 맥 칩 판별은 `sysctl hw.optional.arm64`(`updater._mac_arch`·`install.sh mac_arch`, 로제타에서도 M칩을 알아봄).
+37. **맥 권한이 필요한 기능**(마이크·카메라·화면 기록·연락처·사진·외장 디스크 등)을 넣으면 `daling-mac.spec` 의 `info_plist` 에 `NS…UsageDescription` 을 함께 넣습니다. 카메라·마이크 같은 것은 설명이 없으면 macOS 가 앱을 바로 죽입니다.
+38. **맥 앱은 맥 러너에서 `ditto`·`hdiutil` 로만 묶습니다.** `.app` 폴더를 그대로 아티팩트·zip 에 넣지 않습니다(실행 권한·심볼릭 링크가 사라져 '손상됨'). 서명은 최소 ad-hoc(`codesign --sign -`) — M칩은 서명 없는 실행 파일을 `killed: 9` 로 죽입니다. 공증 자리는 `mac.yml` 주석·`packaging/mac/entitlements.plist`.
+39. **맥 쪽 변경은 CI 로 확인합니다.** `build.yml`·`mac.yml` 이 실제 앱을 띄워 화면 서버 응답·`--autosaver-smoke`·데이터 폴더 위치를 봅니다. 소스만 고치고 "맥에서도 된다" 고 하지 않습니다. CI 로 못 보는 것(창 모양·키체인 창·권한 창·⌘ 단축키)은 맥 사용자에게 확인을 부탁하고 그렇다고 적습니다.
 
 ## 4. 구조 요약
 

@@ -1,0 +1,113 @@
+# Daling 두 운영체제 빌드 — Windows(windows-latest)와 macOS(M칩 macos-latest·인텔 macos-15-intel)를 한 번에
+#
+# 왜 있나: 개발 PC 는 Windows 뿐이고 맥이 없다. PyInstaller 는 다른 운영체제용으로 묶지 못하므로(크로스 빌드 없음)
+#          맥 앱은 GitHub 의 맥 러너에서만 만들고 시험할 수 있다. 코드를 고칠 때마다 두 운영체제에서 묶이고 켜지는지 본다.
+#  - windows: PyInstaller → Inno Setup(서명 없음) → 창 없이 점검(--autosaver-smoke) → 설치 파일을 아티팩트로
+#  - mac:     mac.yml 을 그대로 부른다 (빌드 → 서명(사설 인증서, 없으면 ad-hoc) → 실제 앱 띄워 보기 → 점검 → DMG)
+#  - 릴리스는 만들지 않는다. 서명된 Windows 릴리스는 release.yml(SignPath), 맥 릴리스 DMG 는 mac.yml 결과를 올린다.
+#  - 아티팩트: Actions 실행 화면 아래 'Artifacts' 에서 daling-windows-setup / daling-mac-dmg-arm64(M칩) /
+#    daling-mac-dmg-x86_64(인텔) 를 받는다.
+#    맥 DMG 를 브라우저로 받으면 처음 한 번 '그래도 열기' 가 필요하다 (README 'macOS 에서 열기').
+#
+# 공개 저장소라 맥 러너도 무료다. 같은 브랜치에 새로 올리면 앞의 실행은 취소된다.
+name: build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["main"]
+    # 소개 사이트·문서·디자인 원본만 바뀐 커밋은 앱이 그대로라 빌드하지 않는다
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
+      - "design/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    env:
+      PYTHONUTF8: "1"
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: requirements-build.txt
+
+      - name: 패키지 설치
+        run: python -m pip install -r requirements-build.txt
+
+      - name: 빌드 준비물 (Google 클라이언트, 공공데이터 키, WebView2 부트스트래퍼, Inno Setup)
+        shell: pwsh
+        env:
+          GOOGLE_CLIENT_JSON: ${{ secrets.GOOGLE_CLIENT_JSON }}
+          DGIST_API_KEY: ${{ secrets.DGIST_API_KEY }}
+        run: |
+          # release.yml 과 같은 규칙: 있으면 파일로 만들고, 없으면 빼고 빌드한다
+          if ($env:DGIST_API_KEY) {
+            [IO.File]::WriteAllText("$PWD\public_data_key.txt", $env:DGIST_API_KEY.Trim(), (New-Object Text.UTF8Encoding $false))
+          } else { "DGIST_API_KEY 없음 — 공공데이터 기본 키 없이 빌드" }
+          if ($env:GOOGLE_CLIENT_JSON) {
+            [IO.File]::WriteAllText("$PWD\google_client.json", $env:GOOGLE_CLIENT_JSON, (New-Object Text.UTF8Encoding $false))
+          } else { "GOOGLE_CLIENT_JSON 없음 — 로그인 준비물 없이 빌드" }
+          # Microsoft 공식 Evergreen 부트스트래퍼 (Microsoft 서명)
+          Invoke-WebRequest -UseBasicParsing "https://go.microsoft.com/fwlink/p/?LinkId=2124703" -OutFile packaging\MicrosoftEdgeWebview2Setup.exe
+          if ((Get-AuthenticodeSignature packaging\MicrosoftEdgeWebview2Setup.exe).Status -ne "Valid") { throw "WebView2 부트스트래퍼 서명 확인 실패" }
+          if (-not (Test-Path "C:\Program Files (x86)\Inno Setup 6\ISCC.exe")) { choco install innosetup -y --no-progress }
+
+      - name: PyInstaller + Inno Setup (서명 없음)
+        shell: powershell   # build_installer.ps1 은 Windows PowerShell 5.1 기준 (UTF-8 BOM)
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File packaging\build_installer.ps1
+
+      - name: 창 없이 점검 (--autosaver-smoke)
+        shell: pwsh
+        timeout-minutes: 5
+        run: |
+          New-Item -ItemType Directory -Force logs | Out-Null
+          # 실행 파일 이름(붕어빵.exe)을 스크립트에 적지 않고 찾는다 (dist 아래 폴더 하나, 그 안의 exe 하나)
+          $exe = Get-ChildItem dist -Directory | ForEach-Object { Get-ChildItem $_.FullName -Filter *.exe } | Select-Object -First 1
+          "점검: $($exe.FullName)"
+          # 창 없는(console=False) EXE 라 출력은 파일로 받고, 성공 여부는 종료 코드로 본다 (smoke_test.py)
+          $p = Start-Process -FilePath $exe.FullName -ArgumentList "--autosaver-smoke" -Wait -PassThru `
+                 -RedirectStandardOutput logs\smoke.log -RedirectStandardError logs\smoke-err.log
+          Get-Content logs\smoke.log, logs\smoke-err.log -ErrorAction SilentlyContinue
+          if ($p.ExitCode -ne 0) { throw "점검 실패 (종료 코드 $($p.ExitCode))" }
+
+      - name: 설치 파일 보관
+        uses: actions/upload-artifact@v4
+        with:
+          name: daling-windows-setup
+          path: |
+            packaging/out/*-setup.exe
+            packaging/out/*-setup.exe.sha256
+          if-no-files-found: error
+
+      - name: 로그 보관
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: daling-windows-logs
+          path: |
+            logs/
+            build/bungeoppang/warn-bungeoppang.txt
+          if-no-files-found: ignore
+
+  mac:
+    # mac.yml 의 빌드 출처 증명(Sigstore)이 쓰는 권한. 불리는 쪽은 부르는 쪽이 준 권한까지만 쓸 수 있다
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+    uses: ./.github/workflows/mac.yml
+    secrets: inherit

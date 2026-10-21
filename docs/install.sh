@@ -10,9 +10,9 @@
 #   리눅스는 서명 검사가 없지만, 실행 권한·앱 목록 등록·업데이트를 한 번에 해 준다.
 #
 # 하는 일: GitHub 릴리스에서 이 컴퓨터용 파일과 그 .sha256 을 받아 맞춰 보고 → 설치하고 → 켠다.
-#   macOS: daling-<버전>-mac-arm64.dmg        → /Applications/Daling.app (쓸 수 없으면 ~/Applications)
+#   macOS: daling-<버전>-mac-arm64.dmg(M칩)·mac-x86_64.dmg(인텔) → /Applications/Daling.app (쓸 수 없으면 ~/Applications)
 #   Linux: daling-<버전>-linux-x86_64.tar.gz  → 그 안의 install.sh (~/.local/opt/daling, 앱 목록, ~/.local/bin/daling)
-#   설정·메일·받은 자료(~/.lms-autosaver)는 건드리지 않는다. 다시 실행하면 최신 판으로 바꾼다.
+#   설정·메일·받은 자료(맥 ~/Library/Application Support/Daling 또는 예전 ~/.lms-autosaver, 리눅스 ~/.lms-autosaver)는 건드리지 않는다. 다시 실행하면 최신 판으로 바꾼다.
 #
 # 맥 앱 안 업데이트도 이 파일을 쓴다 (앱에 묶여 있다, updater._start_mac_install). 그때 받는 환경 변수:
 #   DALING_DMG=<앱이 받아 SHA-256 을 확인한 DMG>  DALING_DEST=<지금 앱이 있는 폴더>  DALING_UPDATE=1(앱이 꺼지기를 먼저 기다림)
@@ -56,8 +56,9 @@ find_url() {
         ;;
     esac
   fi
-  [ -n "$url" ] || die "GitHub 에서 설치 파일을 찾지 못했어요. 잠시 뒤 다시 해 주세요." \
-                       "could not find the download on GitHub. Please try again later."
+  # $3·$4 = 못 찾았을 때 알릴 말(한국어·영어). 없으면 '잠시 뒤 다시'
+  [ -n "$url" ] || die "${3:-GitHub 에서 설치 파일을 찾지 못했어요. 잠시 뒤 다시 해 주세요.}" \
+                       "${4:-could not find the download on GitHub. Please try again later.}"
   printf '%s\n' "$url"
 }
 
@@ -100,10 +101,22 @@ wait_quit() {
   while daling_running && [ "$i" -lt "$1" ]; do sleep 1; i=$((i + 1)); done
 }
 
+# 이 맥의 칩: arm64(M칩) 또는 x86_64(인텔). 로제타로 도는 터미널(uname -m 이 x86_64)이어도 M칩이면 arm64 를 고른다.
+# hw.optional.arm64 는 인텔 맥에는 아예 없다 → 0 (updater._mac_arch 와 같은 규칙)
+mac_arch() {
+  if [ "$(sysctl -n hw.optional.arm64 2>/dev/null || echo 0)" = 1 ]; then echo arm64; else echo x86_64; fi
+}
+
 install_mac() {
-  if [ "$(uname -m)" != arm64 ] && [ "$(sysctl -n hw.optional.arm64 2>/dev/null || echo 0)" != 1 ]; then
-    die "Apple Silicon(M1 이상) Mac 만 지원해요." "only Apple Silicon (M1 or later) Macs are supported."
-  fi
+  # 앱은 macOS 12 이상에서만 열린다 (Info.plist 의 LSMinimumSystemVersion). 그 아래면 깔기 전에 알린다.
+  # 판을 못 읽으면(sw_vers 없음) 막지 않고 넘어간다
+  os_ver="$(sw_vers -productVersion 2>/dev/null || true)"
+  major="${os_ver%%.*}"
+  case "$major" in
+    ''|*[!0-9]*) ;;
+    *) [ "$major" -ge 12 ] || die "macOS 12 이상에서만 돼요 (이 Mac 은 $os_ver)." "macOS 12 or later is required (this Mac has $os_ver)." ;;
+  esac
+  arch="$(mac_arch)"
   tmp="$(mktemp -d "${TMPDIR:-/tmp}/daling.XXXXXX")"
   mnt="$tmp/mnt"
   trap 'hdiutil detach "$mnt" -quiet >/dev/null 2>&1 || true; rm -rf "$tmp"' EXIT
@@ -114,7 +127,14 @@ install_mac() {
     dmg="$DALING_DMG"
     say "$(date '+%Y-%m-%d %H:%M:%S') 앱 안 업데이트: ${dmg##*/}" "$(date '+%Y-%m-%d %H:%M:%S') in-app update: ${dmg##*/}"
   else
-    url="$(find_url 'daling-[0-9.]*-mac-arm64\.dmg' 'daling-{v}-mac-arm64.dmg')"
+    # 인텔 판(mac-x86_64)은 2026-10-21 부터 만든다. 그 전 릴리스만 있으면 인텔용 파일이 없다
+    if [ "$arch" = x86_64 ]; then
+      url="$(find_url 'daling-[0-9.]*-mac-x86_64\.dmg' 'daling-{v}-mac-x86_64.dmg' \
+        "아직 인텔 Mac 용 파일이 올라오지 않았어요. 다음 버전부터 받을 수 있어요." \
+        "the Intel Mac build has not been published yet. It will be in the next release.")"
+    else
+      url="$(find_url 'daling-[0-9.]*-mac-arm64\.dmg' 'daling-{v}-mac-arm64.dmg')"
+    fi
     dmg="$tmp/${url##*/}"
     download_verified "$url" "$dmg"
   fi

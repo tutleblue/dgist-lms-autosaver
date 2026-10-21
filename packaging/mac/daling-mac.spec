@@ -1,5 +1,5 @@
 # -*- mode: python ; coding: utf-8 -*-
-"""Daling 을 macOS 앱(Daling.app, Apple Silicon arm64)으로 묶는다.
+"""Daling 을 macOS 앱(Daling.app)으로 묶는다. M칩(arm64)·인텔(x86_64) 따로 (DALING_MAC_ARCH, 없으면 이 맥의 칩).
 
 Windows 판(bungeoppang.spec)과 같은 화면·데이터를 넣고, Windows 전용(pythonnet·winotify·WinRT)은 뺀다.
 맥 판은 GitHub Actions(.github/workflows/mac.yml)의 macos-latest 에서만 만든다.
@@ -16,12 +16,19 @@ Windows 판(bungeoppang.spec)과 같은 화면·데이터를 넣고, Windows 전
     있어야 해서 하지 않는다.
 """
 
+import os
+import platform
 import re
 from pathlib import Path
 
 PROJECT = Path(SPECPATH).resolve().parent.parent
 MAC = PROJECT / "packaging" / "mac"
 VERSION = (PROJECT / "VERSION").read_text(encoding="utf-8").strip()
+# 묶을 칩: arm64(M칩) 또는 x86_64(인텔). 없으면 이 맥의 칩
+TARGET_ARCH = os.environ.get("DALING_MAC_ARCH") or platform.machine()
+if TARGET_ARCH not in ("arm64", "x86_64"):
+    raise SystemExit(f"[Daling mac] 모르는 칩: {TARGET_ARCH} (DALING_MAC_ARCH=arm64 또는 x86_64)")
+print(f"[Daling mac] {TARGET_ARCH} 로 묶습니다")
 
 # 화면 파일·사진·버전은 Windows 판과 똑같이 넣는다
 datas = [
@@ -150,7 +157,9 @@ exe = EXE(
     console=False,
     # Finder 에서 파일을 끌어다 놓는 기능은 없다. 켜 두면 첫 실행 때 Apple Event 를 기다리느라 느려진다
     argv_emulation=False,
-    target_arch="arm64",
+    # mac.yml 이 M칩 러너에서 arm64, 인텔 러너에서 x86_64 로 한 번씩 묶는다. 다른 칩용으로는 못 묶는다
+    # (묶은 파이썬·휠이 러너의 칩 것이라서). universal2 는 휠이 없어 하지 않는다 (CLAUDE.md 36)
+    target_arch=TARGET_ARCH,
     codesign_identity=None,
     entitlements_file=None,
     icon=_icon_arg,
@@ -192,5 +201,10 @@ app = BUNDLE(
         "NSDocumentsFolderUsageDescription": "받은 강의자료를 문서 폴더의 '붕어빵 파일 정리'에 저장합니다.",
         "NSDownloadsFolderUsageDescription": "고른 파일을 다운로드 폴더에서 읽거나 저장합니다.",
         "NSDesktopFolderUsageDescription": "고른 파일을 데스크톱에서 읽거나 저장합니다.",
+        # 저장 폴더는 사용자가 고른다 (USB·외장 디스크·NAS, 클라우드 앱 폴더 ~/Library/CloudStorage 도 됨).
+        # 그런 곳에 처음 쓸 때 macOS 가 묻는 창에 보이는 말. 마이크·카메라·화면 기록은 쓰지 않아 넣지 않는다.
+        "NSRemovableVolumesUsageDescription": "강의자료를 고른 외장 디스크·USB 폴더에 저장합니다.",
+        "NSNetworkVolumesUsageDescription": "강의자료를 고른 네트워크 드라이브 폴더에 저장합니다.",
+        "NSFileProviderDomainUsageDescription": "강의자료를 고른 클라우드 폴더(iCloud Drive·OneDrive·Dropbox 등)에 저장합니다.",
     },
 )

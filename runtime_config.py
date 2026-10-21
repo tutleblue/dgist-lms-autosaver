@@ -56,13 +56,23 @@ def atomic_write_json(path: Any, data: Any, **dump_kwargs: Any) -> None:
     atomic_write_text(path, json.dumps(data, **dump_kwargs))
 
 
-def _default_root() -> Path:
+def default_data_root() -> Path:
+    """설정이 따로 없을 때의 데이터 폴더. web_ui·작업 프로세스가 모두 이것을 따른다 (둘이 어긋나면 다른 폴더를 본다).
+
+    맥: 새로 까는 맥은 애플 표준 위치(~/Library/Application Support/Daling, 2026-10-20~). 예전 판을 쓰던 맥은
+    ~/.lms-autosaver 가 이미 있으므로 그대로 쓴다 — 옮기지 않는다. 설정·메타데이터에 절대 경로가 들어 있고
+    맥에서 직접 확인할 수 없어서, 옮기다 꼬이면 받은 자료·메일이 안 보이게 된다.
+    그래서 어디에서도 ~/.lms-autosaver 를 새로 만들면 안 된다 (만들면 다음 실행부터 옛 자리로 돌아간다).
+    """
     if os.name == "nt":
         return Path(r"C:\lms-autosaver")
-    return Path.home() / ".lms-autosaver"
+    legacy = Path.home() / ".lms-autosaver"
+    if sys.platform == "darwin" and not legacy.exists():
+        return Path.home() / "Library" / "Application Support" / "Daling"
+    return legacy
 
 
-AUTOSAVER_DATA_ROOT = Path(os.environ.get("AUTOSAVER_DATA_ROOT", str(_default_root())))
+AUTOSAVER_DATA_ROOT = Path(os.environ.get("AUTOSAVER_DATA_ROOT", str(default_data_root())))
 CONFIG_JSON_PATH = Path(
     os.environ.get("AUTOSAVER_CONFIG_PATH", str(AUTOSAVER_DATA_ROOT / "config.json"))
 )
@@ -268,7 +278,7 @@ GOOGLE_CLIENT_SECRETS_PATH = str(
     Path(
         os.environ.get(
             "AUTOSAVER_GOOGLE_CLIENT_SECRETS",
-            str(_default_root() / "credentials.json"),
+            str(default_data_root() / "credentials.json"),
         )
     )
 )

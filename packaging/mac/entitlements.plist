@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Daling 강화 런타임(hardened runtime) 예외 — 아직 쓰지 않는다.
+
+  공증(notarization)은 강화 런타임(codesign 의 'options runtime')을 켜야 받아 준다. 강화 런타임은 기본으로 실행 중
+  코드 생성을 막는데, 묶은 것 중 두 가지가 그것이 필요하다. 그래서 공증을 붙일 때(.github/workflows/mac.yml 의
+  '나중에: Developer ID 서명 + 공증' 주석) 이 파일을 codesign 의 'entitlements' 옵션으로 넘긴다.
+  지금(ad-hoc·사설 인증서)은 강화 런타임을 켜지 않으므로 이 파일을 넘기지 않는다.
+
+  - allow-jit: Playwright 의 node(LMS 로그인용 브라우저를 모는 프로그램)는 V8 JIT 를 쓴다. 없으면 node 가 바로 죽는다.
+  - allow-unsigned-executable-memory: ctypes(키체인 mac_keychain.py)·pyobjc(창)·cffi(cryptography) 의 콜백이
+    실행 가능한 메모리를 만든다.
+  맥에서 공증판을 처음 만들면 위 둘을 빼고도 도는지 재 보고, 필요 없는 것은 지운다(권한은 적을수록 좋다).
+  disable-library-validation 은 넣지 않았다: 묶은 .so·.dylib 는 모두 같은 신원으로 서명되고, 크로미움은 따로 뜨는
+  프로세스라 우리 앱에 라이브러리로 올라오지 않는다.
+-->
+<plist version="1.0">
+<dict>
+	<key>com.apple.security.cs.allow-jit</key>
+	<true/>
+	<key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+	<true/>
+</dict>
+</plist>

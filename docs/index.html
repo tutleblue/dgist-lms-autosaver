@@ -289,12 +289,13 @@
             <h3>macOS</h3>
             <span class="pill">베타</span>
           </div>
-          <p class="req">Apple Silicon(M1 이상) Mac · macOS 12 이상 · 디스크 이미지(.dmg)</p>
+          <p class="req" data-req-intel="M1 이상·인텔 Mac · macOS 12 이상 · 디스크 이미지(.dmg)">Apple Silicon(M1 이상) Mac · macOS 12 이상 · 디스크 이미지(.dmg)</p>
           <a class="btn primary" href="https://github.com/tutleblue/dgist-lms-autosaver/releases/download/v1.12.30/daling-1.12.30-mac-arm64.dmg" data-dl="mac" download>
             <span class="logo btn-logo"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.014-2.117 3.675-.546 9.103 1.519 12.09 1.013 1.454 2.208 3.09 3.792 3.039 1.52-.065 2.09-.987 3.935-.987 1.831 0 2.35.987 3.96.948 1.637-.026 2.676-1.48 3.676-2.948 1.156-1.688 1.636-3.325 1.662-3.415-.039-.013-3.182-1.221-3.22-4.857-.026-3.04 2.48-4.494 2.597-4.559-1.429-2.09-3.623-2.324-4.39-2.376-2-.156-3.675 1.09-4.61 1.09zM15.53 3.83c.843-1.012 1.4-2.427 1.245-3.83-1.207.052-2.662.805-3.532 1.818-.78.896-1.454 2.338-1.273 3.714 1.338.104 2.715-.688 3.559-1.701"/></svg></span>
             Mac용 내려받기
           </a>
           <p class="ver" data-ver="mac">버전 1.12.30 · 78MB</p>
+          <p class="ver" data-dl-wrap="mac-intel" hidden>인텔 Mac 은 <a href="https://github.com/tutleblue/dgist-lms-autosaver/releases/latest" data-dl="mac-intel" download>인텔용 DMG</a> <span data-ver="mac-intel" data-fmt="({mb}MB)"></span></p>
           <details>
             <summary>DMG로 받은 앱이 열리지 않으면</summary>
             <ol>
@@ -358,7 +359,7 @@
     </div>
     <div class="faq reveal">
       <details><summary>DGIST 공식 앱인가요?</summary><p>아니요. DGIST 학생이 쓰려고 만든 비공식 앱이며, DGIST가 만들거나 운영하는 서비스가 아닙니다. 중요한 마감과 공지는 LMS와 학교 공식 채널에서도 꼭 확인하세요.</p></details>
-      <details><summary>앱을 지우면 자료도 지워지나요?</summary><p>아니요. 받은 자료와 설정은 데이터 폴더(Windows <code>C:\lms-autosaver</code>, Mac·Linux <code>~/.lms-autosaver</code>)에 남습니다. 필요 없으면 그 폴더를 지우면 됩니다.</p></details>
+      <details><summary>앱을 지우면 자료도 지워지나요?</summary><p>아니요. 받은 자료와 설정은 데이터 폴더(Windows <code>C:\lms-autosaver</code>, Mac <code>~/Library/Application Support/Daling</code> — 예전부터 쓰던 Mac 은 <code>~/.lms-autosaver</code>, Linux <code>~/.lms-autosaver</code>)에 남습니다. 필요 없으면 그 폴더를 지우면 됩니다.</p></details>
       <details><summary>AI 도우미는 내 메일을 어디로 보내나요?</summary><p>AI 도우미(번역·말로 찾기·메일 초안)는 설정에서 켜야 쓰는 실험실 기능이고, 켠 뒤에도 버튼을 누를 때만 내가 PC에 설치해 로그인한 AI(Claude·Gemini·Codex)로 필요한 글만 직접 보냅니다. 개발자를 거치지 않고, Google Drive·Calendar에서 받은 정보는 보내지 않습니다. 자세한 내용은 <a href="./privacy">개인정보처리방침</a>에 있어요.</p></details>
       <details><summary>문의나 오류 제보는 어디로 하나요?</summary><p>앱 왼쪽 아래의 'Feedback' 버튼이나 <a href="mailto:tutleblue12@gmail.com">tutleblue12@gmail.com</a>으로 보내 주세요.</p></details>
     </div>
@@ -446,9 +447,13 @@
         document.querySelectorAll(`[data-ver="${os}"]`).forEach((el) => {
           el.textContent = (el.dataset.fmt || "버전 {v} · {mb}MB").replace("{v}", v).replace("{mb}", Math.round(asset.size / 1048576));
         });
+        // 인텔 Mac 줄처럼 파일이 있을 때만 보이는 것 (인텔 판은 2026-10-21 부터 만든다. 그 전 릴리스에는 없다)
+        document.querySelectorAll(`[data-dl-wrap="${os}"]`).forEach((el) => { el.hidden = false; });
+        if (os === "mac-intel") document.querySelectorAll("[data-req-intel]").forEach((el) => { el.textContent = el.dataset.reqIntel; });
       };
       set("win", pick(/^(bungeoppang|daling)-[\d.]+-win-x64-setup\.exe$/i, false));
       set("mac", pick(/^daling-[\d.]+-mac-arm64\.dmg$/i, true));
+      set("mac-intel", pick(/^daling-[\d.]+-mac-x86_64\.dmg$/i, true));
       set("linux", pick(/^daling-[\d.]+-linux-x86_64\.AppImage$/i, true));
       set("linux-tar", pick(/^daling-[\d.]+-linux-x86_64\.tar\.gz$/i, true));
       pointHero();

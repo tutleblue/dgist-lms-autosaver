@@ -47,7 +47,10 @@ def _bundle_root() -> Path:
 
 PROJECT_ROOT = _bundle_root()
 WEB_ROOT = PROJECT_ROOT / "web"
-DEFAULT_AUTOSAVER_ROOT = Path(r"C:\lms-autosaver") if os.name == "nt" else Path.home() / ".lms-autosaver"
+# 작업 프로세스(runtime_config)와 같은 규칙이어야 한다. 예전엔 여기에 따로 적혀 있었다
+from runtime_config import default_data_root  # noqa: E402
+
+DEFAULT_AUTOSAVER_ROOT = default_data_root()
 AUTOSAVER_ROOT = Path(os.environ.get("AUTOSAVER_ROOT", str(DEFAULT_AUTOSAVER_ROOT)))
 USERS_ROOT = Path(os.environ.get("AUTOSAVER_USERS_ROOT", str(AUTOSAVER_ROOT / "users")))
 MULTI_USER_MODE = os.environ.get("AUTOSAVER_MULTI_USER", "0").lower() in {"1", "true", "yes", "on"}
@@ -1819,24 +1822,38 @@ def detect_cloud_roots() -> dict[str, Path | None]:
     """이 PC 에 깔린 클라우드 동기화 폴더를 찾는다. 없으면 None."""
     home = Path.home()
     env = os.environ
+    # 맥: 요즘 클라우드 앱은 ~/Library/CloudStorage 아래에 '<앱>-<계정>' 폴더를 만든다 (OneDrive-Personal, Dropbox 등).
+    # 예전 판은 홈 바로 아래라 그것도 본다. 맥에서 직접 확인하지는 못했다 — 못 찾으면 사용자가 고른다.
+    # (Windows 에서는 빈 목록이라 예전과 똑같다)
+    cloud_storage: list[Path] = []
+    if sys.platform == "darwin":
+        try:
+            cloud_storage = sorted(p for p in (home / "Library" / "CloudStorage").iterdir() if p.is_dir())
+        except OSError:
+            pass
+
+    def on_mac(word: str) -> list[Path]:
+        return [p for p in cloud_storage if word in p.name.lower()]
+
     # OneDrive: 프로그램이 로그인할 때 환경변수에 폴더를 적어 둔다 (개인 / 학교·회사)
-    onedrive = _first_dir([env.get("OneDrive"), env.get("OneDriveConsumer"), env.get("OneDriveCommercial"), home / "OneDrive"])
-    # Dropbox: 설치 프로그램이 info.json 에 동기화 폴더를 적는다 (개인이 먼저)
+    onedrive = _first_dir([env.get("OneDrive"), env.get("OneDriveConsumer"), env.get("OneDriveCommercial")]
+                          + on_mac("onedrive") + [home / "OneDrive"])
+    # Dropbox: 설치 프로그램이 info.json 에 동기화 폴더를 적는다 (개인이 먼저). 맥·리눅스는 ~/.dropbox/info.json
     dropbox_paths: list[Any] = []
-    for base in (env.get("APPDATA"), env.get("LOCALAPPDATA")):
-        if not base:
-            continue
-        info = read_json(Path(base) / "Dropbox" / "info.json", {})
+    infos = [Path(base) / "Dropbox" / "info.json" for base in (env.get("APPDATA"), env.get("LOCALAPPDATA")) if base]
+    for info_path in infos + [home / ".dropbox" / "info.json"]:
+        info = read_json(info_path, {})
         if isinstance(info, dict):
             for kind in ("personal", "business"):
                 entry = info.get(kind)
                 if isinstance(entry, dict):
                     dropbox_paths.append(entry.get("path"))
-    dropbox = _first_dir(dropbox_paths + [home / "Dropbox"])
-    # iCloud for Windows 기본 폴더
-    icloud = _first_dir([home / "iCloudDrive", home / "iCloud Drive"])
+    dropbox = _first_dir(dropbox_paths + on_mac("dropbox") + [home / "Dropbox"])
+    # iCloud for Windows 기본 폴더, 맥은 iCloud Drive 의 실제 자리
+    icloud = _first_dir([home / "iCloudDrive", home / "iCloud Drive",
+                         home / "Library" / "Mobile Documents" / "com~apple~CloudDocs"])
     # 네이버 MYBOX PC 앱: 흔한 이름만 본다(실제 설치본에서 확인하지 못했다). 못 찾으면 사용자가 고른다.
-    mybox = _first_dir([home / "MYBOX", home / "네이버 MYBOX", home / "NAVER MYBOX", home / "Naver MYBOX"])
+    mybox = _first_dir([home / "MYBOX", home / "네이버 MYBOX", home / "NAVER MYBOX", home / "Naver MYBOX"] + on_mac("mybox"))
     return {"onedrive": onedrive, "dropbox": dropbox, "icloud": icloud, "mybox": mybox}
 
 
@@ -5102,7 +5119,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>{safe_title}</title>
   <style>
-    body {{ margin: 0; font-family: "Segoe UI", system-ui, sans-serif; background: #f7f8fb; color: #17202a; }}
+    body {{ margin: 0; font-family: "Segoe UI", "Malgun Gothic", -apple-system, "Apple SD Gothic Neo", system-ui, sans-serif; background: #f7f8fb; color: #17202a; }}
     main {{ max-width: 680px; margin: 12vh auto; padding: 28px; border: 1px solid #d9e0e8; border-radius: 8px; background: white; }}
     h1 {{ margin: 0 0 10px; color: {color}; font-size: 26px; }}
     p {{ margin: 0 0 22px; color: #667085; line-height: 1.6; }}

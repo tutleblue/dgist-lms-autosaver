@@ -480,7 +480,7 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 | EXE | `.venv\Scripts\python.exe -m PyInstaller bungeoppang.spec --noconfirm` → `dist\붕어빵\` |
 | 설치 파일 | `packaging\build_installer.ps1` → `packaging\out\bungeoppang-<버전>-win-x64-setup.exe` (약 54MB) |
 | 이 PC에 설치 | `packaging\build_installer.ps1 -Install` |
-| 맥 앱 (DMG) | GitHub Actions `.github/workflows/mac.yml` → `daling-<버전>-mac-arm64.dmg` 아티팩트 (아래 'macOS 판') |
+| 맥 앱 (DMG) | GitHub Actions `.github/workflows/mac.yml` → `daling-<버전>-mac-arm64.dmg`(M칩)·`daling-<버전>-mac-x86_64.dmg`(인텔) 아티팩트 (아래 'macOS 판') |
 | 리눅스 앱 (AppImage·tar.gz) | GitHub Actions `.github/workflows/linux.yml` → `daling-<버전>-linux-x86_64.AppImage`·`.tar.gz` 아티팩트 (아래 '리눅스 판') |
 | Microsoft Store 판 (MSIX) | `packaging\msix\build_msix.ps1` → `packaging\out\daling-<버전>-win-x64.msix`(시험판)·`-store.msix`(제출판) (아래 'Microsoft Store 판') |
 | 설치본 점검 | `<실행 파일> --autosaver-smoke` (창 없이, 빈 임시 데이터 폴더로. `smoke_test.py`). Store 판은 `daling.exe --autosaver-smoke` |
@@ -727,14 +727,30 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 - 'LMS·공지' 탭(`isLmsMail`)은 수업·LMS 분류도 포함한다.
 
 ## macOS 판 (2026-10-12)
-- 빌드는 GitHub Actions 에서만(개발 PC 가 Windows): `.github/workflows/mac.yml` — `build/mac` 브랜치 푸시 또는 수동 실행, macos-latest(arm64)·Python 3.13·`requirements-mac.txt` → `packaging/mac/daling-mac.spec` → `dist/Daling.app` → 서명(사설 인증서, 비밀이 없으면 ad-hoc — 아래 '서명 인증서') → `--autosaver-smoke` → 실제 앱 25초 띄워 `/healthz`·스크린샷 → `daling-<버전>-mac-arm64.dmg`(+ `.sha256`). 릴리스는 만들지 않는다.
+- 빌드는 GitHub Actions 에서만(개발 PC 가 Windows): `.github/workflows/mac.yml` — `build/mac` 브랜치 푸시·수동 실행·`build.yml` 이 부름, 칩마다 한 번씩(macos-latest = M칩 arm64, macos-15-intel = 인텔 x86_64)·Python 3.13·`requirements-mac.txt` → `packaging/mac/daling-mac.spec` → `dist/Daling.app` → 서명(사설 인증서, 비밀이 없으면 ad-hoc — 아래 '서명 인증서') → `--autosaver-smoke` → 실제 앱 25초 띄워 `/healthz`·스크린샷 → `daling-<버전>-mac-<arm64|x86_64>.dmg`(+ `.sha256`). 릴리스는 만들지 않는다 — 릴리스에는 두 DMG 와 각 `.sha256` 을 모두 올린다.
 - 공증 없음(유료 Apple Developer 계정 필요). 브라우저로 받은 DMG 는 처음 한 번 '시스템 설정 → 개인정보 보호 및 보안 → 그래도 열기'(macOS 15 부터 Control-클릭 → 열기 는 안 통함). 한 줄 설치(`curl -fsSL https://gudaling.dev/install.sh | sh`)는 격리 표시가 안 붙어 이 창이 없다 ('서명·한 줄 설치').
 - 비밀 설정: 맥은 DPAPI 가 없어 예전엔 config.json 에 평문이었다. 이제 로그인 키체인(서비스 `Daling`, 계정 `settings`, {키: 값} JSON 한 항목)에 두고 config.json 에는 `keychain:<키>` 만. `mac_keychain.py`(Security.framework 를 ctypes 로, 비밀번호가 명령줄에 안 실림). `web_ui.dpapi_protect/unprotect` 와 `runtime_config._load_config` 둘 다 푼다. 항목을 하나로 둔 까닭: ad-hoc 서명은 새 버전마다 서명 해시가 바뀌어 키체인 접근을 다시 묻는데, 항목이 다섯이면 다섯 번 묻는다(사설 인증서로 서명해도 키체인은 다시 묻는다 — 아래 '서명 인증서'). 키체인이 거절하면 DPAPI 실패와 같이 평문을 남기고 다음 저장 때 다시 넣는다.
 - 알림·오류 상자: `osascript`(`app.notify`, `_osascript`). 글은 스크립트에 끼우지 않고 `on run argv` 인자로 넘긴다. 알림 센터에는 '스크립트 편집기' 로 보여 제목 줄에 Daling 을 넣는다.
 - SSL: 묶은 파이썬의 OpenSSL 은 빌드한 맥의 인증서 경로를 본다 → `app.py` 가 `SSL_CERT_FILE` 을 certifi 로(작업 프로세스도 물려받음). Windows 는 시스템 저장소를 읽어 필요 없다.
-- 경로: 데이터 `~/.lms-autosaver`, LMS 브라우저 `~/Library/Caches/ms-playwright`(`browser_ready` 가 맥 실행 파일 이름도 본다), Playwright `node` 는 `Contents/Resources` 에 데이터로 묶여 실행 권한을 확인한다.
+- 경로: 데이터 `~/Library/Application Support/Daling`(2026-10-20~ 새 설치. 예전 판을 쓰던 맥은 `~/.lms-autosaver` 가 있으면 그대로 쓰고 옮기지 않는다 — 설정·메타데이터에 절대 경로가 있고 맥에서 직접 확인할 수 없어서. `runtime_config.default_data_root()` 하나를 web_ui 도 따른다. `mac.yml` '실제 앱 띄워 보기' 가 깨끗한 러너에서 새 자리에 생기고 옛 자리는 안 생기는지 본다), LMS 브라우저 `~/Library/Caches/ms-playwright`(`browser_ready` 가 맥 실행 파일 이름도 본다), Playwright `node` 는 `Contents/Resources` 에 데이터로 묶여 실행 권한을 확인한다.
+- 크로스플랫폼 점검 (2026-10-20, 전체 코드 검사): Windows 전용 API 약 45곳은 모두 OS 분기 안이었다. 맥에서 실제로 틀린 것만 고쳤다.
+  - AI 도우미(`ai_cli`): Finder 로 켠 앱은 PATH 가 `/usr/bin:/bin` 뿐이라 터미널에서 되는 claude·gemini·codex 를 '없음' 으로 봤다 → `~/.local/bin`·`/opt/homebrew/bin`·`/usr/local/bin`·npm 전역·nvm 자리도 보고, 돌릴 때 그 폴더들을 PATH 에 넣는다(npm CLI 는 `#!/usr/bin/env node`).
+  - 클라우드 폴더 찾기(`detect_cloud_roots`): 맥의 `~/Library/CloudStorage/<앱>-<계정>`(OneDrive·Dropbox·MYBOX), `~/.dropbox/info.json`, iCloud Drive(`~/Library/Mobile Documents/com~apple~CloudDocs`). 맥에서 직접 확인하지 못했다.
+  - 화면: '저장 폴더가 클라우드 안' 경고가 `root + "\\"` 로 비교해 맥에서 안 떴다 → `/` 로 맞춰 비교. 경로 줄여 보이기(`friendlyPath`)가 `/Users/<이름>/` 도 줄인다.
+  - 단축키: 처리는 원래 Ctrl·Cmd 를 함께 받았다. 안내 문구만 맥에서 ⌘ 로(`keyLabel`·`macKeyLabels`, 번역 뒤에 입혀 en.json 은 그대로). 뒤로·앞으로는 맥에서 ⌘[ / ⌘] — Option+←/→ 는 맥 글자 칸의 단어 이동인데 가로채서 메일을 쓰다가 화면이 넘어갔다.
+  - 글꼴: Windows 글꼴 뒤에 `-apple-system`·Apple SD Gothic Neo·AppleMyungjo·SF Mono. 화면 문구의 'Windows 알림'·'윈도우의 밝은·어두운 모드' 를 운영체제와 상관없는 말로.
+  - Info.plist: 외장 디스크·네트워크 드라이브·클라우드(File Provider) 폴더에 쓸 때 보일 설명을 더했다. 마이크·카메라·화면 기록은 쓰지 않는다.
+  - universal2 는 하지 않는다: `pydantic_core`·`cryptography`·`cffi` 에 universal2 휠이 없다(2026-10-20 `pip download --platform macosx_11_0_universal2` 실측). 대신 칩마다 따로 묶는다.
+- 인텔 맥 (2026-10-21, 사용자 요청): `mac.yml` 매트릭스에 인텔 러너 `macos-15-intel`(GitHub 공식 표에 macos-15-intel·macos-26-intel). `daling-mac.spec` 이 `DALING_MAC_ARCH` 로 `target_arch` 를 고르고, CI 가 묶은 실행 파일과 Playwright node 의 칩을 `lipo -archs` 로 확인한다.
+  - 휠: 2026-10-21 `pip download --platform macosx_12_0_<칩> --python-version 3.13` 로 55개 모두 두 칩 휠이 있음을 확인. 단 **cryptography 는 49.0.0 부터 인텔 맥 휠이 없다**(49·50 은 arm64 뿐, 48.0.0 은 universal2) → `requirements-mac.txt` 에서 `platform_machine` 으로 인텔만 48.0.0(쓰는 곳은 google-auth, `>=38.0.3`).
+  - Playwright 의 universal2 휠에 든 node 는 x86_64 하나뿐이다(Mach-O 헤더 실측). 인텔 러너의 pip 는 그 휠을(macosx_11_0 이 10_13_x86_64 보다 앞섬), M칩 러너는 arm64 휠을 고르므로 둘 다 맞다.
+  - 칩 판별: `sysctl -n hw.optional.arm64` 가 1 이면 M칩(로제타로 도는 터미널·인텔 판에서도), 인텔 맥에는 이 항목이 없다 → `updater._mac_arch`·`docs/install.sh mac_arch`. 인텔 맥에 M칩 판을 권하지 않는다(릴리스에 인텔 DMG 가 없으면 '새 버전 없음', 한 줄 설치는 '아직 인텔용이 없음').
+  - `install.sh` 는 macOS 12 미만이면 깔기 전에 멈춘다(LSMinimumSystemVersion). 판을 못 읽으면 막지 않는다.
+  - 사이트 내려받기: 릴리스에 `mac-x86_64.dmg` 가 있을 때만 '인텔 Mac 은 인텔용 DMG' 줄이 보이고 요구 사항이 'M1 이상·인텔 Mac' 으로 바뀐다(`data-dl-wrap`·`data-req-intel`).
+  - CI '한 줄 설치·앱 안 업데이트 점검': 지금 릴리스에 이 칩의 DMG 가 없으면(인텔 첫 릴리스 전) 이번 빌드 DMG 로 새로 깔고 같은 DMG 로 업데이트를 흉내 낸다. 키체인 점검·실험은 칩과 상관없어 M칩 러너에서만.
+- CI: `build.yml`(main 푸시·수동)이 Windows(windows-latest, 서명 없는 설치 파일 + `--autosaver-smoke`)와 맥(`mac.yml` 을 `workflow_call` 로)을 함께 돌린다. 공증 자리는 `mac.yml` 주석과 `packaging/mac/entitlements.plist`(강화 런타임 예외 allow-jit·allow-unsigned-executable-memory, 아직 안 씀).
 - 창: 첫 크기는 `NSScreen.visibleFrame`(메뉴 막대·Dock 제외)에 맞추고 자리는 pywebview 가 가운데로. 삼성 노트는 없음(`is_available` False → 버튼 숨김).
-- 업데이트: 릴리스의 `daling-<버전>-mac-arm64.dmg` 만 본다. (2026-10-15~) '지금 업데이트' 는 Windows 처럼 앱이 직접 받아 GitHub digest 로 확인하고, 앱에 묶은 `install.sh`(= `docs/install.sh`)를 따로 띄운 뒤 앱이 꺼진다. install.sh 는 앱이 다 꺼지기를 기다려 DMG 의 앱을 지금 앱이 있는 폴더에 바꿔 끼우고(새 판 복사 → 서명 확인 → 이름만 바꾸기) 다시 켠다. 기록은 `~/.lms-autosaver/update-mac.log`. 예전처럼 브라우저로 받으면 업데이트마다 격리 표시 때문에 '그래도 열기' 를 또 눌러야 했다. 앱이 urllib 로 받은 파일에는 격리 표시가 없다(Info.plist 에 `LSFileQuarantineEnabled` 없음, 샌드박스 아님 — `--autosaver-smoke` 가 확인). DMG 안에서 켰거나(/Volumes) 옮기지 않고 켠(AppTranslocation) 앱은 /Applications(못 쓰면 ~/Applications)에 깐다.
+- 업데이트: 릴리스의 이 칩용 `daling-<버전>-mac-<arm64|x86_64>.dmg` 만 본다. (2026-10-15~) '지금 업데이트' 는 Windows 처럼 앱이 직접 받아 GitHub digest 로 확인하고, 앱에 묶은 `install.sh`(= `docs/install.sh`)를 따로 띄운 뒤 앱이 꺼진다. install.sh 는 앱이 다 꺼지기를 기다려 DMG 의 앱을 지금 앱이 있는 폴더에 바꿔 끼우고(새 판 복사 → 서명 확인 → 이름만 바꾸기) 다시 켠다. 기록은 `~/.lms-autosaver/update-mac.log`. 예전처럼 브라우저로 받으면 업데이트마다 격리 표시 때문에 '그래도 열기' 를 또 눌러야 했다. 앱이 urllib 로 받은 파일에는 격리 표시가 없다(Info.plist 에 `LSFileQuarantineEnabled` 없음, 샌드박스 아님 — `--autosaver-smoke` 가 확인). DMG 안에서 켰거나(/Volumes) 옮기지 않고 켠(AppTranslocation) 앱은 /Applications(못 쓰면 ~/Applications)에 깐다.
 - 아이콘: `packaging/mac/Daling.icns` ← `python scripts/make_icons.py --mac` (애플 격자: 1024 안 824 네모).
 - 점검 `--autosaver-smoke`: 빈 임시 데이터 폴더로 화면 서버(빈 포트)·화면 파일·가벼운 /api·작업 프로세스(`--autosaver-job smoke`)·node·(맥) Cocoa 모듈·인증서, `AUTOSAVER_SMOKE_KEYCHAIN=1` 이면 점검용 계정으로 키체인 왕복, `=write`/`=read` 면 그것만(다음 빌드가 묻지 않고 읽는지, 아래), `=droppart`/`addpart`/`delete`/`readui` 는 '키체인 실험' 용. Windows 소스에서도 돈다(13개 통과).
 - 서명 인증서 (2026-10-15): ad-hoc 서명의 서명 요구 조건(designated requirement, DR)은 `cdhash H"…"` 라 빌드마다 바뀌고, macOS 는 개인정보 보호 권한(TCC: 문서 폴더 접근 등)과 키체인 '믿는 앱' 을 이 조건에 묶는다 → 업데이트마다 다시 묻는다. 오래 쓰는 사설 코드 서명 인증서 하나로 서명하면 DR 이 `identifier "app.daling.desktop" and certificate root = H"<인증서 SHA-1>"` 로 고정된다. **키체인 재질문은 이걸로 안 없어진다**(아래 실측). Gatekeeper 경고와는 상관없다(공증이 필요, 한 줄 설치가 피함). 알림은 osascript 라 앱 신원과 무관.

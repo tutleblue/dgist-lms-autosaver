@@ -36,8 +36,12 @@ PROJECT_ROOT = Path(__file__).resolve().parent
 REPO = "tutleblue/dgist-lms-autosaver"
 LATEST_RELEASE_API = f"https://api.github.com/repos/{REPO}/releases/latest"
 ASSET_PATTERN = re.compile(r"^bungeoppang-[\d.]+-win-x64-setup\.exe$")
-# 맥 빌드(.github/workflows/mac.yml)가 만드는 DMG.
-MAC_ASSET_PATTERN = re.compile(r"^daling-[\d.]+-mac-arm64\.dmg$")
+# 맥 빌드(.github/workflows/mac.yml)가 만드는 DMG. M칩(arm64)·인텔(x86_64) 따로다 (인텔은 2026-10-21~).
+# 제 칩 것만 본다 — 인텔 맥에 M칩 판을 깔면 열리지 않는다.
+MAC_ASSET_PATTERNS = {
+    "arm64": re.compile(r"^daling-[\d.]+-mac-arm64\.dmg$"),
+    "x86_64": re.compile(r"^daling-[\d.]+-mac-x86_64\.dmg$"),
+}
 # 맥은 앱이 직접 받아 바꾼다 (2026-10-15). 예전에는 브라우저로 DMG 주소만 열었는데, 브라우저가 받은 파일에 붙이는
 # 격리 표시(com.apple.quarantine) 때문에 업데이트할 때마다 Gatekeeper 가 다시 막았다(ad-hoc 서명, 공증 없음 →
 # '그래도 열기' 를 또 눌러야 했다). 앱이 urllib 로 받은 파일에는 격리 표시가 붙지 않는다(Info.plist 에
@@ -111,11 +115,27 @@ def _get_json(url: str) -> dict:
         return json.loads(resp.read().decode("utf-8"))
 
 
+def _mac_arch() -> str:
+    """이 맥의 칩: arm64(M칩) 또는 x86_64(인텔). docs/install.sh 의 mac_arch 와 같은 규칙.
+
+    인텔 판을 M칩 맥에서 로제타로 돌리는 중이어도(platform.machine() 이 x86_64) M칩이면 arm64 — 다음 업데이트로
+    제 칩 판에 옮겨 간다. hw.optional.arm64 는 인텔 맥에는 아예 없다(sysctl 이 실패).
+    """
+    try:
+        out = subprocess.run(["/usr/sbin/sysctl", "-n", "hw.optional.arm64"],
+                             capture_output=True, text=True, timeout=5)
+        if out.stdout.strip() == "1":
+            return "arm64"
+    except (OSError, subprocess.SubprocessError):
+        pass
+    return "arm64" if os.uname().machine == "arm64" else "x86_64"
+
+
 def _pick_asset(release: dict) -> dict | None:
-    # 맥은 맥용 DMG 만 본다. 릴리스에 DMG 가 없으면 '새 버전 없음' 으로 보인다 (깔 수 없는 것을 권하지 않게).
+    # 맥은 이 칩용 DMG 만 본다. 릴리스에 DMG 가 없으면 '새 버전 없음' 으로 보인다 (깔 수 없는 것을 권하지 않게).
     # 리눅스도 같은 까닭으로 리눅스용 AppImage 만 본다.
     if sys.platform == "darwin":
-        pattern = MAC_ASSET_PATTERN
+        pattern = MAC_ASSET_PATTERNS[_mac_arch()]
     elif sys.platform.startswith("linux"):
         pattern = LINUX_ASSET_PATTERN
     else:

@@ -31,16 +31,46 @@ TIMEOUT = 180  # 초. 긴 메일 번역도 이 안에 끝났다
 _found: dict[str, str | None] = {}
 
 
+def _unix_bin_dirs() -> list[Path]:
+    """맥·리눅스에서 PATH 밖에 CLI 가 있을 만한 곳.
+
+    맥에서 Finder·Dock 으로 켠 앱은 PATH 가 /usr/bin:/bin:/usr/sbin:/sbin 뿐이다(터미널의 셸 설정을 읽지 않는다).
+    그래서 터미널에서는 되는 claude 를 앱은 '없음' 으로 봤다. 공식 설치 스크립트·Homebrew·npm 전역·nvm 자리를 직접 본다.
+    """
+    home = Path.home()
+    dirs = [
+        home / ".local" / "bin",          # Claude Code 공식 설치 스크립트
+        home / ".claude" / "local",       # 예전 Claude Code 설치 자리
+        Path("/opt/homebrew/bin"),        # Homebrew (M칩 맥)
+        Path("/usr/local/bin"),           # Homebrew (인텔 맥)·npm 기본 전역
+        home / ".npm-global" / "bin",
+        home / ".volta" / "bin",
+        home / ".bun" / "bin",
+    ]
+    # nvm 은 판마다 따로 깔린다. 새 판부터
+    dirs += sorted((home / ".nvm" / "versions" / "node").glob("*/bin"), reverse=True)
+    return [d for d in dirs if d.is_dir()]
+
+
 def _which(name: str) -> str | None:
-    """npm 전역 설치는 PATH 에 claude.cmd 로 잡힌다. 설치형 앱은 사용자 PATH 를 그대로 물려받는다."""
+    """npm 전역 설치는 PATH 에 claude.cmd 로 잡힌다. 설치형 앱은 사용자 PATH 를 그대로 물려받는다(Windows)."""
     if name in _found:
         return _found[name]
     path = shutil.which(name)
     if not path and os.name == "nt":
         npm = Path(os.environ.get("APPDATA", "")) / "npm" / f"{name}.cmd"
         path = str(npm) if npm.exists() else None
+    elif not path:
+        path = shutil.which(name, path=os.pathsep.join(map(str, _unix_bin_dirs())))
     _found[name] = path
     return path
+
+
+def _child_path(exe: str) -> str:
+    """맥·리눅스에서 CLI 를 돌릴 때의 PATH. npm 으로 깐 CLI 는 '#!/usr/bin/env node' 라서 node 가 있는 곳도 있어야 한다."""
+    parts = [str(Path(exe).parent)] + [str(d) for d in _unix_bin_dirs()] + os.environ.get("PATH", "").split(os.pathsep)
+    seen: set[str] = set()
+    return os.pathsep.join(p for p in parts if p and not (p in seen or seen.add(p)))
 
 
 def available() -> dict:
@@ -164,6 +194,8 @@ def run(prompt: str, provider: str | None = None, timeout: int = TIMEOUT, model:
         if os.name == "nt":
             kwargs["creationflags"] = 0x08000000  # CREATE_NO_WINDOW
         env = dict(os.environ)
+        if os.name != "nt":
+            env["PATH"] = _child_path(exe)
         env.setdefault("NO_COLOR", "1")
         try:
             proc = subprocess.run(

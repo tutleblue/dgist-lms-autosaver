@@ -166,6 +166,35 @@ async function api(path, options = {}) {
   return data;
 }
 
+/* ===== 맥 판 =====
+   같은 화면을 맥(WKWebView)에서도 띄운다. 단축키 처리는 원래 ctrlKey·metaKey 를 함께 받으므로, 안내 문구만
+   맥 관례대로 ⌘ 로 바꿔 보여 준다. 번역표(en.json)는 'Ctrl+' 로 적혀 있으니 번역(tr)을 먼저 하고 그 결과에 입힌다.
+   뒤로·앞으로는 맥에서 ⌘[ / ⌘] (사파리와 같음). 맥의 Option+←/→ 는 글자 칸에서 단어 단위 이동이라 가로채면 안 된다. */
+const IS_MAC = /Mac/.test(navigator.platform || "") || /Mac OS X/.test(navigator.userAgent || "");
+
+/** 'Ctrl+K'·'Ctrl K'(검색창 kbd) → 맥에서는 '⌘K', 'Alt+←/→' → '⌘[ / ⌘]'. 다른 운영체제는 그대로 */
+function keyLabel(text) {
+  const s = String(text ?? "");
+  if (!IS_MAC) return s;
+  return s.replace(/Alt\+←\/→/g, "⌘[ / ⌘]").replace(/Alt\+←/g, "⌘[").replace(/Alt\+→/g, "⌘]").replace(/Ctrl[+ ](?=\S)/g, "⌘");
+}
+
+/** index.html 에 적힌 단축키 안내(버튼 풍선 도움말·<kbd>)를 맥 기호로. 번역이 끝난 뒤 한 번 부른다 */
+function macKeyLabels(root) {
+  if (!IS_MAC || !root) return;
+  const has = (v) => /Ctrl[+ ]|Alt\+/.test(v);
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+    if (has(n.nodeValue)) n.nodeValue = keyLabel(n.nodeValue);
+  }
+  root.querySelectorAll("[title], [aria-label], [data-hint]").forEach((el) => {
+    ["title", "aria-label", "data-hint"].forEach((name) => {
+      const v = el.getAttribute(name);
+      if (v && has(v)) el.setAttribute(name, keyLabel(v));
+    });
+  });
+}
+
 /* ===== 영어 화면 (i18n) =====
    외국인 학생도 쓸 수 있게 화면을 영어로 보여 준다.
    문구가 app.js·index.html·web_ui.py 에 1,100개 넘게 흩어져 있어 하나하나 바꾸지 않고,
@@ -390,8 +419,13 @@ function i18nStartObserver() {
   });
 }
 
-/** 저장된 언어 → 없으면 윈도우 언어 (한국어가 아니면 영어) */
+/** 저장된 언어 → 없으면 시스템 언어 (한국어가 아니면 영어). 번역이 끝나면 맥 단축키 기호를 입힌다 */
 async function initLanguage(pref) {
+  await loadLanguage(pref);
+  macKeyLabels(document.body);
+}
+
+async function loadLanguage(pref) {
   const lang = pref === "ko" || pref === "en" ? pref : /^ko/i.test(navigator.language || "") ? "ko" : "en";
   I18N.lang = lang;
   document.documentElement.lang = lang;
@@ -1260,7 +1294,7 @@ function mailFrameDoc(html, showImages) {
     ? ""
     : `<style>img[src^="http"],img[src^="//"]{display:none !important}</style>`;
   const cs = getComputedStyle(document.documentElement);
-  const font = cs.getPropertyValue("--font-sans").trim() || "'Segoe UI', 'Malgun Gothic', sans-serif";
+  const font = cs.getPropertyValue("--font-sans").trim() || "'Segoe UI', 'Malgun Gothic', -apple-system, 'Apple SD Gothic Neo', sans-serif";
   // 밝은 테마: 본문을 투명하게 해 읽기 화면 배경 위에 그대로 앉힌다.
   //   예전에는 --surface(흰색)를 칠해서 크림색 앱 안에 흰 메모장이 떠 있는 것처럼 보였다.
   // 어두운 테마: 메일은 대부분 검은 글자를 박아 두어 어두운 바탕에서 안 읽힌다.
@@ -2565,7 +2599,7 @@ async function runMailMore(action, mail) {
         : `<pre style="white-space:pre-wrap;font-family:inherit">${escapeHtml(mail.body || "")}</pre>`;
       win.document.write(
         `<!doctype html><meta charset="utf-8"><title>${escapeHtml(mail.subject || "메일")}</title>` +
-          `<body style="font-family:system-ui,'Malgun Gothic',sans-serif;padding:24px">` +
+          `<body style="font-family:system-ui,'Malgun Gothic','Apple SD Gothic Neo',sans-serif;padding:24px">` +
           `<h2>${escapeHtml(mail.subject || "")}</h2>` +
           `<p style="color:#666">${escapeHtml(mail.fromName || "")} &lt;${escapeHtml(mail.fromEmail || "")}&gt; · ${escapeHtml(mail.date || "")}</p><hr>${safe}</body>`,
       );
@@ -10156,9 +10190,12 @@ function bindFglp() {
    동기화가 끝날 때마다 서버가 알아서 맞춘다(web_ui.autosave_local).
    여기서는 '지금 저장' 버튼과, 처음 켰을 때 한 번 맞추는 일만 한다.
    처음 켜면 수백 개를 복사할 수 있어 서버가 뒤에서 돌리고 진행만 받아 온다. */
-/** C:\Users\이름\OneDrive\문서\붕어빵 → 문서\붕어빵 (전체 경로는 title 로 남긴다) */
+/** C:\Users\이름\OneDrive\문서\붕어빵 → 문서\붕어빵, 맥 /Users/이름/Documents/붕어빵 → Documents/붕어빵
+    (전체 경로는 title 로 남긴다) */
 function friendlyPath(path) {
-  return String(path || "").replace(/^[A-Za-z]:\\Users\\[^\\]+\\(?:OneDrive[^\\]*\\)?/i, "");
+  return String(path || "")
+    .replace(/^[A-Za-z]:\\Users\\[^\\]+\\(?:OneDrive[^\\]*\\)?/i, "")
+    .replace(/^\/Users\/[^/]+\/(?:Library\/CloudStorage\/[^/]+\/)?/, "");
 }
 
 /** 스위치 + 범위(이번 학기/모든 과목)를 서버 값(off/current/all)으로 */
@@ -10362,11 +10399,13 @@ function renderCloudDests() {
   // 내 컴퓨터 저장 폴더가 이미 켜 둔 클라우드 안에 있으면 같은 파일이 두 번 올라간다
   const note = $("#cloudOverlapNote");
   if (note) {
-    const localFolder = String(state.config?.localSaveFolder || "").toLowerCase();
+    // 경로 구분자는 Windows 가 '\', 맥이 '/' 라 '/' 로 맞춰 비교한다 (예전엔 '\' 만 봐서 맥에서는 안 떴다)
+    const norm = (p) => String(p || "").replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+    const localFolder = norm(state.config?.localSaveFolder);
     const inside = localSaveMode() !== "off"
       ? clouds.find((c) => {
-          const root = String(state.cloudDraft?.[c.key]?.path || c.root || "").toLowerCase();
-          return root && state.cloudDraft?.[c.key]?.on && localFolder.startsWith(root + "\\");
+          const root = norm(state.cloudDraft?.[c.key]?.path || c.root);
+          return root && state.cloudDraft?.[c.key]?.on && localFolder.startsWith(root + "/");
         })
       : null;
     note.hidden = !inside;
@@ -11062,7 +11101,7 @@ const TOUR_STEPS = [
     text: "LMS에 올라온 과제를 마감 순서대로 모아 둬.",
     tips: [
       "아직 안 낸 과제는 눌러서 바로 제출 페이지로",
-      "마감 하루·3시간·1시간 전에 윈도우 알림",
+      "마감 하루·3시간·1시간 전에 알림",
       "과목·제출 상태로 거르고, 끝난 건 숨기기",
       "캘린더 파일(.ics)로 내보내기",
     ],
@@ -11230,7 +11269,7 @@ const TOUR_STEPS = [
     targets: ["#themeFlip"],
     pose: "shy",
     title: "옷 갈아입기",
-    text: "누를 때마다 다음 테마로 넘어가. 기본·화이트·남색·다크가 있고, '자동'은 윈도우의 밝은·어두운 모드를 따라가.",
+    text: "누를 때마다 다음 테마로 넘어가. 기본·화이트·남색·다크가 있고, '자동'은 컴퓨터의 밝은·어두운 모드를 따라가.",
   },
   {
     chapter: "편하게 쓰기",
@@ -11589,14 +11628,14 @@ function showTourStep(index) {
   $("#tourChapter").textContent = step.chapter || "";
   $("#tourCount").textContent = `${index + 1} / ${steps.length}`;
   $("#tourTitle").textContent = step.title;
-  $("#tourText").textContent = step.text;
+  $("#tourText").textContent = keyLabel(tr(step.text));
   const tips = $("#tourTips");
   tips.hidden = !step.tips?.length;
   tips.classList.toggle("chips", Boolean(step.chips));
   tips.replaceChildren(
     ...(step.tips || []).map((tip) => {
       const li = document.createElement("li");
-      li.textContent = tip;
+      li.textContent = keyLabel(tr(tip));
       return li;
     }),
   );
@@ -12833,13 +12872,24 @@ document.addEventListener("click", (event) => {
   if (btn.dataset.nav === "back" && nav.idx > 0) history.back();
   if (btn.dataset.nav === "forward" && nav.idx < nav.max) history.forward();
 });
-// Alt+←/→ (글 쓰는 중에는 커서 이동이므로 건드리지 않는다)
+// Alt+←/→ (글 쓰는 중에는 커서 이동이므로 건드리지 않는다). 맥은 ⌘[ / ⌘] — Option+←/→ 는 맥 글자 칸의
+// 단어 단위 이동이라, 가로채면 메일을 쓰다가 화면이 넘어간다 (위 '맥 판')
 document.addEventListener("keydown", (event) => {
-  if (!event.altKey || event.ctrlKey || event.metaKey) return;
-  if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+  let dir = 0;
+  if (IS_MAC) {
+    if (!event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
+    // 자판 배열과 상관없이 같은 자리의 키 (한글 자판에서도 [ ] 자리)
+    if (event.code === "BracketLeft") dir = -1;
+    if (event.code === "BracketRight") dir = 1;
+  } else {
+    if (!event.altKey || event.ctrlKey || event.metaKey) return;
+    if (event.key === "ArrowLeft") dir = -1;
+    if (event.key === "ArrowRight") dir = 1;
+  }
+  if (!dir) return;
   event.preventDefault();
-  if (event.key === "ArrowLeft" && nav.idx > 0) history.back();
-  if (event.key === "ArrowRight" && nav.idx < nav.max) history.forward();
+  if (dir < 0 && nav.idx > 0) history.back();
+  if (dir > 0 && nav.idx < nav.max) history.forward();
 });
 // 마우스 옆 버튼 (뒤로 = 3, 앞으로 = 4)
 document.addEventListener("mouseup", (event) => {
@@ -13192,7 +13242,7 @@ async function importFromDrive() {
 
 /* ===== 문의 · 오류 제보 · 아이디어 =====
    만든 사람(FEEDBACK_TO)에게 붕어빵 메일 쓰기로 바로 보낸다.
-   종류를 고르면 받는 사람·제목·본문 서식이 채워지고, 앱 정보(버전·Windows·화면)를 아래에 붙인다.
+   종류를 고르면 받는 사람·제목·본문 서식이 채워지고, 앱 정보(버전·운영체제·화면)를 아래에 붙인다.
    오류 제보에는 최근 앱 오류 기록(server_errors.log 마지막 한 건)도 붙인다.
    메일 주소·비밀번호·파일 경로 같은 개인 정보는 붙이지 않는다 — 보내기 전에 사용자가 다 볼 수 있다. */
 const FEEDBACK_TO = "tutleblue12@gmail.com";
@@ -13270,7 +13320,7 @@ async function openFeedback() {
     "──────────────",
     "앱 정보 (자동으로 붙었어요. 빼도 괜찮아요)",
     `- 버전: ${info.version || "?"}${info.installed === false ? " (개발판)" : ""}`,
-    `- Windows: ${info.os || navigator.userAgent}`,
+    `- 운영체제: ${info.os || navigator.userAgent}`,
     `- 화면: ${window.screen.width}×${window.screen.height}, 창 ${window.innerWidth}×${window.innerHeight}${theme ? `, 테마 ${theme}` : ""}`,
     `- 보낸 때: ${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")} ${hhmm(now)}`,
   ];
@@ -14723,7 +14773,7 @@ $("#mailFlowPolish")?.addEventListener("click", async () => {
     s.addRange(range);
     // 고른 부분을 한 번에 바꾼다 (Ctrl+Z 한 번이면 내 메모로 돌아간다)
     document.execCommand("insertText", false, out.split("\n").map((line) => line.trim()).join("\n"));
-    showToast(`${res.engine || "AI"} 가 다듬었어요 (${res.seconds}초). [ ] 칸을 채우고, 마음에 안 들면 Ctrl+Z`);
+    showToast(keyLabel(tr(`${res.engine || "AI"} 가 다듬었어요 (${res.seconds}초). [ ] 칸을 채우고, 마음에 안 들면 Ctrl+Z`)));
   } catch (error) {
     showToast(humanError(error));
   } finally {

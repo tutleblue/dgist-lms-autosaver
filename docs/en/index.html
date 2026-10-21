@@ -289,12 +289,13 @@
             <h3>macOS</h3>
             <span class="pill">Beta</span>
           </div>
-          <p class="req">Apple silicon (M1 or later) · macOS 12+ · Disk image (.dmg)</p>
+          <p class="req" data-req-intel="Apple silicon or Intel Mac · macOS 12+ · Disk image (.dmg)">Apple silicon (M1 or later) · macOS 12+ · Disk image (.dmg)</p>
           <a class="btn primary" href="https://github.com/tutleblue/dgist-lms-autosaver/releases/download/v1.12.30/daling-1.12.30-mac-arm64.dmg" data-dl="mac" download>
             <span class="logo btn-logo"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.014-2.117 3.675-.546 9.103 1.519 12.09 1.013 1.454 2.208 3.09 3.792 3.039 1.52-.065 2.09-.987 3.935-.987 1.831 0 2.35.987 3.96.948 1.637-.026 2.676-1.48 3.676-2.948 1.156-1.688 1.636-3.325 1.662-3.415-.039-.013-3.182-1.221-3.22-4.857-.026-3.04 2.48-4.494 2.597-4.559-1.429-2.09-3.623-2.324-4.39-2.376-2-.156-3.675 1.09-4.61 1.09zM15.53 3.83c.843-1.012 1.4-2.427 1.245-3.83-1.207.052-2.662.805-3.532 1.818-.78.896-1.454 2.338-1.273 3.714 1.338.104 2.715-.688 3.559-1.701"/></svg></span>
             Download for Mac
           </a>
           <p class="ver" data-ver="mac" data-fmt="Version {v} · {mb} MB">Version 1.12.30 · 78 MB</p>
+          <p class="ver" data-dl-wrap="mac-intel" hidden>Intel Mac: <a href="https://github.com/tutleblue/dgist-lms-autosaver/releases/latest" data-dl="mac-intel" download>Intel DMG</a> <span data-ver="mac-intel" data-fmt="({mb} MB)"></span></p>
           <details>
             <summary>If the app from the DMG won't open</summary>
             <ol>
@@ -358,7 +359,7 @@
     </div>
     <div class="faq reveal">
       <details><summary>Is this an official DGIST app?</summary><p>No. It's an unofficial app made by a DGIST student and is not made or operated by DGIST. Always double-check important deadlines and notices on the LMS and official channels.</p></details>
-      <details><summary>Does uninstalling delete my files?</summary><p>No. Files and settings stay in the data folder (Windows <code>C:\lms-autosaver</code>, Mac and Linux <code>~/.lms-autosaver</code>). Delete that folder if you no longer need it.</p></details>
+      <details><summary>Does uninstalling delete my files?</summary><p>No. Files and settings stay in the data folder (Windows <code>C:\lms-autosaver</code>, Mac <code>~/Library/Application Support/Daling</code> — or <code>~/.lms-autosaver</code> if you used an earlier version, Linux <code>~/.lms-autosaver</code>). Delete that folder if you no longer need it.</p></details>
       <details><summary>Where does the AI assistant send my mail?</summary><p>The AI assistant (translation, plain-language search, mail drafts) is an optional Labs feature that's off until you turn it on in Settings. Even then, only when you press one of its buttons does it send the needed text directly to the AI you installed and signed in to on your PC (Claude, Gemini or Codex). It never goes through the developer, and nothing from Google Drive or Calendar is sent. Details are in the <a href="../privacy#english">Privacy Policy</a>.</p></details>
       <details><summary>Where do I send feedback or bug reports?</summary><p>Use the "Feedback" button at the bottom left of the app, or write to <a href="mailto:tutleblue12@gmail.com">tutleblue12@gmail.com</a>.</p></details>
     </div>
@@ -428,9 +429,13 @@
         document.querySelectorAll(`[data-ver="${osKey}"]`).forEach((el) => {
           el.textContent = (el.dataset.fmt || "Version {v} · {mb} MB").replace("{v}", v).replace("{mb}", Math.round(asset.size / 1048576));
         });
+        // shown only when the release has the file (the Intel build starts 2026-10-21; older releases have none)
+        document.querySelectorAll(`[data-dl-wrap="${osKey}"]`).forEach((el) => { el.hidden = false; });
+        if (osKey === "mac-intel") document.querySelectorAll("[data-req-intel]").forEach((el) => { el.textContent = el.dataset.reqIntel; });
       };
       set("win", pick(/^(bungeoppang|daling)-[\d.]+-win-x64-setup\.exe$/i, false));
       set("mac", pick(/^daling-[\d.]+-mac-arm64\.dmg$/i, true));
+      set("mac-intel", pick(/^daling-[\d.]+-mac-x86_64\.dmg$/i, true));
       set("linux", pick(/^daling-[\d.]+-linux-x86_64\.AppImage$/i, true));
       set("linux-tar", pick(/^daling-[\d.]+-linux-x86_64\.tar\.gz$/i, true));
       pointHero();
