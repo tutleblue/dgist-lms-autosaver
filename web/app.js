@@ -552,6 +552,8 @@ function statusLabel(status) {
 /* 화면 전환은 View Transitions API로 감싼다.
    예전 화면이 즉시 사라지고 새 화면이 튀어나오는 대신,
    둘이 겹쳐서 부드럽게 이어진다. 미지원 브라우저는 그냥 바로 바뀐다. */
+let lastViewTransition = null;
+
 function switchView(view) {
   const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   // 창이 가려져 있으면 화면을 그릴 필요가 없으니 전환 효과도 건너뛴다
@@ -575,6 +577,7 @@ function switchView(view) {
   const mailSwitch = [state.view, view].some((v) => v === "emails" || v === "compose");
   document.documentElement.classList.toggle("vt-quick", mailSwitch);
   const transition = document.startViewTransition(apply);
+  lastViewTransition = transition; // 소개(showTourStep)가 돌던 전환을 끝낼 수 있게
   transition.finished.finally(() => document.documentElement.classList.remove("vt-quick"));
   transition.finished.catch(() => {});
   transition.updateCallbackDone.catch(() => {});
@@ -768,6 +771,12 @@ function applyView(view) {
   // 화면을 바꿀 때 여기서 채워 줘야 한다)
   renderCurrentView();
   navPush();
+  // 그 화면에 처음 왔으면 달구가 짧게 소개한다 (tour 는 아래에서 만들어진다. 켜지는 중이면 건너뜀)
+  try {
+    maybeViewIntro(view);
+  } catch (error) {
+    /* 아직 소개 준비 전 */
+  }
 }
 
 /* ===== 마감일 헬퍼 ===== */
@@ -11153,16 +11162,18 @@ bindMailStripWheel();
    비출 곳을 못 찾으면 fallback(보통 그 메뉴)을, 그것도 없으면(좁은 화면) 가운데에 카드만 띄운다.
    when 이 있으면 시작할 때 물어서 거짓이면 그 단계를 뺀다(예: 학사일정이 없어 D-day 띠가 숨은 경우).
    처음 12단계는 메뉴 이름만 짚고 지나가서, 메뉴 안의 기능(시간표·공지·보기 방식·저장 위치…)을 몰랐다는
-   말을 듣고 화면 안 요소까지 비추도록 늘렸다(2026-10-02). */
+   말을 듣고 화면 안 요소까지 비추도록 늘렸다(2026-10-02).
+   그랬더니 27단계로 너무 길었다(2026-10-21 사용자). 이제 처음 켤 때는 핵심(area 없음 = core)만 보여 주고,
+   나머지는 area 의 화면에 처음 들어갔을 때 그 화면 것만 짧게 보여 준다(maybeViewIntro). 본 화면은 tutorial.json views. */
 const TOUR_STEPS = [
   {
     chapter: "시작",
     pose: "yay",
     title: "안녕! 나는 달구야",
-    text: "Daling은 학교생활에 흩어진 것들을 알아서 모아 한 화면에 보여 주는 앱이야. 어떤 걸 할 수 있는지 하나씩 보여 줄게.",
+    text: "Daling은 학교생활에 흩어진 것들을 알아서 모아 한 화면에 보여 줘. 꼭 알아야 할 것만 짧게 보여 줄게.",
     tips: ["LMS 강의자료", "과제 마감", "학교 메일", "학사일정", "과목 공지", "셔틀버스"],
     chips: true,
-    note: "← → 키로 넘기고, Esc 로 언제든 그만둘 수 있어.",
+    note: "Space 로 넘기고, Esc 로 언제든 그만둘 수 있어.",
   },
   {
     chapter: "시작",
@@ -11199,6 +11210,7 @@ const TOUR_STEPS = [
     when: () => !$("#ddayBanner")?.hidden,
     targets: ["#ddayBanner"],
     pose: "cheer",
+    area: "dashboard",
     title: "시험·수강신청 D-day",
     text: "학사일정에서 놓치면 큰 일정(시험, 수강신청, 성적 확인)을 골라 며칠 남았는지 세어 줘. 그다음 일정 두 개도 아래에 적어 둬.",
   },
@@ -11208,6 +11220,7 @@ const TOUR_STEPS = [
     targets: [".timetable-panel .panel-header"],
     fallback: ['.nav-item[data-view="dashboard"]'],
     pose: "study",
+    area: "dashboard",
     title: "주간 시간표",
     text: "시간표를 한 번 넣어 두면 대시보드·시계·알림이 모두 이걸 기준으로 움직여.",
     tips: [
@@ -11221,6 +11234,7 @@ const TOUR_STEPS = [
     view: "dashboard",
     targets: ["#nowBar"],
     pose: "wink",
+    area: "dashboard",
     title: "지금 무슨 수업이지?",
     text: "왼쪽 위 시계는 시간표를 보고 지금 수업과 남은 시간, 다음 수업을 알려 줘. 누르면 자세히 펼쳐져.",
   },
@@ -11229,6 +11243,7 @@ const TOUR_STEPS = [
     view: "dashboard",
     targets: ["#statusCard"],
     pose: "thumbs",
+    area: "dashboard",
     title: "잘 돌아가는지는 여기서",
     text: "LMS·메일·Drive 연결 불빛과 다음에 가져올 때를 보여 줘. 문제가 생기면 빨간불이 켜지고, 누르면 고칠 곳으로 데려가.",
   },
@@ -11237,6 +11252,7 @@ const TOUR_STEPS = [
     view: "deadlines",
     targets: ['.nav-item[data-view="deadlines"]'],
     pose: "search",
+    area: "deadlines",
     title: "과제 마감",
     text: "LMS에 올라온 과제를 마감 순서대로 모아 둬.",
     tips: [
@@ -11251,6 +11267,7 @@ const TOUR_STEPS = [
     view: "calendar",
     targets: ['.nav-item[data-view="calendar"]'],
     pose: "read",
+    area: "calendar",
     title: "캘린더",
     text: "흩어진 날짜를 달력 하나에 모았어. 색만 봐도 무슨 일정인지 알 수 있어.",
     tips: [
@@ -11265,6 +11282,7 @@ const TOUR_STEPS = [
     view: "courses",
     targets: ['.nav-item[data-view="courses"]'],
     pose: "book",
+    area: "courses",
     title: "강의",
     text: "이번 학기 과목을 카드로 정리해 뒀어.",
     tips: [
@@ -11280,6 +11298,7 @@ const TOUR_STEPS = [
     targets: ['.course-tab[data-ctab="ann"]'],
     fallback: ['.nav-item[data-view="courses"]'],
     pose: "reach",
+    area: "courses",
     title: "과목 공지사항",
     text: "과목마다 흩어진 LMS 공지를 게시판처럼 모아 봐. 최근 7일 공지는 맨 위에 따로 모이고, 새 공지가 올라오면 알려 줘.",
     tips: [
@@ -11292,6 +11311,7 @@ const TOUR_STEPS = [
     view: "files",
     targets: ['.nav-item[data-view="files"]'],
     pose: "munch",
+    area: "files",
     title: "자료",
     text: "LMS 강의자료를 받아 두고, 새 자료가 올라오면 알려 줘. 여러 개를 골라 한 번에 보낼 수 있어.",
     tips: [
@@ -11306,6 +11326,7 @@ const TOUR_STEPS = [
     targets: [".file-mode-tabs"],
     fallback: ['.nav-item[data-view="files"]'],
     pose: "offer",
+    area: "files",
     title: "보는 방법은 세 가지",
     text: "자료가 많아도 원하는 방식으로 찾을 수 있어.",
     tips: [
@@ -11319,6 +11340,7 @@ const TOUR_STEPS = [
     view: "emails",
     targets: ['.nav-item[data-view="emails"]'],
     pose: "stretch",
+    area: "emails",
     title: "메일함",
     text: "학교 메일을 앱 안에서 바로 읽고 정리해.",
     tips: [
@@ -11334,6 +11356,7 @@ const TOUR_STEPS = [
     targets: ["#emailSearchInput"],
     fallback: ['.nav-item[data-view="emails"]'],
     pose: "search",
+    area: "emails",
     title: "과목으로 메일 찾기",
     text: "검색칸에 과목 이름만 쳐도 그 과목 메일이 다 나와. 받은 편지함·보낸 편지함·LMS 탭을 한 번에 찾아.",
     tips: [
@@ -11348,6 +11371,7 @@ const TOUR_STEPS = [
     targets: ["#newsGrid .person-course"],
     fallback: ["#emailSearchInput"],
     pose: "point",
+    area: "emails",
     title: "누가 보낸 메일이야?",
     text: "보낸 사람이 이번 학기에 무슨 과목 몇 분반을 맡았는지 이름 옆에 붙여 줘. 내 수업이면 주황색이야.",
     tips: [
@@ -11361,6 +11385,7 @@ const TOUR_STEPS = [
     targets: ["#composeButton"],
     fallback: ['.nav-item[data-view="emails"]'],
     pose: "give",
+    area: "emails",
     title: "메일 쓰기",
     text: "웹메일을 따로 열 필요 없이 여기서 보내.",
     tips: [
@@ -11375,6 +11400,7 @@ const TOUR_STEPS = [
     view: "storage",
     targets: ['.nav-item[data-view="storage"]'],
     pose: "back",
+    area: "storage",
     title: "창고",
     text: "가끔 꼭 필요한 것들을 넣어 뒀어.",
     tips: [
@@ -11404,30 +11430,12 @@ const TOUR_STEPS = [
     tips: ["메일 5분 · 과제 마감 1시간 · 강의자료 3시간마다"],
   },
   {
-    chapter: "편하게 쓰기",
-    view: "dashboard",
-    targets: ["#themeFlip"],
-    pose: "shy",
-    title: "옷 갈아입기",
-    text: "누를 때마다 다음 테마로 넘어가. 기본·화이트·남색·다크가 있고, '자동'은 컴퓨터의 밝은·어두운 모드를 따라가.",
-  },
-  {
-    chapter: "편하게 쓰기",
-    pose: "stretch",
-    title: "창을 줄여도 괜찮아",
-    text: "창 크기에 맞춰 화면이 바뀌어. 옆에 다른 창을 띄워 놓고 같이 써도 돼.",
-    tips: [
-      "좁히면 왼쪽 메뉴가 아이콘만 남아",
-      "휴대폰처럼 세로로 줄이면 아래 탭 + 더보기",
-      "좁은 메일함은 폴더가 한 줄 띠로, 옆으로 넘겨 봐",
-    ],
-  },
-  {
     chapter: "설정",
     view: "settings",
     targets: ["#stStorage .st-head"],
     fallback: ['.nav-item[data-view="settings"]'],
     pose: "sprout",
+    area: "settings",
     title: "자료를 어디에 둘까",
     text: "켜 두면 새 강의자료가 올라올 때마다 원하는 곳에 저절로 들어가.",
     tips: [
@@ -11443,6 +11451,7 @@ const TOUR_STEPS = [
     targets: ["#stAuto .st-head"],
     fallback: ['.nav-item[data-view="settings"]'],
     pose: "lounge",
+    area: "settings",
     title: "얼마나 자주 가져올까",
     text: "메일·마감·자료를 가져오는 주기와 하루 한 번 전체 확인 시각을 정해. 마감 알림과 새 자료 알림도 여기서 켜고 꺼.",
   },
@@ -11452,6 +11461,7 @@ const TOUR_STEPS = [
     targets: ["#langRow"],
     fallback: ['.nav-item[data-view="settings"]'],
     pose: "hello",
+    area: "settings",
     title: "English도 돼",
     text: "화면을 영어로 바꿀 수 있어. 유학생 친구에게도 알려 줘. 메일·과목 이름 같은 자료는 원래 글자 그대로 둬.",
   },
@@ -11460,6 +11470,7 @@ const TOUR_STEPS = [
     view: "settings",
     targets: ["#feedbackButton", "#whatsNewButton"],
     pose: "bow",
+    area: "settings",
     title: "궁금하거나 고장 나면",
     text: "'Feedback'을 누르면 받는 사람과 서식이 채워진 메일이 열려. 새 버전이 나오면 이 근처에 '새 업데이트'가 떠.",
   },
@@ -11467,47 +11478,85 @@ const TOUR_STEPS = [
     chapter: "끝",
     pose: "laugh",
     title: "준비 끝!",
-    text: "이 소개는 설정 맨 아래 '앱 소개 다시 보기'로 언제든 다시 볼 수 있어. 이제 시작해 보자!",
+    text: "다른 메뉴는 처음 들어갈 때 내가 짧게 알려 줄게. 처음부터 다시 보려면 설정 맨 아래 '앱 소개 다시 보기'.",
     last: true,
   },
 ];
 
-const tour = { index: 0, active: false, returnView: null, buddy: null, walkTimer: 0, steps: TOUR_STEPS };
+const tour = {
+  index: 0, active: false, returnView: null, buddy: null, walkTimer: 0, steps: [],
+  mode: "core", // "core" = 처음 켤 때, 그 밖에는 화면 이름 (그 화면에 처음 들어갔을 때 소개)
+  seen: null, // 소개를 본 화면들 (서버 tutorial.json views, "*" = 전부)
+  quietUntil: 0, // 처음 소개를 막 끝내고 돌아간 화면에서 곧바로 또 소개가 뜨지 않게
+};
 
-async function maybeStartTour() {
-  try {
-    const res = await api("/api/tutorial");
-    if (res.done) return;
-  } catch (error) {
-    return; // 서버가 대답을 못 하면 소개를 억지로 띄우지 않는다
-  }
-  // 첫 화면이 다 그려진 다음에 띄운다
-  window.setTimeout(() => startTour(), 700);
-}
-
-function startTour() {
-  const root = $("#tour");
-  if (!root || tour.active) return;
-  // 그림을 미리 받아 둬서 단계를 넘길 때 달구가 깜빡이지 않게
-  [...TOUR_STEPS.map((s) => s.pose), ...Object.keys(BUDDY_MOVES)].forEach((pose) => {
-    const img = new Image();
-    img.src = `/img/dalgu/${pose}.png`;
-  });
-  tour.buddy = null; // 첫 단계에서는 화면 왼쪽 밖에서 뛰어 들어온다
-  tour.steps = TOUR_STEPS.filter((s) => {
+function tourStepsFor(area) {
+  return TOUR_STEPS.filter((s) => (s.area || "core") === area).filter((s) => {
     try {
       return !s.when || s.when();
     } catch (error) {
       return false;
     }
   });
-  // 점은 묶음(chapter)마다 띄어 놓고, 누르면 그 단계로 간다
-  $("#tourDots").innerHTML = tour.steps
-    .map((s, i) => {
-      const gap = i > 0 && s.chapter !== tour.steps[i - 1].chapter ? " gap" : "";
-      return `<span class="tour-dot${gap}" data-step="${i}" title="${escapeHtml(s.title)}"></span>`;
-    })
-    .join("");
+}
+
+async function maybeStartTour() {
+  let res;
+  try {
+    res = await api("/api/tutorial");
+  } catch (error) {
+    return; // 서버가 대답을 못 하면 소개를 억지로 띄우지 않는다
+  }
+  tour.seen = new Set(res.views || []);
+  if (res.done) {
+    // 지금 화면(보통 대시보드)의 소개가 남았으면 첫 화면이 다 그려진 뒤에
+    window.setTimeout(() => maybeViewIntro(state.view), 900);
+    return;
+  }
+  // 첫 화면이 다 그려진 다음에 띄운다
+  window.setTimeout(() => startTour(), 700);
+}
+
+/** 이 화면에 처음 들어왔으면 그 화면 소개를 띄운다 (applyView 가 부른다) */
+function maybeViewIntro(view) {
+  if (!tour.seen || tour.active || tour.seen.has("*") || tour.seen.has(view)) return;
+  if (Date.now() < tour.quietUntil || !tourStepsFor(view).length) return;
+  // 화면이 바뀌고 자리가 잡힌 뒤에. 그새 다른 화면으로 갔거나 창(대화 상자)이 열려 있으면 다음 기회에
+  window.setTimeout(() => {
+    if (state.view !== view || tour.active || tour.seen.has(view) || document.querySelector("dialog[open]")) return;
+    startTour(view);
+  }, 450);
+}
+
+function markViewSeen(view) {
+  if (!tour.seen) tour.seen = new Set();
+  tour.seen.add(view);
+  api("/api/tutorial/view", { method: "POST", body: JSON.stringify({ view }) }).catch(() => {});
+}
+
+function startTour(area = "core") {
+  const root = $("#tour");
+  if (!root || tour.active) return;
+  const steps = tourStepsFor(area);
+  if (!steps.length) return;
+  // 그림을 미리 받아 둬서 단계를 넘길 때 달구가 깜빡이지 않게
+  [...steps.map((s) => s.pose), ...Object.keys(BUDDY_MOVES)].forEach((pose) => {
+    const img = new Image();
+    img.src = `/img/dalgu/${pose}.png`;
+  });
+  tour.buddy = null; // 첫 단계에서는 화면 왼쪽 밖에서 뛰어 들어온다
+  tour.mode = area;
+  tour.steps = steps;
+  // 점은 묶음(chapter)마다 띄어 놓고, 누르면 그 단계로 간다. 한 단계짜리 화면 소개는 점이 필요 없다
+  $("#tourDots").innerHTML =
+    steps.length < 2
+      ? ""
+      : steps
+          .map((s, i) => {
+            const gap = i > 0 && s.chapter !== steps[i - 1].chapter ? " gap" : "";
+            return `<span class="tour-dot${gap}" data-step="${i}" title="${escapeHtml(s.title)}"></span>`;
+          })
+          .join("");
   tour.active = true;
   tour.index = 0;
   tour.returnView = state.view;
@@ -11527,6 +11576,13 @@ function finishTour(skipped) {
   window.clearTimeout(tour.walkTimer);
   root.hidden = true;
   document.body.classList.remove("tour-open");
+  if (tour.mode !== "core") {
+    // 화면 소개: 끝까지 봤든 건너뛰었든 다시 띄우지 않는다
+    markViewSeen(tour.mode);
+    return;
+  }
+  if (!tour.seen) tour.seen = new Set();
+  tour.quietUntil = Date.now() + 2000;
   api("/api/tutorial/done", {
     method: "POST",
     body: JSON.stringify({ skipped: Boolean(skipped), step: tour.index }),
@@ -11759,6 +11815,12 @@ function showTourStep(index) {
   const step = steps[index];
   if (!step) return;
   tour.index = index;
+  // 화면 전환 효과가 도는 동안은 그 위에 덮인 그림이 클릭을 다 받아 '다음' 이 안 눌린다. 소개 중에는 바로 끝낸다
+  try {
+    (document.activeViewTransition || lastViewTransition)?.skipTransition();
+  } catch (error) {
+    /* 오래된 WebView */
+  }
   if (step.view && state.view !== step.view) applyView(step.view);
 
   tour.pose = step.pose;
@@ -11782,10 +11844,17 @@ function showTourStep(index) {
   $("#tourNote").hidden = !step.note;
   $("#tourNote").textContent = step.note || "";
   $("#tourPrev").hidden = index === 0;
-  $("#tourDemo").hidden = !(index === 0 && demoInvite());
-  $("#tourNext").textContent =
-    index === 0 ? "둘러보기" : step.last ? (state.status?.requiredConfig?.lms ? "시작하기" : "계정 넣으러 가기") : "다음";
-  $("#tourSkip").hidden = Boolean(step.last);
+  const core = tour.mode === "core";
+  const lastOne = index === steps.length - 1;
+  $("#tourDemo").hidden = !(core && index === 0 && demoInvite());
+  $("#tourNext").textContent = step.last
+    ? state.status?.requiredConfig?.lms ? "시작하기" : "계정 넣으러 가기"
+    : core && index === 0
+      ? "둘러보기"
+      : lastOne
+        ? "알겠어"
+        : "다음";
+  $("#tourSkip").hidden = Boolean(step.last) || lastOne;
   document.querySelectorAll("#tourDots .tour-dot").forEach((dot, i) => {
     dot.classList.toggle("on", i === index);
     dot.classList.toggle("past", i < index);
@@ -11820,7 +11889,12 @@ function stepTour(delta) {
 $("#tourNext")?.addEventListener("click", () => stepTour(1));
 $("#tourPrev")?.addEventListener("click", () => stepTour(-1));
 $("#tourSkip")?.addEventListener("click", () => finishTour(true));
-$("#replayTourButton")?.addEventListener("click", () => startTour());
+$("#replayTourButton")?.addEventListener("click", () => {
+  // 화면마다의 소개도 다시 뜨게 한다
+  tour.seen = new Set();
+  api("/api/tutorial/view", { method: "POST", body: JSON.stringify({ reset: true }) }).catch(() => {});
+  startTour("core");
+});
 $("#tourDots")?.addEventListener("click", (event) => {
   const dot = event.target.closest(".tour-dot");
   if (dot && tour.active) showTourStep(Number(dot.dataset.step));
@@ -11830,14 +11904,22 @@ document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") {
     event.preventDefault();
     finishTour(true);
-  } else if (event.key === "ArrowRight" || event.key === "Enter") {
+  } else if (event.key === "ArrowRight" || event.key === "Enter" || event.key === " " || event.code === "Space") {
+    // Space: 포커스가 어디 있든 다음으로. 단추 위의 Space 는 손을 뗄 때 한 번 더 눌려(click) 두 칸 갔다 → keyup 도 막는다
     event.preventDefault();
-    stepTour(1);
+    if (!event.repeat) stepTour(1);
   } else if (event.key === "ArrowLeft") {
     event.preventDefault();
     stepTour(-1);
   }
 });
+document.addEventListener(
+  "keyup",
+  (event) => {
+    if (tour.active && (event.key === " " || event.code === "Space")) event.preventDefault();
+  },
+  true,
+);
 window.addEventListener("resize", () => {
   if (tour.active) placeTourCard(tourStepRect(tour.steps[tour.index]));
 });
@@ -12419,7 +12501,7 @@ function renderDemoPill() {
     $("#demoRowButton").textContent = DEMO_ON ? "체험 끝내기" : "체험해 보기";
   }
   // 소개는 첫 목록을 받기 전에 뜰 수 있다. 목록(계정 유무)이 오면 첫 카드의 단추를 다시 맞춘다
-  if (tour.active) $("#tourDemo").hidden = !(tour.index === 0 && demoInvite());
+  if (tour.active) $("#tourDemo").hidden = !(tour.mode === "core" && tour.index === 0 && demoInvite());
 }
 
 let demoSwitching = false;

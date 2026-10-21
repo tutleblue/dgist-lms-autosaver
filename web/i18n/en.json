@@ -2010,5 +2010,10 @@
  "연구중심": "Research",
  "공과대학": "Engineering",
  "이전 사진": "Previous photo",
- "다음 사진": "Next photo"
+ "다음 사진": "Next photo",
+ "Daling은 학교생활에 흩어진 것들을 알아서 모아 한 화면에 보여 줘. 꼭 알아야 할 것만 짧게 보여 줄게.": "Daling gathers everything scattered across school life onto one screen. I'll show you just the essentials.",
+ "Space 로 넘기고, Esc 로 언제든 그만둘 수 있어.": "Press Space to continue, and Esc to stop anytime.",
+ "다른 메뉴는 처음 들어갈 때 내가 짧게 알려 줄게. 처음부터 다시 보려면 설정 맨 아래 '앱 소개 다시 보기'.": "I'll give a quick intro the first time you open each menu. To see it all again, use 'Replay tour' at the bottom of Settings.",
+ "알겠어": "Got it",
+ "작업이 실패했습니다: {0}{1}": "Task failed: {0}{1}"
 }

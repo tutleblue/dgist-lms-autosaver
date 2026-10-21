@@ -3171,10 +3171,15 @@ def get_tutorial_state(workspace: UserWorkspace) -> dict[str, Any]:
     """
     data = read_json(workspace.root / "tutorial.json", {})
     data = data if isinstance(data, dict) else {}
+    views = data.get("views")
+    if not isinstance(views, list):
+        # 화면별 소개(2026-10-21) 전 기록: 27단계를 끝까지 본 사람은 다 본 것으로, 건너뛴 사람은 화면마다 보여 준다
+        views = ["*"] if data.get("done") and not data.get("skipped") else []
     return {
         "done": bool(data.get("done")),
         "skipped": bool(data.get("skipped")),
         "at": data.get("at"),
+        "views": [str(v) for v in views][:40],
     }
 
 
@@ -3186,6 +3191,8 @@ def mark_tutorial_done(workspace: UserWorkspace, payload: dict[str, Any]) -> dic
         "skipped": bool(payload.get("skipped")),
         "step": int(payload.get("step") or 0),
         "at": now_iso(),
+        # 처음 소개를 끝내도 화면별 소개는 남는다 (본 화면 목록은 그대로 이어 간다)
+        "views": [v for v in get_tutorial_state(workspace)["views"] if v != "*"],
     }
     workspace.root.mkdir(parents=True, exist_ok=True)
     atomic_write_text((workspace.root / "tutorial.json"), json.dumps(record, ensure_ascii=False), encoding="utf-8")
@@ -3195,6 +3202,24 @@ def mark_tutorial_done(workspace: UserWorkspace, payload: dict[str, Any]) -> dic
     if not (isinstance(seen, dict) and seen.get("seen")):
         mark_whats_new_seen(workspace, updater.local_version())
     return {"ok": True, **record}
+
+
+def mark_tutorial_view(workspace: UserWorkspace, payload: dict[str, Any]) -> dict[str, Any]:
+    """화면별 소개를 본 화면을 적는다. reset 이면 비운다('앱 소개 다시 보기')."""
+    path = workspace.root / "tutorial.json"
+    data = read_json(path, {})
+    data = data if isinstance(data, dict) else {}
+    views = [v for v in get_tutorial_state(workspace)["views"] if v != "*"]
+    if payload.get("reset"):
+        views = []
+    else:
+        view = str(payload.get("view") or "")[:30]
+        if view and view not in views:
+            views.append(view)
+    data["views"] = views
+    workspace.root.mkdir(parents=True, exist_ok=True)
+    atomic_write_text(path, json.dumps(data, ensure_ascii=False), encoding="utf-8")
+    return {"ok": True, "views": views}
 
 
 def mark_whats_new_seen(workspace: UserWorkspace, version: str) -> dict[str, Any]:
@@ -5935,6 +5960,9 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             return
         if route == "/api/tutorial/done":
             self.send_json(mark_tutorial_done(workspace, self.read_body_json()))
+            return
+        if route == "/api/tutorial/view":
+            self.send_json(mark_tutorial_view(workspace, self.read_body_json()))
             return
         if route in ("/api/mail/me", "/api/mail/flow"):
             try:

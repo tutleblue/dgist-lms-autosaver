@@ -102,7 +102,7 @@ AUTOSAVER_DATA_ROOT=C:/lms-autosaver AUTOSAVER_CONFIG_PATH=C:/lms-autosaver/conf
 
 ### 마스코트 달구·첫 실행 소개
 26-3. 달구 그림은 `design/dalgu/sheet0.png`·`sheet1.png`·`sheet2.webp`(4×4 스티커 시트, sheet2 는 걷기·달리기·옆모습)에서 `scripts/slice_dalgu.py`로 잘라 `web/img/dalgu/`에 둡니다. 포즈를 바꾸려면 스크립트의 `POSES`를 고치고 다시 돌립니다(시스템 파이썬의 Pillow 사용, 앱에는 불필요). `design/`은 설치 파일에 들어가지 않습니다.
-26-4. 첫 실행 소개(`TOUR_STEPS`)는 새 화면·메뉴를 만들면 함께 고칩니다. 비출 곳은 선택자로 적고, 못 찾으면 가운데 카드로 나옵니다. 어둡게 하는 막은 큰 `box-shadow` 대신 사각형 네 장(`.tour-dim`)을 씁니다 — WebView 가 큰 그림자를 그리지 않을 때가 있었습니다. 달구는 카드에 붙어 있지 않고 단계마다 비출 곳 옆으로 걸어갑니다(`placeBuddy`). 새 단계를 넣을 때 자리는 자동으로 고르니 `pose` 만 정하면 됩니다.
+26-4. 첫 실행 소개(`TOUR_STEPS`)는 새 화면·메뉴를 만들면 함께 고칩니다. 비출 곳은 선택자로 적고, 못 찾으면 가운데 카드로 나옵니다. 어둡게 하는 막은 큰 `box-shadow` 대신 사각형 네 장(`.tour-dim`)을 씁니다 — WebView 가 큰 그림자를 그리지 않을 때가 있었습니다. 달구는 카드에 붙어 있지 않고 단계마다 비출 곳 옆으로 걸어갑니다(`placeBuddy`). 새 단계를 넣을 때 자리는 자동으로 고르니 `pose` 만 정하면 됩니다. **처음 켤 때는 핵심 6단계만** 보여 줍니다(2026-10-21 사용자: 27단계는 너무 길다). 화면 안 기능 소개는 `area: "<화면>"` 을 붙여 그 화면에 처음 들어갈 때 나오게 하고(`maybeViewIntro`, 본 화면은 `tutorial.json` 의 `views`), 핵심 단계는 함부로 늘리지 않습니다. Space·→·Enter 로 넘깁니다.
 
 ### 새 버전 내기
 27. `VERSION`과 `data/changelog.json` 맨 위 항목을 같은 번호로 함께 올립니다. 앱 사이드바의 '업데이트 내용'이 이 파일을 보여 주고, 설치 파일 버전도 `VERSION`을 따릅니다.
