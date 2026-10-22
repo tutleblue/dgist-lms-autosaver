@@ -1,0 +1,151 @@
+# 맥 LMS·메일 진단 — 사용자가 받는 맥 앱(릴리스 DMG) 그대로, M칩·인텔에서
+#
+# 왜 있나: 2026-10-22 사용자 신고 "맥 판에서 LMS·메일 연동이 안 된다". 개발 PC 에 맥이 없어 여기서 잰다.
+# 진짜 학교 서버에는 아무것도 보내지 않는다 — 계정은 가짜, 메일 서버는 127.0.0.1(닫힌 포트), LMS 는 러너 안의 fake_lms.py.
+#  A. 새로 깐 맥: 설치 → 설정 저장(키체인에 들어가나) → 껐다 켜기(메모리 말고 키체인에서 읽게)
+#     → 메일 새로고침(비밀번호를 읽었으면 '연결 거부', 못 읽었으면 '계정을 먼저 입력')
+#     → 빠른 동기화(크로미움 받기·띄우기 → 작업 프로세스가 키체인의 비밀번호로 가짜 LMS 에 로그인하나)
+#  B. 업데이트한 맥: 이전 판으로 설정 저장 → 새 판을 덮어 깔기 → 메일 새로고침 (키체인이 다시 묻는지 — 화면을 찍는다)
+# 결과는 실행 요약 표, 자세한 것은 아티팩트 mac-diagnose-<칩> (작업 기록·가짜 LMS 기록·화면).
+name: mac-diagnose
+
+on:
+  push:
+    branches: ["diag/mac-lms-mail"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "볼 릴리스 (비우면 최신)"
+        type: string
+        default: ""
+      previous:
+        description: "업데이트 흉내에서 먼저 깔 이전 릴리스"
+        type: string
+        default: "v1.12.33"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mac-diagnose-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  diagnose:
+    name: diagnose (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            runner: macos-latest
+          - arch: x86_64
+            runner: macos-15-intel
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 50
+    env:
+      ARCH: ${{ matrix.arch }}
+      REPO: tutleblue/dgist-lms-autosaver
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: 볼 판 정하기
+        id: ver
+        run: |
+          TAG="${{ inputs.version }}"
+          [ -n "$TAG" ] || TAG="$(curl -fsSIL -o /dev/null -w '%{url_effective}' "https://github.com/$REPO/releases/latest" | sed 's#.*/tag/##')"
+          PREV="${{ inputs.previous }}"
+          [ -n "$PREV" ] || PREV=v1.12.33
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "prev=$PREV" >> "$GITHUB_OUTPUT"
+          echo "새 판 $TAG · 이전 판 $PREV · $ARCH · macOS $(sw_vers -productVersion)"
+          { echo "### 맥 LMS·메일 진단 ($ARCH, macOS $(sw_vers -productVersion), 새 판 $TAG, 이전 판 $PREV)"
+            echo "| 장면 | 항목 | 결과 |"; echo "|---|---|---|"; } > "$RUNNER_TEMP/head.md"
+
+      - name: 임시 키체인을 기본으로 (러너의 로그인 키체인은 잠겨 있을 수 있다)
+        run: |
+          KC=daling-diag.keychain
+          security create-keychain -p diag "$KC"
+          security set-keychain-settings "$KC"   # 자동 잠금 끄기
+          security unlock-keychain -p diag "$KC"
+          security list-keychains -d user -s "$KC" $(security list-keychains -d user | tr -d '"')
+          security default-keychain -d user -s "$KC"
+
+      - name: 가짜 LMS 띄우기 (127.0.0.1:8899)
+        run: |
+          mkdir -p logs
+          nohup python3 .github/diag/fake_lms.py 8899 diag-user diag-lms-pass-1 "$PWD/logs/fake-lms.json" > logs/fake-lms.log 2>&1 &
+          for _ in $(seq 1 20); do curl -fsS -o /dev/null http://127.0.0.1:8899/login && break; sleep 0.5; done
+          curl -fsS http://127.0.0.1:8899/login | grep -q 'Login ID'
+
+      - name: A. 새로 깐 맥 — 설치·설정 저장·껐다 켜기
+        run: |
+          . .github/diag/lib.sh
+          install_release "${{ steps.ver.outputs.tag }}"
+          preseed_config
+          start_app A
+          save_settings
+          guard_fake_targets
+          $API markers "$DATA/config.json" | tee "$LOGS/A-markers.txt"
+          if grep -q '평문' "$LOGS/A-markers.txt"; then verdict A "설정 저장" "❌ 비밀번호가 config.json 에 평문 (키체인에 못 넣음)"
+          else verdict A "설정 저장" "✅ 비밀번호는 키체인에, config.json 에는 표시만"; fi
+          security find-generic-password -s Daling -a settings > /dev/null 2>&1 \
+            && verdict A "키체인 항목" "✅ Daling/settings 있음" || verdict A "키체인 항목" "❌ 없음"
+          # 껐다 켠다: 저장할 때 들고 있던 비밀번호(메모리) 말고 키체인에서 다시 읽게 — 사용자가 다음 날 켤 때와 같다
+          stop_app
+          start_app A
+
+      - name: A. 메일 새로고침 (메일 서버 127.0.0.1)
+        timeout-minutes: 5
+        run: |
+          . .github/diag/lib.sh
+          mail_check A 30
+
+      - name: A. 빠른 동기화 (가짜 LMS, 처음엔 크로미움을 받는다)
+        timeout-minutes: 20
+        run: |
+          . .github/diag/lib.sh
+          lms_check A
+
+      - name: B. 업데이트한 맥 — 이전 판으로 저장 → 새 판 덮어 깔기 → 메일 새로고침
+        # 키체인이 묻는 창을 띄우면 아무도 누르지 않아 멈춘다. 시간 제한을 두고 화면을 찍는다. 그래서 맨 끝에
+        continue-on-error: true
+        timeout-minutes: 10
+        run: |
+          . .github/diag/lib.sh
+          stop_app
+          rm -rf "$DATA"
+          security delete-generic-password -s Daling -a settings > /dev/null 2>&1 || true
+          install_release "${{ steps.ver.outputs.prev }}"
+          preseed_config
+          start_app B-old
+          save_settings
+          guard_fake_targets
+          stop_app
+          install_release "${{ steps.ver.outputs.tag }}"
+          if start_app B; then
+            mail_check B 40
+          else
+            verdict B "새 판 켜기" "❌ 60초 안에 화면 서버가 안 뜸 (화면: B-start-stuck.png)"
+          fi
+          # 묻는 창이 남아 있으면 치운다 (뒤 단계가 멈추지 않게)
+          pkill -x SecurityAgent 2>/dev/null || sudo pkill -x SecurityAgent 2>/dev/null || true
+
+      - name: 요약
+        if: always()
+        run: |
+          cat "$RUNNER_TEMP/head.md" logs/verdicts.md 2>/dev/null | tee -a "$GITHUB_STEP_SUMMARY"
+          cp "$HOME/Library/Application Support/Daling/server_errors.log" logs/ 2>/dev/null || true
+          pkill -f "/Applications/Daling.app/Contents/MacOS/Daling" || true
+
+      - name: 기록 보관
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mac-diagnose-${{ matrix.arch }}
+          path: logs/
+          if-no-files-found: ignore
