@@ -27,6 +27,35 @@ install_release() {  # $1 태그 — 릴리스의 이 칩 DMG 를 받아 확인�
   echo "깐 판: $(defaults read "$APP/Contents/Info.plist" CFBundleShortVersionString) · $(lipo -archs "$APP/Contents/MacOS/Daling")"
 }
 
+install_dmg() {  # $1 DMG 경로 — 이 브랜치를 묶은 앱(mac.yml 아티팩트)을 /Applications 에 깐다
+  local mnt
+  mnt="$(mktemp -d)"
+  hdiutil attach -nobrowse -readonly -mountpoint "$mnt" "$1" > /dev/null
+  rm -rf "$APP"
+  ditto "$mnt/Daling.app" "$APP"
+  hdiutil detach "$mnt" > /dev/null || hdiutil detach -force "$mnt" > /dev/null
+  codesign --verify --deep --strict "$APP"
+  echo "깐 판(브랜치): $(defaults read "$APP/Contents/Info.plist" CFBundleShortVersionString) · $(lipo -archs "$APP/Contents/MacOS/Daling")"
+}
+
+mail_probe() {  # $1 장면, $2 시간 제한 — 판정 없이 MAIL_RESULT 에 hang|old-message|keychain-message|refused|other
+  local scene=$1 limit=${2:-30} start
+  guard_fake_targets > /dev/null
+  start="$($API post /api/refresh-emails '{}' "$limit")"
+  echo "$start" | cut -c1-400 | tee "$LOGS/$scene-mail-start.txt"
+  MAIL_TEXT="$(echo "$start" | cut -c1-300)"
+  case "$start" in
+    "HTTP 0 "*) MAIL_RESULT=hang; return 0 ;;
+    *"계정을 먼저 입력"*) MAIL_RESULT=old-message; return 0 ;;
+    *"키체인"*) MAIL_RESULT=keychain-message; return 0 ;;
+  esac
+  $API wait mail 120 "$LOGS/$scene-mail.json" > /dev/null
+  if grep -E -q 'Connection refused|Errno 61|연결을 거부|refused' "$LOGS/$scene-mail.json"; then MAIL_RESULT=refused
+  elif grep -q '키체인' "$LOGS/$scene-mail.json"; then MAIL_RESULT=keychain-message
+  elif grep -q '계정을 먼저 입력' "$LOGS/$scene-mail.json"; then MAIL_RESULT=old-message
+  else MAIL_RESULT=other; fi
+}
+
 start_app() {  # Finder 에서 켜듯 open 으로. $1 = 장면 이름(멈추면 화면을 찍는다)
   open "$APP"
   if ! $API port 60 > /dev/null; then
@@ -94,8 +123,10 @@ mail_check() {  # $1 장면, $2 요청 시간 제한(초)
 }
 
 lms_check() {  # $1 장면 — fake_lms 로 빠른 동기화. 브라우저 받기·띄우기·작업 프로세스의 키체인 읽기까지
-  local scene=$1 rec="$LOGS/fake-lms.json"
+  local scene=$1 rec="$LOGS/fake-lms.json" before
   guard_fake_targets
+  # 앞 장면의 로그인 기록과 섞이지 않게 이번에 들어온 것만 본다
+  before="$(python3 -c "import json,sys; print(len(json.load(open(sys.argv[1]))['posts']))" "$rec" 2>/dev/null || echo 0)"
   $API post /api/run '{"confirm":true,"mode":"fast"}' | cut -c1-200
   $API wait main 1080 "$LOGS/$scene-sync.json"
   if grep -q 'LMS 접속 브라우저' "$LOGS/$scene-sync.json"; then
@@ -105,9 +136,9 @@ lms_check() {  # $1 장면 — fake_lms 로 빠른 동기화. 브라우저 받�
   else
     verdict "$scene" "LMS 브라우저" "❓ 브라우저 단계까지 못 감 — $scene-sync.json 확인"
   fi
-  if python3 -c "import json,sys; p=json.load(open(sys.argv[1]))['posts']; sys.exit(0 if any(x['accepted'] for x in p) else 1)" "$rec" 2>/dev/null; then
+  if python3 -c "import json,sys; p=json.load(open(sys.argv[1]))['posts'][int(sys.argv[2]):]; sys.exit(0 if any(x['accepted'] for x in p) else 1)" "$rec" "$before" 2>/dev/null; then
     verdict "$scene" "LMS 로그인 (가짜 LMS)" "✅ 작업 프로세스가 키체인의 비밀번호를 그대로 입력함"
   else
-    verdict "$scene" "LMS 로그인 (가짜 LMS)" "❌ $(python3 -c "import json,sys; p=json.load(open(sys.argv[1]))['posts']; print('입력 없음' if not p else '받은 것: ' + json.dumps(p[-1], ensure_ascii=False))" "$rec" 2>/dev/null || echo '기록 없음')"
+    verdict "$scene" "LMS 로그인 (가짜 LMS)" "❌ $(python3 -c "import json,sys; p=json.load(open(sys.argv[1]))['posts'][int(sys.argv[2]):]; print('입력 없음' if not p else '받은 것: ' + json.dumps(p[-1], ensure_ascii=False))" "$rec" "$before" 2>/dev/null || echo '기록 없음') · 작업 기록 끝: $(python3 -c "import json,sys; print((json.load(open(sys.argv[1])).get('logs') or [''])[-1])" "$LOGS/$scene-sync.json" 2>/dev/null | cut -c1-140)"
   fi
 }

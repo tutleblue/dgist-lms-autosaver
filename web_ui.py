@@ -2369,6 +2369,16 @@ def get_health(workspace: UserWorkspace) -> dict[str, Any]:
         out["warning"] = f"{kind}이(가) {out['consecutiveFailures']}번 연속 실패했습니다. 설정에서 계정 정보를 확인해 주세요."
     elif out["stale"]:
         out["warning"] = f"{out['staleDays']}일째 동기화가 되지 않았습니다."
+    # 맥·리눅스: 비밀번호를 저장소에서 못 꺼내면 LMS·메일이 모두 실패한다. 다른 알림보다 먼저, 까닭과 할 일을 말한다
+    problems = secret_read_problems(workspace)
+    if problems:
+        labels = " · ".join(SECRET_LABELS.get(k, k) for k in problems)
+        waiting = secret_store.waiting()
+        out["keychain"] = {"keys": sorted(problems), "waiting": waiting}
+        out["warning"] = (
+            "키체인 창에 맥 로그인 암호를 넣고 '항상 허용'을 눌러 주세요. 그때까지 LMS·메일 동기화를 멈춰요."
+            if waiting else secret_store.read_problem(labels, next(iter(problems.values())))
+        )
     return out
 
 
@@ -4174,12 +4184,43 @@ def _secret_handover(workspace: UserWorkspace) -> str | None:
     if not secret_store.supported():
         return None
     raw = read_json(workspace.config_path, {})
-    handed = {}
+    handed: dict[str, Any] = {}
+    errors: dict[str, str] = {}
     for key in SECRET_KEYS:
         value = raw.get(key) if isinstance(raw, dict) else None
         if secret_store.is_marker(value):
             handed[key] = dpapi_unprotect(value)
+            if not handed[key]:
+                errors[key] = secret_store.last_error() or "까닭을 알 수 없음"
+    if errors:
+        # 못 읽은 까닭도 넘긴다: 작업이 '로그인 실패' 대신 '키체인을 못 읽음' 을 말하게 (runtime_config._HANDED_ERRORS)
+        handed["_secret_errors"] = errors
     return json.dumps(handed, ensure_ascii=False) + "\n"
+
+
+SECRET_LABELS = {
+    "LMS_PASSWORD": "LMS 비밀번호",
+    "SCHOOL_EMAIL_PASSWORD": "학교 메일 비밀번호",
+    "EMAIL_PASSWORD": "알림 메일 비밀번호",
+    "GEMINI_API_KEY": "Gemini 키",
+    "DGIST_API_KEY": "공공데이터 키",
+}
+
+
+def secret_read_problems(workspace: UserWorkspace) -> dict[str, str]:
+    """맥·리눅스: 설정에 표시는 있는데 저장소에서 값을 못 꺼낸 비밀 설정 {키: 까닭}. Windows 는 늘 빈 dict.
+
+    한 번 읽은 값은 mac_keychain 이 기억하므로 건강 확인(12초마다)에서 불러도 키체인을 다시 열지 않는다.
+    """
+    if not secret_store.supported():
+        return {}
+    raw = read_json(workspace.config_path, {})
+    out: dict[str, str] = {}
+    for key in SECRET_KEYS:
+        value = raw.get(key) if isinstance(raw, dict) else None
+        if secret_store.is_marker(value) and not secret_store.unprotect(value):
+            out[key] = secret_store.last_error() or "까닭을 알 수 없음"
+    return out
 
 
 def run_process(workspace: UserWorkspace, kind: str, command: list[str] | None, extra_env: dict[str, str] | None = None, auto: bool = False) -> None:
@@ -4349,6 +4390,10 @@ def start_task(workspace: UserWorkspace, kind: str, sync_mode: str = "fast", aut
     if demo_mode.active():
         # 체험 중: LMS·메일 서버에 가짜 계정으로 로그인하러 가지 않는다 (자동 실행도 여기서 멈춘다)
         return False, demo_mode.BLOCK_MESSAGE
+    if kind in ("sync", "deadlines", "emails") and secret_store.waiting():
+        # 맥: 키체인 허락을 기다리는 중이면 빈 비밀번호로 로그인하러 가지 않는다. 가면 실패가 쌓이고
+        # '서버가 로그인을 거절' 로 2시간 쉬기까지 한다. 허락하면 다음 자동 확인부터 그대로 돈다
+        return False, "키체인 창에 맥 로그인 암호를 넣고 '항상 허용'을 누른 뒤 다시 해 주세요."
     with task_lock:
         task_state = task_states.setdefault(task_key(workspace.user_id, kind), default_task_state())
         if task_state["running"]:
@@ -5348,6 +5393,15 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             return
         if route == "/api/refresh-emails":
             config = read_config(workspace)
+            if config.get("SCHOOL_EMAIL") and not config.get("SCHOOL_EMAIL_PASSWORD"):
+                # 넣어 둔 비밀번호를 저장소에서 못 꺼냈으면 '계정을 먼저 입력' 이 아니라 그 까닭을 말한다 (2026-10-22 맥)
+                problem = secret_read_problems(workspace).get("SCHOOL_EMAIL_PASSWORD")
+                if problem:
+                    self.send_json(
+                        {"ok": False, "message": secret_store.read_problem("학교 메일 비밀번호", problem)},
+                        HTTPStatus.BAD_REQUEST,
+                    )
+                    return
             if not config.get("SCHOOL_EMAIL") or not config.get("SCHOOL_EMAIL_PASSWORD"):
                 self.send_json(
                     {"ok": False, "message": "설정 → 학교 이메일에서 계정을 먼저 입력해 주세요."},

@@ -366,6 +366,21 @@ async def login_lms(page, max_attempts=2):
     죽을 때도 있었다(자료 동기화가 여기서 계속 실패했다).
     기다리는 기준을 '화면이 조용해질 때'가 아니라 '필요한 것이 생겼을 때'로 바꾼다.
     """
+    if not LMS_ID or not LMS_PASSWORD:
+        # 빈 비밀번호로 학교 SSO 에 로그인을 거듭하지 않는다. 넣어 둔 비밀번호를 맥 키체인에서 못 꺼냈으면
+        # 'ID/비밀번호를 확인' 대신 그 까닭을 말한다 (2026-10-22 맥: 업데이트 뒤 키체인 거부로 LMS·메일이 함께 실패)
+        try:
+            import runtime_config
+            import secret_store
+
+            reason = runtime_config.SECRET_READ_ERRORS.get("LMS_PASSWORD", "")
+            if LMS_ID and reason:
+                raise RuntimeError(secret_store.read_problem("LMS 비밀번호", reason))
+        except RuntimeError:
+            raise
+        except Exception:
+            pass
+        raise RuntimeError("설정에서 LMS ID와 비밀번호를 먼저 입력해 주세요.")
     for attempt in range(1, max_attempts + 1):
         print(f"LMS 로그인 중... (시도 {attempt}/{max_attempts})")
         await page.goto(LOGIN_URL, wait_until="domcontentloaded")

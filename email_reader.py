@@ -1018,7 +1018,7 @@ def fetch_inline_images(
     if not images:
         return {}
     if not SCHOOL_EMAIL or not SCHOOL_EMAIL_PASSWORD:
-        raise RuntimeError("설정에서 학교 이메일 계정을 먼저 입력해 주세요.")
+        raise RuntimeError(_missing_account_message(SCHOOL_EMAIL, SCHOOL_EMAIL_PASSWORD))
 
     with imap_session() as client:
         raw_name = None
@@ -1400,7 +1400,7 @@ def fetch_school_emails(days: int | None = None, max_count: int | None = None) -
     읽음 여부는 바뀔 수 있으므로 그 부분만 따로 맞춘다.
     """
     if not SCHOOL_EMAIL or not SCHOOL_EMAIL_PASSWORD:
-        raise RuntimeError("설정에서 학교 이메일 계정을 먼저 입력해 주세요.")
+        raise RuntimeError(_missing_account_message(SCHOOL_EMAIL, SCHOOL_EMAIL_PASSWORD))
     from runtime_config import MAIL_KEEP_DAYS, MAIL_KEEP_MAX
 
     days = int(days or MAIL_KEEP_DAYS)
@@ -1746,7 +1746,7 @@ def imap_session(account: str | None = None, password: str | None = None,
     account = account or SCHOOL_EMAIL
     password = password or SCHOOL_EMAIL_PASSWORD
     if not account or not password:
-        raise RuntimeError("설정에서 학교 이메일 계정을 먼저 입력해 주세요.")
+        raise RuntimeError(_missing_account_message(account, password))
     key = (host or SCHOOL_IMAP_HOST, int(port or SCHOOL_IMAP_PORT), account, password)
     with _SESSION_LOCK:
         client = _session_client(key)
@@ -2132,7 +2132,7 @@ def send_email(to_addr: str, subject: str, body: str,
     port = int(port or SCHOOL_SMTP_PORT)
 
     if not account or not password:
-        raise RuntimeError("설정에서 학교 이메일 계정을 먼저 입력해 주세요.")
+        raise RuntimeError(_missing_account_message(account, password))
     to_list = _split_addrs(to_addr)
     cc_list = _split_addrs(cc)
     bcc_list = _split_addrs(bcc)
@@ -2189,7 +2189,7 @@ def save_draft(to_addr: str, subject: str, body: str, cc: str = "", bcc: str = "
     account = account or SCHOOL_EMAIL
     password = password or SCHOOL_EMAIL_PASSWORD
     if not account or not password:
-        raise RuntimeError("설정에서 학교 이메일 계정을 먼저 입력해 주세요.")
+        raise RuntimeError(_missing_account_message(account, password))
     msg = build_message(
         account, _split_addrs(to_addr), subject, body, _split_addrs(cc), html,
         attachments=attachments, extra_headers={DRAFT_HEADER: draft_id} if draft_id else None,
@@ -2229,6 +2229,22 @@ def abort_refresh() -> bool:
         except OSError:
             pass
     return True
+
+
+def _missing_account_message(account: str, password: str) -> str:
+    """메일 계정이 비었을 때 할 말. 비밀번호를 넣어 뒀는데 맥 키체인(리눅스 키링)에서 못 꺼냈으면 '계정을 먼저 입력'
+    대신 그 까닭을 말한다 — 2026-10-22 맥: 업데이트 뒤 키체인을 못 읽었는데 화면은 계정을 넣으라고만 했다."""
+    if account and not password:
+        try:
+            import runtime_config
+            import secret_store
+
+            reason = runtime_config.SECRET_READ_ERRORS.get("SCHOOL_EMAIL_PASSWORD") or secret_store.last_error()
+            if reason:
+                return secret_store.read_problem("학교 메일 비밀번호", reason)
+        except Exception:
+            pass
+    return "설정에서 학교 이메일 계정을 먼저 입력해 주세요."
 
 
 def reload_settings() -> tuple[int, int]:

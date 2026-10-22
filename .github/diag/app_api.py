@@ -56,6 +56,21 @@ def main(argv):
         code, body = call("POST", argv[2], json.loads(argv[3]), float(argv[4]) if len(argv) > 4 else 30)
         print(f"HTTP {code} {body[:2000]}")
         return 0
+    if cmd == "get":
+        code, body = call("GET", argv[2], timeout=float(argv[3]) if len(argv) > 3 else 30)
+        print(f"HTTP {code} {body[:3000]}")
+        return 0
+    if cmd == "health":  # 건강 알림 요약: '<keychain 상태> | <경고 문구>'
+        code, body = call("GET", "/api/health", timeout=float(argv[2]) if len(argv) > 2 else 30)
+        try:
+            h = json.loads(body)
+        except Exception:
+            print(f"none | (HTTP {code} {body[:200]})")
+            return 0
+        kc = h.get("keychain")
+        state = "none" if not kc else ("waiting" if kc.get("waiting") else "denied")
+        print(f"{state} | {h.get('warning', '')}")
+        return 0
     if cmd == "wait":
         which, limit, out = argv[2], float(argv[3]), argv[4]
         deadline, seen, last = time.time() + limit, False, {}

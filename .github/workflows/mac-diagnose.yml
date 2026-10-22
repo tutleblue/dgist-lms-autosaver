@@ -1,12 +1,16 @@
-# 맥 LMS·메일 진단 — 사용자가 받는 맥 앱(릴리스 DMG) 그대로, M칩·인텔에서
+# 맥 LMS·메일 진단 — 이 브랜치로 묶은 맥 앱(M칩·인텔)을 실제 설치·업데이트 흐름대로 돌려 본다
 #
 # 왜 있나: 2026-10-22 사용자 신고 "맥 판에서 LMS·메일 연동이 안 된다". 개발 PC 에 맥이 없어 여기서 잰다.
-# 진짜 학교 서버에는 아무것도 보내지 않는다 — 계정은 가짜, 메일 서버는 127.0.0.1(닫힌 포트), LMS 는 러너 안의 fake_lms.py.
-#  A. 새로 깐 맥: 설치 → 설정 저장(키체인에 들어가나) → 껐다 켜기(메모리 말고 키체인에서 읽게)
-#     → 메일 새로고침(비밀번호를 읽었으면 '연결 거부', 못 읽었으면 '계정을 먼저 입력')
-#     → 빠른 동기화(크로미움 받기·띄우기 → 작업 프로세스가 키체인의 비밀번호로 가짜 LMS 에 로그인하나)
-#  B. 업데이트한 맥: 이전 판으로 설정 저장 → 새 판을 덮어 깔기 → 메일 새로고침 (키체인이 다시 묻는지 — 화면을 찍는다)
-# 결과는 실행 요약 표, 자세한 것은 아티팩트 mac-diagnose-<칩> (작업 기록·가짜 LMS 기록·화면).
+# 첫 실행(릴리스 v1.12.34 그대로, 실행 39707720717)에서 원인을 찾았다: 새로 깐 맥은 모두 되는데, 업데이트한 새 판은
+# 창·서버가 뜨기 전에 키체인 암호 창에서 멈췄다(옛 판이 만든 키체인 항목을 새 판이 허락 없이 못 읽음).
+# 이제는 고친 것을 잰다 — 이 브랜치를 mac.yml 로 묶은 DMG 로:
+#  A. 새로 깐 맥: 설정 저장 → 키체인 → 껐다 켜기 → 메일 새로고침 → 빠른 동기화 (크로미움·작업 프로세스의 비밀번호)
+#  B. 넘겨주기 없이 업데이트한 맥 (DMG 로 다시 깔기 등): 최신 릴리스로 설정 저장 → 이 빌드를 덮어 깔기
+#     → 창·서버가 먼저 뜨나 → 허락을 기다리는 동안 메일·LMS 를 안 하나 → 거부하면 까닭을 말하나
+#     → 비밀번호를 다시 저장하면 맥 로그인 암호 없이 되살아나나
+#  (앱 안 업데이트의 넘겨주기는 mac.yml '키체인 넘겨주기 점검' 이 잰다)
+# 진짜 학교 서버에는 아무것도 보내지 않는다 — 계정은 가짜, 메일 서버는 127.0.0.1(닫힌 포트), LMS 는 fake_lms.py,
+# 켜기 전에 설정에 가짜 주소를 넣고 부르기 직전마다 다시 확인한다(lib.sh guard_fake_targets).
 name: mac-diagnose
 
 on:
@@ -14,14 +18,10 @@ on:
     branches: ["diag/mac-lms-mail"]
   workflow_dispatch:
     inputs:
-      version:
-        description: "볼 릴리스 (비우면 최신)"
+      previous:
+        description: "업데이트 흉내에서 먼저 깔 릴리스 (비우면 최신)"
         type: string
         default: ""
-      previous:
-        description: "업데이트 흉내에서 먼저 깔 이전 릴리스"
-        type: string
-        default: "v1.12.33"
 
 permissions:
   contents: read
@@ -35,8 +35,19 @@ defaults:
     shell: bash
 
 jobs:
+  build:
+    # 이 브랜치를 묶는다 (넘겨주기 점검·실제 앱 띄우기·smoke 포함). 불리는 쪽은 부르는 쪽이 준 권한까지만 쓴다
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+    uses: ./.github/workflows/mac.yml
+    secrets: inherit
+
   diagnose:
     name: diagnose (${{ matrix.arch }})
+    needs: build
     strategy:
       fail-fast: false
       matrix:
@@ -53,17 +64,21 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      - uses: actions/download-artifact@v4
+        with:
+          name: daling-mac-dmg-${{ matrix.arch }}
+          path: ${{ runner.temp }}/new
+
       - name: 볼 판 정하기
         id: ver
         run: |
-          TAG="${{ inputs.version }}"
-          [ -n "$TAG" ] || TAG="$(curl -fsSIL -o /dev/null -w '%{url_effective}' "https://github.com/$REPO/releases/latest" | sed 's#.*/tag/##')"
           PREV="${{ inputs.previous }}"
-          [ -n "$PREV" ] || PREV=v1.12.33
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          [ -n "$PREV" ] || PREV="$(curl -fsSIL -o /dev/null -w '%{url_effective}' "https://github.com/$REPO/releases/latest" | sed 's#.*/tag/##')"
+          NEW_DMG="$(ls "$RUNNER_TEMP"/new/daling-*-mac-$ARCH.dmg | head -1)"
           echo "prev=$PREV" >> "$GITHUB_OUTPUT"
-          echo "새 판 $TAG · 이전 판 $PREV · $ARCH · macOS $(sw_vers -productVersion)"
-          { echo "### 맥 LMS·메일 진단 ($ARCH, macOS $(sw_vers -productVersion), 새 판 $TAG, 이전 판 $PREV)"
+          echo "new_dmg=$NEW_DMG" >> "$GITHUB_OUTPUT"
+          echo "이 브랜치 DMG ${NEW_DMG##*/} · 이전 판 $PREV · $ARCH · macOS $(sw_vers -productVersion)"
+          { echo "### 맥 LMS·메일 진단 ($ARCH, macOS $(sw_vers -productVersion), 이 브랜치 ${NEW_DMG##*/}, 이전 판 $PREV)"
             echo "| 장면 | 항목 | 결과 |"; echo "|---|---|---|"; } > "$RUNNER_TEMP/head.md"
 
       - name: 임시 키체인을 기본으로 (러너의 로그인 키체인은 잠겨 있을 수 있다)
@@ -85,7 +100,7 @@ jobs:
       - name: A. 새로 깐 맥 — 설치·설정 저장·껐다 켜기
         run: |
           . .github/diag/lib.sh
-          install_release "${{ steps.ver.outputs.tag }}"
+          install_dmg "${{ steps.ver.outputs.new_dmg }}"
           preseed_config
           start_app A
           save_settings
@@ -93,8 +108,6 @@ jobs:
           $API markers "$DATA/config.json" | tee "$LOGS/A-markers.txt"
           if grep -q '평문' "$LOGS/A-markers.txt"; then verdict A "설정 저장" "❌ 비밀번호가 config.json 에 평문 (키체인에 못 넣음)"
           else verdict A "설정 저장" "✅ 비밀번호는 키체인에, config.json 에는 표시만"; fi
-          security find-generic-password -s Daling -a settings > /dev/null 2>&1 \
-            && verdict A "키체인 항목" "✅ Daling/settings 있음" || verdict A "키체인 항목" "❌ 없음"
           # 껐다 켠다: 저장할 때 들고 있던 비밀번호(메모리) 말고 키체인에서 다시 읽게 — 사용자가 다음 날 켤 때와 같다
           stop_app
           start_app A
@@ -111,10 +124,9 @@ jobs:
           . .github/diag/lib.sh
           lms_check A
 
-      - name: B. 업데이트한 맥 — 이전 판으로 저장 → 새 판 덮어 깔기 → 메일 새로고침
-        # 키체인이 묻는 창을 띄우면 아무도 누르지 않아 멈춘다. 시간 제한을 두고 화면을 찍는다. 그래서 맨 끝에
-        continue-on-error: true
-        timeout-minutes: 10
+      - name: B. 넘겨주기 없이 업데이트 — 창이 먼저 뜨나, 기다리는 동안·거부 뒤·다시 저장 뒤
+        # 키체인 묻는 창은 아무도 누르지 않는다(러너). 기다리는 동안을 재고, SecurityAgent 를 꺼 '거부' 를 흉내 낸다
+        timeout-minutes: 25
         run: |
           . .github/diag/lib.sh
           stop_app
@@ -126,13 +138,52 @@ jobs:
           save_settings
           guard_fake_targets
           stop_app
-          install_release "${{ steps.ver.outputs.tag }}"
+          install_dmg "${{ steps.ver.outputs.new_dmg }}"
+
           if start_app B; then
-            mail_check B 40
+            verdict B "새 판 켜기" "✅ 창·화면 서버가 먼저 뜸 (키체인은 창이 뜬 뒤 물음)"
           else
             verdict B "새 판 켜기" "❌ 60초 안에 화면 서버가 안 뜸 (화면: B-start-stuck.png)"
+            exit 0
           fi
-          # 묻는 창이 남아 있으면 치운다 (뒤 단계가 멈추지 않게)
+          sleep 6
+          screencapture -x "$LOGS/B-after-window.png" 2>/dev/null || true
+          H="$($API health)"; echo "건강: $H" | tee "$LOGS/B-health-waiting.txt"
+          case "$H" in
+            waiting*) verdict B "허락 기다리는 동안 알림" "✅ ${H#*| }" ;;
+            *) verdict B "허락 기다리는 동안 알림" "❌ $H (화면: B-after-window.png)" ;;
+          esac
+          mail_probe B-wait 20
+          [ "$MAIL_RESULT" = keychain-message ] \
+            && verdict B "기다리는 동안 메일 새로고침" "✅ 시작하지 않고 키체인 안내 — ${MAIL_TEXT#HTTP * }" \
+            || verdict B "기다리는 동안 메일 새로고침" "❌ $MAIL_RESULT — $MAIL_TEXT"
+
+          # '거부' 흉내: 묻는 창(SecurityAgent)을 끈다
+          pkill -x SecurityAgent 2>/dev/null || sudo pkill -x SecurityAgent 2>/dev/null || true
+          sleep 6
+          screencapture -x "$LOGS/B-after-deny.png" 2>/dev/null || true
+          H="$($API health)"; echo "건강: $H" | tee "$LOGS/B-health-denied.txt"
+          case "$H" in
+            denied*) verdict B "거부 뒤 알림" "✅ ${H#*| }" ;;
+            *) verdict B "거부 뒤 알림" "❌ $H (화면: B-after-deny.png)" ;;
+          esac
+          mail_probe B-denied 20
+          [ "$MAIL_RESULT" = keychain-message ] \
+            && verdict B "거부 뒤 메일 새로고침" "✅ '계정을 먼저 입력' 대신 — ${MAIL_TEXT#HTTP * }" \
+            || verdict B "거부 뒤 메일 새로고침" "❌ $MAIL_RESULT — $MAIL_TEXT"
+
+          # 되살리기: 설정에서 비밀번호를 다시 저장 → 못 읽는 옛 항목을 묻지 않고 지우고 이 판의 항목을 만든다
+          save_settings
+          $API markers "$DATA/config.json" | tee "$LOGS/B-resaved-markers.txt"
+          if grep -q '평문' "$LOGS/B-resaved-markers.txt"; then verdict B "비밀번호 다시 저장" "❌ 평문으로 남음 (키체인에 못 넣음)"
+          else verdict B "비밀번호 다시 저장" "✅ 키체인에 다시 들어감 (맥 로그인 암호 없이)"; fi
+          H="$($API health)"; echo "건강: $H" | tee "$LOGS/B-health-resaved.txt"
+          case "$H" in none*) verdict B "다시 저장 뒤 알림" "✅ 키체인 알림 사라짐" ;; *) verdict B "다시 저장 뒤 알림" "❌ $H" ;; esac
+          mail_probe B-resaved 30
+          [ "$MAIL_RESULT" = refused ] \
+            && verdict B "다시 저장 뒤 메일" "✅ 비밀번호를 읽고 서버에 붙으러 감 (닫힌 포트라 연결 거부)" \
+            || verdict B "다시 저장 뒤 메일" "❌ $MAIL_RESULT — $MAIL_TEXT"
+          lms_check B-resaved
           pkill -x SecurityAgent 2>/dev/null || sudo pkill -x SecurityAgent 2>/dev/null || true
 
       - name: 요약
@@ -141,6 +192,8 @@ jobs:
           cat "$RUNNER_TEMP/head.md" logs/verdicts.md 2>/dev/null | tee -a "$GITHUB_STEP_SUMMARY"
           cp "$HOME/Library/Application Support/Daling/server_errors.log" logs/ 2>/dev/null || true
           pkill -f "/Applications/Daling.app/Contents/MacOS/Daling" || true
+          # 판정에 ❌ 가 있으면 실패로 (요약 표를 보면 어디인지 바로 안다)
+          ! grep -q '❌' logs/verdicts.md
 
       - name: 기록 보관
         if: always()

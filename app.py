@@ -64,6 +64,15 @@ if sys.platform.startswith("linux"):
 
 from http.server import ThreadingHTTPServer
 
+if sys.platform == "darwin" and not (len(sys.argv) >= 2 and sys.argv[1] == SMOKE_FLAG):
+    # 켤 때 키체인 암호 창에서 멈추지 않게. 2026-10-22 맥 신고(LMS·메일이 안 됨) → CI 실측(mac-diagnose.yml): 업데이트한
+    # 새 판은 창도 서버도 뜨기 전에 'Daling 이 키체인에 접근하려고 함' 창에서 멈췄다. 아래 `import web_ui` 가
+    # runtime_config 를 불러오고, runtime_config 는 모듈 맨 위에서 비밀값을 풀며 키체인을 연다.
+    # 켤 때는 묻는 창 없이만 읽고, 허락이 필요하면 창이 뜬 뒤 묻는다(_unlock_keychain_after_window).
+    import mac_keychain
+
+    mac_keychain.quiet_startup(True)
+
 import web_ui
 
 HOST = "127.0.0.1"
@@ -972,6 +981,27 @@ def run_linux_window(webview, server, url: str) -> None:
             server.server_close()
 
 
+def _unlock_keychain_after_window() -> None:
+    """맥: 켤 때 키체인을 조용히 못 읽었으면(업데이트 뒤 등) 창이 뜬 뒤 묻는다. 허락하면 비밀 상수를 다시 채운다.
+
+    묻는 동안 화면은 그대로 쓸 수 있고, LMS·메일 자동 실행은 허락을 기다린다(web_ui.start_task). 거부하면 이번 실행에서는
+    다시 묻지 않고, 건강 알림이 까닭과 할 일(다시 켜기·비밀번호 다시 저장)을 보여 준다.
+    """
+    try:
+        import mac_keychain
+
+        asked = mac_keychain.needs_prompt()
+        if asked:
+            time.sleep(1.5)  # 창이 먼저 그려지게
+        if mac_keychain.unlock_interactive() and asked:
+            import runtime_config
+
+            runtime_config.refresh_secrets()
+            print("키체인 허락을 받아 비밀 설정을 다시 읽음")
+    except Exception as exc:  # 키체인이 어떻게 틀려도 창은 그대로 둔다
+        print(f"키체인 허락 받기 실패: {exc}")
+
+
 def main() -> None:
     _marks = {"appStart": _APP_T0, "webUiImported": _MODULE_T0, "main": time.time()}
     set_app_user_model_id()  # 창을 만들기 전에 (작업표시줄 아이콘 반영의 핵심)
@@ -1068,6 +1098,8 @@ def main() -> None:
     )
     # 창이 뜬 뒤 아이콘을 입힌다 (pywebview는 Windows에서 아이콘 인자를 지원하지 않음)
     threading.Thread(target=apply_window_icon, daemon=True).start()
+    if server is not None and sys.platform == "darwin":
+        threading.Thread(target=_unlock_keychain_after_window, daemon=True).start()
     try:
         webview.start()
     finally:

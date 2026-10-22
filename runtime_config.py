@@ -181,6 +181,10 @@ def _keychain_unprotect(text: str) -> str:
 SECRETS_STDIN_FLAG = "AUTOSAVER_SECRETS_STDIN"
 
 
+# 앱 본체가 못 읽어 빈 값으로 넘긴 비밀 설정의 까닭 {키: 사람 말} (web_ui._secret_handover 의 "_secret_errors")
+_HANDED_ERRORS: dict[str, str] = {}
+
+
 def _read_handed_secrets() -> dict[str, str] | None:
     """앱 본체가 넘긴 비밀 값. 넘겨받는 작업이 아니면 None (예전처럼 저장소에서 직접 읽는다)."""
     if os.environ.pop(SECRETS_STDIN_FLAG, "") != "1":  # 손주 프로세스(node 등)에 물려주지 않게 바로 뺀다
@@ -190,10 +194,30 @@ def _read_handed_secrets() -> dict[str, str] | None:
         data = json.loads(line) if line.strip() else {}
     except Exception:
         data = {}
-    return {str(k): str(v) for k, v in data.items()} if isinstance(data, dict) else {}
+    if not isinstance(data, dict):
+        return {}
+    # 까닭은 따로 꺼낸다 — 비밀 값 개수(점검의 handed=)에 들지 않게
+    errors = data.pop("_secret_errors", None)
+    if isinstance(errors, dict):
+        _HANDED_ERRORS.update({str(k): str(v) for k, v in errors.items()})
+    return {str(k): str(v) for k, v in data.items()}
 
 
 _HANDED_SECRETS = _read_handed_secrets()
+
+# 표시('keychain:<키>' 등)는 있는데 값을 못 꺼낸 비밀 설정과 그 까닭 {키: 사람 말}. _load_config 가 채운다.
+# email_reader·lms_crawler 가 '계정을 먼저 입력해 주세요'·'ID/비밀번호를 확인해 주세요' 대신 이 까닭을 보인다
+# (2026-10-22 맥 신고: 업데이트 뒤 키체인을 못 읽어 LMS·메일이 함께 실패했는데 화면은 계정을 넣으라고만 했다).
+SECRET_READ_ERRORS: dict[str, str] = {}
+
+
+def _store_error() -> str:
+    try:
+        import secret_store
+
+        return secret_store.last_error() or "까닭을 알 수 없음"
+    except Exception:
+        return "까닭을 알 수 없음"
 
 
 def _load_config() -> dict[str, Any]:
@@ -205,13 +229,23 @@ def _load_config() -> dict[str, Any]:
         data = {}
     else:
         data = _read_legacy_config()
+    errors: dict[str, str] = {}
     for key in SECRET_KEYS:
         value = data.get(key)
         if isinstance(value, str) and value.startswith(DPAPI_PREFIX):
             data[key] = _dpapi_unprotect(value)
         elif _is_store_marker(value):  # 맥: 'keychain:' 만, 리눅스: 'keychain:'·'secretfile:', Windows: 없음
             # 넘겨받은 작업은 저장소를 아예 열지 않는다 — 본체가 못 읽은 값(빈 문자열)도 여기서 묻지 않는다
-            data[key] = _HANDED_SECRETS.get(key, "") if _HANDED_SECRETS is not None else _keychain_unprotect(value)
+            if _HANDED_SECRETS is not None:
+                data[key] = _HANDED_SECRETS.get(key, "")
+                if not data[key]:
+                    errors[key] = _HANDED_ERRORS.get(key) or "앱이 키체인에서 이 값을 넘겨주지 못함"
+            else:
+                data[key] = _keychain_unprotect(value)
+                if not data[key]:
+                    errors[key] = _store_error()
+    SECRET_READ_ERRORS.clear()
+    SECRET_READ_ERRORS.update(errors)
     return data
 
 
@@ -230,6 +264,19 @@ SCHOOL_EMAIL = str(_CONFIG.get("SCHOOL_EMAIL", ""))
 SCHOOL_EMAIL_PASSWORD = str(_CONFIG.get("SCHOOL_EMAIL_PASSWORD", ""))
 SCHOOL_IMAP_HOST = str(_CONFIG.get("SCHOOL_IMAP_HOST", "mail.dgist.ac.kr"))
 SCHOOL_IMAP_PORT = int(_CONFIG.get("SCHOOL_IMAP_PORT", 993))
+
+
+def refresh_secrets() -> None:
+    """맥 화면 프로세스: 켤 때는 키체인을 묻지 않고 읽어(mac_keychain.quiet_startup) 비밀 상수가 비어 있을 수 있다.
+    창이 뜬 뒤 허락을 받으면(app.py) 다시 채운다. 함수 안에서 `from runtime_config import X` 로 꺼내 쓰는 곳
+    (translator·timetable_import·dgist_api)은 새 값을 본다."""
+    global _CONFIG, LMS_PASSWORD, GEMINI_API_KEY, DGIST_API_KEY, EMAIL_PASSWORD, SCHOOL_EMAIL_PASSWORD
+    _CONFIG = _load_config()
+    LMS_PASSWORD = str(_CONFIG.get("LMS_PASSWORD", ""))
+    GEMINI_API_KEY = str(_CONFIG.get("GEMINI_API_KEY", ""))
+    DGIST_API_KEY = str(_CONFIG.get("DGIST_API_KEY", ""))
+    EMAIL_PASSWORD = str(_CONFIG.get("EMAIL_PASSWORD", ""))
+    SCHOOL_EMAIL_PASSWORD = str(_CONFIG.get("SCHOOL_EMAIL_PASSWORD", ""))
 SCHOOL_SMTP_HOST = str(_CONFIG.get("SCHOOL_SMTP_HOST", "smtp.dgist.ac.kr"))
 SCHOOL_SMTP_PORT = int(_CONFIG.get("SCHOOL_SMTP_PORT", 465))
 EMAIL_INTERESTS = str(_CONFIG.get("EMAIL_INTERESTS", "전공 탐색, 취업, 음악, 세미나"))

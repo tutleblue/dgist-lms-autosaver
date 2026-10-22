@@ -7569,10 +7569,12 @@ async function renderHealth() {
     const last = failKind && h.lastSuccess?.[failKind]
       ? h.lastSuccess[failKind]
       : Object.values(h.lastSuccess || {}).sort().pop();
-    $("#healthTitle").textContent =
-      h.consecutiveFailures >= 2 ? "동기화가 계속 실패하고 있어요" : "한동안 동기화가 되지 않았어요";
+    // 맥 키체인에서 비밀번호를 못 꺼내면(업데이트 뒤 허락 전·거부) LMS·메일이 함께 실패한다. 그때는 그것부터 말한다
+    $("#healthTitle").textContent = h.keychain
+      ? h.keychain.waiting ? "키체인 허락을 기다리고 있어요" : "키체인에서 비밀번호를 못 꺼냈어요"
+      : h.consecutiveFailures >= 2 ? "동기화가 계속 실패하고 있어요" : "한동안 동기화가 되지 않았어요";
     $("#healthDetail").textContent =
-      h.warning + (last ? ` (마지막 성공: ${String(last).replace("T", " ")})` : "");
+      h.warning + (last && !h.keychain ? ` (마지막 성공: ${String(last).replace("T", " ")})` : "");
     banner.hidden = false;
   } catch (error) {
     banner.hidden = true;

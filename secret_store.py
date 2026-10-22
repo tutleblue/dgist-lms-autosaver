@@ -63,6 +63,34 @@ def unprotect(value: str) -> str:
     return _backend().unprotect(value)
 
 
+def last_error() -> str:
+    """마지막으로 표시를 풀지 못한 까닭(사람 말). 됐거나 알 수 없으면 빈 문자열."""
+    if not supported():
+        return ""
+    try:
+        return str(getattr(_backend(), "last_error", lambda: "")() or "")
+    except Exception:
+        return ""
+
+
+def waiting() -> bool:
+    """맥: 키체인 허락을 기다리는 중인지 (켤 때 조용히 못 읽었거나 묻는 창이 떠 있다)."""
+    if not supported():
+        return False
+    try:
+        return bool(getattr(_backend(), "waiting", lambda: False)())
+    except Exception:
+        return False
+
+
+def read_problem(label: str, reason: str) -> str:
+    """표시는 있는데 값을 못 꺼냈을 때 '계정을 먼저 입력해 주세요' 대신 보일 말. label 예: '학교 메일 비밀번호'."""
+    if sys.platform == "darwin":
+        return (f"맥 키체인에서 {label}를 꺼내지 못했어요 ({reason}). Daling 을 껐다 켜면 키체인이 다시 물어요 — "
+                "맥 로그인 암호를 넣고 '항상 허용'을 눌러 주세요. 또는 설정에서 비밀번호를 한 번 다시 저장해 주세요.")
+    return f"비밀 저장소(키링)에서 {label}를 꺼내지 못했어요 ({reason}). 설정에서 비밀번호를 한 번 다시 저장해 주세요."
+
+
 def forget(key: str) -> None:
     """설정에서 지운 비밀 값을 저장소에서도 뺀다."""
     _backend().forget(key)
