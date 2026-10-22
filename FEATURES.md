@@ -284,6 +284,7 @@ LMS 브라우저를 Edge 로 바꾼 까닭 (2026-10-15): Playwright 가 받는 `
   - **Drive 전체 읽기** (2026-10-22, 1.12.38, 사용자 결정): 메일 'Drive에서 첨부' 가 내 Drive 전체·공유 문서함을 보려고 `drive.readonly` 를 더 요청한다(`runtime_config.GOOGLE_DRIVE_READ_SCOPE`). 구글은 이것을 **제한된 범위** 로 분류한다 → 위의 '인증 필요 없음' 이 깨진다: 심사(보안 평가 포함)를 받기 전까지 연결할 때 '확인되지 않은 앱' 경고('고급 → 이동')가 뜨고, 확인되지 않은 앱은 새 사용자 수에 상한이 있다. Cloud 콘솔 데이터 액세스에 이 범위를 더하는 일과 심사 신청은 사용자가 한다. 쓰기는 여전히 `drive.file` 만.
     - 예전 토큰(drive.file 만)은 그대로 쓴다: Drive 창은 앱이 올린 파일만 보이고 '다시 연결' 안내를 띄운다(`/api/drive/list` 의 `fullAccess`). 다시 연결하면 전체가 보인다. 맨 위에 '공유 문서함'(`parent=shared` → `sharedWithMe`), 목록·받기는 `supportsAllDrives`.
     - 권한을 하나씩 끄고 허락해도 연결되게 `OAUTHLIB_RELAX_TOKEN_SCOPE` 를 켜고, token.json 의 `scopes` 에는 실제로 허락한 것만 적는다(`runtime_config.granted_token_json`). google-auth 의 to_json 은 '요청한' 권한을 적어, 끈 권한도 있는 줄 알고 갱신 때 그 권한까지 달라고 했을 것이다.
+    - 다시 연결하면 그 자리에서 반영: 화면 서버가 예전 토큰으로 만들어 둔 Drive 접속(`drive_uploader._service`)을 `finish_google_oauth`·'google-oauth' 작업 끝에 버린다. 2026-10-22 실제로 다시 연결했을 때 새 토큰에 drive.readonly 가 있는데도 Drive 창은 앱 폴더 2개뿐이었다(새로 만든 접속으로는 내 드라이브 46개·공유 문서함 61개).
 
 ### 4.6 DGIST 공공데이터 (`dgist_api.py`)
 

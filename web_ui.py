@@ -760,6 +760,10 @@ def finish_google_oauth(code: str, state: str) -> tuple[UserWorkspace, dict[str,
     from runtime_config import granted_token_json
 
     atomic_write_text(workspace.token_path, granted_token_json(flow.credentials), encoding="utf-8")
+    # 이 서버가 예전 토큰으로 만들어 둔 Drive 접속을 버린다. 안 버리면 다시 연결해도 앱을 껐다 켜기 전까지
+    # 예전 권한으로 돌았다(2026-10-22 실측: 새 토큰엔 drive.readonly 가 있는데 Drive 창은 여전히 앱 폴더 2개뿐)
+    if "drive_uploader" in sys.modules:
+        sys.modules["drive_uploader"]._service = None
     return workspace, saved_state
 
 
@@ -4346,6 +4350,10 @@ def run_process(workspace: UserWorkspace, kind: str, command: list[str] | None, 
         task_state["logs"].append(
             f"[{now_iso()}] {kind} 작업이 종료되었습니다. 종료 코드: {return_code}"
         )
+
+    # 작업 프로세스가 구글을 다시 연결했으면 이 서버의 예전 Drive 접속을 버린다 (finish_google_oauth 와 같은 까닭)
+    if kind == "google-oauth" and "drive_uploader" in sys.modules:
+        sys.modules["drive_uploader"]._service = None
 
     # 자료를 새로 받았으면 곧바로 '학기 / 과목' 폴더로 정리한다.
     # 버튼을 눌러야만 정리되면, 새로 받은 자료는 계속 폴더 밖에 쌓인다.
