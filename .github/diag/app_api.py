@@ -63,9 +63,12 @@ def main(argv):
     if cmd == "health":  # 건강 알림 요약: '<keychain 상태> | <경고 문구>'
         code, body = call("GET", "/api/health", timeout=float(argv[2]) if len(argv) > 2 else 30)
         try:
+            if code != 200:
+                raise ValueError
             h = json.loads(body)
         except Exception:
-            print(f"none | (HTTP {code} {body[:200]})")
+            # 응답이 없거나 깨졌으면 '알림 없음' 이 아니라 오류 (예전엔 시간 초과를 none 으로 읽어 거짓 통과)
+            print(f"error | HTTP {code} {body[:200]}")
             return 0
         kc = h.get("keychain")
         state = "none" if not kc else ("waiting" if kc.get("waiting") else "denied")

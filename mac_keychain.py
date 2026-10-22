@@ -82,9 +82,10 @@ _quiet = False
 # 앱을 다시 켜면 다시 묻고, 설정에서 비밀번호를 다시 저장하면 protect 가 이 판의 항목을 새로 만든다.
 _state = "ok"
 _denied_reason = [""]  # denied 가 된 까닭 (사람 말). 그 뒤 조용히 읽다 나는 '허락 없음' 으로 덮이지 않게
-# protect 가 항목을 새로 만들 때마다 하나씩 올린다. 창을 못 본 채 비밀번호를 다시 저장한 뒤에 그 옛 창에 답하면
-# unlock_interactive 가 옛 값으로 덮어쓰지 않게 (2026-10-22 CI: 창이 그대로 떠 있는 동안 다시 저장이 평문으로 남았다)
-_generation = 0
+# 묻는 창이 떠 있는 동안(asking) 저장한 비밀 값. 그동안 이 프로세스에서 키체인을 부르면 그 창이 닫힐 때까지 막힌다
+# (2026-10-22 CI 실행 39712261129: 창이 떠 있는 채 저장하자 옛 항목 지우기가 30초 넘게 멈췄고, _lock 을 쥐고 있어
+# 건강 확인·설정 요청까지 줄줄이 멈췄다). 그래서 잡아 두었다가 창이 닫히면(unlock_interactive) 키체인에 넣는다.
+_pending: dict[str, str] = {}
 # 표시('keychain:<키>')를 풀지 못한 마지막 까닭(사람 말). 비면 마지막 풀기는 됐다.
 # unprotect 는 못 읽으면 빈 문자열을 돌려주는데(DPAPI 실패와 같게), 그 빈 값이 '설정에서 계정을 먼저 입력해 주세요'·
 # 'LMS ID/비밀번호를 확인해 주세요' 로 보여 진짜 까닭(키체인 거부·다시 묻기)이 가려졌다.
@@ -478,25 +479,56 @@ def unlock_interactive() -> bool:
                 _quiet = False  # 이미 읽었거나 물을 것이 없다: 이제부터는 예전처럼
             return _state == "ok"
         _state = "asking"
-        generation = _generation
     try:
         raw = _read_item()  # 여기서 'Daling 이 키체인의 "Daling" 키에 접근하려고 함' 창이 뜬다
     except KeychainError as exc:
         with _lock:
-            if generation != _generation:  # 그사이 비밀번호를 다시 저장해 새 항목이 있다: 이 창의 답은 버린다
-                return _state == "ok"
+            if _pending:
+                # 창이 떠 있는 동안 비밀번호를 다시 저장했다: 못 읽는 옛 항목을 묻지 않고 지우고 그 값으로 새로 만든다
+                try:
+                    _replace_with({}, dict(_pending))
+                    return True
+                except KeychainError:
+                    pass
             _state = "denied"
             _quiet = True
             _last_error = _denied_reason[0] = str(exc)
         return False
     with _lock:
-        if generation != _generation:
-            return _state == "ok"
-        _cache = _parse(raw)
+        data = _parse(raw)
+        if _pending:
+            try:
+                _replace_with(data, dict(_pending))
+                return True
+            except KeychainError as exc:
+                _last_error = str(exc)  # 읽기는 됐다: 잡아 둔 값은 기억으로 쓰고 다음 저장 때 다시 넣는다
+                data.update(_pending)
+                _pending.clear()
+        _cache = data
         _state = "ok"
         _quiet = False
         _last_error = ""
     return True
+
+
+def _replace_with(data: dict[str, str], updates: dict[str, str]) -> None:
+    """_lock 을 잡은 채로: data 에 updates 를 더해 키체인에 넣는다. 그냥 고쳐 쓰지 못하면(이 판에 허락 없음) 옛 항목을
+    묻지 않고 지우고 새로 만든다. 되면 기억·상태를 맞추고 잡아 둔 값을 비운다. 안 되면 KeychainError."""
+    global _cache, _state, _quiet, _last_error
+    merged = dict(data)
+    merged.update(updates)
+    text = json.dumps(merged, ensure_ascii=False)
+    with _no_prompt():
+        try:
+            _write_item(text)
+        except KeychainError:
+            _delete_item()
+            _write_item(text)
+    _cache = merged
+    _pending.clear()
+    _state = "ok"
+    _quiet = False
+    _last_error = ""
 
 
 def protect(key: str, value: str) -> str:
@@ -507,13 +539,17 @@ def protect(key: str, value: str) -> str:
     예전에는 여기서 실패해 부르는 쪽이 비밀번호를 config.json 에 평문으로 남겼다. 옛 항목의 다른 값은 잃는다 —
     그 값의 표시는 unprotect 가 '항목에 이 값이 없습니다' 로 알려 다시 넣게 한다.
     """
-    global _cache, _state, _quiet, _retry_at, _last_error, _generation
+    global _cache, _state, _quiet, _retry_at, _last_error
     with _lock:
+        if _state == "asking":
+            # 묻는 창이 떠 있다: 지금 키체인을 부르면 그 창이 닫힐 때까지 막힌다. 잡아 두었다가 창이 닫히면 넣는다.
+            # 표시를 돌려줘 config.json 에 평문이 남지 않게 한다 (창이 안 닫힌 채 앱을 끄면 다음에 다시 넣으라고 알린다)
+            _pending[key] = value
+            return PREFIX + key
         try:
             data = dict(_load(fresh=_cache is None))
         except KeychainError as exc:
-            # 묻는 창이 떠 있는 채(asking, 사용자가 못 봄)여도 같다: 지금 넣는 값으로 새로 만든다
-            if exc.status not in (-128, _ERR_WAITING, *_ERR_SILENT_DENIED):
+            if exc.status not in (-128, *_ERR_SILENT_DENIED):
                 raise
             with _no_prompt():
                 try:
@@ -522,7 +558,6 @@ def protect(key: str, value: str) -> str:
                     raise exc from None
             data = {}
             _retry_at = 0.0
-            _generation += 1
         if data.get(key) != value:
             data[key] = value
             _write_item(json.dumps(data, ensure_ascii=False))

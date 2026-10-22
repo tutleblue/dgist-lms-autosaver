@@ -1,5 +1,5 @@
 {
- "키체인 창에 맥 로그인 암호를 넣고 '항상 허용'을 눌러 주세요. 창이 안 보이면 설정에서 비밀번호를 다시 저장해도 돼요. 그때까지 LMS·메일 동기화를 멈춰요.": "Enter your Mac login password in the Keychain window and click 'Always Allow'. If you can't see the window, save your password again in Settings. LMS and email sync are paused until then.",
+ "키체인 창에 맥 로그인 암호를 넣고 '항상 허용'을 눌러 주세요. 창이 안 보이면 Daling 을 껐다 켜 주세요. 그때까지 LMS·메일 동기화를 멈춰요.": "Enter your Mac login password in the Keychain window and click 'Always Allow'. If you can't see the window, quit and reopen Daling. LMS and email sync are paused until then.",
  "Gemini 키": "Gemini key",
  "공공데이터 키": "Public data key",
  "까닭을 알 수 없음": "unknown reason",
