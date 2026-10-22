@@ -2376,8 +2376,7 @@ def get_health(workspace: UserWorkspace) -> dict[str, Any]:
         waiting = secret_store.waiting()
         out["keychain"] = {"keys": sorted(problems), "waiting": waiting}
         out["warning"] = (
-            "키체인 창에 맥 로그인 암호를 넣고 '항상 허용'을 눌러 주세요. 그때까지 LMS·메일 동기화를 멈춰요."
-            if waiting else secret_store.read_problem(labels, next(iter(problems.values())))
+            KEYCHAIN_WAIT_MESSAGE if waiting else secret_store.read_problem(labels, next(iter(problems.values())))
         )
     return out
 
@@ -4198,6 +4197,11 @@ def _secret_handover(workspace: UserWorkspace) -> str | None:
     return json.dumps(handed, ensure_ascii=False) + "\n"
 
 
+# 맥: 켤 때 조용히 못 읽어 키체인 허락을 기다리는 동안의 안내 (건강 알림·작업 시작·메일 새로고침이 같이 쓴다).
+# 창을 못 보고 지나치는 사람이 있어(2026-10-22 CI: 창이 그대로 떠 있었다) 다시 저장하는 길도 알린다 — mac_keychain.protect
+KEYCHAIN_WAIT_MESSAGE = "키체인 창에 맥 로그인 암호를 넣고 '항상 허용'을 눌러 주세요. 창이 안 보이면 설정에서 비밀번호를 다시 저장해도 돼요. 그때까지 LMS·메일 동기화를 멈춰요."
+
+
 SECRET_LABELS = {
     "LMS_PASSWORD": "LMS 비밀번호",
     "SCHOOL_EMAIL_PASSWORD": "학교 메일 비밀번호",
@@ -4393,7 +4397,7 @@ def start_task(workspace: UserWorkspace, kind: str, sync_mode: str = "fast", aut
     if kind in ("sync", "deadlines", "emails") and secret_store.waiting():
         # 맥: 키체인 허락을 기다리는 중이면 빈 비밀번호로 로그인하러 가지 않는다. 가면 실패가 쌓이고
         # '서버가 로그인을 거절' 로 2시간 쉬기까지 한다. 허락하면 다음 자동 확인부터 그대로 돈다
-        return False, "키체인 창에 맥 로그인 암호를 넣고 '항상 허용'을 누른 뒤 다시 해 주세요."
+        return False, KEYCHAIN_WAIT_MESSAGE
     with task_lock:
         task_state = task_states.setdefault(task_key(workspace.user_id, kind), default_task_state())
         if task_state["running"]:
@@ -5397,8 +5401,10 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 # 넣어 둔 비밀번호를 저장소에서 못 꺼냈으면 '계정을 먼저 입력' 이 아니라 그 까닭을 말한다 (2026-10-22 맥)
                 problem = secret_read_problems(workspace).get("SCHOOL_EMAIL_PASSWORD")
                 if problem:
+                    message = (KEYCHAIN_WAIT_MESSAGE if secret_store.waiting()
+                               else secret_store.read_problem("학교 메일 비밀번호", problem))
                     self.send_json(
-                        {"ok": False, "message": secret_store.read_problem("학교 메일 비밀번호", problem)},
+                        {"ok": False, "message": message},
                         HTTPStatus.BAD_REQUEST,
                     )
                     return

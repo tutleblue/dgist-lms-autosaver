@@ -158,23 +158,13 @@ jobs:
             && verdict B "기다리는 동안 메일 새로고침" "✅ 시작하지 않고 키체인 안내 — ${MAIL_TEXT#HTTP * }" \
             || verdict B "기다리는 동안 메일 새로고침" "❌ $MAIL_RESULT — $MAIL_TEXT"
 
-          # '거부' 흉내: 묻는 창(SecurityAgent)을 끈다
-          pkill -x SecurityAgent 2>/dev/null || sudo pkill -x SecurityAgent 2>/dev/null || true
-          sleep 6
-          screencapture -x "$LOGS/B-after-deny.png" 2>/dev/null || true
-          H="$($API health)"; echo "건강: $H" | tee "$LOGS/B-health-denied.txt"
-          case "$H" in
-            denied*) verdict B "거부 뒤 알림" "✅ ${H#*| }" ;;
-            *) verdict B "거부 뒤 알림" "❌ $H (화면: B-after-deny.png)" ;;
-          esac
-          mail_probe B-denied 20
-          [ "$MAIL_RESULT" = keychain-message ] \
-            && verdict B "거부 뒤 메일 새로고침" "✅ '계정을 먼저 입력' 대신 — ${MAIL_TEXT#HTTP * }" \
-            || verdict B "거부 뒤 메일 새로고침" "❌ $MAIL_RESULT — $MAIL_TEXT"
-
-          # 되살리기: 설정에서 비밀번호를 다시 저장 → 못 읽는 옛 항목을 묻지 않고 지우고 이 판의 항목을 만든다
+          # '거부' 는 여기서 흉내 낼 수 없다: SecurityAgent 를 꺼도 창이 다시 떴다(2026-10-22 실행 39709767056 화면).
+          # 거부 뒤 흐름은 단위 흉내로 잰다. 여기서는 창을 못 본 사람처럼 창을 그대로 둔 채 비밀번호를 다시 저장한다
+          # → 못 읽는 옛 항목을 묻지 않고 지우고 이 판의 항목을 만든다 (예전엔 평문으로 남았다)
           save_settings
           $API markers "$DATA/config.json" | tee "$LOGS/B-resaved-markers.txt"
+          sleep 3
+          screencapture -x "$LOGS/B-after-resave.png" 2>/dev/null || true
           if grep -q '평문' "$LOGS/B-resaved-markers.txt"; then verdict B "비밀번호 다시 저장" "❌ 평문으로 남음 (키체인에 못 넣음)"
           else verdict B "비밀번호 다시 저장" "✅ 키체인에 다시 들어감 (맥 로그인 암호 없이)"; fi
           H="$($API health)"; echo "건강: $H" | tee "$LOGS/B-health-resaved.txt"

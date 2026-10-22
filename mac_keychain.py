@@ -82,6 +82,9 @@ _quiet = False
 # 앱을 다시 켜면 다시 묻고, 설정에서 비밀번호를 다시 저장하면 protect 가 이 판의 항목을 새로 만든다.
 _state = "ok"
 _denied_reason = [""]  # denied 가 된 까닭 (사람 말). 그 뒤 조용히 읽다 나는 '허락 없음' 으로 덮이지 않게
+# protect 가 항목을 새로 만들 때마다 하나씩 올린다. 창을 못 본 채 비밀번호를 다시 저장한 뒤에 그 옛 창에 답하면
+# unlock_interactive 가 옛 값으로 덮어쓰지 않게 (2026-10-22 CI: 창이 그대로 떠 있는 동안 다시 저장이 평문으로 남았다)
+_generation = 0
 # 표시('keychain:<키>')를 풀지 못한 마지막 까닭(사람 말). 비면 마지막 풀기는 됐다.
 # unprotect 는 못 읽으면 빈 문자열을 돌려주는데(DPAPI 실패와 같게), 그 빈 값이 '설정에서 계정을 먼저 입력해 주세요'·
 # 'LMS ID/비밀번호를 확인해 주세요' 로 보여 진짜 까닭(키체인 거부·다시 묻기)이 가려졌다.
@@ -92,7 +95,10 @@ class KeychainError(RuntimeError):
     def __init__(self, status: int, what: str = "") -> None:
         self.status = status
         text = _STATUS_TEXT.get(status, "키체인 오류")
-        super().__init__(f"{text} (OSStatus {status}{', ' + what if what else ''})")
+        if status == _ERR_WAITING:  # 우리끼리 쓰는 값이라 숫자는 보이지 않는다
+            super().__init__(text)
+        else:
+            super().__init__(f"{text} (OSStatus {status}{', ' + what if what else ''})")
 
 
 def is_marker(value: object) -> bool:
@@ -472,15 +478,20 @@ def unlock_interactive() -> bool:
                 _quiet = False  # 이미 읽었거나 물을 것이 없다: 이제부터는 예전처럼
             return _state == "ok"
         _state = "asking"
+        generation = _generation
     try:
         raw = _read_item()  # 여기서 'Daling 이 키체인의 "Daling" 키에 접근하려고 함' 창이 뜬다
     except KeychainError as exc:
         with _lock:
+            if generation != _generation:  # 그사이 비밀번호를 다시 저장해 새 항목이 있다: 이 창의 답은 버린다
+                return _state == "ok"
             _state = "denied"
             _quiet = True
             _last_error = _denied_reason[0] = str(exc)
         return False
     with _lock:
+        if generation != _generation:
+            return _state == "ok"
         _cache = _parse(raw)
         _state = "ok"
         _quiet = False
@@ -496,12 +507,13 @@ def protect(key: str, value: str) -> str:
     예전에는 여기서 실패해 부르는 쪽이 비밀번호를 config.json 에 평문으로 남겼다. 옛 항목의 다른 값은 잃는다 —
     그 값의 표시는 unprotect 가 '항목에 이 값이 없습니다' 로 알려 다시 넣게 한다.
     """
-    global _cache, _state, _quiet, _retry_at, _last_error
+    global _cache, _state, _quiet, _retry_at, _last_error, _generation
     with _lock:
         try:
             data = dict(_load(fresh=_cache is None))
         except KeychainError as exc:
-            if exc.status not in (-128, *_ERR_SILENT_DENIED):
+            # 묻는 창이 떠 있는 채(asking, 사용자가 못 봄)여도 같다: 지금 넣는 값으로 새로 만든다
+            if exc.status not in (-128, _ERR_WAITING, *_ERR_SILENT_DENIED):
                 raise
             with _no_prompt():
                 try:
@@ -510,6 +522,7 @@ def protect(key: str, value: str) -> str:
                     raise exc from None
             data = {}
             _retry_at = 0.0
+            _generation += 1
         if data.get(key) != value:
             data[key] = value
             _write_item(json.dumps(data, ensure_ascii=False))
