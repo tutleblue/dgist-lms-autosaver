@@ -44,7 +44,7 @@ SWEEP_GET = (
     "/api/deadlines.ics", "/api/demo", "/api/dgist-api/status", "/api/diagnostics", "/api/directory?q=",
     "/api/drive/get", "/api/drive/list", "/api/email-body?id=1", "/api/emails", "/api/fglp", "/api/file?path=x",
     "/api/files", "/api/files/bulk", "/api/health", "/api/local-autosave/job", "/api/mail-image",
-    "/api/mail/discard-draft", "/api/mail/eml", "/api/mail/folders", "/api/mail/me", "/api/mail/pending",
+    "/api/mail/discard-draft", "/api/mail/draft?uid=1", "/api/mail/eml", "/api/mail/folders", "/api/mail/me", "/api/mail/pending",
     "/api/my-events", "/api/notices", "/api/place-search?q=", "/api/samsung-notes/job", "/api/samsung-notes/status",
     "/api/school-events", "/api/selection", "/api/seminars", "/api/shelves", "/api/shuttle", "/api/status",
     "/api/storage", "/api/task", "/api/timetable", "/api/tutorial", "/api/ui-prefs", "/api/update/check",

@@ -2044,5 +2044,13 @@
  "AppImage 파일 자리를 찾지 못했어요.": "Couldn't find the AppImage file.",
  "이 컴퓨터에서는 쓸 수 없어요.": "Not available on this computer.",
  "컴퓨터 켤 때 실행": "Open at login",
- "Daling 을 보고 있지 않을 때는 15분마다 확인해요. 학교 메일 서버가 잦은 로그인을 막을 때가 있어서예요.": "When you're not looking at Daling, mail is checked every 15 minutes, because the school mail server sometimes blocks frequent logins."
+ "Daling 을 보고 있지 않을 때는 15분마다 확인해요. 학교 메일 서버가 잦은 로그인을 막을 때가 있어서예요.": "When you're not looking at Daling, mail is checked every 15 minutes, because the school mail server sometimes blocks frequent logins.",
+ "(본문 없음)": "(No message body)",
+ "메일 서버에서 읽지 못해 목록에 있는 내용으로 열었어요. 숨은참조·첨부는 빠졌을 수 있어요.": "Couldn't read it from the mail server, so it opened from the saved list. Bcc and attachments may be missing.",
+ "방금 옮긴 메일이에요. 메일을 다시 받은 뒤 열어 주세요.": "This mail was just moved. Refresh mail, then open it again.",
+ "임시 보관함에서 이어 쓰는 중": "Continuing a saved draft",
+ "첨부파일이 20MB 를 넘어 이어 쓸 수 없어요. 웹메일에서 열어 주세요.": "Attachments are over 20 MB, so this draft can't be continued here. Open it in webmail.",
+ "공유 문서함": "Shared with me",
+ "다시 연결": "Reconnect",
+ "지금은 Daling 이 올린 파일만 보여요. 내 Drive 전체를 보려면 Google 을 다시 연결해 주세요.": "Only files Daling uploaded are shown. Reconnect Google to see your whole Drive."
 }

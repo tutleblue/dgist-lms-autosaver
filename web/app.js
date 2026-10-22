@@ -1442,7 +1442,7 @@ async function renderMailBody(mail) {
     if (frame) frame.hidden = true;
     if (bar) bar.hidden = true;
     plain.hidden = false;
-    plain.textContent = mail.body || mail.snippet || "(본문을 불러오지 못했습니다)";
+    plain.textContent = mail.body || mail.snippet || (mail.bodyLoaded ? "(본문 없음)" : "(본문을 불러오지 못했습니다)");
     return;
   }
 
@@ -1460,6 +1460,10 @@ async function renderMailBody(mail) {
 }
 
 function openEmailDetail(mail) {
+  if (mail?.folder === "draft") {
+    resumeDraft(mail);
+    return;
+  }
   const color = CATEGORY_COLORS[mail.category] || "neutral";
   const chip = $("#readCategory");
   chip.className = `category-chip ${color}`;
@@ -1629,6 +1633,7 @@ function openCompose({ to = "", cc = "", bcc = "", subject = "", body = "", inRe
   form.dataset.inReplyTo = inReplyTo;
   form.dataset.references = references;
   form.dataset.draftId = "";
+  form.dataset.replaceUid = "";
   // 참조 줄은 늘 보이고, 숨은참조만 접었다 편다
   const bccField = $("#bccField");
   if (bccField) bccField.hidden = !bcc;
@@ -1650,6 +1655,62 @@ function openCompose({ to = "", cc = "", bcc = "", subject = "", body = "", inRe
   showMailPane("compose");
   resetMailFlow();
   form.elements[to ? "subject" : "to"].focus();
+}
+
+/* 임시 보관함의 메일은 '메일 쓰기' 로 열어 이어 쓴다 (2026-10-22 사용자: 받은 메일처럼 띄워 이어 쓸 수 없었다).
+   서버 원본에서 숨은참조·첨부·우리 번호(draftId)까지 채운다(/api/mail/draft). 다시 저장하면 이 임시 메일을 새 판으로
+   바꾸고, 보내거나 작성 취소하면 정리한다(replaceUid = 이 메일 번호 — 웹메일에서 만든 것은 우리 번호가 없다).
+   서버에서 못 읽으면 목록에 있는 내용으로라도 연다(숨은참조·첨부는 빠질 수 있다고 알린다). */
+async function resumeDraft(mail) {
+  if (state.mailPane === "compose" && autosave.dirty && composeHasContent()) {
+    window.clearTimeout(autosave.server);
+    await saveDraftToServer({ auto: true }); // 쓰던 다른 메일은 먼저 저장해 둔다
+  }
+  const known = mail.uid !== null && mail.uid !== undefined && !mail.pendingTrash;
+  let draft = null;
+  if (known) {
+    draftNote("");
+    try {
+      draft = await api(`/api/mail/draft?uid=${encodeURIComponent(mail.uid)}&folder=draft`);
+    } catch {
+      showToast("메일 서버에서 읽지 못해 목록에 있는 내용으로 열었어요. 숨은참조·첨부는 빠졌을 수 있어요.");
+    }
+  }
+  if (!draft) {
+    await ensureMailBody(mail).catch(() => {});
+    const to = mail.toEmail ? (mail.toName ? `${mail.toName} <${mail.toEmail}>` : mail.toEmail) : "";
+    draft = {
+      to,
+      cc: "",
+      bcc: "",
+      subject: mail.subject === "(제목 없음)" ? "" : mail.subject || "",
+      body: mail.bodyHtml || escapeHtml(mail.body || "").replace(/\n/g, "<br>"),
+      attachments: [],
+      draftId: "",
+    };
+  }
+  openCompose({ to: draft.to || "", cc: draft.cc || "", bcc: draft.bcc || "", subject: draft.subject || "" });
+  setComposeBody(draft.body || "");
+  const form = $("#composeForm");
+  form.dataset.draftId = draft.draftId || "";
+  form.dataset.replaceUid = known ? String(mail.uid) : "";
+  state.attachments = (draft.attachments || []).map((a) => ({ filename: a.filename, size: a.size, content: a.content }));
+  renderAttachments();
+  // 연 그대로는 다시 저장하지 않는다 (손대면 그때 자동 저장)
+  autosave.lastSig = draftSignature(collectDraft());
+  autosave.dirty = false;
+  draftNote(draft.draftId || known ? "임시 보관함에서 이어 쓰는 중" : "");
+  // 받는 사람이 있으면 본문 끝에 커서를 둔다 (앞에 두면 이어 쓴 글이 맨 앞에 붙었다)
+  const body = $("#composeRich");
+  if (body && (draft.to || "").trim()) {
+    body.focus();
+    const range = document.createRange();
+    range.selectNodeContents(body);
+    range.collapse(false);
+    const sel = window.getSelection();
+    sel?.removeAllRanges();
+    sel?.addRange(range);
+  }
 }
 
 /** '←' 목록으로: 쓰던 내용은 바로 저장해 두고 닫는다 */
@@ -1675,10 +1736,12 @@ async function discardCompose() {
     if (!ok) return;
   }
   const id = form?.dataset.draftId;
+  const replaceUid = form?.dataset.replaceUid || "";
   clearAutosave();
-  if (id) {
-    api("/api/mail/discard-draft", { method: "POST", body: JSON.stringify({ draftId: id }) }).catch(() => {});
+  if (id || replaceUid) {
+    api("/api/mail/discard-draft", { method: "POST", body: JSON.stringify({ draftId: id || "", replaceUid }) }).catch(() => {});
     form.dataset.draftId = "";
+    form.dataset.replaceUid = "";
   }
   state.attachments = [];
   showMailPane("list");
@@ -2412,6 +2475,7 @@ function saveLocalDraft() {
   const d = collectDraft();
   if (!d) return;
   d.draftId = ensureDraftId();
+  d.replaceUid = $("#composeForm").dataset.replaceUid || "";
   try {
     localStorage.setItem(DRAFT_KEY, JSON.stringify(d));
   } catch (error) {
@@ -2441,6 +2505,7 @@ async function saveDraftToServer({ auto }) {
       body: JSON.stringify({
         ...d,
         draftId: ensureDraftId(),
+        replaceUid: $("#composeForm").dataset.replaceUid || "",
         attachments: withAtts ? atts.map((a) => ({ filename: a.filename, content: a.content })) : [],
       }),
     });
@@ -2548,6 +2613,7 @@ async function restoreDraftIfAny() {
   const form = $("#composeForm");
   // 같은 번호로 이어서 저장해야 서버 임시 보관함에 같은 메일이 여러 벌 생기지 않는다
   if (draft.draftId) form.dataset.draftId = draft.draftId;
+  form.dataset.replaceUid = draft.replaceUid || "";
   if (form.elements.to) form.elements.to.value = draft.to;
   if (form.elements.cc) form.elements.cc.value = draft.cc;
   if (form.elements.bcc) form.elements.bcc.value = draft.bcc;
@@ -6477,6 +6543,7 @@ function bindEvents() {
       references: form.dataset.references || "",
       attachments: (state.attachments || []).map((a) => ({ filename: a.filename, content: a.content })),
       draftId: form.dataset.draftId || "",
+      replaceUid: form.dataset.replaceUid || "",
     };
     if (!payload.to) {
       showToast("받는 사람 주소를 입력해 주세요.");
@@ -6513,6 +6580,7 @@ function bindEvents() {
       window.setTimeout(() => refreshMailNow?.(), 800);
       clearAutosave();
       form.dataset.draftId = ""; // 서버 임시저장본은 보내면서 서버가 정리했다
+      form.dataset.replaceUid = "";
       state.attachments = [];
       showMailPane("list");
     } catch (error) {
@@ -13541,6 +13609,8 @@ async function openDrivePicker() {
       <nav class="drive-crumbs" aria-label="폴더 위치"></nav>
       <label class="drive-search">${iconHtml("search")}<input type="search" placeholder="Drive에서 파일 이름 찾기" /></label>
     </div>
+    <p class="drive-scope-note" hidden>지금은 Daling 이 올린 파일만 보여요. 내 Drive 전체를 보려면 Google 을 다시 연결해 주세요.
+      <button type="button" class="button compact" data-act="reconnect">다시 연결</button></p>
     <div class="drive-list" role="listbox" aria-multiselectable="true"></div>
     <div class="app-dialog-actions">
       <span class="drive-picked"></span>
@@ -13604,6 +13674,8 @@ async function openDrivePicker() {
       const data = await api(`/api/drive/list?${params}`);
       if (my !== seq) return; // 그새 다른 폴더를 열었다
       current = data;
+      // 예전에 연결한 토큰(drive.file 만)은 앱이 올린 파일만 보인다 → 다시 연결하면 내 Drive 전체
+      dlg.querySelector(".drive-scope-note").hidden = data.fullAccess !== false;
       const rows = [...(data.folders || []), ...(data.files || [])];
       list.innerHTML = rows.length
         ? rows.map(rowHtml).join("")
@@ -13673,6 +13745,11 @@ async function openDrivePicker() {
       const act = event.target.closest("[data-act]")?.dataset.act;
       if (act === "cancel") finish(null);
       if (act === "ok" && picked.size) finish([...picked.values()]);
+      if (act === "reconnect") {
+        // 설정의 'Google 연결' 과 같은 길 (새 권한까지 묻는다). 브라우저에서 허락한 뒤 이 창을 다시 열면 된다
+        finish(null);
+        $("#googleLoginButton")?.click();
+      }
     });
     dlg.addEventListener("cancel", (event) => {
       event.preventDefault();

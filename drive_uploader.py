@@ -74,11 +74,15 @@ def authorize_drive(force=False, interactive=True):
         # PKCE: 매번 새로 만드는 검증값이 있어야 인증 코드를 토큰으로 바꿀 수 있다.
         # 데스크톱 앱은 client_secret 을 비밀로 지킬 수 없으므로, 보안이 여기에 기댄다.
         flow.autogenerate_code_verifier = True
+        # 권한 하나를 끄고 허락해도 연결은 되게, 그리고 실제로 허락한 권한만 적는다 (runtime_config.granted_token_json)
+        os.environ.setdefault("OAUTHLIB_RELAX_TOKEN_SCOPE", "1")
         creds = flow.run_local_server(port=0)
+
+    from runtime_config import granted_token_json
 
     os.makedirs(os.path.dirname(TOKEN_PATH), exist_ok=True)
     with open(TOKEN_PATH, 'w', encoding='utf-8') as token:
-        token.write(creds.to_json())
+        token.write(granted_token_json(creds))
     _service = None
     print("Google Drive OAuth 연결 완료!")
     return creds

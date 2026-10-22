@@ -1967,6 +1967,73 @@ def fetch_raw_message(uid: int, folder_key: str = "inbox") -> bytes:
     return max(chunks, key=len)
 
 
+def load_draft(uid: int, folder_key: str = "draft", max_attach: int = 20 * 1024 * 1024) -> dict:
+    """임시 보관함의 메일을 '메일 쓰기' 에 다시 채울 모양으로 (받는 사람·참조·숨은참조·제목·본문·첨부·번호).
+
+    예전엔 임시 보관함의 메일을 받은 메일처럼 읽기 화면에 띄워 이어 쓸 수 없었다(2026-10-22 사용자).
+    목록에 저장한 본문만으로는 숨은참조·첨부 내용·우리 번호 머리말이 없어 서버 원본을 읽는다(BODY.PEEK, 읽기만).
+    """
+    import email as email_lib
+    import html as html_lib
+    from email import policy
+
+    msg = email_lib.message_from_bytes(fetch_raw_message(uid, folder_key), policy=policy.default)
+    draft_id = str(msg.get(DRAFT_HEADER, "") or "").strip()
+    subject = str(msg.get("Subject", "") or "")
+    if draft_id and subject == "(제목 없음)":
+        subject = ""  # 우리 앱이 빈 제목 대신 넣은 글자 (build_message)
+    html_body, text_body = "", ""
+    attachments, inline = [], {}
+    total = 0
+    for part in msg.walk():
+        if part.is_multipart():
+            continue
+        ctype = part.get_content_type()
+        filename = part.get_filename()
+        disposition = (part.get_content_disposition() or "").lower()
+        if not filename and disposition != "attachment" and ctype in ("text/html", "text/plain"):
+            try:
+                content = part.get_content()
+            except Exception:
+                content = (part.get_payload(decode=True) or b"").decode("utf-8", "replace")
+            if ctype == "text/html" and not html_body:
+                html_body = content
+            elif ctype == "text/plain" and not text_body:
+                text_body = content
+            continue
+        data = part.get_payload(decode=True) or b""
+        cid = str(part.get("Content-ID", "") or "").strip("<> ")
+        if cid and ctype.startswith("image/") and disposition != "attachment":
+            inline[cid] = (ctype, data)  # 본문 그림은 편집기에서 보이게 data: 로 넣는다
+            continue
+        total += len(data)
+        if total > max_attach:
+            raise ValueError("첨부파일이 20MB 를 넘어 이어 쓸 수 없어요. 웹메일에서 열어 주세요.")
+        attachments.append({
+            "filename": unicodedata.normalize("NFC", str(filename or "첨부파일")),
+            "size": len(data),
+            "content": base64.b64encode(data).decode("ascii"),
+        })
+    if html_body:
+        match = re.search(r"<body[^>]*>(.*)</body>", html_body, flags=re.I | re.S)
+        body = match.group(1) if match else html_body
+        for cid, (ctype, data) in inline.items():
+            body = body.replace(f"cid:{cid}", f"data:{ctype};base64,{base64.b64encode(data).decode('ascii')}")
+    else:
+        body = html_lib.escape(text_body).replace("\r\n", "\n").replace("\n", "<br>")
+    return {
+        "ok": True,
+        "uid": int(uid),
+        "draftId": draft_id,
+        "to": str(msg.get("To", "") or ""),
+        "cc": str(msg.get("Cc", "") or ""),
+        "bcc": str(msg.get("Bcc", "") or ""),
+        "subject": subject,
+        "body": body.strip(),
+        "attachments": attachments,
+    }
+
+
 def delete_message(uid: int, folder_key: str = "inbox", permanent: bool = False) -> dict:
     """메일을 휴지통으로 옮긴다.
 
@@ -2098,17 +2165,22 @@ def _message_bytes(msg) -> bytes:
 DRAFT_HEADER = "X-Bungeoppang-Draft"
 
 
-def _drop_old_drafts(client, draft_id: str) -> int:
+def _drop_old_drafts(client, draft_id: str, replace_uid: int = 0) -> int:
     """우리가 넣었던 같은 임시저장본에 지운 표시만 한다.
 
     EXPUNGE 는 절대 보내지 않는다(임시 보관함의 지운 표시 전부가 영구 삭제된다).
     앱은 NOT DELETED 로 찾으니 지운 표시만으로 안 보인다.
+    replace_uid: 임시 보관함에서 열어 이어 쓰던 메일(웹메일에서 만든 것은 우리 번호 머리말이 없다).
+    임시 보관함 안의 번호만 본다(다른 폴더의 같은 번호를 건드리지 않게 이 폴더를 고른 뒤에 표시한다).
     """
     raw = client.find_folder("임시")
-    if not raw or not draft_id or not client.select_folder(raw):
+    if not raw or not (draft_id or replace_uid) or not client.select_folder(raw):
         return 0
+    uids = set(client.search_header(DRAFT_HEADER, draft_id)) if draft_id else set()
+    if replace_uid and int(replace_uid) > 0:
+        uids.add(int(replace_uid))
     n = 0
-    for uid in client.search_header(DRAFT_HEADER, draft_id):
+    for uid in sorted(uids):
         if client.store_flag(uid, "\\Deleted", True):
             n += 1
     return n
@@ -2120,7 +2192,7 @@ def send_email(to_addr: str, subject: str, body: str,
                attachments: list | None = None,
                account: str | None = None, password: str | None = None,
                host: str | None = None, port: int | None = None,
-               imap_host: str | None = None, draft_id: str = "") -> dict:
+               imap_host: str | None = None, draft_id: str = "", replace_uid: int = 0) -> dict:
     """SMTP(SSL)로 메일 발송. 참조(cc)/숨은참조(bcc)/첨부파일/HTML 지원.
 
     보낸 뒤 서버의 '보낸 편지함'에 사본을 넣는다. 예전에는 넣지 않아서
@@ -2159,8 +2231,8 @@ def send_email(to_addr: str, subject: str, body: str,
             raw = client.find_folder("보낸")
             if raw:
                 saved = client.append(raw, _message_bytes(msg), "(\\Seen)")
-            if draft_id:
-                _drop_old_drafts(client, draft_id)
+            if draft_id or replace_uid:
+                _drop_old_drafts(client, draft_id, replace_uid)
     except Exception as exc:
         print(f"보낸 편지함에 사본을 넣지 못했습니다: {exc}")
     return {
@@ -2174,21 +2246,21 @@ def send_email(to_addr: str, subject: str, body: str,
 
 
 def discard_draft(draft_id: str, account: str | None = None, password: str | None = None,
-                  imap_host: str | None = None) -> int:
+                  imap_host: str | None = None, replace_uid: int = 0) -> int:
     """'작성 취소' 한 메일의 서버 임시저장본(자동 저장 포함)에 지운 표시를 한다. EXPUNGE 안 함."""
     account = account or SCHOOL_EMAIL
     password = password or SCHOOL_EMAIL_PASSWORD
-    if not draft_id or not account or not password:
+    if not (draft_id or replace_uid) or not account or not password:
         return 0
     with imap_session(account, password, imap_host) as client:
-        return _drop_old_drafts(client, draft_id)
+        return _drop_old_drafts(client, draft_id, replace_uid)
 
 
 def save_draft(to_addr: str, subject: str, body: str, cc: str = "", bcc: str = "",
                html: bool = False, attachments: list | None = None,
                account: str | None = None, password: str | None = None,
-               imap_host: str | None = None, draft_id: str = "") -> dict:
-    """서버의 '임시 보관함'에 넣는다. 같은 draft_id 로 넣었던 예전 판은 지운 표시."""
+               imap_host: str | None = None, draft_id: str = "", replace_uid: int = 0) -> dict:
+    """서버의 '임시 보관함'에 넣는다. 같은 draft_id 로 넣었던 예전 판(과 이어 쓰던 replace_uid)은 지운 표시."""
     account = account or SCHOOL_EMAIL
     password = password or SCHOOL_EMAIL_PASSWORD
     if not account or not password:
@@ -2204,7 +2276,7 @@ def save_draft(to_addr: str, subject: str, body: str, cc: str = "", bcc: str = "
         raw = client.find_folder("임시")
         if not raw:
             raise RuntimeError("메일 서버에서 임시 보관함을 찾지 못했습니다.")
-        replaced = _drop_old_drafts(client, draft_id) if draft_id else 0
+        replaced = _drop_old_drafts(client, draft_id, replace_uid) if (draft_id or replace_uid) else 0
         ok = client.append(raw, _message_bytes(msg), "(\\Seen \\Draft)")
         if not ok:
             raise RuntimeError("메일 서버가 임시저장을 받아 주지 않았습니다.")

@@ -368,7 +368,30 @@ GOOGLE_CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar.app.created"
 GOOGLE_CALENDAR_LIST_SCOPE = "https://www.googleapis.com/auth/calendar.calendarlist.readonly"
 # 예전에 연결한 사람의 token.json 에는 이 권한이 남아 있다. 그대로 계속 쓸 수 있다.
 GOOGLE_LEGACY_CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar"
-GOOGLE_SCOPES = [GOOGLE_DRIVE_SCOPE, GOOGLE_CALENDAR_SCOPE, GOOGLE_CALENDAR_LIST_SCOPE]
+# 메일 'Drive에서 첨부' 가 내 Drive 전체(공유받은 파일 포함)를 보려면 읽기 권한이 든다. drive.file 만으로는 Daling 이
+# 올린 파일(붕어빵·AutoSaver 폴더)만 보였다(2026-10-22 사용자: '전체 폴더가 안 나온다' → 권한 넓히기로 결정).
+# 구글은 이것을 '제한된 범위' 로 분류한다: 구글 심사(보안 평가 포함)를 받기 전까지 연결할 때 '확인되지 않은 앱' 경고가 뜬다.
+# 쓰기는 지금처럼 drive.file 로만 한다(읽기 전용이라 남의 파일을 고치거나 지울 수 없다).
+GOOGLE_DRIVE_READ_SCOPE = "https://www.googleapis.com/auth/drive.readonly"
+GOOGLE_SCOPES = [GOOGLE_DRIVE_SCOPE, GOOGLE_CALENDAR_SCOPE, GOOGLE_CALENDAR_LIST_SCOPE, GOOGLE_DRIVE_READ_SCOPE]
+
+
+def granted_token_json(creds) -> str:
+    """연결을 마친 토큰을 token.json 으로. 'scopes' 에는 사용자가 실제로 허락한 권한만 적는다.
+
+    구글 동의 화면은 권한을 하나씩 끌 수 있다(예: 경고가 뜨는 Drive 전체 읽기만 끄기). google-auth 의 to_json 은
+    '요청한' 권한을 적어, 앱이 없는 권한을 있는 줄 알고(Drive 창이 조용히 일부만 보임) 갱신 때 그 권한까지 달라고 했다.
+    부르는 쪽은 OAUTHLIB_RELAX_TOKEN_SCOPE 를 켜 둔다 — 안 켜면 하나만 꺼도 'Scope has changed' 로 연결 전체가 실패한다.
+    """
+    import json
+
+    data = json.loads(creds.to_json())
+    granted = getattr(creds, "granted_scopes", None)
+    if isinstance(granted, str):
+        granted = granted.split()
+    if granted:
+        data["scopes"] = list(granted)
+    return json.dumps(data)
 
 
 def calendar_scope_granted(granted: set[str] | list[str]) -> bool:

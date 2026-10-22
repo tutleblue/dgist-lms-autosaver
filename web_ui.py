@@ -63,7 +63,7 @@ DRIVE_CREDENTIALS_PATH = Path(
 GOOGLE_OAUTH_PENDING_PATH = AUTOSAVER_ROOT / "oauth_pending.json"
 FALLBACK_COURSE_MAP = PROJECT_ROOT / "file_course_map.json"
 from runtime_config import GOOGLE_SCOPES as _GOOGLE_SCOPES
-from runtime_config import calendar_scope_granted
+from runtime_config import GOOGLE_DRIVE_READ_SCOPE, calendar_scope_granted
 from runtime_config import atomic_write_text
 
 GOOGLE_OAUTH_SCOPE = _GOOGLE_SCOPES[0]
@@ -702,6 +702,7 @@ def get_google_oauth_status(workspace: UserWorkspace, base_url: str | None = Non
         token_data = read_json(workspace.token_path, {})
         granted = set(token_data.get("scopes") or []) if isinstance(token_data, dict) else set()
         status["calendarGranted"] = calendar_scope_granted(granted)
+        status["driveFullGranted"] = GOOGLE_DRIVE_READ_SCOPE in granted
     except Exception as exc:
         status["error"] = str(exc)
     return status
@@ -752,9 +753,13 @@ def finish_google_oauth(code: str, state: str) -> tuple[UserWorkspace, dict[str,
         code_verifier=saved_state.get("code_verifier"),
         autogenerate_code_verifier=False,
     )
+    # 권한 하나를 끄고 허락해도 연결은 되게 (runtime_config.granted_token_json)
+    os.environ.setdefault("OAUTHLIB_RELAX_TOKEN_SCOPE", "1")
     flow.fetch_token(code=code)
     workspace.root.mkdir(parents=True, exist_ok=True)
-    atomic_write_text(workspace.token_path, flow.credentials.to_json(), encoding="utf-8")
+    from runtime_config import granted_token_json
+
+    atomic_write_text(workspace.token_path, granted_token_json(flow.credentials), encoding="utf-8")
     return workspace, saved_state
 
 
@@ -1656,6 +1661,14 @@ _IMAGE_EXT = {
     "image/webp": ".webp",
     "image/svg+xml": ".svg",
 }
+
+
+def _int_or_zero(value: Any) -> int:
+    """화면이 보낸 번호(이어 쓰던 임시 메일 uid 등). 숫자가 아니면 0."""
+    try:
+        return max(0, int(str(value or "0").strip() or 0))
+    except (TypeError, ValueError):
+        return 0
 
 
 def mail_image_path(workspace: UserWorkspace, mail_id: str, index: int, mime: str = "") -> Path:
@@ -4839,6 +4852,18 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             except Exception as exc:
                 self.send_json({"ok": False, "items": [], "message": str(exc)})
             return
+        if route == "/api/mail/draft":
+            # 임시 보관함의 메일을 '메일 쓰기' 에 다시 채운다 (이어 쓰기, email_reader.load_draft)
+            try:
+                import email_reader
+
+                uid_text = params.get("uid", [""])[0]
+                if not uid_text.isdigit():
+                    raise ValueError("방금 옮긴 메일이에요. 메일을 다시 받은 뒤 열어 주세요.")
+                self.send_json(email_reader.load_draft(int(uid_text), params.get("folder", ["draft"])[0]))
+            except Exception as exc:
+                self.send_json({"ok": False, "message": str(exc)}, HTTPStatus.BAD_REQUEST)
+            return
         if route == "/api/mail/eml":
             # 메일 원본을 .eml 파일로 내려준다
             try:
@@ -5086,16 +5111,21 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             return
         if route == "/api/drive/list":
             # 메일 첨부용 Drive 창. 폴더 안(parent) 또는 검색(q) 결과를 폴더·파일로 나눠 준다.
-            # 앱 권한이 drive.file 이라 이 앱이 올린 파일(강의자료 등)만 보인다.
+            # drive.readonly 를 받은 토큰이면 내 Drive 전체·공유 문서함, 예전 토큰(drive.file 만)은 이 앱이 올린 파일만 보인다
+            # (fullAccess 로 알려 화면이 'Google 다시 연결' 을 권한다).
             parent = (params.get("parent", [""])[0] or "root").strip()
             q = (params.get("q", [""])[0] or "").strip()
             token = (params.get("pageToken", [""])[0] or "").strip() or None
             try:
                 import drive_uploader
                 service = drive_uploader.get_drive_service()
+                granted = read_json(workspace.token_path, {}) or {}
+                full = GOOGLE_DRIVE_READ_SCOPE in set(granted.get("scopes") or []) if isinstance(granted, dict) else False
                 if q:
                     safe = q.replace("\\", "").replace("'", "\\'")
                     query = f"trashed=false and name contains '{safe}'"
+                elif parent == "shared":
+                    query = "trashed=false and sharedWithMe"  # '공유 문서함' (내 드라이브 폴더 밖)
                 else:
                     safe_parent = parent.replace("'", "")
                     query = f"trashed=false and '{safe_parent}' in parents"
@@ -5105,14 +5135,19 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                     q=query,
                     orderBy="folder,name_natural",
                     fields="nextPageToken, files(id,name,size,mimeType,modifiedTime)",
+                    supportsAllDrives=True,
+                    includeItemsFromAllDrives=True,
                 ).execute()
                 items = results.get("files", [])
                 folders = [f for f in items if f.get("mimeType") == "application/vnd.google-apps.folder"]
                 files = [f for f in items if f.get("mimeType") != "application/vnd.google-apps.folder"]
+                if full and not q and parent == "root" and not token:
+                    folders.insert(0, {"id": "shared", "name": "공유 문서함", "mimeType": "application/vnd.google-apps.folder"})
                 self.send_json({
                     "ok": True,
                     "folders": folders,
                     "files": files,
+                    "fullAccess": full,
                     "nextPageToken": results.get("nextPageToken", ""),
                 })
             except Exception as exc:
@@ -5124,7 +5159,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 import base64 as _b64
                 import drive_uploader
                 service = drive_uploader.get_drive_service()
-                meta = service.files().get(fileId=file_id, fields="name,size,mimeType").execute()
+                meta = service.files().get(fileId=file_id, fields="name,size,mimeType", supportsAllDrives=True).execute()
                 name = meta.get("name", "file")
                 mime = str(meta.get("mimeType", ""))
                 if mime.startswith("application/vnd.google-apps."):
@@ -5132,7 +5167,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                     content = service.files().export(fileId=file_id, mimeType="application/pdf").execute()
                     name = f"{name}.pdf"
                 else:
-                    content = service.files().get_media(fileId=file_id).execute()
+                    content = service.files().get_media(fileId=file_id, supportsAllDrives=True).execute()
                 if len(content) > 20 * 1024 * 1024:
                     raise ValueError("파일이 20MB를 넘어 메일에 붙일 수 없습니다.")
                 self.send_json({
@@ -5174,7 +5209,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
     # ===== 체험 모드 (demo_mode) =====
     # 화면 서버가 바깥 서버에 묻는 라우트를 체험 중에는 여기서 먼저 받는다. 소켓 차단(demo_mode)은 빠뜨린 곳을 위한 안전망.
     DEMO_BLOCKED_GET = {
-        "/api/mail/eml", "/api/mail-image", "/api/drive/list", "/api/drive/get",
+        "/api/mail/eml", "/api/mail/draft", "/api/mail-image", "/api/drive/list", "/api/drive/get",
         "/api/place-search", "/api/fglp", "/api/seminars",
     }
     DEMO_BLOCKED_POST = {
@@ -5517,6 +5552,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                     port=int(config.get("SCHOOL_SMTP_PORT", 465) or 465),
                     imap_host=config.get("SCHOOL_IMAP_HOST", "mail.dgist.ac.kr"),
                     draft_id=str(payload.get("draftId", "")),
+                    replace_uid=_int_or_zero(payload.get("replaceUid")),
                 )
                 message = f"메일을 보냈습니다: {result['to']}"
                 if result.get("refused"):
@@ -5538,6 +5574,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                     account=config.get("SCHOOL_EMAIL"),
                     password=config.get("SCHOOL_EMAIL_PASSWORD"),
                     imap_host=config.get("SCHOOL_IMAP_HOST", "mail.dgist.ac.kr"),
+                    replace_uid=_int_or_zero(payload.get("replaceUid")),
                 )
                 self.send_json({"ok": True, "dropped": n})
             except Exception as exc:
@@ -5566,6 +5603,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                     password=config.get("SCHOOL_EMAIL_PASSWORD"),
                     imap_host=config.get("SCHOOL_IMAP_HOST", "mail.dgist.ac.kr"),
                     draft_id=str(payload.get("draftId", "")),
+                    replace_uid=_int_or_zero(payload.get("replaceUid")),
                 )
                 self.send_json({"ok": True, "message": "임시 보관함에 저장했습니다.", **result})
             except Exception as exc:

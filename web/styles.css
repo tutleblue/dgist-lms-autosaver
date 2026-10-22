@@ -9817,6 +9817,13 @@ html.vt-quick::view-transition-new(topbar) { animation: vt-soft-fade 0.15s ease 
 .drive-row-meta { font-size: 11.5px; color: var(--text-faint); white-space: nowrap; }
 .drive-row.folder .drive-row-meta .icon { display: inline-block; transform: rotate(-90deg); }
 .drive-empty { margin: 32px 0; text-align: center; font-size: 13px; color: var(--text-faint); line-height: 1.6; }
+/* 예전 구글 연결(앱이 올린 파일만 보임)일 때 'Google 다시 연결' 안내 */
+.drive-scope-note {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  margin: 0 0 8px; padding: 8px 10px; border-radius: 10px;
+  background: var(--accent-soft); color: var(--text); font-size: 12.5px; line-height: 1.5;
+}
+.drive-scope-note .button { flex: none; }
 .drive-picked { margin-right: auto; font-size: 12.5px; color: var(--text-soft); }
 
 .drive-row.too-big { opacity: .45; cursor: not-allowed; }
