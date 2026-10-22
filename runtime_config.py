@@ -174,6 +174,28 @@ def _keychain_unprotect(text: str) -> str:
         return ""
 
 
+# 작업 프로세스(--autosaver-job)가 키체인을 직접 읽지 않게, 앱 본체(web_ui.run_process)가 풀어 둔 비밀 값을
+# 표준 입력 한 줄(JSON)로 넘겨준다. 맥은 업데이트마다 키체인이 다시 묻는데(FEATURES '서명 인증서'), 작업 프로세스가
+# 읽으면 60분·180분마다 뒤에서 암호 창이 뜨고, '거부' 하면 빈 비밀번호로 로그인 실패가 되어 자동 재시도가 멈췄다
+# (2026-10-21 맥·리눅스 점검 4번). 파이프는 두 프로세스 사이에만 있어 환경 변수·파일처럼 남이 볼 수 없다.
+SECRETS_STDIN_FLAG = "AUTOSAVER_SECRETS_STDIN"
+
+
+def _read_handed_secrets() -> dict[str, str] | None:
+    """앱 본체가 넘긴 비밀 값. 넘겨받는 작업이 아니면 None (예전처럼 저장소에서 직접 읽는다)."""
+    if os.environ.pop(SECRETS_STDIN_FLAG, "") != "1":  # 손주 프로세스(node 등)에 물려주지 않게 바로 뺀다
+        return None
+    try:
+        line = sys.stdin.readline() if sys.stdin else ""
+        data = json.loads(line) if line.strip() else {}
+    except Exception:
+        data = {}
+    return {str(k): str(v) for k, v in data.items()} if isinstance(data, dict) else {}
+
+
+_HANDED_SECRETS = _read_handed_secrets()
+
+
 def _load_config() -> dict[str, Any]:
     if CONFIG_JSON_PATH.exists():
         data = _read_json(CONFIG_JSON_PATH)
@@ -188,7 +210,8 @@ def _load_config() -> dict[str, Any]:
         if isinstance(value, str) and value.startswith(DPAPI_PREFIX):
             data[key] = _dpapi_unprotect(value)
         elif _is_store_marker(value):  # 맥: 'keychain:' 만, 리눅스: 'keychain:'·'secretfile:', Windows: 없음
-            data[key] = _keychain_unprotect(value)
+            # 넘겨받은 작업은 저장소를 아예 열지 않는다 — 본체가 못 읽은 값(빈 문자열)도 여기서 묻지 않는다
+            data[key] = _HANDED_SECRETS.get(key, "") if _HANDED_SECRETS is not None else _keychain_unprotect(value)
     return data
 
 

@@ -30,6 +30,7 @@ import urllib.request
 from urllib.parse import parse_qs, quote, urlencode, urlparse
 
 import demo_mode
+import autostart
 import secret_store
 
 
@@ -4165,6 +4166,22 @@ def _run_emails_here(key: str) -> int:
             pass
 
 
+def _secret_handover(workspace: UserWorkspace) -> str | None:
+    """작업 프로세스에 표준 입력으로 넘길 비밀 값(JSON 한 줄). 맥·리눅스만 (Windows 는 DPAPI 라 묻는 창이 없다).
+
+    본체가 저장소(키체인·키링)를 읽고(한 번 읽으면 기억한다) 작업은 저장소를 열지 않는다 — runtime_config._HANDED_SECRETS.
+    """
+    if not secret_store.supported():
+        return None
+    raw = read_json(workspace.config_path, {})
+    handed = {}
+    for key in SECRET_KEYS:
+        value = raw.get(key) if isinstance(raw, dict) else None
+        if secret_store.is_marker(value):
+            handed[key] = dpapi_unprotect(value)
+    return json.dumps(handed, ensure_ascii=False) + "\n"
+
+
 def run_process(workspace: UserWorkspace, kind: str, command: list[str] | None, extra_env: dict[str, str] | None = None, auto: bool = False) -> None:
     key = task_key(workspace.user_id, kind)
     env = os.environ.copy()
@@ -4198,9 +4215,15 @@ def run_process(workspace: UserWorkspace, kind: str, command: list[str] | None, 
         return_code = _run_emails_here(key)
     else:
       try:
+        handover = _secret_handover(workspace)
+        if handover is not None:
+            from runtime_config import SECRETS_STDIN_FLAG
+
+            env[SECRETS_STDIN_FLAG] = "1"
         process = subprocess.Popen(
             command,
             cwd=str(PROJECT_ROOT),
+            stdin=subprocess.PIPE if handover is not None else None,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
@@ -4208,6 +4231,11 @@ def run_process(workspace: UserWorkspace, kind: str, command: list[str] | None, 
             errors="replace",
             env=env,
         )
+        if handover is not None and process.stdin is not None:
+            try:
+                process.stdin.write(handover)
+            finally:
+                process.stdin.close()
         with task_lock:
             current_processes[key] = process
 
@@ -4759,6 +4787,11 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         if route == "/api/whats-new":
             self.send_json(get_whats_new(workspace))
             return
+        if route == "/api/autostart":
+            # 맥·리눅스 '컴퓨터를 켤 때 Daling 켜기' (autostart.py). Windows 는 설치 파일이 맡아 supported=False
+            supported = autostart.supported() and not MULTI_USER_MODE
+            self.send_json({"ok": True, "supported": supported, "enabled": supported and autostart.enabled()})
+            return
         if route == "/api/tutorial":
             self.send_json(get_tutorial_state(workspace))
             return
@@ -5078,6 +5111,8 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         "/api/save-local", "/api/export-ics",
         # AI CLI 는 바깥 서비스에 묻는다
         "/api/ai/search", "/api/ai/draft", "/api/ai/polish", "/api/ai/continue",
+        # 로그인 항목(LaunchAgents·~/.config/autostart)에 쓰지 않는다
+        "/api/autostart",
     }
     DEMO_MAIL_POST = {
         "/api/mark-read": "mark-read", "/api/mark-all-read": "mark-all-read", "/api/delete-email": "delete",
@@ -5268,6 +5303,10 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 HTTPStatus.FORBIDDEN,
             )
             return
+        # 본문을 먼저 다 읽어 둔다(처리는 read_body_json 이 담아 둔 값을 쓴다). 체험 모드에서 막는 길처럼 본문을 안 읽고
+        # 답하면, 연결을 닫을 때 읽지 않은 본문 때문에 운영체제가 연결을 끊어(RST) 화면이 답을 못 받았다
+        # (2026-10-22 POST 점검에서 실측: WinError 10053).
+        self.read_body_json()
         workspace = self.get_workspace()
         base_url = self.request_base_url()
         route = urlparse(self.path).path
@@ -5811,6 +5850,15 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         if route == "/api/open-url":
             try:
                 self.send_json(open_external_url(self.read_body_json()))
+            except Exception as exc:
+                self.send_json({"ok": False, "message": str(exc)}, HTTPStatus.BAD_REQUEST)
+            return
+        if route == "/api/autostart":
+            try:
+                if MULTI_USER_MODE:
+                    raise ValueError("공유 웹사이트 모드에서는 쓰지 않습니다.")
+                result = autostart.set_enabled(bool(self.read_body_json().get("on")))
+                self.send_json(result, HTTPStatus.OK if result.get("ok") else HTTPStatus.BAD_REQUEST)
             except Exception as exc:
                 self.send_json({"ok": False, "message": str(exc)}, HTTPStatus.BAD_REQUEST)
             return

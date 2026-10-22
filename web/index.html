@@ -1632,6 +1632,14 @@
                 </span>
                 <span class="toggle"><input type="checkbox" name="notifyNewFiles" id="notifyNewFiles" /><span class="track"></span></span>
               </label>
+              <!-- 맥·리눅스만 (/api/autostart). Windows 는 설치할 때 고른다 -->
+              <label class="st-auto-item" id="autostartRow" hidden>
+                <span class="icon" data-icon="monitor"></span>
+                <span class="st-auto-label">컴퓨터 켤 때 실행
+                  <button type="button" class="hint" data-hint="자동으로 가져오기는 Daling 이 켜져 있을 때만 돌아요. 켜 두면 컴퓨터에 로그인할 때 Daling 도 함께 켜집니다.">?</button>
+                </span>
+                <span class="toggle"><input type="checkbox" id="autostartToggle" /><span class="track"></span></span>
+              </label>
             </div>
           </section>
 

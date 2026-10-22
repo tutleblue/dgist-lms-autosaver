@@ -5735,6 +5735,7 @@ async function populateSettings() {
   form.elements.hidePastEmails.checked = Boolean(state.config?.hidePastEmails);
   if (form.elements.notifyDeadlines) form.elements.notifyDeadlines.checked = state.config?.notifyDeadlines !== false;
   if (form.elements.notifyNewFiles) form.elements.notifyNewFiles.checked = state.config?.notifyNewFiles !== false;
+  loadAutostart();
   // 구글 캘린더 동기화 (체크박스라 value 대입으로는 반영되지 않음)
   form.elements.gcalSyncEnabled.checked = Boolean(state.config?.gcalSyncEnabled);
   form.elements.gcalCalendarName.value = state.config?.gcalCalendarName || "DGIST 메일 일정";
@@ -7002,8 +7003,148 @@ function applyTheme(choice, { save = true } = {}) {
     /* localStorage 사용 불가 환경 무시 */
   }
   paintThemeCard(choice);
+  polyfillColorMix();
   // 앱 창의 저장소는 끌 때마다 지워진다. 데이터 폴더에 적어야 다음에 켤 때도 그대로다.
   if (save) api("/api/ui-prefs", { method: "POST", body: JSON.stringify({ theme: choice }) }).catch(() => {});
+}
+
+/* 옛 WebKit(업데이트 안 한 macOS 12 = Safari 15)은 color-mix()·@container 를 모른다(2026-10-21 맥·리눅스 점검 8번).
+   color-mix 안에 var() 가 있으면 읽을 때는 통과했다가 그릴 때 값이 통째로 사라져 배경·테두리가 없어진다.
+   CSS 앞줄에 단색을 적어도 소용없어(뒤 선언이 이기고 나서 사라짐), 여기서 지금 테마의 색으로 섞어 규칙에 넣는다.
+   var() 없는 것(글자 그대로의 색)은 읽을 때 버려지므로 styles.css 에 단색 앞줄을 두었다. 섞는 법은 CSS Color 5(srgb, 알파 곱). */
+const SUPPORTS_COLOR_MIX = (() => {
+  try {
+    return CSS.supports("color", "color-mix(in srgb, red 50%, blue)");
+  } catch {
+    return false;
+  }
+})();
+const colorMixSource = new WeakMap(); // 규칙 → {속성: 원래 값}. 테마를 바꾸면 원래 값에서 다시 섞는다
+
+function colorMixRules(list, out = []) {
+  for (const rule of Array.from(list || [])) {
+    if (rule.style && /color-mix\(/.test(rule.style.cssText || "") || colorMixSource.has(rule)) out.push(rule);
+    if (rule.cssRules) colorMixRules(rule.cssRules, out);
+  }
+  return out;
+}
+
+function polyfillColorMix(force = false) {
+  if (SUPPORTS_COLOR_MIX && !force) return 0;
+  const rootStyle = getComputedStyle(document.documentElement);
+  const probe = document.createElement("i");
+  probe.style.display = "none";
+  document.body.appendChild(probe);
+  const rgba = (text) => {
+    probe.style.color = "";
+    probe.style.color = text;
+    const nums = (getComputedStyle(probe).color.match(/[\d.]+/g) || []).map(Number);
+    return [nums[0] || 0, nums[1] || 0, nums[2] || 0, nums.length > 3 ? nums[3] : 1];
+  };
+  const resolveVars = (text) =>
+    text.replace(/var\(\s*(--[\w-]+)\s*(?:,\s*([^()]*))?\)/g, (_, name, fallback) => rootStyle.getPropertyValue(name).trim() || (fallback || "").trim());
+  const mixOne = (args) => {
+    // 'in srgb, A p%, B q%' — 퍼센트가 하나면 나머지는 100 - p
+    const parts = [];
+    let depth = 0;
+    let cur = "";
+    for (const ch of args) {
+      if (ch === "(") depth += 1;
+      if (ch === ")") depth -= 1;
+      if (ch === "," && depth === 0) {
+        parts.push(cur.trim());
+        cur = "";
+      } else cur += ch;
+    }
+    parts.push(cur.trim());
+    const split = (part) => {
+      const m = part.match(/^(.*?)(?:\s+([\d.]+)%)?$/);
+      return [m[1].trim(), m[2] === undefined ? null : Number(m[2]) / 100];
+    };
+    const [c1, p1raw] = split(parts[1] || "");
+    const [c2, p2raw] = split(parts[2] || "");
+    const p1 = p1raw ?? (p2raw === null ? 0.5 : 1 - p2raw);
+    const p2 = p2raw ?? 1 - p1;
+    const a = rgba(resolveVars(c1));
+    const b = rgba(resolveVars(c2));
+    const alpha = a[3] * p1 + b[3] * p2;
+    if (alpha <= 0) return "transparent";
+    const ch = (i) => Math.round((a[i] * a[3] * p1 + b[i] * b[3] * p2) / alpha);
+    return `rgba(${ch(0)}, ${ch(1)}, ${ch(2)}, ${Math.round(alpha * 1000) / 1000})`;
+  };
+  const rewrite = (value) => {
+    let out = "";
+    let i = 0;
+    while (i < value.length) {
+      const at = value.indexOf("color-mix(", i);
+      if (at < 0) {
+        out += value.slice(i);
+        break;
+      }
+      out += value.slice(i, at);
+      let depth = 0;
+      let end = at + "color-mix".length;
+      for (; end < value.length; end += 1) {
+        if (value[end] === "(") depth += 1;
+        if (value[end] === ")" && --depth === 0) break;
+      }
+      out += mixOne(value.slice(at + "color-mix(".length, end));
+      i = end + 1;
+    }
+    return out;
+  };
+  let changed = 0;
+  for (const sheet of Array.from(document.styleSheets)) {
+    let rules;
+    try {
+      rules = sheet.cssRules;
+    } catch {
+      continue; // 다른 출처(글꼴 CSS)는 못 읽는다
+    }
+    for (const rule of colorMixRules(rules)) {
+      let source = colorMixSource.get(rule);
+      if (!source) {
+        source = {};
+        // 선언 문자열에서 바로 꺼낸다 — var() 가 든 줄임 속성(border·box-shadow)은 낱 속성 값이 비어 있다
+        for (const decl of rule.style.cssText.split(/;(?![^(]*\))/)) {
+          const idx = decl.indexOf(":");
+          if (idx < 0 || !decl.includes("color-mix(")) continue;
+          const prop = decl.slice(0, idx).trim();
+          const val = decl.slice(idx + 1).trim();
+          const important = /!\s*important\s*$/i.test(val);
+          source[prop] = [val.replace(/!\s*important\s*$/i, "").trim(), important ? "important" : ""];
+        }
+        colorMixSource.set(rule, source);
+      }
+      for (const [prop, [val, prio]] of Object.entries(source)) {
+        rule.style.setProperty(prop, rewrite(val), prio);
+        changed += 1;
+      }
+    }
+  }
+  probe.remove();
+  return changed;
+}
+
+/* 맥에서 옛 WebKit 이면 한 번만: Safari 를 올리면 같은 macOS 에서도 화면이 제대로 나온다(Monterey 는 Safari 17.6 까지). */
+function warnOldWebKit() {
+  let containers = true;
+  try {
+    containers = CSS.supports("container-type", "inline-size");
+  } catch {
+    containers = false;
+  }
+  if (!IS_MAC || (SUPPORTS_COLOR_MIX && containers)) return;
+  try {
+    if (localStorage.getItem("daling-old-webkit-told")) return;
+    localStorage.setItem("daling-old-webkit-told", "1");
+  } catch {
+    /* 저장소를 못 쓰면 켤 때마다 알린다 */
+  }
+  uiConfirm(
+    "이 Mac 의 Safari 가 오래되어 Daling 화면 일부(색·좁은 창 배치)가 단순하게 보여요. 시스템 설정의 소프트웨어 업데이트에서 Safari 를 최신으로 올리면 제대로 보입니다.",
+    { title: "Safari 업데이트", icon: "alert", ok: "알겠어요", cancel: "" },
+  );
 }
 
 function paintThemeCard(choice) {
@@ -12718,6 +12859,7 @@ $("#updateReadyButton")?.addEventListener("click", () => {
   window.setTimeout(() => $("#updateRow")?.scrollIntoView({ block: "center" }), 500);
 });
 window.setTimeout(() => checkForUpdate(false), 4000);
+window.setTimeout(warnOldWebKit, 5000);
 window.setInterval(() => checkForUpdate(false), 6 * 60 * 60 * 1000);
 
 /* 알림 스위치는 누르는 즉시 저장한다 ('설정 저장' 을 안 눌러 도로 꺼지는 일이 없게) */
@@ -12733,6 +12875,32 @@ window.setInterval(() => checkForUpdate(false), 6 * 60 * 60 * 1000);
       showToast(humanError(error));
     }
   });
+});
+
+
+/* 맥·리눅스: 컴퓨터를 켤 때 Daling 켜기 (/api/autostart). Windows 는 설치할 때 고르므로 줄을 숨긴 채 둔다 */
+async function loadAutostart() {
+  const row = $("#autostartRow");
+  if (!row) return;
+  try {
+    const res = await api("/api/autostart");
+    row.hidden = !res.supported;
+    $("#autostartToggle").checked = Boolean(res.enabled);
+  } catch {
+    row.hidden = true;
+  }
+}
+
+$("#autostartToggle")?.addEventListener("change", async (event) => {
+  const on = event.target.checked;
+  try {
+    const res = await api("/api/autostart", { method: "POST", body: JSON.stringify({ on }) });
+    event.target.checked = Boolean(res.enabled);
+    if (res.message) showToast(tr(res.message));
+  } catch (error) {
+    event.target.checked = !on;
+    showToast(humanError(error));
+  }
 });
 
 

@@ -37,7 +37,7 @@ from pathlib import Path
 
 # 화면 서버의 GET 길 전부 ('화면 API 전부' 점검). 쿼리가 필요한 길은 빈 값으로 — 400 이 와도 500 이 아니면 된다.
 SWEEP_GET = (
-    "/api/academic-calendar", "/api/ai/status", "/api/config", "/api/config/export", "/api/course-announcements",
+    "/api/academic-calendar", "/api/ai/status", "/api/autostart", "/api/config", "/api/config/export", "/api/course-announcements",
     "/api/course-catalog?q=", "/api/course-staff", "/api/course-state", "/api/course-terms", "/api/deadlines",
     "/api/deadlines.ics", "/api/demo", "/api/dgist-api/status", "/api/diagnostics", "/api/directory?q=",
     "/api/drive/get", "/api/drive/list", "/api/email-body?id=1", "/api/emails", "/api/fglp", "/api/file?path=x",
@@ -50,6 +50,30 @@ SWEEP_GET = (
 )
 # 아래 '빠진 길' 비교는 쿼리 앞까지만 본다
 _SWEEP_PATHS = {r.split("?")[0] for r in SWEEP_GET}
+
+# POST 길 전부를 빈 본문({})으로 ('화면 API 전부 POST' 점검). 체험 모드라 바깥 서버에 쓰는 길은 409 로 막히고,
+# 나머지는 임시 데이터 폴더에만 쓴다. 맥·리눅스에서만 도는 분기(폴더 열기·저장·키체인)가 500 을 내는지 본다.
+SWEEP_POST = (
+    "/api/acknowledge-courses", "/api/ai/continue", "/api/ai/draft", "/api/ai/polish", "/api/ai/profile",
+    "/api/ai/search", "/api/assignment/open", "/api/autostart", "/api/boot-done", "/api/config", "/api/config/import",
+    "/api/delete-email", "/api/directory/import", "/api/export-ics", "/api/files/bulk", "/api/gcal/sync",
+    "/api/gcal/sync-academic", "/api/google/connect", "/api/google/credentials", "/api/google/disconnect",
+    "/api/local-autosave/run", "/api/mail/discard-draft", "/api/mail/flow", "/api/mail/folder-create", "/api/mail/me",
+    "/api/mail/move", "/api/mail/reminder", "/api/mail/save-draft", "/api/mail/star", "/api/mail/translate",
+    "/api/mark-all-read", "/api/mark-read", "/api/my-events/delete", "/api/my-events/save", "/api/organize-files",
+    "/api/refresh-deadlines", "/api/refresh-emails", "/api/restore-email", "/api/run", "/api/samsung-notes/organize",
+    "/api/samsung-notes/send", "/api/save-local", "/api/selection", "/api/send-email", "/api/shelves/save", "/api/stop",
+    "/api/storage/cleanup", "/api/storage/trash-browser", "/api/timetable/bulk", "/api/timetable/delete",
+    "/api/timetable/import-image", "/api/timetable/import-link", "/api/timetable/save", "/api/tutorial/done",
+    "/api/tutorial/view", "/api/ui-prefs", "/api/update/apply", "/api/update/open-download", "/api/verify",
+    "/api/whats-new/seen",
+)
+# 부르면 안 되는 길: 점검이 켜고 끄는 체험 모드, 앱을 다시 켜기·창 조작, 폴더 고르기 창(사람이 닫을 때까지 멈춤),
+# 파일 관리자·브라우저를 실제로 여는 길
+SWEEP_POST_SKIP = (
+    "/api/demo", "/api/restart", "/api/window", "/api/pick-folder", "/api/open-downloads", "/api/open-url",
+    "/api/open-app-url", "/api/mail/open-link",
+)
 
 
 def prepare_env() -> Path:
@@ -290,6 +314,61 @@ def run(app) -> int:
             summary = " · ".join(f"{c}×{n}" for c, n in sorted(codes.items()))
             return f"{len(SWEEP_GET)}개 길 ({summary})"
 
+        def post_sweep():
+            # GET 점검과 같은 규칙으로 POST 길을 빈 본문으로 한 번씩 (2026-10-21 맥·리눅스 점검 17번)
+            import urllib.error
+            import urllib.request
+
+            def post(route: str, payload: dict) -> int:
+                req = urllib.request.Request(base + route, data=json.dumps(payload).encode(),
+                                             headers={"Content-Type": "application/json"}, method="POST")
+                try:
+                    with urllib.request.urlopen(req, timeout=30) as resp:
+                        resp.read()
+                        return resp.status
+                except urllib.error.HTTPError as err:
+                    return err.code
+
+            if not frozen:
+                import re
+
+                src = Path(web_ui.__file__).read_text(encoding="utf-8")
+                start = src.index("    def _do_POST(self)")
+                nxt = re.search(r"\n    def \w", src[start + 10:])
+                body = src[start:start + 10 + nxt.start()] if nxt else src[start:]
+                found = set(re.findall(r'route == "(/api/[^"]+)"', body))
+                for group in re.findall(r"route in \(([^)]*)\)", body):
+                    found |= set(re.findall(r'"(/api/[^"]+)"', group))
+                missing = sorted(found - set(SWEEP_POST) - set(SWEEP_POST_SKIP))
+                if missing:
+                    raise RuntimeError(f"점검 목록에 없는 POST 길: {missing} (smoke_test.SWEEP_POST 나 SWEEP_POST_SKIP 에)")
+            log = web_ui.AUTOSAVER_ROOT / "server_errors.log"
+            before = log.stat().st_size if log.exists() else 0
+            post("/api/demo", {"on": True})
+            bad, codes = [], {}
+            try:
+                for route in SWEEP_POST:
+                    try:
+                        status = post(route, {})
+                    except Exception as exc:
+                        bad.append(f"{route}: {type(exc).__name__} {exc}")
+                        continue
+                    codes[status] = codes.get(status, 0) + 1
+                    if status >= 500:
+                        bad.append(f"{route}: HTTP {status}")
+                # 체험 중엔 로그인 항목에 쓰지 않는다 (autostart)
+                if post("/api/autostart", {"on": True}) != 409:
+                    bad.append("/api/autostart: 체험 모드인데 막히지 않음")
+            finally:
+                post("/api/demo", {"on": False})
+            after = log.stat().st_size if log.exists() else 0
+            if bad:
+                raise RuntimeError("; ".join(bad[:8]))
+            if after > before:
+                raise RuntimeError(f"server_errors.log 에 새 오류 {after - before}바이트")
+            summary = " · ".join(f"{c}×{n}" for c, n in sorted(codes.items()))
+            return f"{len(SWEEP_POST)}개 길 ({summary})"
+
         def faculty_directory():
             # 새 사용자도 교수 주소가 채워지게 설치 파일에 넣은 교원 주소록 (web_ui.directory_people).
             # 점검 폴더는 비어 있으니 내가 넣은 조직도는 0명이어야 한다.
@@ -304,6 +383,7 @@ def run(app) -> int:
         check("체험 모드", demo_mode_check)
         check("교원 주소록", faculty_directory)
         check("화면 API 전부 (체험 모드)", api_sweep)
+        check("화면 API 전부 POST (체험 모드)", post_sweep)
         # 네트워크 없이 파일만 읽는 것들 (설정·업데이트 내용·소개·화면 설정)
         for route in ("/api/config", "/api/whats-new", "/api/tutorial", "/api/ui-prefs", "/api/task"):
             check(f"GET {route}", lambda route=route: f"{len(_json(base, route))}개 항목")
@@ -316,6 +396,55 @@ def run(app) -> int:
                 return "없음(맥)"
 
             check("삼성 노트는 맥에서 꺼짐", samsung_off)
+
+        if sys.platform == "darwin" or sys.platform.startswith("linux"):
+            def autostart_entry():
+                # '컴퓨터 켤 때 Daling 켜기' (autostart.py). 사용자 로그인 항목을 건드리지 않게 HOME 을 임시 폴더로 바꿔
+                # 만들고·읽고·지운다. 소스로 돌면 켤 실행 파일이 없어 쓸 수 없음이 맞다.
+                import tempfile
+
+                import autostart
+
+                if not frozen:
+                    if autostart.supported():
+                        raise RuntimeError("소스 실행인데 자동 시작을 '쓸 수 있음' 으로 봄")
+                    return "소스 실행이라 건너뜀"
+                saved = {k: os.environ.get(k) for k in ("HOME", "XDG_CONFIG_HOME")}
+                home = tempfile.mkdtemp(prefix="daling-autostart-")
+                os.environ["HOME"] = home
+                os.environ.pop("XDG_CONFIG_HOME", None)
+                try:
+                    path = autostart.entry_path()
+                    if not str(path).startswith(home):
+                        raise RuntimeError(f"임시 HOME 밖을 가리킴: {path}")
+                    res = autostart.set_enabled(True)
+                    if not res.get("ok") or not autostart.enabled():
+                        raise RuntimeError(f"켜지 못함: {res}")
+                    text = path.read_bytes()
+                    if sys.platform == "darwin":
+                        import plistlib
+
+                        lint = subprocess.run(["/usr/bin/plutil", "-lint", str(path)], capture_output=True, text=True)
+                        if lint.returncode != 0:
+                            raise RuntimeError(f"plist 가 틀림: {lint.stdout.strip()}")
+                        exe = plistlib.loads(text)["ProgramArguments"][0]
+                    else:
+                        line = next(x for x in text.decode("utf-8").splitlines() if x.startswith("Exec="))
+                        exe = line[len("Exec="):].strip('"')
+                    if not Path(exe).exists():
+                        raise RuntimeError(f"자동 시작이 없는 파일을 가리킴: {exe}")
+                    autostart.set_enabled(False)
+                    if autostart.enabled():
+                        raise RuntimeError("끄지 못함")
+                    return f"{path.name} → {exe}"
+                finally:
+                    for k, v in saved.items():
+                        if v is None:
+                            os.environ.pop(k, None)
+                        else:
+                            os.environ[k] = v
+
+            check("컴퓨터 켤 때 켜기 (임시 HOME)", autostart_entry)
 
         if sys.platform.startswith("linux"):
             def samsung_off_linux():
@@ -348,12 +477,21 @@ def run(app) -> int:
             command = [sys.executable, str(Path(app.__file__).resolve()), WORKER_FLAG, "smoke"]
         env = os.environ.copy()
         env["PYTHONIOENCODING"] = "utf-8"
-        # 실제 앱(web_ui.run_process)과 같은 모양으로 띄운다
+        # 실제 앱(web_ui.run_process)과 같은 모양으로 띄운다. 맥·리눅스는 비밀 값을 표준 입력으로 넘겨받는다
+        # (runtime_config._HANDED_SECRETS) — 묶은 실행 파일에서도 그 한 줄이 닿는지 본다
+        handover = os.name != "nt"
+        if handover:
+            from runtime_config import SECRETS_STDIN_FLAG
+
+            env[SECRETS_STDIN_FLAG] = "1"
         proc = subprocess.run(command, capture_output=True, text=True, encoding="utf-8",
+                              input='{"LMS_PASSWORD": "smoke"}\n' if handover else None,
                               errors="replace", env=env, timeout=120, cwd=str(web_ui.PROJECT_ROOT))
         out = (proc.stdout or "") + (proc.stderr or "")
         if proc.returncode != 0 or "smoke-worker ok" not in out:
             raise RuntimeError(f"종료 코드 {proc.returncode}: {out.strip()[-400:]}")
+        if handover and "handed=1" not in out:
+            raise RuntimeError(f"비밀 값을 표준 입력으로 못 넘겨받음: {out.strip()[-200:]}")
         want = os.environ.get("AUTOSAVER_SMOKE_ROOT", "")
         if want and want not in out:
             raise RuntimeError(f"데이터 경로가 안 이어짐: {out.strip()[-200:]}")

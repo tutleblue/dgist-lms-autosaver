@@ -836,7 +836,9 @@ def run_worker(job: str) -> int:
             import runtime_config
 
             # package: Store 판(MSIX)이면 작업 프로세스도 같은 패키지 안에서 도는지 (AppData 가상화를 같이 봐야 한다)
-            print(f"smoke-worker ok data={runtime_config.AUTOSAVER_DATA_ROOT} package={runtime_config.msix_package_full_name() or '-'}")
+            # handed: 앱 본체가 표준 입력으로 넘긴 비밀 값 수 (맥·리눅스, runtime_config._HANDED_SECRETS)
+            handed = "-" if runtime_config._HANDED_SECRETS is None else len(runtime_config._HANDED_SECRETS)
+            print(f"smoke-worker ok data={runtime_config.AUTOSAVER_DATA_ROOT} package={runtime_config.msix_package_full_name() or '-'} handed={handed}")
         else:
             print(f"알 수 없는 작업입니다: {job}")
             return 1
@@ -1019,6 +1021,11 @@ def main() -> None:
         web_ui.BOOT.update(start=_process_started_at(), server=time.time(), **_marks)
         threading.Thread(target=_prewarm_first_screen, daemon=True).start()
         threading.Thread(target=scheduler_loop, daemon=True).start()
+        if os.name != "nt":
+            # 맥·리눅스 '컴퓨터를 켤 때 Daling 켜기' 를 켜 둔 사람만: AppImage 를 옮겼으면 자동 시작 파일을 새 자리로
+            import autostart
+
+            autostart.refresh()
 
         # 켤 때마다 띄우던 '48시간 마감 요약' 은 없앴다. 마감 알림(하루·3시간·1시간 전)이 대신한다.
 

@@ -2021,5 +2021,15 @@
  "이 판에서는 아직 쓸 수 없어요": "Not available in this version yet",
  "마감 다시 가져오기": "Fetching deadlines again",
  "메일 다시 가져오기": "Fetching mail again",
- "폴더 고르기 창을 열 수 없어요. 앱 창에서 다시 해 주세요.": "Couldn't open the folder picker. Please try again from the app window."
+ "폴더 고르기 창을 열 수 없어요. 앱 창에서 다시 해 주세요.": "Couldn't open the folder picker. Please try again from the app window.",
+ "Safari 업데이트": "Update Safari",
+ "알겠어요": "Got it",
+ "이 Mac 의 Safari 가 오래되어 Daling 화면 일부(색·좁은 창 배치)가 단순하게 보여요. 시스템 설정의 소프트웨어 업데이트에서 Safari 를 최신으로 올리면 제대로 보입니다.": "Safari on this Mac is out of date, so parts of Daling (colours and narrow-window layouts) look simplified. Update Safari in System Settings > Software Update to fix it.",
+ "자동으로 가져오기는 Daling 이 켜져 있을 때만 돌아요. 켜 두면 컴퓨터에 로그인할 때 Daling 도 함께 켜집니다.": "Automatic fetching only runs while Daling is open. Turn this on to start Daling when you log in to your computer.",
+ "컴퓨터를 켤 때 Daling 도 함께 켜요.": "Daling will start when you log in.",
+ "컴퓨터를 켤 때 Daling 을 켜지 않아요.": "Daling won't start when you log in.",
+ "Daling 을 응용 프로그램 폴더로 옮겨 켠 뒤 다시 켜 주세요.": "Move Daling to the Applications folder, open it from there and try again.",
+ "AppImage 파일 자리를 찾지 못했어요.": "Couldn't find the AppImage file.",
+ "이 컴퓨터에서는 쓸 수 없어요.": "Not available on this computer.",
+ "컴퓨터 켤 때 실행": "Open at login"
 }
