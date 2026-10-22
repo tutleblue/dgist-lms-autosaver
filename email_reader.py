@@ -1682,13 +1682,16 @@ FOLDER_RAW_CACHE: dict[str, str] = {}
 # 'NO login failure: invalid auth or access denied' 로 거절하기 시작했다(2026-10-21: 이 PC 21:19 성공 →
 # 21:28 거절, 같은 비밀번호. 9/27·10/12 에도 같은 일). 이제 한 프로세스는 연결 하나를 열어 두고 같이 쓴다.
 #   - 한 번에 한 작업만 쓴다(_SESSION_LOCK). 새로고침이 1초 남짓이라 기다림은 짧다.
-#   - 1분 넘게 쉬었으면 NOOP 으로 살아 있는지 보고, 끊겼으면 그때만 다시 로그인한다.
+#   - 5초 넘게 쉬었으면 NOOP 으로 살아 있는지 보고, 끊겼으면 그때만 다시 로그인한다. 학교 서버는 쉬는 연결을
+#     1분보다 짧게 끊는다(2026-10-22 실측: 14:26:23 그림 받기 → 1분 안의 .eml 받기가 4ms 만에 EOF, 14:27:12 다시
+#     로그인 → 69초 쉰 14:28:21 새로고침도 다시 로그인). 예전 기준(60초)이면 30초~1분 사이의 첫 동작이 죽은 연결로
+#     나가 한 번 실패했다 — 메일을 열면 본문 그림이 깨지고 읽음·별표가 '서버 연결이 끊겼습니다' 로 실패. NOOP 은 왕복 0.1초.
 #   - 20분 넘게 쉬었으면 새로 연다 (서버 자동 로그아웃은 보통 30분).
 #   - 계정·비밀번호가 바뀌면 새로 로그인한다. 로그인이 거절되면 연결을 남기지 않는다.
 #   - 연결 오류가 나면 버린다. 명령을 저절로 다시 보내지는 않는다(복사·넣기는 두 번 하면 두 벌이 된다).
 _SESSION: dict = {"client": None, "key": None, "used": 0.0}
 _SESSION_LOCK = threading.RLock()
-SESSION_CHECK_AFTER = 60
+SESSION_CHECK_AFTER = 5
 SESSION_MAX_IDLE = 20 * 60
 _CONNECTION_ERRORS = (OSError, ConnectionError, ssl.SSLError, EOFError)
 

@@ -2043,5 +2043,6 @@
  "Daling 을 응용 프로그램 폴더로 옮겨 켠 뒤 다시 켜 주세요.": "Move Daling to the Applications folder, open it from there and try again.",
  "AppImage 파일 자리를 찾지 못했어요.": "Couldn't find the AppImage file.",
  "이 컴퓨터에서는 쓸 수 없어요.": "Not available on this computer.",
- "컴퓨터 켤 때 실행": "Open at login"
+ "컴퓨터 켤 때 실행": "Open at login",
+ "Daling 을 보고 있지 않을 때는 15분마다 확인해요. 학교 메일 서버가 잦은 로그인을 막을 때가 있어서예요.": "When you're not looking at Daling, mail is checked every 15 minutes, because the school mail server sometimes blocks frequent logins."
 }

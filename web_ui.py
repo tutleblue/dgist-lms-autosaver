@@ -303,6 +303,28 @@ def auto_minutes(config: dict[str, Any]) -> dict[str, int]:
     }
 
 
+# 앱 창을 보고 있는지 (화면 app.js reportPresence 가 바뀔 때·1분마다 알린다).
+# 학교 메일 서버는 연결을 로그인 뒤 20~40초면 끊어 5분마다 매번 새로 로그인하고(2026-10-22 실측: 5초마다 NOOP 을
+# 보내도 21초에 응답 15.9초, 42초에 응답 없음), 로그인이 잦으면 맞는 비밀번호도 거절한다(9/27·10/12·10/21·10/22).
+# 보고 있을 때는 설정한 주기 그대로, 안 볼 때는 메일을 15분마다로 늦춰 로그인을 줄인다(사용자 결정 2026-10-22).
+PRESENCE: dict[str, Any] = {"viewing": False, "at": 0.0}
+AWAY_EMAIL_MINUTES = 15
+PRESENCE_FRESH_SECONDS = 180
+
+
+def user_viewing() -> bool:
+    """앱을 보고 있는지. 화면이 3분 넘게 소식이 없으면(창을 닫았거나 화면이 멈춤) 안 보는 것으로 본다."""
+    return bool(PRESENCE["viewing"]) and time.time() - float(PRESENCE["at"] or 0) < PRESENCE_FRESH_SECONDS
+
+
+def effective_minutes(config: dict[str, Any]) -> dict[str, int]:
+    """자동 실행에 실제로 쓰는 주기. 앱을 안 볼 때 메일은 15분마다 (설정이 더 길거나 꺼져 있으면 그대로)."""
+    minutes = auto_minutes(config)
+    if minutes["emails"] > 0 and not user_viewing():
+        minutes["emails"] = max(minutes["emails"], AWAY_EMAIL_MINUTES)
+    return minutes
+
+
 def _merge_cloud_save(existing: dict[str, Any], incoming: Any) -> dict[str, dict[str, Any]]:
     """화면에서 온 {key: {on, path}} 를 저장된 값 위에 얹는다. 안 온 키는 그대로."""
     merged = cloud_save_settings(existing)
@@ -1660,7 +1682,13 @@ def ensure_mail_images(workspace: UserWorkspace, mail: dict[str, Any]) -> None:
 
     folder, _, raw_uid = str(mail.get("id", "")).partition(":")
     uid = int(mail.get("uid") or raw_uid or 0)
-    blobs = email_reader.fetch_inline_images(uid, folder or "inbox", [image for _, image in missing])
+    wanted = [image for _, image in missing]
+    try:
+        blobs = email_reader.fetch_inline_images(uid, folder or "inbox", wanted)
+    except (OSError, ConnectionError):
+        # 같이 쓰던 연결이 서버 쪽에서 끊겨 있었으면 한 번만 다시 (그림 받기는 읽기만 해서 두 번 해도 된다).
+        # 예전엔 여기서 실패하면 cid: 가 그대로 남아 그림이 깨진 채 보였다(2026-10-22 총학생회 메일 로고)
+        blobs = email_reader.fetch_inline_images(uid, folder or "inbox", wanted)
     target_dir = workspace.root / "mail_images"
     target_dir.mkdir(parents=True, exist_ok=True)
     for index, image in missing:
@@ -5912,6 +5940,11 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 self.send_json(open_external_url(self.read_body_json()))
             except Exception as exc:
                 self.send_json({"ok": False, "message": str(exc)}, HTTPStatus.BAD_REQUEST)
+            return
+        if route == "/api/presence":
+            # 앱을 보고 있는지 (메일 자동 확인 주기, effective_minutes)
+            PRESENCE.update(viewing=bool(self.read_body_json().get("viewing")), at=time.time())
+            self.send_json({"ok": True})
             return
         if route == "/api/autostart":
             try:

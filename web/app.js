@@ -1334,6 +1334,8 @@ function mailFrameDoc(html, showImages) {
   const bg = onPaper ? mailPaperColor() : "transparent";
   // 본문 안의 그림은 /api/mail-image 로 온다. srcdoc 안에서도 그 주소를 찾게
   // 기준 주소를 박아 준다 (없으면 about:srcdoc 기준이라 그림이 다 깨진다).
+  // 주소(src) 없는 그림은 숨긴다: 보낸 쪽 편집기에서 그림이 빠진 자리라 빈 네모만 남았다
+  // (2026-10-22 총학생회 메일의 카드뉴스 — 원본 메일에도 그림 조각이 없었다).
   return `<!doctype html><html><head><meta charset="utf-8">
     <meta name="referrer" content="no-referrer">
     <base href="${location.origin}/" target="_blank">
@@ -1342,6 +1344,7 @@ function mailFrameDoc(html, showImages) {
       body{margin:0;padding:${onPaper ? "22px 26px" : "2px 0"};font-family:${font};
            font-size:15px;line-height:1.75;color:${text};background:${bg};word-break:break-word}
       img,table{max-width:100% !important;height:auto}
+      img:not([src]),img[src=""]{display:none !important}
       table{border-collapse:collapse}
       a{color:${cs.getPropertyValue("--accent-strong").trim() || "#c60"}}
       ::-webkit-scrollbar{width:8px;height:8px;background:transparent}
@@ -12863,6 +12866,36 @@ $("#updateReadyButton")?.addEventListener("click", () => {
 window.setTimeout(() => checkForUpdate(false), 4000);
 window.setTimeout(warnOldWebKit, 5000);
 window.setInterval(() => checkForUpdate(false), 6 * 60 * 60 * 1000);
+
+/* 앱을 보고 있는지 서버에 알린다 → 메일 자동 확인은 보고 있을 때 설정 주기, 안 볼 때 15분마다 (web_ui.effective_minutes).
+   학교 메일 서버는 연결을 금방 끊어 확인할 때마다 새로 로그인하고, 로그인이 잦으면 맞는 비밀번호도 거절한다.
+   보고 있음 = 화면이 보이고, (앱에 초점이 있고 10분 안에 손댔거나) 2분 안에 손댔다. 서버는 3분 소식이 없으면 안 보는 것으로 본다. */
+let lastInputAt = Date.now();
+let lastPresence = null;
+function reportPresence() {
+  const idle = Date.now() - lastInputAt;
+  const viewing =
+    document.visibilityState === "visible" && ((document.hasFocus() && idle < 10 * 60 * 1000) || idle < 2 * 60 * 1000);
+  // 안 보는 동안은 바뀔 때 한 번만, 보는 동안은 1분마다 (신호가 끊기면 서버가 안 보는 것으로 친다)
+  if (!viewing && lastPresence === false) return;
+  lastPresence = viewing;
+  api("/api/presence", { method: "POST", body: JSON.stringify({ viewing }) }).catch(() => {});
+}
+["pointerdown", "keydown", "wheel", "mousemove", "touchstart"].forEach((type) =>
+  window.addEventListener(
+    type,
+    () => {
+      lastInputAt = Date.now();
+      if (lastPresence === false) reportPresence(); // 돌아오면 바로 알려 밀린 메일 확인을 당긴다
+    },
+    { passive: true, capture: true },
+  ),
+);
+document.addEventListener("visibilitychange", reportPresence);
+window.addEventListener("focus", reportPresence);
+window.addEventListener("blur", reportPresence);
+window.setInterval(reportPresence, 60 * 1000);
+reportPresence();
 
 /* 알림 스위치는 누르는 즉시 저장한다 ('설정 저장' 을 안 눌러 도로 꺼지는 일이 없게) */
 ["notifyDeadlines", "notifyNewFiles"].forEach((name) => {

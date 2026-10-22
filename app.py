@@ -480,7 +480,8 @@ def scheduler_loop() -> None:
             # LMS 작업(마감·자료)은 한 번에 하나만 돌린다 (LMS 로그인이 겹치지 않게).
             # 메일은 IMAP 만 써서 따로 돈다 (web_ui.task_key).
             if time.monotonic() - started_at > 45:
-                minutes = web_ui.auto_minutes(config)
+                # 앱을 안 볼 때는 메일을 15분마다로 늦춘다 (web_ui.effective_minutes — 학교 메일 서버 로그인 줄이기)
+                minutes = web_ui.effective_minutes(config)
                 with web_ui.task_lock:
                     running = web_ui.task_states.get(workspace.user_id, {}).get("running", False)
                     mail_running = web_ui.task_states.get(web_ui.task_key(workspace.user_id, "emails"), {}).get("running", False)

@@ -63,6 +63,7 @@ SWEEP_POST = (
     "/api/local-autosave/run", "/api/mail/discard-draft", "/api/mail/flow", "/api/mail/folder-create", "/api/mail/me",
     "/api/mail/move", "/api/mail/reminder", "/api/mail/save-draft", "/api/mail/star", "/api/mail/translate",
     "/api/mark-all-read", "/api/mark-read", "/api/my-events/delete", "/api/my-events/save", "/api/organize-files",
+    "/api/presence",
     "/api/refresh-deadlines", "/api/refresh-emails", "/api/restore-email", "/api/run", "/api/samsung-notes/organize",
     "/api/samsung-notes/send", "/api/save-local", "/api/selection", "/api/send-email", "/api/shelves/save", "/api/stop",
     "/api/storage/cleanup", "/api/storage/trash-browser", "/api/timetable/bulk", "/api/timetable/delete",
