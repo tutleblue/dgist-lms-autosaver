@@ -87,7 +87,8 @@ jobs:
               read -r X Y < <(python3 -c 'import json,sys;d=json.load(open(sys.argv[1]))["dragScreen"];print(d[0],d[1])' "$OUT/drag-ready.json")
               if command -v cliclick > /dev/null; then
                 # 상단 바 빈 곳을 눌러 오른쪽 아래로 150·100 끈다
-                cliclick "m:$X,$Y" w:200 "dd:$X,$Y" w:150 "m:$((X + 50)),$((Y + 30))" w:100 "m:$((X + 150)),$((Y + 100))" w:150 "du:$((X + 150)),$((Y + 100))" \
+                # (m: 은 단추를 뗀 채 움직임이라 창이 안 따라왔다 → 누른 채 움직이는 dm:)
+                cliclick "m:$X,$Y" w:200 "dd:$X,$Y" w:150 "dm:$((X + 50)),$((Y + 30))" w:100 "dm:$((X + 150)),$((Y + 100))" w:150 "du:$((X + 150)),$((Y + 100))" \
                   > "$OUT/cliclick.log" 2>&1 || echo "::warning::cliclick 실패 (손쉬운 사용 권한?)"
                 sleep 1
                 screencapture -x "$OUT/shot-drag.png" || true
@@ -148,6 +149,10 @@ jobs:
                   check(f"{label}: 가짜 클릭 {name} → {'웹' if want_web else '끌기'}", ok,
                         f"web={c['webGotMouseDown']} {c.get('webTarget') or ''} 판정={c['decision'] or '없음'}")
           ready, after = out / "drag-ready.json", out / "drag-after.json"
+          errs = out / "js-errors.json"
+          if errs.exists():
+              e = json.loads(errs.read_text(encoding="utf-8"))
+              check("화면 오류 없음", not e, "; ".join(map(str, e))[:300])
           if ready.exists() and after.exists():
               a = json.loads(ready.read_text(encoding="utf-8"))["frame"]
               b = json.loads(after.read_text(encoding="utf-8"))["frame"]

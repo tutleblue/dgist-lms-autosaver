@@ -335,10 +335,10 @@ def _eval_js(script: str, timeout: float = 5.0):
     return box.get("value")
 
 
-def _find_point(rects, avoid, step=6.0):
+def _find_point(rects, avoid, step=6.0, limit=140):
     for r in rects:
         y = r[1] + 4
-        while y < r[1] + min(r[3], 140):
+        while y < r[1] + min(r[3], limit):
             x = r[0] + 4
             while x < r[0] + r[2]:
                 if not any(a[0] <= x < a[0] + a[2] and a[1] <= y < a[1] + a[3] for a in avoid):
@@ -379,8 +379,10 @@ def _measure(label: str) -> dict:
     probes = {}
     if _regions is not None:
         drag, nodrag = _regions[1], _regions[2]
-        probes["topbarEmpty"] = _find_point(drag[:1], nodrag)
-        probes["sidebarEmpty"] = _find_point(drag[1:2], nodrag)
+        # 신호등 둘레(제목 줄 단추 칸)는 운영체제가 받아 스스로 끈다 → 웹뷰를 거치는 자리를 보려고 그 둘레는 피한다
+        band = [(0.0, 0.0, _lights[0] + 80.0, _lights[1] * 2 + 4)]
+        probes["topbarEmpty"] = _find_point(drag[:1], nodrag + band)
+        probes["sidebarEmpty"] = _find_point(drag[1:2], nodrag + [(0.0, 0.0, _regions[0], _lights[1] * 2 + 4)], limit=400)
     for key in ("button", "search", "nowbar"):
         if isinstance(_probe.get(key), list):
             probes[key] = _probe[key]
@@ -450,7 +452,10 @@ def _selftest(out: Path) -> None:
             note("화면이 끌 곳을 보내지 않음")
         time.sleep(2.0)
         _eval_js("window.__dalingDown=[];document.addEventListener('mousedown',function(e){var b=e.target.closest('button,a,input');"
-                 "window.__dalingDown.push(b?(b.id||b.className||b.tagName):'(none)')},true);true")
+                 "window.__dalingDown.push(b?(b.id||b.className||b.tagName):'(none)')},true);"
+                 # 화면 오류('문제가 생겼어요' 알림의 원인)도 남긴다
+                 "window.__dalingErrors=[];window.addEventListener('error',function(e){window.__dalingErrors.push(String(e.message)+' @'+e.lineno)});"
+                 "window.addEventListener('unhandledrejection',function(e){window.__dalingErrors.push('reject: '+String(e.reason&&(e.reason.stack||e.reason)))});true")
         wide = _on_main(lambda: _measure("wide"))
         # 웹뷰로 가야 할 자리(단추)를 눌러 실제로 웹이 받는지, 끌 곳을 눌러 웹에 안 가는지
         clicks = {}
@@ -505,6 +510,7 @@ def _selftest(out: Path) -> None:
         after = _on_main(screen_info)
         after["lastDecision"] = dict(_last_decision)
         write("drag-after.json", after)
+        write("js-errors.json", _eval_js("window.__dalingErrors||[]") or [])
         note("끝")
     except Exception as exc:
         note(f"오류: {type(exc).__name__}: {exc}")

@@ -14325,7 +14325,8 @@ function macDragRegions() {
       if (st.mac) {
         // 상단 바 높이는 창 크기 말고도 화면(메일함 등)마다 바뀐다. 맥은 왼쪽 메뉴가 이 높이만큼 내려가므로 늘 따라간다
         const bar = document.querySelector(".topbar");
-        if (bar && window.ResizeObserver) new ResizeObserver(fitHeight).observe(bar);
+        // 다음 그림 차례에 고친다: 콜백 안에서 바로 고치면 'ResizeObserver loop' 오류가 window error 로 올라온다
+        if (bar && window.ResizeObserver) new ResizeObserver(() => requestAnimationFrame(fitHeight)).observe(bar);
         macDragRegions();
       }
       let timer = 0;
