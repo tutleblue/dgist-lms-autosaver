@@ -14204,16 +14204,30 @@ function macDragRegions() {
         if (b) nodrag.push(b);
       });
     }
-    // 위를 덮은 것(대화 상자·소개·알림 등)은 끌지 않는다: 끌 곳 위를 띄엄띄엄 찍어 보고, 맨 위가 끌 곳 밖의 것이면
-    // 끌 곳을 품지 않는 가장 큰 조상(덮개 전체)을 뺀다
+    // 위를 덮은 것(대화 상자·소개 카드·알림 등)은 끌지 않는다: 끌 곳 위를 띄엄띄엄 찍어 보고, 맨 위가 끌 곳 밖의 것이면
+    // 끌 곳을 품지 않는 가장 큰 조상(카드 전체)을 뺀다. 다만 화면을 어둡게 덮는 막(소개의 .tour-dim, 대화 상자 바탕)은
+    // 끌기를 막지 않는다 — 맥 CI 실측(2026-10-26): 첫 실행 소개가 뜬 동안 상단 바 전체가 '끌기 안 됨' 이 되어 창을 못 옮겼다.
+    // 막 = 글·자식이 없는 빈 판, 또는 이 끌 곳을 통째로 덮는 것
     const seen = new Set();
-    drag.forEach(([x, y, w, h]) => {
+    drag.forEach((rect) => {
+      const [x, y, w, h] = rect;
+      const covers = (el) => {
+        const r = el.getBoundingClientRect();
+        return r.left <= x && r.top <= y && r.right >= x + w && r.bottom >= y + h;
+      };
+      const backdrop = (el) =>
+        (/^(DIV|SPAN)$/.test(el.tagName) && !el.firstElementChild && !el.textContent.trim()) || covers(el);
       for (let py = y + 4; py < y + h; py += 32) {
         for (let px = x + 4; px < x + w; px += 32) {
           const hit = document.elementFromPoint(px, py);
-          if (!hit || areas.some((a) => a.contains(hit))) continue;
+          if (!hit || areas.some((a) => a.contains(hit)) || backdrop(hit)) continue;
           let top = hit;
-          while (top.parentElement && top.parentElement !== document.body && !areas.some((a) => top.parentElement.contains(a))) {
+          while (
+            top.parentElement &&
+            top.parentElement !== document.body &&
+            !areas.some((a) => top.parentElement.contains(a)) &&
+            !covers(top.parentElement)
+          ) {
             top = top.parentElement;
           }
           if (seen.has(top)) continue;

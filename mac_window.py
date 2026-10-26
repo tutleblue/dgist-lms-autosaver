@@ -217,6 +217,16 @@ def _place_lights() -> None:
         pass
 
 
+class _TitlebarWatch(Foundation.NSObject):
+    """창 모양(라이트·다크)·제목이 바뀌면 AppKit 이 제목 줄을 다시 배치해 신호등이 창 맨 위로 돌아간다
+    (CI 실측 2026-10-26: 다크로 바꾸자 신호등 가운데가 30 → 2·-2). 크기 알림은 오지 않아 KVO 로 본다."""
+
+    def observeValueForKeyPath_ofObject_change_context_(self, path, obj, change, context):
+        # 배치는 바뀐 직후 다음 차례에 일어나므로 조금 뒤에 한 번 더 놓는다
+        AppHelper.callAfter(_place_lights)
+        AppHelper.callLater(0.15, _place_lights)
+
+
 def _refresh_state(_note=None) -> None:
     win = _win
     if win is None:
@@ -269,6 +279,10 @@ def install(window) -> bool:
             "NSWindowDidDeminiaturizeNotification",
         ):
             _observers.append(center.addObserverForName_object_queue_usingBlock_(name, win, None, _refresh_state))
+        watch = _TitlebarWatch.alloc().init()
+        for key in ("effectiveAppearance", "title"):
+            win.addObserver_forKeyPath_options_context_(watch, key, 0, None)
+        _observers.append(watch)
         ENABLED = True
         _refresh_state()
         out = os.environ.get("DALING_WINDOW_SELFTEST")
