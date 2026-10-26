@@ -459,7 +459,10 @@ def scheduler_loop() -> None:
             now = datetime.now()
             today = now.strftime("%Y-%m-%d")
             due_today = now.strftime("%H:%M") >= schedule_time and last_run_day != today
-            if due_today and time.monotonic() - started_at > 120:
+            # 계정이 비었으면 자동으로는 돌리지 않는다. 새 기기에서 계정을 넣기 전부터 '실패' 가 쌓여
+            # 쉬는 간격이 늘고 '계속 실패' 띠가 떴다(web_ui.TASK_ACCOUNT_KEYS). 넣으면 다음 차례(30초 안)에 돈다
+            ready = {kind: web_ui.account_ready(config, kind) for kind in ("emails", "deadlines", "sync")}
+            if due_today and ready["sync"] and time.monotonic() - started_at > 120:
                 with web_ui.task_lock:
                     running = web_ui.task_states.get(workspace.user_id, {}).get("running", False)
                 if not running:
@@ -485,10 +488,10 @@ def scheduler_loop() -> None:
                 with web_ui.task_lock:
                     running = web_ui.task_states.get(workspace.user_id, {}).get("running", False)
                     mail_running = web_ui.task_states.get(web_ui.task_key(workspace.user_id, "emails"), {}).get("running", False)
-                if not mail_running and next_due_job(workspace, minutes, ("emails",)):
+                if not mail_running and ready["emails"] and next_due_job(workspace, minutes, ("emails",)):
                     web_ui.start_task(workspace, "emails", auto=True)
                 if not running:
-                    kind = next_due_job(workspace, minutes, ("deadlines", "sync"))
+                    kind = next_due_job(workspace, minutes, tuple(k for k in ("deadlines", "sync") if ready[k]))
                     if kind:
                         web_ui.start_task(workspace, kind, auto=True)
         except Exception:
@@ -1087,7 +1090,7 @@ def main() -> None:
     if window_chrome:
         window_chrome.enable_webview_drag_regions()
         window_chrome.install_async(WINDOW_TITLE)
-    webview.create_window(
+    window = webview.create_window(
         WINDOW_TITLE,
         url,
         width=width,
@@ -1097,6 +1100,15 @@ def main() -> None:
         # 휴대폰 비율로 줄여도 쓸 수 있게 화면을 다시 짰다(좁으면 아래 탭 막대). 예전 900×640 은 정사각형·세로 창을 막았다.
         min_size=(360, 560),
     )
+    if sys.platform == "darwin":
+        # 맥도 기본 제목 줄을 투명하게 하고 상단 바를 제목 줄로 쓴다 (mac_window 설명 참고).
+        # 창을 보이기 직전(before_show, 메인 스레드)에 바꿔야 회색 줄이 한 번 번쩍이지 않는다. 못 바꾸면 기본 제목 줄 그대로
+        try:
+            import mac_window
+
+            window.events.before_show += mac_window.install
+        except Exception:
+            pass
     # 창이 뜬 뒤 아이콘을 입힌다 (pywebview는 Windows에서 아이콘 인자를 지원하지 않음)
     threading.Thread(target=apply_window_icon, daemon=True).start()
     if server is not None and sys.platform == "darwin":

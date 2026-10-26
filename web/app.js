@@ -231,7 +231,7 @@ const HANGUL_RE = /[가-힣]/;
 const I18N_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const I18N_DATE_MAP = { "(월)": "(Mon)", "(화)": "(Tue)", "(수)": "(Wed)", "(목)": "(Thu)", "(금)": "(Fri)", "(토)": "(Sat)", "(일)": "(Sun)" };
 const I18N_DATE_RE = /\((월|화|수|목|금|토|일)\)/g;
-const I18N_ATTRS = ["placeholder", "title", "aria-label", "data-hint", "alt"];
+const I18N_ATTRS = ["placeholder", "data-placeholder", "title", "aria-label", "data-hint", "alt"];
 
 function i18nCompile(table) {
   I18N.exact.clear();
@@ -403,7 +403,8 @@ function i18nTranslateTree(root) {
   els.forEach((el) => {
     I18N_ATTRS.forEach((name) => {
       const v = el.getAttribute(name);
-      if (v && HANGUL_RE.test(v) && !i18nSkip(el)) {
+      // 메일 본문(contenteditable)은 사용자 글이라 건너뛰지만, 빈 칸 안내(data-placeholder)는 화면 문구다
+      if (v && HANGUL_RE.test(v) && (name === "data-placeholder" || !i18nSkip(el))) {
         const next = tr(v);
         if (next !== v) el.setAttribute(name, next);
       }
@@ -1416,6 +1417,7 @@ async function renderMailBody(mail) {
   // 다른 메일로 옮겨 갔는지 판단할 수 있다.
   state.readMail = mail;
   state.readShowImages = false;
+  renderReadAttachments(mail);
 
   if (!mail.bodyLoaded) {
     // 받아오는 동안 빈 화면 대신 미리보기라도 보여 준다
@@ -1426,6 +1428,7 @@ async function renderMailBody(mail) {
     await ensureMailBody(mail);
     // 그 사이 다른 메일을 눌렀으면 이 결과는 버린다
     if (!state.readMail || state.readMail.id !== mail.id) return;
+    renderReadAttachments(mail);
   }
 
   const html = mail.bodyHtml || "";
@@ -1457,6 +1460,45 @@ async function renderMailBody(mail) {
     sizeMailFrame(frame);
   };
   if (bar) bar.hidden = true;
+}
+
+/* 읽기 화면의 첨부 칸. 예전엔 이 칸이 없어 받은·보낸 메일의 첨부를 앱에서 볼 수 없었다(2026-10-25 사용자:
+   '보낸 편지함에서 첨부가 안 보인다'). 누르면 서버에서 그 파트만 받아 내려받기로 연다(/api/mail/attachment). */
+function renderReadAttachments(mail) {
+  const box = $("#readAttachments");
+  if (!box) return;
+  const atts = mail?.attachments || [];
+  box.hidden = !atts.length;
+  if (!atts.length) {
+    box.innerHTML = "";
+    return;
+  }
+  // 목록의 크기는 전송 인코딩 뒤 크기라 base64 면 실제 파일의 약 4/3 이다
+  const realSize = (a) => Math.round(Number(a.size || 0) * ((a.encoding || "base64") === "base64" ? 0.75 : 1));
+  const canGet = mail.uid !== null && mail.uid !== undefined && !mail.pendingTrash;
+  box.innerHTML = atts
+    .map(
+      (a, i) => `
+      <button type="button" class="read-att" data-att="${i}" ${canGet ? "" : "disabled"} title="${escapeHtml(a.name || "첨부파일")}">
+        ${iconHtml("file", "read-att-icon")}
+        <span class="read-att-name">${escapeHtml(a.name || "첨부파일")}</span>
+        <span class="read-att-size">${formatBytes(realSize(a))}</span>
+        ${iconHtml("download", "read-att-get")}
+      </button>`,
+    )
+    .join("");
+}
+
+function bindReadAttachments() {
+  $("#readAttachments")?.addEventListener("click", (event) => {
+    const btn = event.target.closest(".read-att");
+    const mail = state.readMail;
+    const att = btn && mail ? (mail.attachments || [])[Number(btn.dataset.att)] : null;
+    if (!att) return;
+    const q = new URLSearchParams({ uid: String(mail.uid), folder: mail.folder || "inbox", part: att.part });
+    openOutside(`/api/mail/attachment?${q}`);
+    showToast(`${shortText(att.name || "첨부파일", 30)} 받는 중`);
+  });
 }
 
 function openEmailDetail(mail) {
@@ -2499,6 +2541,8 @@ async function saveDraftToServer({ auto }) {
   const attBytes = atts.reduce((n, a) => n + Number(a.size || 0), 0);
   const withAtts = !auto || attBytes <= AUTOSAVE_ATTACH_MAX;
   draftNote(auto ? "자동 저장 중…" : "저장하는 중…");
+  let finishSaving;
+  autosave.inflight = new Promise((resolve) => (finishSaving = resolve));
   try {
     await api("/api/mail/save-draft", {
       method: "POST",
@@ -2520,11 +2564,24 @@ async function saveDraftToServer({ auto }) {
     if (!auto) showToast(error.message);
   } finally {
     autosave.busy = false;
+    finishSaving();
     if (autosave.pending) {
       autosave.pending = false;
       scheduleAutosave();
     }
   }
+}
+
+/* 보내기 직전: 예약된 자동 저장을 멈추고, 이미 서버로 가는 중인 저장은 끝날 때까지 기다린다.
+   안 그러면 보낸 뒤 1초 만에 같은 메일이 임시 보관함에 다시 생겼다(2026-10-25 실측: 보냄 22:25:17 · 임시 22:25:18).
+   보내기가 같은 번호(draftId)의 임시본을 정리하므로, 저장이 먼저 끝나야 함께 지워진다. */
+async function settleAutosave() {
+  window.clearTimeout(autosave.local);
+  window.clearTimeout(autosave.server);
+  autosave.pending = false;
+  if (autosave.busy) await autosave.inflight;
+  autosave.pending = false;
+  window.clearTimeout(autosave.server);
 }
 
 function scheduleAutosave() {
@@ -6560,6 +6617,7 @@ function bindEvents() {
     const sendBtn = $("#sendMailButton");
     sendBtn.disabled = true;
     try {
+      await settleAutosave();
       let sent = 0;
       const warnings = [];
       for (const one of targets) {
@@ -7644,8 +7702,9 @@ async function renderHealth() {
     $("#healthTitle").textContent = h.keychain
       ? h.keychain.waiting ? "키체인 허락을 기다리고 있어요" : "키체인에서 비밀번호를 못 꺼냈어요"
       : h.consecutiveFailures >= 2 ? "동기화가 계속 실패하고 있어요" : "한동안 동기화가 되지 않았어요";
+    // 경고와 '(마지막 성공: …)' 을 따로 옮긴다. 한 줄로 붙이면 영어 화면 번역표의 어느 틀에도 안 맞아 한국어로 남았다
     $("#healthDetail").textContent =
-      h.warning + (last && !h.keychain ? ` (마지막 성공: ${String(last).replace("T", " ")})` : "");
+      tr(h.warning) + (last && !h.keychain ? tr(` (마지막 성공: ${String(last).replace("T", " ")})`) : "");
     banner.hidden = false;
   } catch (error) {
     banner.hidden = true;
@@ -8670,7 +8729,7 @@ function heroSummary() {
 }
 
 function setHeroGreeting() {
-  // '오후도 차분하게, 유준 님' 같은 인사는 오글거린다는 말을 들었다. 날짜만 담백하게 쓴다.
+  // '오후도 차분하게, ○○ 님' 같은 인사는 오글거린다는 말을 들었다. 날짜만 담백하게 쓴다.
   // 쉬는 날에는 그 이름을 붙인다 (예: 10월 5일 월요일 · 추석).
   const now = new Date();
   const holiday = specialDay(now)?.holiday;
@@ -10069,6 +10128,7 @@ bindFold();
 bindRichToolbar();
 bindAddressPicker();
 bindComposeExtras();
+bindReadAttachments();
 bindAcademic();
 bindDirectory();
 bindDashEditor();
@@ -12660,10 +12720,13 @@ function nextAutoJob() {
   const cfg = state.config || {};
   const h = state.health || {};
   const every = { emails: cfg.autoEmailMinutes, deadlines: cfg.autoDeadlineMinutes, sync: cfg.autoSyncMinutes };
+  // 계정이 빈 작업은 앱이 자동으로 돌리지 않는다 (app.scheduler_loop · web_ui.account_ready)
+  const lms = Boolean(cfg.lmsId && cfg.hasLmsPassword);
+  const ready = { emails: Boolean(cfg.schoolEmail && cfg.hasSchoolEmailPassword), deadlines: lms, sync: lms };
   let best = null;
   Object.entries(every).forEach(([kind, minutes]) => {
     const m = Number(minutes) || 0;
-    if (m <= 0 || (h.authFailed || {})[kind]) return;
+    if (m <= 0 || !ready[kind] || (h.authFailed || {})[kind]) return;
     const last = h.lastSuccess?.[kind] ? new Date(h.lastSuccess[kind]).getTime() : 0;
     let at = last + m * 60000;
     // 실패한 뒤에는 앱이 쉬었다가 다시 한다 (app.next_due_job 과 같은 셈: 연속 실패마다 두 배, 최대 6시간)
@@ -12697,7 +12760,11 @@ function renderStatusCard(task) {
     line = STATUS_KIND_DOING[kind];
   } else {
     const next = nextAutoJob();
-    if (!next) line = "자동으로 가져오기 꺼짐";
+    if (!next) {
+      const c = state.config || {};
+      const noAccount = !(c.lmsId && c.hasLmsPassword) && !(c.schoolEmail && c.hasSchoolEmailPassword);
+      line = noAccount ? "계정을 넣으면 자동으로 가져와요" : "자동으로 가져오기 꺼짐";
+    }
     else {
       const mins = Math.ceil((next.at - Date.now()) / 60000);
       // 앱은 30초마다 차례를 보므로, 시간이 됐으면 1분 안에 시작한다
@@ -13579,7 +13646,8 @@ function uiButtons(message, buttons, opts = {}) {
 /* ===== 메일 첨부: Drive 창 =====
    예전에는 파일 20개를 번호로 늘어놓고 번호를 적게 했다(시스템 입력창).
    이제 Drive 처럼 폴더를 열어 들어가고, 검색하고, 여러 개를 골라 한 번에 붙인다.
-   앱 권한(drive.file) 때문에 이 앱이 올린 파일만 보인다 — 강의자료는 전부 여기 있다. */
+   앱 권한(drive.file) 때문에 이 앱이 올린 파일만 보인다 — 강의자료는 전부 여기 있다. 다른 파일은 'Drive 전체에서 고르기'
+   (구글 고르기 창, pickFromGoogleDrive). */
 const DRIVE_FOLDER = "application/vnd.google-apps.folder";
 const DRIVE_ATTACH_MAX = 20 * 1024 * 1024; // 서버(/api/drive/get)와 같은 한도
 
@@ -13609,8 +13677,8 @@ async function openDrivePicker() {
       <nav class="drive-crumbs" aria-label="폴더 위치"></nav>
       <label class="drive-search">${iconHtml("search")}<input type="search" placeholder="Drive에서 파일 이름 찾기" /></label>
     </div>
-    <p class="drive-scope-note" hidden>지금은 Daling 이 올린 파일만 보여요. 내 Drive 전체를 보려면 Google 을 다시 연결해 주세요.
-      <button type="button" class="button compact" data-act="reconnect">다시 연결</button></p>
+    <p class="drive-scope-note" hidden>여기엔 Daling 이 올린 파일만 보여요. 다른 파일은 Google Drive 에서 골라 주세요.
+      <button type="button" class="button compact" data-act="google-pick">Drive 전체에서 고르기</button></p>
     <div class="drive-list" role="listbox" aria-multiselectable="true"></div>
     <div class="app-dialog-actions">
       <span class="drive-picked"></span>
@@ -13674,7 +13742,7 @@ async function openDrivePicker() {
       const data = await api(`/api/drive/list?${params}`);
       if (my !== seq) return; // 그새 다른 폴더를 열었다
       current = data;
-      // 예전에 연결한 토큰(drive.file 만)은 앱이 올린 파일만 보인다 → 다시 연결하면 내 Drive 전체
+      // 보통 토큰(drive.file)은 앱이 올린 파일만 보인다 → 나머지는 구글 고르기 창에서 (pickFromGoogleDrive)
       dlg.querySelector(".drive-scope-note").hidden = data.fullAccess !== false;
       const rows = [...(data.folders || []), ...(data.files || [])];
       list.innerHTML = rows.length
@@ -13745,11 +13813,8 @@ async function openDrivePicker() {
       const act = event.target.closest("[data-act]")?.dataset.act;
       if (act === "cancel") finish(null);
       if (act === "ok" && picked.size) finish([...picked.values()]);
-      if (act === "reconnect") {
-        // 설정의 'Google 연결' 과 같은 길 (새 권한까지 묻는다). 브라우저에서 허락한 뒤 이 창을 다시 열면 된다
-        finish(null);
-        $("#googleLoginButton")?.click();
-      }
+      // 이 창에서 고른 것도 함께 붙인다 (구글 고르기 창의 결과와 합침)
+      if (act === "google-pick") finish({ google: true, files: [...picked.values()] });
     });
     dlg.addEventListener("cancel", (event) => {
       event.preventDefault();
@@ -13764,7 +13829,47 @@ async function openDrivePicker() {
 }
 
 async function importFromDrive() {
-  const files = await openDrivePicker();
+  const chosen = await openDrivePicker();
+  if (chosen?.google) {
+    const more = await pickFromGoogleDrive();
+    await attachDriveFiles([...chosen.files, ...more]);
+    return;
+  }
+  await attachDriveFiles(chosen || []);
+}
+
+/* Drive 전체·공유 문서함에서 고르기: 구글 고르기 창(Picker)을 기본 브라우저에 띄우고(/api/drive/pick), 고를 때까지 묻는다.
+   고른 파일에만 권한(drive.file)이 생긴다 — Drive 전체 읽기(제한된 범위)는 심사 전엔 '확인되지 않은 앱' 경고가 떠서 뺐다. */
+async function pickFromGoogleDrive() {
+  let start;
+  try {
+    start = await api("/api/drive/pick", { method: "POST", body: JSON.stringify({ openBrowser: true }) });
+  } catch (error) {
+    showToast(humanError(error));
+    return [];
+  }
+  if (!start.openedInBrowser && start.authUrl) openOutside(start.authUrl);
+  showToast("브라우저에서 첨부할 파일을 골라 주세요.");
+  const until = Date.now() + 10 * 60 * 1000;
+  while (Date.now() < until) {
+    await new Promise((resolve) => window.setTimeout(resolve, 1500));
+    let pick;
+    try {
+      pick = await api(`/api/drive/picked?state=${encodeURIComponent(start.state)}`);
+    } catch {
+      continue;
+    }
+    if (pick.status === "waiting") continue;
+    if (pick.status === "done") return pick.files || [];
+    if (pick.status === "cancelled") showToast("파일을 고르지 않았어요.");
+    else showToast(humanError(pick.message || "Drive 에서 파일을 가져오지 못했어요."));
+    return [];
+  }
+  showToast("10분 동안 고르지 않아 기다리기를 멈췄어요.");
+  return [];
+}
+
+async function attachDriveFiles(files) {
   if (!files?.length) return;
   showTopProgress?.(`Drive에서 ${files.length}개 가져오는 중`, 30);
   let done = 0;
@@ -14160,9 +14265,126 @@ $("#mailRailFold")?.addEventListener("click", () => setMailRailFolded(true, true
   });
 })();
 
+/* ===== 맥: 끌 곳 알리기 =====
+   맥 창(mac_window.py)도 제목 줄을 투명하게 하고 상단 바를 제목 줄로 쓴다. 그런데 WKWebView 는 CSS app-region 을
+   모르므로, styles.css '창 제목 줄 = 상단 바' 의 끌 곳(상단 바·왼쪽 메뉴의 빈 곳)과 단추 자리를 사각형으로 재서
+   앱에 알려 준다. 앱은 누른 자리가 끌 곳이면 웹에 넘기지 않고 맥 고유의 창 끌기를 한다.
+   신호등(닫기·최소화·확대)은 운영체제 것을 그대로 쓰고, 상단 바 첫 줄 가운데 높이(cy)로 옮겨 달라고 함께 보낸다. */
+const MAC_NO_DRAG =
+  "button, input, a, label, select, textarea, summary, kbd, [role='button'], [tabindex], [contenteditable], " +
+  ".search-wrap, .search-pop, .top-progress, .sync-pill, .nowbar-compact, .demo-pill";
+function macDragRegions() {
+  let last = "";
+  let timer = 0;
+  const box = (el) => {
+    const r = el.getBoundingClientRect();
+    return r.width > 0 && r.height > 0 ? [r.left, r.top, r.width, r.height].map((n) => Math.round(n * 10) / 10) : null;
+  };
+  const center = (el) => {
+    const r = el && el.getBoundingClientRect();
+    return r && r.width > 0 ? [Math.round(r.left + r.width / 2), Math.round(r.top + r.height / 2)] : null;
+  };
+  const measure = () => {
+    const drag = [];
+    const nodrag = [];
+    const areas = [];
+    const bar = document.querySelector(".topbar");
+    const barBox = bar && getComputedStyle(bar).display !== "none" ? box(bar) : null;
+    if (barBox) {
+      drag.push(barBox);
+      areas.push(bar);
+      bar.querySelectorAll(MAC_NO_DRAG).forEach((el) => {
+        const b = box(el);
+        if (b) nodrag.push(b);
+      });
+    }
+    const side = document.querySelector(".sidebar");
+    const sideBox = side ? box(side) : null;
+    // 왼쪽 세로 메뉴일 때만 (좁은 창에서는 아래 탭바가 된다). Windows 처럼 메뉴의 빈 틈만 끈다(.sidebar > * 는 빼고)
+    if (sideBox && sideBox[1] <= 1 && sideBox[3] > 200) {
+      drag.push(sideBox);
+      areas.push(side);
+      [...side.children].forEach((el) => {
+        const b = box(el);
+        if (b) nodrag.push(b);
+      });
+    }
+    // 위를 덮은 것(대화 상자·소개 카드·알림 등)은 끌지 않는다: 끌 곳 위를 띄엄띄엄 찍어 보고, 맨 위가 끌 곳 밖의 것이면
+    // 끌 곳을 품지 않는 가장 큰 조상(카드 전체)을 뺀다. 다만 화면을 어둡게 덮는 막(소개의 .tour-dim, 대화 상자 바탕)은
+    // 끌기를 막지 않는다 — 맥 CI 실측(2026-10-26): 첫 실행 소개가 뜬 동안 상단 바 전체가 '끌기 안 됨' 이 되어 창을 못 옮겼다.
+    // 막 = 글·자식이 없는 빈 판, 또는 이 끌 곳을 통째로 덮는 것
+    const seen = new Set();
+    drag.forEach((rect) => {
+      const [x, y, w, h] = rect;
+      const covers = (el) => {
+        const r = el.getBoundingClientRect();
+        return r.left <= x && r.top <= y && r.right >= x + w && r.bottom >= y + h;
+      };
+      const backdrop = (el) =>
+        (/^(DIV|SPAN)$/.test(el.tagName) && !el.firstElementChild && !el.textContent.trim()) || covers(el);
+      for (let py = y + 4; py < y + h; py += 32) {
+        for (let px = x + 4; px < x + w; px += 32) {
+          const hit = document.elementFromPoint(px, py);
+          if (!hit || areas.some((a) => a.contains(hit)) || backdrop(hit)) continue;
+          let top = hit;
+          while (
+            top.parentElement &&
+            top.parentElement !== document.body &&
+            !areas.some((a) => top.parentElement.contains(a)) &&
+            !covers(top.parentElement)
+          ) {
+            top = top.parentElement;
+          }
+          if (seen.has(top)) continue;
+          seen.add(top);
+          const b = box(top);
+          if (b) nodrag.push(b);
+        }
+      }
+    });
+    const anchor = bar && (bar.querySelector(".topbar-actions") || bar);
+    const ar = anchor ? anchor.getBoundingClientRect() : null;
+    return {
+      action: "regions",
+      w: window.innerWidth,
+      drag,
+      nodrag,
+      cy: ar && ar.height > 0 ? Math.round(ar.top + ar.height / 2) : 30,
+      lx: sideBox && sideBox[2] < 100 && sideBox[1] <= 1 ? 12 : 20, // 메일함의 좁은(72px) 메뉴 안에 신호등이 들어가게
+      // 앱의 자가 점검(CI)이 눌러 볼 자리
+      probe: { button: center(document.getElementById("themeFlip")), search: center(bar && bar.querySelector(".search-wrap")), nowbar: center(document.getElementById("nowBar")) },
+    };
+  };
+  const send = () => {
+    timer = 0;
+    const body = JSON.stringify(measure());
+    if (body === last) return;
+    last = body;
+    api("/api/window", { method: "POST", body }).catch(() => {});
+  };
+  const later = (ms = 80) => {
+    if (!timer) timer = setTimeout(send, ms);
+  };
+  // 화면이 바뀌면(대화 상자·메뉴 열림, 창 크기) 다시 잰다. 시계 글자처럼 글만 바뀌는 것은 보지 않는다(1초마다 잴 까닭이 없다)
+  const textOnly = (r) =>
+    r.type === "childList" && [...r.addedNodes, ...r.removedNodes].every((n) => n.nodeType === Node.TEXT_NODE);
+  new MutationObserver((records) => {
+    if (!records.every(textOnly)) later();
+  }).observe(document.body, {
+    subtree: true,
+    childList: true,
+    attributes: true,
+    attributeFilter: ["class", "hidden", "style", "open"],
+  });
+  window.addEventListener("resize", () => later(60));
+  document.addEventListener("transitionend", () => later(), true);
+  send();
+}
+
 /* ===== 창 제목 줄 = 상단 바 (Spotify 처럼) =====
-   설치 앱은 회색 기본 제목 줄을 없앤다(window_chrome.py). 그러면 상단 바 빈 곳을 끌어 창을 옮기고(두 번 누르면 최대화),
-   오른쪽 끝 단추로 최소화·최대화·닫기를 한다. 개발 서버(브라우저)에서는 custom=false 라 아무것도 안 바뀐다. */
+   설치 앱은 회색 기본 제목 줄을 없앤다(Windows: window_chrome.py, 맥: mac_window.py). 그러면 상단 바 빈 곳을 끌어
+   창을 옮기고(두 번 누르면 최대화), Windows 는 오른쪽 끝 단추로 최소화·최대화·닫기를 한다(맥은 왼쪽 위 신호등).
+   개발 서버(브라우저)에서는 custom=false 라 아무것도 안 바뀐다. */
 (function bindWindowChrome() {
   const box = $("#winControls");
   if (!box) return;
@@ -14178,23 +14400,46 @@ $("#mailRailFold")?.addEventListener("click", () => setMailRailFolded(true, true
   // 단추 높이를 상단 바 첫 줄에 맞춘다 (상단 바 높이는 화면 폭마다 다르다)
   const fitHeight = () => {
     const bar = document.querySelector(".topbar");
-    const h = bar && bar.offsetHeight ? Math.min(bar.offsetHeight, 64) : 48;
+    let h = bar && bar.offsetHeight ? Math.min(bar.offsetHeight, 64) : 48;
+    // 두 줄 상단 바(휴대폰 배치)는 첫 줄(단추 묶음) 가운데에 맞춘다. 바 높이로 잡으면 창 단추 칸이 둘째 줄까지
+    // 내려와 검색칸 오른쪽 빈 곳(끌기 자리, placeDragGaps)을 가렸다.
+    const acts = bar && bar.querySelector(":scope > .topbar-actions");
+    if (acts && acts.offsetHeight) h = Math.min(h, Math.round((acts.offsetTop + acts.offsetHeight / 2) * 2));
     document.documentElement.style.setProperty("--winctl-h", `${h}px`);
     // 설정 판은 상단 바 아래부터 덮는다(스크롤 막대가 창 끝까지 올라가지 않게)
     if (bar && bar.offsetHeight) document.documentElement.style.setProperty("--topbar-h", `${bar.offsetHeight}px`);
   };
+  // 맥 전체 화면에서는 신호등이 메뉴 막대와 함께 숨으므로 그 자리를 비워 두지 않는다
+  const paintMac = (st) => document.documentElement.classList.toggle("mac-fullscreen", !!(st && st.fullscreen));
   const refresh = () =>
     api("/api/window")
-      .then((st) => paintMax(st.maximized))
+      .then((st) => {
+        paintMax(st.maximized);
+        if (st.mac) paintMac(st);
+      })
       .catch(() => {});
   api("/api/window")
     .then((st) => {
       if (!st || !st.custom) return;
       document.documentElement.classList.add("custom-frame");
       placeMailSearch(); // 메일함에서 켜졌으면 검색창을 상단 바로
-      box.hidden = false;
+      if (st.mac) {
+        document.documentElement.classList.add("mac-frame");
+        paintMac(st);
+      } else {
+        // 맥은 운영체제 신호등을 쓰고, 끌 곳도 macDragRegions 가 따로 알린다(WebKit 은 app-region 을 모름)
+        watchDragGaps();
+        box.hidden = false;
+      }
       paintMax(st.maximized);
       fitHeight();
+      if (st.mac) {
+        // 상단 바 높이는 창 크기 말고도 화면(메일함 등)마다 바뀐다. 맥은 왼쪽 메뉴가 이 높이만큼 내려가므로 늘 따라간다
+        const bar = document.querySelector(".topbar");
+        // 다음 그림 차례에 고친다: 콜백 안에서 바로 고치면 'ResizeObserver loop' 오류가 window error 로 올라온다
+        if (bar && window.ResizeObserver) new ResizeObserver(() => requestAnimationFrame(fitHeight)).observe(bar);
+        macDragRegions();
+      }
       let timer = 0;
       window.addEventListener("resize", () => {
         clearTimeout(timer);
@@ -14291,6 +14536,89 @@ function placeMailSearch() {
   row.classList.toggle("emptied", up);
 }
 window.addEventListener("resize", () => placeMailSearch());
+
+/* 상단 바 단추 묶음 사이 빈 칸을 창 끌기 자리로 (styles.css '창 제목 줄 = 상단 바' 설명).
+   배치(flex·grid·줄바꿈)가 화면 폭마다 달라 칸을 끼워 넣지 않고, 같은 줄 이웃 사이 틈을 재서 절대 위치 칸을 놓는다.
+   칸은 단추 높이(40px)가 아니라 상단 바 위아래 끝까지 늘린다. 단추 높이만이면 오른쪽(검색칸~동기화 칩)에서
+   끌 곳이 42×40px 하나뿐이라 '오른쪽은 안 끌린다'고 느꼈다(2026-10-26). 줄바꿈된 다른 줄 단추에는 닿지 않게 자른다.
+   값이 그대로면 건드리지 않는다: 끌기 자리가 바뀔 때마다 WebView2 가 창 조각을 다시 만든다.
+   줄 끝(오른쪽 이웃 없음)은 상단 바 오른쪽 끝까지가 틈이다. 휴대폰 배치의 둘째 줄(검색칸) 오른쪽, 창 단추 아래
+   빈 곳이 그렇다. 창 단추와 같은 줄이면 단추 앞에서 자르고, 단추보다 아래 줄이면 단추 밑에서부터 둔다. */
+function placeDragGaps() {
+  const bar = document.querySelector(".topbar");
+  if (!bar) return;
+  const base = bar.getBoundingClientRect();
+  const boxes = [...bar.children]
+    .filter((el) => !el.classList.contains("drag-gap"))
+    .map((el) => el.getBoundingClientRect())
+    .filter((r) => r.width > 0 && r.height > 0);
+  const ctl = $("#winControls");
+  const wc = ctl && !ctl.hidden ? ctl.getBoundingClientRect() : null;
+  const gaps = [];
+  boxes.forEach((a) => {
+    // 오른쪽에서 가장 가까운, 같은 줄(세로로 겹치는) 이웃
+    let b = null;
+    boxes.forEach((c) => {
+      if (c === a || c.left < a.right - 1) return;
+      if (Math.min(a.bottom, c.bottom) - Math.max(a.top, c.top) < 16) return;
+      if (!b || c.left < b.left) b = c;
+    });
+    let right = b ? b.left - 4 : base.right;
+    let top = base.top;
+    if (!b && wc && wc.width > 0 && wc.left < right) {
+      if (Math.min(a.bottom, wc.bottom) - Math.max(a.top, wc.top) >= 16) right = Math.min(right, wc.left - 4);
+      else top = Math.max(top, wc.bottom + 4);
+    }
+    const left = a.right + 4;
+    if (right - left < 16) return;
+    let bottom = base.bottom;
+    boxes.forEach((c) => {
+      if (c.right <= left || c.left >= right) return; // 이 틈 위·아래에 놓인 다른 줄 단추만
+      if (c.bottom <= Math.max(a.top, b ? b.top : a.top)) top = Math.max(top, c.bottom + 4);
+      else if (c.top >= Math.min(a.bottom, b ? b.bottom : a.bottom)) bottom = Math.min(bottom, c.top - 4);
+    });
+    if (bottom - top < 16) return;
+    gaps.push([left - base.left, top - base.top, right - left, bottom - top].map(Math.round));
+  });
+  const key = JSON.stringify(gaps);
+  if (bar.dataset.dragGaps === key) return;
+  bar.dataset.dragGaps = key;
+  const els = [...bar.querySelectorAll(":scope > .drag-gap")];
+  gaps.forEach(([left, top, width, height], i) => {
+    let el = els[i];
+    if (!el) {
+      el = document.createElement("div");
+      el.className = "drag-gap";
+      el.setAttribute("aria-hidden", "true");
+      bar.append(el);
+    }
+    Object.assign(el.style, { left: `${left}px`, top: `${top}px`, width: `${width}px`, height: `${height}px` });
+  });
+  els.slice(gaps.length).forEach((el) => el.remove());
+}
+
+function watchDragGaps() {
+  const bar = document.querySelector(".topbar");
+  if (!bar || bar.dataset.dragWatch) return;
+  bar.dataset.dragWatch = "1";
+  let frame = 0;
+  const schedule = () => {
+    if (!frame) frame = requestAnimationFrame(() => ((frame = 0), placeDragGaps()));
+  };
+  const sizes = new ResizeObserver(schedule);
+  const observeKids = () => {
+    sizes.disconnect();
+    sizes.observe(bar);
+    if ($("#winControls")) sizes.observe($("#winControls")); // 높이(--winctl-h)가 바뀌면 줄 끝 틈도 다시
+    [...bar.children].forEach((el) => el.classList.contains("drag-gap") || sizes.observe(el));
+    schedule();
+  };
+  // 메일함에서는 #topbarMail 이 들어오고 나간다 (placeMailSearch)
+  new MutationObserver((list) => {
+    if (list.some((m) => [...m.addedNodes, ...m.removedNodes].some((n) => !n.classList?.contains("drag-gap")))) observeKids();
+  }).observe(bar, { childList: true });
+  observeKids();
+}
 
 
 /* ===== AI 도우미 (ai_cli.py: Claude · Gemini · Codex CLI) =====

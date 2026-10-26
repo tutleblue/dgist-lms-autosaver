@@ -242,7 +242,7 @@ LMS 브라우저를 Edge 로 바꾼 까닭 (2026-10-15): Playwright 가 받는 `
   - 주소(src) 없는 `<img>` 는 메일 화면에서 숨긴다(`mailFrameDoc`). 보낸 쪽 편집기에서 그림이 빠진 자리라 빈 네모만 남았다(2026-10-22 총학생회 카드뉴스 — 원본 .eml 에도 그림 조각이 없었다).
 - 메일 자동 확인 주기 자동 조절 (2026-10-22, 1.12.37, 사용자 결정): 앱을 보고 있으면 설정한 주기(기본 5분), 안 보면 15분(`web_ui.effective_minutes`·`AWAY_EMAIL_MINUTES`, 설정이 더 길거나 꺼져 있으면 그대로). '보고 있음' 은 화면(`app.js reportPresence`)이 `/api/presence` 로 알린다: 화면이 보이고 (앱에 초점이 있고 10분 안에 손댔거나) 2분 안에 손댔을 때. 보는 동안 1분마다, 바뀌면 바로 보내고, 서버는 3분 소식이 없으면 안 보는 것으로 친다(`PRESENCE_FRESH_SECONDS`). 다시 손대면 곧바로 알려 밀린 확인을 당긴다. 실패 뒤 간격 두 배·로그인 거절 뒤 2시간 쉬기(`app.next_due_job`)는 그대로.
   - 까닭(2026-10-22 실측, 시험 로그인 2번): 학교 메일 서버는 로그인 뒤 20~40초면 연결을 끊거나 멈춘다 — 5초마다 NOOP 을 보내도 응답이 4ms·289ms·745ms·15.9초로 흔들리다 42초에 20초 동안 답이 없었다. 그래서 5분마다 확인할 때마다 새로 로그인한다(컴퓨터 1대에 시간당 12번). 같은 계정 로그인이 잦으면 맞는 비밀번호도 'NO login failure: invalid auth or access denied' 로 거절한다(9/27·10/12·10/21 21:28·10/22 12:18, 10/21 은 맥 2대 + Windows 가 함께 돌 때 시작). 서버 기록이 없어 거절 규칙은 확인하지 못했다. 연결을 살려 두기(NOOP 유지)는 위 실측대로 소용없다.
-- 첨부: `attachments` 메타(이름·형식·크기), `hasAttachment`. 내려받기 기능은 아직 없음.
+- 첨부: `attachments` 메타(이름·형식·크기(전송 인코딩 뒤)·인코딩·`nameChecked`), `hasAttachment`. 읽기 화면 받는 사람 줄 아래 칩(`renderReadAttachments`)을 누르면 `/api/mail/attachment?uid=&folder=&part=` → `email_reader.fetch_attachment` 가 그 파트만 받아(BODY.PEEK, 40MB 까지) 내려받기로 연다(1.12.41, 예전엔 첨부 칸이 없었다).
 - `BODY_VERSION`(현재 3)이 올라가면 예전에 받은 메일을 한 번 다시 받음.
 - quoted-printable 판별(`_looks_quoted_printable`), HTML→평문 정리(`clean_html_to_text`, 역추적 폭발 없는 정규식).
 - 분류: 규칙 기반(`rule_based_category`), Gemini 키가 있으면 관심도·요약 추가.
@@ -270,21 +270,26 @@ LMS 브라우저를 Edge 로 바꾼 까닭 (2026-10-15): Playwright 가 받는 `
 - Drive (`drive_uploader.py`): 루트 폴더 아래 과목 폴더, 업로드 선택(`upload_selection.json`의 `courses`)을 따름. 권한은 `drive.file`.
 - Calendar (`calendar_sync.py`): 메일에서 뽑은 일정, 학사일정을 지정한 캘린더로. 권한은 `calendar.app.created`(앱이 만든 보조 캘린더와 그 일정) + `calendar.calendarlist.readonly`(이름으로 찾기), 둘 다 민감하지 않은 범위라 데이터 액세스 인증이 필요 없다(1.12.23, 2026-10-13).
   - 예전 토큰(전체 `calendar`)도 그대로 쓴다(`runtime_config.calendar_scope_granted`). 그래서 토큰을 읽을 때 권한 목록을 넘기지 않는다 — 넘기면 갱신 때 없는 좁은 권한을 달라고 해 `invalid_scope` 로 실패한다.
-  - 실측(jykim5215 계정): 전체 `calendar` 로 예전에 만든 'DGIST 메일 일정'도 `app.created` 로 열리고 일정 넣기·고치기·키로 찾기·지우기가 된다 → 다시 연결해도 캘린더가 두 개로 갈라지지 않는다.
+  - 실측(개발자 계정): 전체 `calendar` 로 예전에 만든 'DGIST 메일 일정'도 `app.created` 로 열리고 일정 넣기·고치기·키로 찾기·지우기가 된다 → 다시 연결해도 캘린더가 두 개로 갈라지지 않는다.
   - 찾은 캘린더 ID 는 토큰 옆 `gcal_calendars.json` 에 적어 두고 먼저 쓴다. 같은 이름의 캘린더가 여럿이거나 이 토큰으로 못 여는 것(사용자가 직접 만든 같은 이름)이면 건너뛴다.
   - 연결 URL 에 `include_granted_scopes` 를 넣지 않는다. 넣으면 예전에 허락한 전체 `calendar` 가 새 토큰에 다시 묶인다.
 - **OAuth 동의 화면 브랜딩** (2026-10-12): 데스크톱 앱이 쓰는 클라이언트는 Cloud 프로젝트 `dgist-lms-autosaver-2`, 예전 웹판(Render) 클라이언트는 `dgist-lms-sync`. 두 프로젝트 모두 앱 이름 Daling, 로고 `docs/logo-120.png`(= `web/app-logo-120.png`), 홈 `https://gudaling.dev/`, 개인정보처리방침 `/privacy`, 약관 `/terms`, 승인된 도메인 `gudaling.dev`.
   - 2026-10-12 `daling-app.pages.dev` 로 낸 재인증은 "웹사이트가 나에게 등록되어 있지 않음"으로 남아, 같은 날 개인 도메인 `gudaling.dev`(Cloudflare Registrar, 같은 계정)를 사서 Pages 프로젝트 `daling-app` 에 붙였다(DNS: `@` CNAME → `daling-app.pages.dev`, 프록시). `daling-app.pages.dev` 도 같은 내용을 내보내지만 페이지마다 canonical 은 `gudaling.dev`.
-  - 이전 반려 사유 4가지: 홈페이지(`jykim5215.github.io/…`)가 내 소유로 확인 안 됨(GitHub 이름이 tutleblue로 바뀌어 404, 게다가 Search Console 확인이 하위 경로라 도메인 소유로 안 침), 개인정보처리방침 내용 부족, 홈에 앱 목적 설명 없음, 동의 화면 이름(Daling)과 홈 이름(붕어빵) 불일치.
+  - 이전 반려 사유 4가지: 홈페이지(`<옛 GitHub 이름>.github.io/…`)가 내 소유로 확인 안 됨(GitHub 이름이 tutleblue로 바뀌어 404, 게다가 Search Console 확인이 하위 경로라 도메인 소유로 안 침), 개인정보처리방침 내용 부족, 홈에 앱 목적 설명 없음, 동의 화면 이름(Daling)과 홈 이름(붕어빵) 불일치.
   - 사이트 원본은 `docs/`(한국어 + 심사관용 영어). 배포: `npx wrangler pages deploy docs --project-name daling-app --branch main`. Pages 가 `.html`을 떼는 308 리디렉트를 하므로 동의 화면에는 `/privacy`처럼 확장자 없는 주소를 넣습니다.
-  - Search Console: '도메인' 속성 `gudaling.dev` 를 DNS TXT(`google-site-verification=…`, Cloudflare DNS 의 `@` TXT)로 jykim5215@gmail.com 소유 확인. 이 TXT 를 지우면 소유 확인이 풀립니다. 예전 URL 접두어 속성 `https://daling-app.pages.dev/` 는 `docs/googlee81e6dcdac788920.html` 로 확인해 두었다.
+  - Search Console: '도메인' 속성 `gudaling.dev` 를 DNS TXT(`google-site-verification=…`, Cloudflare DNS 의 `@` TXT)로 개발자 Google 계정 소유 확인. 이 TXT 를 지우면 소유 확인이 풀립니다. 예전 URL 접두어 속성 `https://daling-app.pages.dev/` 는 `docs/googlee81e6dcdac788920.html` 로 확인해 두었다.
   - Google 은 github.io 같은 공용 호스팅 하위 도메인을 "소유 확인 불가"로 반려한 사례가 있습니다(2026-06 포럼 답변). 그래서 개인 도메인을 쓴다.
   - **결과**: 2026-10-13 0시경 `gudaling.dev` 로 낸 재인증이 두 프로젝트 모두 몇 분 만에 통과했고 '브랜딩 게시'까지 마쳐, 인증 센터에 "브랜딩이 인증되었으며 사용자에게 표시되고 있습니다". 이름·로고·주소를 바꾸면 다시 인증받아야 하고, 통과한 결과는 7일 안에 게시하지 않으면 만료됩니다.
   - **데이터 액세스** (2026-10-13): 두 프로젝트 모두 데이터 액세스에 `drive.file`·`calendar.app.created`·`calendar.calendarlist.readonly` 만 등록(전부 '민감하지 않은 범위'), `dgist-lms-sync` 에 있던 민감 범위 `calendar` 는 지움. 인증 센터: "앱이 민감하거나 제한된 범위를 요청하지 않으므로 인증이 필요하지 않습니다". 동의 화면은 '확인되지 않은 앱' 경고 없이 Daling 이름·로고로 바로 권한 선택이 나온다. 민감 범위를 다시 넣으면 시연 영상까지 내는 데이터 액세스 인증을 받아야 한다.
   - **Drive 전체 읽기** (2026-10-22, 1.12.38, 사용자 결정): 메일 'Drive에서 첨부' 가 내 Drive 전체·공유 문서함을 보려고 `drive.readonly` 를 더 요청한다(`runtime_config.GOOGLE_DRIVE_READ_SCOPE`). 구글은 이것을 **제한된 범위** 로 분류한다 → 위의 '인증 필요 없음' 이 깨진다: 심사(보안 평가 포함)를 받기 전까지 연결할 때 '확인되지 않은 앱' 경고('고급 → 이동')가 뜨고, 확인되지 않은 앱은 새 사용자 수에 상한이 있다. Cloud 콘솔 데이터 액세스에 이 범위를 더하는 일과 심사 신청은 사용자가 한다. 쓰기는 여전히 `drive.file` 만.
-    - 예전 토큰(drive.file 만)은 그대로 쓴다: Drive 창은 앱이 올린 파일만 보이고 '다시 연결' 안내를 띄운다(`/api/drive/list` 의 `fullAccess`). 다시 연결하면 전체가 보인다. 맨 위에 '공유 문서함'(`parent=shared` → `sharedWithMe`), 목록·받기는 `supportsAllDrives`.
+    - 예전 토큰(drive.file 만)은 그대로 쓴다: Drive 창은 앱이 올린 파일만 보이고 '다시 연결' 안내를 띄웠다(`/api/drive/list` 의 `fullAccess`, 1.12.40 부터는 고르기 창 단추). 다시 연결하면 전체가 보인다. 맨 위에 '공유 문서함'(`parent=shared` → `sharedWithMe`), 목록·받기는 `supportsAllDrives`.
     - 권한을 하나씩 끄고 허락해도 연결되게 `OAUTHLIB_RELAX_TOKEN_SCOPE` 를 켜고, token.json 의 `scopes` 에는 실제로 허락한 것만 적는다(`runtime_config.granted_token_json`). google-auth 의 to_json 은 '요청한' 권한을 적어, 끈 권한도 있는 줄 알고 갱신 때 그 권한까지 달라고 했을 것이다.
     - 다시 연결하면 그 자리에서 반영: 화면 서버가 예전 토큰으로 만들어 둔 Drive 접속(`drive_uploader._service`)을 `finish_google_oauth`·'google-oauth' 작업 끝에 버린다. 2026-10-22 실제로 다시 연결했을 때 새 토큰에 drive.readonly 가 있는데도 Drive 창은 앱 폴더 2개뿐이었다(새로 만든 접속으로는 내 드라이브 46개·공유 문서함 61개).
+  - **Drive 전체 읽기를 거두고 구글 고르기 창으로** (2026-10-25, 1.12.40): `GOOGLE_SCOPES` 에서 `drive.readonly` 를 뺐다. 까닭: (1) 1.12.38 로 올린 사람은 토큰에 이 권한이 없어 Drive 창이 '다시 연결' 을 요구했고(사용자: "기존 인증이 풀렸다"), 다시 연결하면 '확인되지 않은 앱' 경고가 떴다. (2) 콘솔 '대상' 에 "사용자 한도 100명 중 3명" — 확인되지 않은 제한된 범위는 평생 100명까지다. (3) 제한된 범위 심사는 시연 영상·사유서에 더해, 데이터가 서버를 거치면 외부 보안 평가(CASA, 유료·매년)까지 든다. 구글 Drive 문서도 자체 파일 목록 대신 Picker + `drive.file` 을 권한다. 인증 센터는 그대로 "브랜딩 인증됨 / 데이터 액세스 인증 필요 없음"(drive.readonly 는 콘솔에 등록한 적이 없다).
+    - 고르기 창: `/api/drive/pick` → `create_drive_pick_url` 이 `scope=drive.file&prompt=consent&trigger_onepick=true&allow_multiple=true&access_type=online` 주소를 기본 브라우저로 연다(구글 문서 'desktop-mobile-picker'). 돌아오는 `/oauth2callback?picked_file_ids=…&code=…` 는 state 의 `purpose="drive-pick"` 로 가려 `finish_drive_pick` 이 받는다 — **token.json 에 쓰지 않는다**(drive.file 하나뿐이라 쓰면 캘린더 권한이 사라짐). 고른 파일 이름·크기는 `drive_picks[state]`, 그 파일을 받을 토큰은 `drive_pick_tokens[id]`(50분)에 두고 `/api/drive/get` 이 `drive_service_for_file` 로 쓴다. 화면은 `/api/drive/picked?state=` 를 1.5초마다 묻는다(10분).
+    - `access_type=online`: 구글은 한 계정·한 앱의 갱신 토큰을 100개까지만 두고 넘치면 가장 오래된 것을 끊는다. 고를 때마다 갱신 토큰이 생기면 늘 쓰는 token.json 이 끊길 수 있다.
+    - 콘솔: `dgist-lms-autosaver-2` 에 Google Picker API(`picker.googleapis.com`)를 켰다. 2026-10-25 실측(Chrome, 개발자 계정): 동의 화면이 경고 없이 "선택하려는 파일의 경우 Daling에서 다음 작업을 할 수 있습니다", 고르기 창에 최근·업로드·내 드라이브·공유 문서함·중요 문서함·컴퓨터 탭이 보였다.
+    - 1.12.38~39 에 drive.readonly 를 허락한 토큰은 그대로 둔다(Drive 창이 전체를 보여 줌, `fullAccess`). 다시 연결하면 세 권한만 남는다.
 
 ### 4.6 DGIST 공공데이터 (`dgist_api.py`)
 
@@ -389,9 +394,11 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 | `/api/place-search?q=` | OpenStreetMap 장소 검색 |
 | `/api/emails` | 메일 목록 (본문 없음) |
 | `/api/email-body?id=` | 본문, HTML(cid 주소 치환), 첨부 메타 |
+| `/api/mail/attachment?uid=&folder=&part=` | 첨부 한 개 내려받기 (이름은 서버에서 다시 읽음) |
 | `/api/mail-image?id=&n=` | 본문 그림 한 장 |
 | `/api/mail/folders`, `/api/mail/pending`, `/api/mail/eml` | 메일함 목록, 답장 대기, eml |
 | `/api/drive/list`, `/api/drive/get` | Drive 파일 (첨부용) |
+| `/api/drive/pick` (POST), `/api/drive/picked?state=` | 구글 고르기 창으로 Drive 전체에서 첨부할 파일 고르기 |
 | `/api/samsung-notes/status`, `/api/samsung-notes/job` | 설치 여부, 넣기 진행 |
 | `/api/local-autosave/job` | 내 컴퓨터 자동 저장 진행 |
 | `/api/dgist-api/status` | 공공데이터 키 확인 |
@@ -511,7 +518,6 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 
 ## 10. 알려진 한계·남은 일
 
-- 메일 첨부 파일은 이름·아이콘까지만 나오고 내려받기는 아직 없음
 - 지난 학기 과목은 LMS가 403을 줘서 LMS 순서를 못 채움 (이름순)
 - 학교 메일서버에 IDLE이 없어 새 메일은 주기 확인으로만 앎
 - 삼성 노트 넣기는 PDF만, 파일당 약 5.5초 (삼성 노트 자체 저장 시간)
@@ -638,7 +644,7 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 
 ### 메일 첨부: Drive 창 (`openDrivePicker`)
 
-- `/api/drive/list?parent=<id>` (폴더 안) / `?q=<이름>` (검색) → folders·files. 권한이 `drive.file` 이라 앱이 올린 파일만 보인다.
+- `/api/drive/list?parent=<id>` (폴더 안) / `?q=<이름>` (검색) → folders·files. 권한이 `drive.file` 이라 앱이 올린 파일만 보인다(`fullAccess=false`). 그때 'Drive 전체에서 고르기' 단추가 구글 고르기 창을 띄운다(`pickFromGoogleDrive` → `/api/drive/pick`·`/api/drive/picked`, §4.5). 이 창에서 고른 파일도 함께 붙인다.
 - `/api/drive/get?id=` 로 받아 붙인다. 구글 문서·시트·슬라이드는 PDF 로 내보내 붙인다. 20MB 넘는 파일은 고를 수 없게 흐리게 표시.
 - 작성창의 '내 자료'(강의자료 목록) 칸은 없앴다. 강의자료는 Drive 창의 AutoSaver 폴더에 있다.
 
@@ -649,6 +655,9 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 - 임시저장은 '임시 보관함'에 `(\Seen \Draft)` 로 넣고 `X-Bungeoppang-Draft: <draftId>` 헤더를 붙인다. 다시 저장하거나 보내면 같은 번호의 예전 판에 `\Deleted` 표시만 한다(EXPUNGE 금지).
 - 이 서버는 `SEARCH HEADER` 를 받아도 빈 결과를 준다(실측). 그래서 `search_header` 는 최근 60일 메일의 그 헤더만 FETCH 해서 직접 비교한다.
 - 보내기 결과에 `refused`(서버가 거절한 주소)·`savedToSent` 를 돌려주고 화면 토스트에 붙인다.
+- **첨부 이름은 학교 웹메일과 같은 꼴**(`name="=?utf-8?b?…?="`, `_encoded_filename`, 1.12.41). 1.12.40 까지는 파이썬 기본 RFC 2231 꼴(`filename*=utf-8''…`)이었는데, 학교 서버가 이것을 구조(BODYSTRUCTURE)에서 버려 `("ATTACHMENT" NIL)` 이 됐다(2026-10-25 실측). 그래서 보낸 편지함에서 '첨부파일' 로만 보였다(파일 내용은 들어 있었음). 받는 사람이 학교 웹메일이면 같은 일이 났을 수 있다. 보낸 편지함 사본(`_message_bytes`)도 받는 사람에게 간 것과 같은 compat32 글자로 넣는다(policy.SMTP 는 머리말을 다시 접으며 RFC 2231 로 바꿨다).
+- 이미 그렇게 간 메일: 구조에 이름이 없는 첨부는 메일 앞부분(`BODY.PEEK[]<0.n>`, 앞 파트 크기 합 + 여유, 2MB 까지)을 받아 파트 머리말에서 이름을 읽는다(`MiniIMAP._fill_nameless`). 파트 머리말만 주는 `BODY[n.MIME]` 은 이 서버가 무시하고 메일 전체를 준다(실측). 예전에 받아 둔 '첨부파일' 은 `nameChecked` 가 없어 그 메일만 한 번 다시 받는다.
+- 보내기 직전 `settleAutosave`: 예약된 자동 저장을 멈추고 서버로 가는 중인 저장은 끝날 때까지 기다린다. 예전엔 보낸 1초 뒤 같은 메일이 임시 보관함에 다시 생겼다(22:25:17 보냄 · 22:25:18 임시).
 - 받는 사람·참조·숨은참조는 칩(`setupRecipientChips`). 서버로 보내는 값은 숨긴 원래 칸에 `이름 <주소>, …`. 그 칸의 `value` 를 가로채서 코드가 값을 넣으면 칩을 다시 그린다. 주소 나누기는 따옴표·꺾쇠 안 쉼표를 자르지 않는다(`parseRecipients`, 서버는 `email.utils.getaddresses`).
 - 요청 처리 중 잡히지 않은 오류는 `DashboardHandler._guarded` 가 `C:\lms-autosaver\server_errors.log` 에 남기고 화면에 오류 문구를 돌려준다. 창 없는 EXE 에서는 예전에 연결만 끊겨 원인을 알 수 없었다.
 - 시험할 때 주의: Git Bash 의 curl 에 한글 JSON 을 그대로 넣으면 UTF-8 이 아닌 코드페이지로 나가 `read_body_json` 에서 깨진다. 본문은 UTF-8 파일로 만들어 `--data-binary @파일` 로 보낸다.
@@ -744,6 +753,16 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 ## 메일 로그인 거절 (2026-10-12)
 - 10/12 13:44~16:02 학교 메일 서버가 맞는 비밀번호를 거절했다가 저절로 풀렸다(21:5x 에 같은 비밀번호로 `OK LOGIN complete`, 19:00 자동 확인도 성공). 9/27 에도 같은 일이 있었다.
 - 이제 `MiniIMAP.login` 이 서버의 끝맺음 말(`last_reply`)을 오류에 붙이고, `run_process` 가 이를 `health.json` 의 `authFailed.<kind>.reason` 에 적는다. 경고(`get_health`)는 '서버가 거절 (서버: …) · 2시간 뒤 다시 · 비밀번호를 바꿨다면 설정에서' 순서로 말한다.
+
+## 새 기기에서 '메일 동기화가 계속 실패' (2026-10-25, 1.12.39)
+- 신고: 배포판을 다른 기기(맥·Windows 둘 다)에 깔아 쓰면 메일 동기화가 계속 실패. 그 기기의 로그는 없어(작업 로그는 메모리에만) 이 PC 에서 새 기기를 흉내 내 쟀다.
+- 원인이 아니었던 것: 빈 데이터 폴더 + 이 PC 설정으로 첫 받기 성공(112통 39.8초). 서버가 긴 연결을 끊는지 — 로그인 한 번으로 240초 동안 명령 346번(0.4초 간격) 모두 성공. 인증서 — 서버가 사슬 3장을 다 보내고 certifi 만으로도 된다.
+- 원인 ①(두 운영체제 공통): 자동 확인이 계정이 비었는지 보지 않았다. `app.next_due_job` 그대로 시계만 감아 재현: 계정을 넣기 전 0.8분·17.2분에 '계정을 먼저 입력' 으로 실패 → '동기화가 계속 실패하고 있어요 — emails이(가) 2번 연속 실패' 띠. 32분에 계정을 넣어도 실패마다 두 배로 느는 간격 때문에 47.2분에야 첫 성공(늦게 넣을수록 최대 6시간). 계정이 오래전부터 있던 이 PC 에서는 안 났다.
+  - 이제 계정 칸이 빈 작업은 자동으로 안 돈다(`app.scheduler_loop` 의 `ready`, `web_ui.TASK_ACCOUNT_KEYS`·`account_ready`, 매일 예약 동기화도). 상태판은 '계정을 넣으면 자동으로 가져와요'(`nextAutoJob` 도 같은 셈).
+  - 계정을 넣거나 바꾸면 그 작업의 `failStreak`·`authFailed`·`lastFailure` 를 지운다(`save_config_dict` → `reset_task_failures`, 비교는 비밀 값을 푼 것끼리). 고친 뒤 같은 재현: 32.0분 저장 → 32.5분 첫 자동 확인 성공, 그 전 실패 0번.
+- 원인 ②(맥·리눅스): 키체인을 못 읽는 동안(업데이트 직후 허락 전·거부) 아무 설정이나 저장하면 빈 값으로 읽힌 비밀번호가 키체인에서 지워졌다(`save_config_dict` 의 `forget`). 흉내(Windows 에서 `secret_store` 를 바꿔 끼움): 예약 시각만 바꿔 저장 → 비밀 항목 5개 forget, LMS·메일 비밀번호가 빈 값. 이제 빈 값으로 온 비밀번호는 표시(`keychain:…`)를 그대로 두고, '지우기' 를 누른 것(`cleared`)만 지운다. 백업 불러오기도 같다. 실제 맥 확인은 CI·맥 사용자.
+- 띠에 까닭: `run_process` 가 '작업이 실패했습니다: …' 를 `lastFailure.reason` 에 적고(`_failure_reason`, 소스 위치는 뺌) `get_health` 가 작업별 문장(`FAIL_WARNINGS`)과 그 작업의 연속 횟수로 말한다(예전엔 작업 이름 'emails' 와 모든 작업을 합친 횟수). 영어 화면은 경고와 '(마지막 성공: …)' 을 따로 옮긴다(붙어 있으면 번역표에 안 맞아 한국어로 남았다).
+- 시험할 때: `web_ui` 의 데이터 폴더는 `AUTOSAVER_ROOT` 를 본다. `AUTOSAVER_DATA_ROOT` 만 바꾸면 `web_ui` 는 그대로 `C:\lms-autosaver` 를 쓴다(이번 시험 2번이 실제 폴더에서 메일 새로고침을 했다 — 새 메일 없음). 또 개발 폴더에는 git 에 없는 옛 `config.py` 가 있어 `config.json` 이 없으면 `web_ui.read_config` 가 그걸 읽는다(설치본에는 안 들어감).
 
 ## 메일 분류 규칙 (2026-10-12)
 - `email_reader.rule_based_category` 순서: 답신 → 계정·알림(인증번호·패스키·계정 생성) → 수업·LMS(Blackboard 발신, 제목의 `[2026_2학기]`, 일일 통지·제출물 수신함·강의성찰) → 학생회 → 교수님(발신자 이름에 교수) → 세미나·행사(한·영 낱말: Seminar·Colloquium·Symposium·Lecture Series·Workshop·Forum·투어·마라톤…) → 취업·진로(창업·공모전·해커톤·트랙…) → 행정·학생팀(보낸 부서) → 동아리·문화 → 기타.
@@ -869,7 +888,7 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 ## Microsoft Store 판 (MSIX, 2026-10-15)
 무료로 지금 받을 수 있는 공인 서명은 Store 뿐이다(위 표). Store 에서 받은 MSIX 는 Microsoft 가 다시 서명하므로 SmartScreen('PC 보호')·스마트 앱 컨트롤(SAC)·S 모드(Store 앱만 허용)에 막히지 않는다. EXE·MSI 를 그대로 내는 길(정책 10.2.9)은 공인 인증서 서명이 있어야 해서 안 된다.
 - 만들기: `packaging\msix\build_msix.ps1` — [1/6] `dist\붕어빵`(없거나 `-Build` 면 `build_installer.ps1 -Stage exe`) → [2/6] `build\msix\layout` 에 복사 + 매니페스트 → [3/6] `resources.pri` → [4/6] MakeAppx → [5/6] 서명 → [6/6] `-Install`(·`-Smoke`). `-Uninstall` 은 시험판 지우기.
-  - 시험판 `packaging\out\daling-<버전>-win-x64.msix`: 이름 `jykim5215.Daling`, 게시자 = 사설 인증서 주체(`CN=붕어빵 (jykim5215), O=jykim5215`), 사설 서명. 73.8MB(Inno 설치 파일 57MB 보다 큼: MSIX 는 파일마다 따로 압축).
+  - 시험판 `packaging\out\daling-<버전>-win-x64.msix`: 이름 `<게시자>.Daling`, 게시자 = 사설 인증서 주체(`CN=붕어빵 (…), O=…`), 사설 서명. 73.8MB(Inno 설치 파일 57MB 보다 큼: MSIX 는 파일마다 따로 압축).
   - 제출판 `-Store -IdentityName … -Publisher … -PublisherDisplayName …` → `…-store.msix`: Partner Center 값으로, 서명 안 함(Store 가 서명). 가짜 값으로 묶기까지 확인.
   - 도구: Windows SDK 가 없으면 Microsoft 의 NuGet 패키지 `Microsoft.Windows.SDK.BuildTools` 10.0.26100.4654(22MB)를 `build\msix-tools` 에 한 번 받아 MakeAppx·MakePri·SignTool 을 쓴다. 셋 다 Microsoft 서명인지 확인한다(SDK 전체 설치는 관리자 권한이 든다).
   - 판 번호: `VERSION` 1.12.28 → 1.12.28.0 (Store 는 넷째 자리를 자기가 쓰므로 0).
@@ -878,7 +897,7 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 - 이 PC 시험 설치: MSIX 설치는 시스템 서비스가 서명을 보므로 '현재 사용자' 신뢰로는 안 되고(실측 0x800B0109 '루트 인증서는 신뢰할 수 있어야'), **사용자가 직접** 관리자 PowerShell 에서 한 번 `Import-Certificate -FilePath packaging\bungeoppang-codesign.cer -CertStoreLocation Cert:\LocalMachine\TrustedPeople`. (보안 설정이라 대신 하지 않는다. 되돌리기: 인증서 관리자에서 '신뢰할 수 있는 사람'의 붕어빵 인증서 삭제)
 
 ### MSIX 안에서 달라지는 것
-2026-10-15 이 PC 실측 (`jykim5215.Daling_1.12.28.0_x64__mm60x010zk88p`, 설치 위치 `C:\Program Files\WindowsApps\…`):
+2026-10-15 이 PC 실측 (`<게시자>.Daling_1.12.28.0_x64__mm60x010zk88p`, 설치 위치 `C:\Program Files\WindowsApps\…`):
 - `daling.exe --autosaver-smoke` **14개 통과**. 작업 프로세스가 같은 패키지 이름으로 돎(`package=` 일치), node 실행, 업데이트는 Store 로.
 - `%LOCALAPPDATA%` **바로 아래에 새로 만든 폴더**: 패키지 안에서 만들면 `…\Packages\<패밀리>\LocalCache\Local` 로 가고 밖에서 안 보인다. 반대로 **설치 뒤에 밖에서 만든 바로 아래 폴더는 패키지 안에서 아예 안 보인다**(폴더 2개로 확인. 같은 EXE 를 패키지 밖에서 돌리면 보임). 설치 전부터 있던 `ms-playwright` 는 보인다.
 - **이미 있던 하위 폴더**(`Programs\붕어빵`, 삼성 노트 `LocalState`, `Temp`): 밖에서 만든 파일이 보이고, 안에서 새로 만든 파일·고친 내용이 진짜 자리에 그대로 간다 → 삼성 노트 DB·백업·저널도 진짜 자리에 쓰인다(실제 DB 에는 쓰지 않고 같은 성격의 폴더로 확인). 홈 폴더·`Temp` 도 진짜 자리.
@@ -965,10 +984,27 @@ Microsoft Store 정책 10.3.1(로그인 앱은 심사용 시험 계정을 줄 �
 ## 창 제목 줄 = 상단 바 (2026-10-14)
 
 - `window_chrome.py`: WinForms 테두리는 그대로 두고 `WM_NCCALCSIZE` 에서 제목 줄 높이만 클라이언트로 돌려 회색 제목 줄을 없앤다(크기 조절·Aero 스냅·그림자 유지). `frameless=True` 는 이것들이 다 사라져 쓰지 않았다.
-- 끌기: WebView2 `IsNonClientRegionSupportEnabled` 를 첫 페이지 전에 켜고 CSS `app-region: drag`(상단 바·사이드바 빈 곳). 두 번 누르면 최대화·화면 끝 스냅도 진짜 제목 줄처럼 된다.
+- 끌기: WebView2 `IsNonClientRegionSupportEnabled` 를 첫 페이지 전에 켜고 CSS `app-region: drag`. 두 번 누르면 최대화·화면 끝 스냅도 진짜 제목 줄처럼 된다.
+- 끌기 자리는 빈 곳의 사각형 몇 개뿐(1.12.42): 상단 바 위·아래 8px 띠(`.topbar::before/::after`), 왼쪽 메뉴 맨 위 여백(`.sidebar::before`), 같은 줄 단추 묶음 사이 24px 넘는 틈(`.drag-gap`, `app.js placeDragGaps` — ResizeObserver 로 재고 값이 같으면 안 건드림). no-drag 구멍은 쓰지 않는다.
+  - 틈은 상단 바 위아래 끝까지(1.12.43): 예전엔 이웃 단추 높이(40px)만큼만이었다. 줄바꿈된 다른 줄 단추가 위·아래에 있으면 그 4px 앞에서 자른다. 넓은 창의 검색칸은 520→440px(`flex: 0 1 440px`)로 줄여 오른쪽 틈을 넓혔다. 창 1307px(CSS) 대시보드: 오른쪽 틈 28×40 → 68×61px(진행 칩 없을 때 82×61), 메일함 81×40 → 81×61px. 끌기 조각 10개, 진행 칩을 띄운 채 20초 WM_NULL 0/40번 멈춤(최대 9ms).
+  - 좁은 창(1.12.44, 사용자: '앱 크기를 줄이면 끌어서 옮기기가 전혀 안 된다'): CSS 1100px 이하는 검색칸이 남는 자리를 다 채워 틈이 0개라, 옮길 수 있는 곳이 아래 8px 띠와 왼쪽 위 75×4px 뿐이었다(위 8px 띠는 HTTOP). 761~1100px: 검색칸 `flex: 0 1 280px` + 오른쪽 64px 여백, 단추 묶음은 한 줄(`flex: none`), 진행 칩 150px, 960px 이하 ←/→ 빼기, 860px 이하 시계 날짜 빼기 → 검색칸 오른쪽에 늘 72px 넘는 틈. 760px 이하(휴대폰 배치): 시계를 글자 폭만(`justify-self: start`) 써서 시계 옆이 틈, `placeDragGaps` 가 줄 끝(오른쪽 이웃 없음)도 틈으로 잡아 창 단추 아래 검색칸 오른쪽(146px)이 틈. 창 단추 칸 높이(`--winctl-h`)는 단추 묶음 줄 가운데에 맞춘다(64→56px, 둘째 줄을 가리지 않게).
+    - 시험 창 실측(앱과 같은 window_chrome·개발 서버, `Chrome_WidgetWin_0` 조각마다 WM_NCHITTEST): 옮기기(2) 넓이 1000px 6484→11139, 800px 4884→8412, 420px 2152→12074(px²). 조각 3~8개. 진행 칩을 띄워도 761~1100px 에서 단추가 창 단추 밑으로 밀리지 않음(전엔 761px 에서 39px). 소개 중(`body.tour-open`)에는 틈을 뺀다(말풍선 위를 누르면 창이 끌리지 않게).
+  - 왜: 예전엔 상단 바·사이드바 전체를 drag 로 두고 단추마다 no-drag 를 뚫었다. WebView2 는 그 모양의 사각형 조각마다 자식 창(`Chrome_WidgetWin_0`)을 만든다(67개). 끝없는 애니메이션(진행 칩 고리 `top-ring-spin`, 메일 새로고침 회전 등)이 있으면 매 프레임 그 창들을 UI 스레드에서 `SetWindowPos`·`ShowWindow` 로 다시 놓아 창이 '응답 없음'이 됐다. 메일을 보내면 새로고침 진행 칩이 떠서 늘 걸렸다(2026-10-26 사용자 신고).
+  - 실측(시험 앱, WM_NULL 3초 시간 제한으로 20초): 진행 칩만 띄워도 27/27번 멈춤 · 고리 회전을 끄면 1/30 · 끌기 기능을 끄면 0/39 · will-change 로는 그대로 27/27 · 끌기 조각 1개 0/32(최대 3ms) · 조각 15개 0/39 · 29개 26/26. 고친 뒤 4조각: 대시보드·메일함·보내기 흐름 모두 0/39(최대 59ms).
+  - 확인: 띠·틈·왼쪽 위에서 실제 마우스로 끌면 창이 옮겨지고, 검색칸 위에서는 안 옮겨짐, 틈 두 번 누르면 최대화/복원.
+  - 'x 약 1800px 오른쪽은 안 끌린다'(2026-10-26 오전 기록)는 다시 재 보니 없었다(같은 날 오후, 2880×1800·200%). 설치본 1.12.42·소스 1.12.42·1.12.38 모두 x 1813·1900·2000·2400·2700 에서 실제 마우스(SetCursorPos+mouse_event)로 끌면 옮겨지고 터치(InjectTouchInput)도 같다. 창 위치(120·800·1400)·폭(2000·2640)·최대화를 바꿔도 같다. 길: 끌기 조각 자식 창 `WM_NCHITTEST`=2(HTCAPTION) → `WM_NCLBUTTONDOWN` → WebView2 가 최상위 창에 `WM_SYSCOMMAND 0xF012`(SC_MOVE|HTCAPTION, 화면 좌표 그대로) → `ENTERSIZEMOVE`. 좌표가 잘리는 곳은 없다.
+    - 예전 측정이 틀린 까닭(추정): 시험 앱과 설치본이 같은 자리(120,40,2760,1664)에 겹쳐 뜨고, 다른 프로세스의 `SetForegroundWindow` 는 막힐 때가 있다. 그러면 누른 것이 설치본으로 가서 설치본 창이 옮겨지고 시험 앱은 `moved=(0,0)` 로 나온다(이번에 그대로 겪음). 시험 도구는 `WindowFromPoint` 의 `GetAncestor(…, GA_ROOT)` 가 시험 창인지 먼저 확인한다.
+    - 실제로 오른쪽이 잘 안 끌렸던 까닭은 배치였다: 상단 바 오른쪽은 검색칸·동기화 칩·테마 단추·창 단추로 차 있어 끌 곳이 검색칸과 동기화 칩 사이 28×40px 틈과 아래 8px 띠뿐이었다(1.12.43 에서 넓힘, 위 항목). 위 8px 띠는 WebView2 가 위쪽 크기 조절(HTTOP=12)로 돌려줘 끌면 높이가 바뀐다. 폭 760px 이하(휴대폰 배치)에 끌기 자리가 없던 것은 1.12.44 에서 고침(위 항목).
+- 화면 맨 위 몇 px 는 운영체제의 위쪽 크기 조절 자리라 끌면 창 높이가 바뀐다(원래 그렇다).
 - 단추: `#winControls`(Segoe Fluent 아이콘) → `GET/POST /api/window {action: minimize|maximize|close}`. 개발 서버는 `custom:false` 라 화면이 그대로다.
 - 최대화 뒤 복원하면 WinForms 가 없앤 제목 줄 높이를 다시 더해 창이 29px씩 길어졌다(820→849→878). `WM_SIZE` 로 최대화 직전 크기를 기억했다가 복원 직후 크기만 되돌린다.
 - 화면: `html.custom-frame` 에서 넓은 창은 검색창 가운데(Spotify), 상단 바·사이드바 바탕을 이어 붙이고 본문 왼쪽 위를 둥글게. 메일함에도 상단 바를 둔다(창 단추가 읽기 도구를 덮었다).
+- **맥(2026-10-26, `mac_window.py`)**: 사용자 맥 사진에서 밝은 앱 위에 검은 기본 제목 줄과 화면 이름('과제 마감')이 따로 떴다. pywebview 가 제목 줄 뷰를 `windowBackgroundColor` 로 칠해 다크 모드에서 검은 띠가 된다. `app.py` 가 `window.events.before_show` 에 `mac_window.install` 을 걸어:
+  - 제목 줄 투명·제목 숨김·`NSWindowStyleMaskFullSizeContentView`·구분선 없음, pywebview 가 칠한 바탕은 `clearColor`. `frameless` 는 크기 조절·신호등이 사라져 쓰지 않는다.
+  - 신호등(닫기·최소화·확대)은 운영체제 것을 그대로 두고 상단 바 첫 줄 가운데 높이(`cy`)·왼쪽 `lx`(메일함의 72px 메뉴에선 12)로 옮긴다(Tauri `trafficLightPosition` 방식: 제목 줄 컨테이너 높이를 늘리고 단추 자리를 바꿈). 창 크기·전체 화면·키 창 알림마다 다시 놓는다.
+  - 끌기: WKWebView 는 CSS `app-region` 을 모른다. `app.js macDragRegions` 가 상단 바·세로 메뉴(끌 곳)와 그 안의 단추·입력칸·덮개(안 끌 곳)를 사각형으로 재서 `POST /api/window {action:"regions"}` 로 보낸다(DOM 이 바뀔 때만, 같은 값이면 안 보냄). pywebview 의 `WebKitHost.mouseDown:` 을 `objc.classAddMethods` 로 바꿔 끼워 끌 곳이면 `performWindowDragWithEvent_`, 두 번 누르면 시스템 설정(`AppleActionOnDoubleClick`)대로. 하위 클래스로 바꾸면 pywebview 안의 `super(BrowserView.WebKitHost, self)` 가 끝없이 돈다.
+  - 화면: `html.mac-frame` — 넓은 창은 세로 메뉴 내용을 상단 바 높이(`--topbar-h`, ResizeObserver 로 따라감) 아래부터, 좁은 창(≤760px)은 상단 바 왼쪽 80px 를 비운다. 메일함 좁은 창은 상단 바 첫 줄을 남긴다(숨기면 신호등이 목록 머리에 겹침). 가장 낮은 창(560px)에서 메뉴 아래가 49px 잘려 메뉴 목록이 스크롤된다.
+  - 점검: 개발 PC 에 맥이 없어 `.github/workflows/mac-window.yml`(`diag/mac-window` 브랜치·수동) 이 M칩·인텔에서 `DALING_WINDOW_SELFTEST` 로 켜 신호등 자리·누른 자리 판정·가짜 클릭·스크린샷·실제 끌기(cliclick)를 잰다. 끌기 손맛·창 크기 바꿀 때 깜빡임은 맥 사용자 확인이 필요하다.
 
 ## 단추 교통정리 (2026-10-14)
 

@@ -42,7 +42,7 @@ SWEEP_GET = (
     "/api/academic-calendar", "/api/ai/status", "/api/autostart", "/api/config", "/api/config/export", "/api/course-announcements",
     "/api/course-catalog?q=", "/api/course-staff", "/api/course-state", "/api/course-terms", "/api/deadlines",
     "/api/deadlines.ics", "/api/demo", "/api/dgist-api/status", "/api/diagnostics", "/api/directory?q=",
-    "/api/drive/get", "/api/drive/list", "/api/email-body?id=1", "/api/emails", "/api/fglp", "/api/file?path=x",
+    "/api/drive/get", "/api/drive/list", "/api/drive/picked?state=", "/api/email-body?id=1", "/api/emails", "/api/fglp", "/api/file?path=x",
     "/api/files", "/api/files/bulk", "/api/health", "/api/local-autosave/job", "/api/mail-image",
     "/api/mail/discard-draft", "/api/mail/draft?uid=1", "/api/mail/eml", "/api/mail/folders", "/api/mail/me", "/api/mail/pending",
     "/api/my-events", "/api/notices", "/api/place-search?q=", "/api/samsung-notes/job", "/api/samsung-notes/status",
@@ -58,7 +58,7 @@ _SWEEP_PATHS = {r.split("?")[0] for r in SWEEP_GET}
 SWEEP_POST = (
     "/api/acknowledge-courses", "/api/ai/continue", "/api/ai/draft", "/api/ai/polish", "/api/ai/profile",
     "/api/ai/search", "/api/assignment/open", "/api/autostart", "/api/boot-done", "/api/config", "/api/config/import",
-    "/api/delete-email", "/api/directory/import", "/api/export-ics", "/api/files/bulk", "/api/gcal/sync",
+    "/api/delete-email", "/api/directory/import", "/api/drive/pick", "/api/export-ics", "/api/files/bulk", "/api/gcal/sync",
     "/api/gcal/sync-academic", "/api/google/connect", "/api/google/credentials", "/api/google/disconnect",
     "/api/local-autosave/run", "/api/mail/discard-draft", "/api/mail/flow", "/api/mail/folder-create", "/api/mail/me",
     "/api/mail/move", "/api/mail/reminder", "/api/mail/save-draft", "/api/mail/star", "/api/mail/translate",

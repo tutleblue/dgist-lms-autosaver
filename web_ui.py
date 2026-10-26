@@ -63,7 +63,7 @@ DRIVE_CREDENTIALS_PATH = Path(
 GOOGLE_OAUTH_PENDING_PATH = AUTOSAVER_ROOT / "oauth_pending.json"
 FALLBACK_COURSE_MAP = PROJECT_ROOT / "file_course_map.json"
 from runtime_config import GOOGLE_SCOPES as _GOOGLE_SCOPES
-from runtime_config import GOOGLE_DRIVE_READ_SCOPE, calendar_scope_granted
+from runtime_config import GOOGLE_DRIVE_READ_SCOPE, GOOGLE_DRIVE_SCOPE, calendar_scope_granted
 from runtime_config import atomic_write_text
 
 GOOGLE_OAUTH_SCOPE = _GOOGLE_SCOPES[0]
@@ -212,6 +212,7 @@ def remember_oauth_state(
     redirect_uri: str,
     code_verifier: str | None,
     session_token: str | None = None,
+    purpose: str = "",
 ) -> None:
     oauth_states[state] = {
         "user_id": workspace.user_id,
@@ -219,6 +220,7 @@ def remember_oauth_state(
         "code_verifier": code_verifier,
         "session_token": session_token,
         "created_at": now_iso(),
+        "purpose": purpose,  # "" = 구글 연결(token.json), "drive-pick" = Drive 고르기 창 (finish_drive_pick)
     }
     pending = load_oauth_pending()
     pending[state] = oauth_states[state]
@@ -434,24 +436,39 @@ def write_config(workspace: UserWorkspace, payload: dict[str, Any]) -> dict[str,
         values["EMAIL_HIDE_PAST"] = bool(existing.get("EMAIL_HIDE_PAST", False))
 
     # 명시적 삭제 요청 (저장된 비밀 값 제거)
-    if payload.get("clearGeminiKey") is True:
-        values["GEMINI_API_KEY"] = ""
-    if payload.get("clearEmailPassword") is True:
-        values["EMAIL_PASSWORD"] = ""
-    if payload.get("clearSchoolEmailPassword") is True:
-        values["SCHOOL_EMAIL_PASSWORD"] = ""
+    cleared = [key for flag, key in (("clearGeminiKey", "GEMINI_API_KEY"), ("clearEmailPassword", "EMAIL_PASSWORD"),
+                                     ("clearSchoolEmailPassword", "SCHOOL_EMAIL_PASSWORD")) if payload.get(flag) is True]
+    for key in cleared:
+        values[key] = ""
 
-    save_config_dict(workspace, values)
+    save_config_dict(workspace, values, cleared=tuple(cleared))
     Path(download_path).mkdir(parents=True, exist_ok=True)
     ensure_data_files(workspace)
     return values
 
 
-def save_config_dict(workspace: UserWorkspace, values: dict[str, Any]) -> None:
-    """설정을 저장한다. 비밀 항목은 DPAPI로 암호화해서 넣는다 (맥은 키체인에 두고 표시만)."""
+def save_config_dict(workspace: UserWorkspace, values: dict[str, Any], cleared: tuple[str, ...] = ()) -> None:
+    """설정을 저장한다. 비밀 항목은 DPAPI로 암호화해서 넣는다 (맥은 키체인에 두고 표시만).
+
+    cleared: 사용자가 '지우기' 를 누른 비밀 항목. 이것만 빈 값으로 저장하고 키체인에서도 뺀다.
+    """
+    try:
+        before = read_config(workspace) if workspace.config_path.exists() else {}
+        raw_before = read_json(workspace.config_path, {}) if workspace.config_path.exists() else {}
+    except Exception:
+        before, raw_before = {}, {}
+    if not isinstance(raw_before, dict):
+        raw_before = {}
     to_write = dict(values)
     for key in SECRET_KEYS:
         raw = str(to_write.get(key, "") or "")
+        old = raw_before.get(key)
+        if not raw and key not in cleared and secret_store.is_marker(old):
+            # 맥·리눅스: 키체인을 못 읽어(업데이트 직후 허락 전·거부) 빈 값으로 읽힌 비밀번호는 표시를 그대로 둔다.
+            # 예전엔 이때 아무 설정이나 저장하면 키체인 항목까지 지워져, 그 뒤로 LMS·메일이 '계정을 먼저 입력' 으로
+            # 계속 실패했다(2026-10-25 흉내: 예약 시각만 바꿔 저장 → 비밀 항목 5개 forget, 두 비밀번호가 빈 값)
+            to_write[key] = old
+            continue
         # 이미 암호문이면 그대로 두고, 평문이면 암호화
         if raw and not raw.startswith(_SECRET_PREFIXES):
             to_write[key] = dpapi_protect(raw, key)
@@ -462,10 +479,17 @@ def save_config_dict(workspace: UserWorkspace, values: dict[str, Any]) -> None:
             except Exception:
                 pass
     workspace.root.mkdir(parents=True, exist_ok=True)
-    atomic_write_text(workspace.config_path, 
+    atomic_write_text(workspace.config_path,
         json.dumps(to_write, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
+    # 계정을 넣거나 바꿨으면 그 작업의 실패 기록을 지워 다음 자동 확인(30초 안)이 곧바로 돌게 한다 (reset_task_failures)
+    changed = [
+        kind for kind, keys in TASK_ACCOUNT_KEYS.items()
+        if any(dpapi_unprotect(str(values.get(key) or "")) != str(before.get(key) or "") for key in keys)
+    ]
+    if changed:
+        reset_task_failures(workspace, changed)
 
 
 BUNDLED_CREDENTIALS_PATH = PROJECT_ROOT / "credentials.json"
@@ -765,6 +789,106 @@ def finish_google_oauth(code: str, state: str) -> tuple[UserWorkspace, dict[str,
     if "drive_uploader" in sys.modules:
         sys.modules["drive_uploader"]._service = None
     return workspace, saved_state
+
+
+# ===== Drive 고르기 창 (구글 Picker, 데스크톱 방식) =====
+# 메일에 붙일 파일을 내 Drive 전체·공유 문서함에서 고른다. 구글이 기본 브라우저에 고르기 창을 띄우고, 고른 파일에만
+# drive.file 권한을 준다(인증 주소에 trigger_onepick=true). Drive 전체 읽기(drive.readonly)는 제한된 범위라 심사 전엔
+# '확인되지 않은 앱' 경고·사용자 100명 한도가 걸려서 이쪽으로 바꿨다(runtime_config.GOOGLE_DRIVE_READ_SCOPE).
+# 2026-10-25 실측: 동의 화면이 경고 없이 "선택하려는 파일의 경우 Daling 에서…" 로 나오고, 고르기 창에 최근·내 드라이브·
+# 공유 문서함이 다 보였다. 구글 문서: developers.google.com/workspace/drive/picker/guides/desktop-mobile-picker
+drive_picks: dict[str, dict[str, Any]] = {}  # state → {"user_id", "status": waiting|done|cancelled|error, "files", "message"}
+drive_pick_tokens: dict[str, dict[str, Any]] = {}  # 고른 파일 id → {"user_id", "token", "until"} (/api/drive/get 이 씀)
+
+
+def create_drive_pick_url(
+    workspace: UserWorkspace,
+    base_url: str | None = None,
+    session_token: str | None = None,
+) -> tuple[str, str]:
+    if not google_credentials_available():
+        raise FileNotFoundError("이 판에서는 아직 Google 연결을 쓸 수 없어요.")
+    from google_auth_oauthlib.flow import Flow
+
+    now = time.time()
+    for key in [k for k, v in drive_picks.items() if now - v.get("at", now) > 3600]:
+        drive_picks.pop(key, None)
+    # 고르기 창은 drive.file 하나만 받는다(구글: 다른 범위와 섞을 수 없음). 그래서 이 토큰은 token.json 에 쓰지 않는다 —
+    # 쓰면 캘린더 권한이 사라진다. access_type=online: 고를 때마다 갱신 토큰이 새로 생기지 않게. 구글은 한 계정·한 앱의
+    # 갱신 토큰을 100개까지만 두고, 넘치면 가장 오래된 것(늘 쓰는 token.json 일 수 있다)을 말없이 끊는다.
+    flow = Flow.from_client_config(
+        google_client_config_for_flow(),
+        scopes=[GOOGLE_DRIVE_SCOPE],
+        redirect_uri=choose_google_redirect_uri(base_url),
+    )
+    auth_url, state = flow.authorization_url(
+        access_type="online",
+        prompt="consent",
+        trigger_onepick="true",
+        allow_multiple="true",
+    )
+    remember_oauth_state(workspace, state, flow.redirect_uri, flow.code_verifier, session_token, purpose="drive-pick")
+    drive_picks[state] = {"user_id": workspace.user_id, "status": "waiting", "files": [], "at": now}
+    return auth_url, state
+
+
+def oauth_state_purpose(state: str) -> str:
+    saved = oauth_states.get(state) or load_oauth_pending().get(state) or {}
+    return str(saved.get("purpose") or "") if isinstance(saved, dict) else ""
+
+
+def finish_drive_pick(state: str, code: str, error: str, picked_ids: str) -> tuple[str, str, bool]:
+    """고르기 창이 돌아왔다. 고른 파일의 이름·크기를 화면이 가져가도록 drive_picks 에 적는다. (제목, 안내, 성공)"""
+    saved = pop_oauth_state(state)
+    pick = drive_picks.setdefault(state, {"user_id": (saved or {}).get("user_id"), "files": [], "at": time.time()})
+    if not saved:
+        pick.update(status="error", message="고르기 창이 오래되어 닫혔어요. Daling 에서 다시 열어 주세요.")
+        return "파일 고르기 실패", pick["message"], False
+    ids = [i for i in str(picked_ids or "").split(",") if i.strip()]
+    if error or not code or not ids:
+        pick.update(status="cancelled")
+        return "파일을 고르지 않았어요", "Daling 으로 돌아가 주세요. 이 탭은 닫아도 됩니다.", False
+    try:
+        from google_auth_oauthlib.flow import Flow
+        from googleapiclient.discovery import build
+
+        flow = Flow.from_client_config(
+            google_client_config_for_flow(),
+            scopes=[GOOGLE_DRIVE_SCOPE],
+            redirect_uri=saved.get("redirect_uri") or choose_google_redirect_uri(),
+            code_verifier=saved.get("code_verifier"),
+            autogenerate_code_verifier=False,
+        )
+        os.environ.setdefault("OAUTHLIB_RELAX_TOKEN_SCOPE", "1")
+        flow.fetch_token(code=code)
+        creds = flow.credentials
+        service = build("drive", "v3", credentials=creds, cache_discovery=False)
+        files = []
+        until = time.time() + 50 * 60  # 접근 토큰은 1시간짜리
+        for file_id in ids[:50]:
+            meta = service.files().get(
+                fileId=file_id.strip(), fields="id,name,size,mimeType", supportsAllDrives=True
+            ).execute()
+            files.append(meta)
+            drive_pick_tokens[meta["id"]] = {"user_id": saved.get("user_id"), "token": creds.token, "until": until}
+        pick.update(status="done", files=files)
+        return "파일을 골랐어요", f"{len(files)}개를 Daling 메일에 붙입니다. 이 탭은 닫아도 됩니다.", True
+    except Exception as exc:
+        pick.update(status="error", message=str(exc))
+        return "파일 고르기 실패", str(exc), False
+
+
+def drive_service_for_file(workspace: UserWorkspace, file_id: str):
+    """고르기 창으로 고른 파일은 그때 받은 토큰으로, 나머지는 늘 쓰는 Drive 접속(token.json)으로 읽는다."""
+    picked = drive_pick_tokens.get(file_id)
+    if picked and picked.get("user_id") == workspace.user_id and picked.get("until", 0) > time.time():
+        from google.oauth2.credentials import Credentials
+        from googleapiclient.discovery import build
+
+        return build("drive", "v3", credentials=Credentials(picked["token"]), cache_discovery=False)
+    import drive_uploader
+
+    return drive_uploader.get_drive_service()
 
 
 def stored_relpath(name: str, meta: Any) -> str:
@@ -2410,8 +2534,15 @@ def get_health(workspace: UserWorkspace) -> dict[str, Any]:
             "비밀번호를 바꿨다면 설정에서 새 비밀번호를 넣어 주세요."
         )
     elif out["consecutiveFailures"] >= 2:
-        kind = out["lastFailure"].get("kind", "작업")
-        out["warning"] = f"{kind}이(가) {out['consecutiveFailures']}번 연속 실패했습니다. 설정에서 계정 정보를 확인해 주세요."
+        # 예전엔 'emails이(가) 2번 연속 실패했습니다' 처럼 작업 이름이 그대로 나왔고 왜 실패했는지는 없었다.
+        # 다른 기기에서 '계속 실패' 를 들었을 때 화면만 보고도 까닭을 알 수 있게 마지막 실패의 말을 붙인다
+        kind = str(out["lastFailure"].get("kind", ""))
+        # 횟수는 그 작업 것으로 (consecutiveFailures 는 작업을 가리지 않고 센다)
+        count = int(out["failStreak"].get(kind) or 0) or out["consecutiveFailures"]
+        reason = str(out["lastFailure"].get("reason") or "").rstrip(". ")
+        out["warning"] = FAIL_WARNINGS.get(kind, FAIL_WARNINGS[""]).format(
+            count=count, said=f" ({reason})" if reason else ""
+        )
     elif out["stale"]:
         out["warning"] = f"{out['staleDays']}일째 동기화가 되지 않았습니다."
     # 맥·리눅스: 비밀번호를 저장소에서 못 꺼내면 LMS·메일이 모두 실패한다. 다른 알림보다 먼저, 까닭과 할 일을 말한다
@@ -2426,8 +2557,67 @@ def get_health(workspace: UserWorkspace) -> dict[str, Any]:
     return out
 
 
+# 자동 실행에 쓰는 계정. 칸이 비었으면 스케줄러가 자동으로 돌리지 않는다(app.scheduler_loop · account_ready).
+# 2026-10-25 새 데이터 폴더로 재현: 계정을 넣기 전인 켠 지 0.8분·17.2분에 메일 자동 확인이 '계정을 먼저 입력' 으로
+# 실패해 '동기화가 계속 실패하고 있어요' 띠가 떴고, 실패마다 두 배로 느는 간격 때문에 32분에 계정을 넣고도
+# 47분에야 처음 받았다(늦게 넣을수록 최대 6시간). 계정이 오래전부터 있던 이 PC 에선 안 나고 새 기기마다 났다.
+TASK_ACCOUNT_KEYS = {
+    "emails": ("SCHOOL_EMAIL", "SCHOOL_EMAIL_PASSWORD"),
+    "deadlines": ("LMS_ID", "LMS_PASSWORD"),
+    "sync": ("LMS_ID", "LMS_PASSWORD"),
+}
+# 작업마다 문장을 통째로 둔다. '{이름} {횟수}번' 처럼 빈자리 둘을 띄어 쓰면 영어 화면 번역표가 이름을 잘못 끊었다
+FAIL_WARNINGS = {
+    "emails": "메일 가져오기가 {count}번 연속 실패했어요{said}. 인터넷 연결과 설정의 계정을 확인해 주세요.",
+    "deadlines": "마감 확인이 {count}번 연속 실패했어요{said}. 인터넷 연결과 설정의 계정을 확인해 주세요.",
+    "sync": "자료 동기화가 {count}번 연속 실패했어요{said}. 인터넷 연결과 설정의 계정을 확인해 주세요.",
+    "": "동기화가 {count}번 연속 실패했어요{said}. 인터넷 연결과 설정의 계정을 확인해 주세요.",
+}
+
+
+def account_ready(config: dict[str, Any], kind: str) -> bool:
+    """그 작업에 필요한 계정 칸이 다 찼는지 (read_config 처럼 비밀 값을 푼 설정을 받는다)."""
+    return all(str(config.get(key) or "").strip() for key in TASK_ACCOUNT_KEYS.get(kind, ()))
+
+
+def reset_task_failures(workspace: UserWorkspace, kinds: list[str]) -> None:
+    """계정을 넣거나 바꾼 작업의 실패 기록(늘어난 쉬는 간격·로그인 거절)을 지운다. 수동 새로고침을 안 눌러도 곧 다시 한다."""
+    data = read_json(workspace.health_path, {})
+    if not isinstance(data, dict):
+        return
+    changed = False
+    for name in ("failStreak", "authFailed"):
+        bucket = data.get(name)
+        if isinstance(bucket, dict):
+            for kind in kinds:
+                changed = bucket.pop(kind, None) is not None or changed
+    if (data.get("lastFailure") or {}).get("kind") in kinds:
+        data.pop("lastFailure", None)
+        data["consecutiveFailures"] = 0
+        changed = True
+    if not changed:
+        return
+    try:
+        atomic_write_text(workspace.health_path, json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    except OSError:
+        pass
+
+
+def _failure_reason(logs: list[Any]) -> str:
+    """작업 로그에서 실패 까닭 한 줄 ('작업이 실패했습니다: …' 의 뒷부분). 소스 위치 '(email_reader.py:1403)' 는 로그에만 둔다."""
+    for line in reversed(logs[-40:]):
+        text = str(line)
+        if "작업이 실패했습니다:" in text:
+            reason = text.split("작업이 실패했습니다:", 1)[1].strip()
+            return re.sub(r"\s*\([\w.]+\.py:\d+\)$", "", reason)[:160]
+        if text.startswith("[오류]"):
+            return text[4:].strip()[:160]
+    return ""
+
+
 def record_task_result(
-    workspace: UserWorkspace, kind: str, return_code: int, auth_failed: bool = False, auth_reason: str = ""
+    workspace: UserWorkspace, kind: str, return_code: int, auth_failed: bool = False, auth_reason: str = "",
+    reason: str = "",
 ) -> dict[str, Any]:
     """작업 성공/실패를 기록한다. 실패가 쌓이면 사용자에게 알리기 위함.
 
@@ -2452,6 +2642,8 @@ def record_task_result(
     else:
         data["consecutiveFailures"] = int(data.get("consecutiveFailures", 0) or 0) + 1
         data["lastFailure"] = {"kind": kind, "at": stamp, "code": return_code}
+        if reason:
+            data["lastFailure"]["reason"] = reason
         streaks[kind] = int(streaks.get(kind, 0) or 0) + 1
         if auth_failed:
             auth[kind] = {"at": stamp, "configStamp": list(_file_stamp(workspace.config_path))}
@@ -3171,8 +3363,17 @@ def get_course_announcements(workspace: UserWorkspace) -> dict[str, Any]:
 UI_THEMES = ("auto", "graphite", "graphite-dark", "claude", "light", "navy", "dark")  # 그래파이트 두 개는 2026-10-14 추가
 
 
-def _window_chrome_call(action):
-    """창 제목 줄을 앱이 그리는지(custom)와 최대화 여부. 개발 서버(브라우저)에서는 custom=False."""
+def _window_chrome_call(action, payload=None):
+    """창 제목 줄을 앱이 그리는지(custom)와 최대화 여부. 개발 서버(브라우저)에서는 custom=False.
+
+    맥은 mac_window(신호등은 운영체제 것, 화면이 끌 곳을 regions 로 알려 준다), Windows 는 window_chrome.
+    """
+    if sys.platform == "darwin":
+        try:
+            import mac_window
+        except Exception:
+            return {"custom": False, "maximized": False}
+        return mac_window.command(action, payload) if action else mac_window.state()
     try:
         import window_chrome
     except Exception:
@@ -4379,7 +4580,8 @@ def run_process(workspace: UserWorkspace, kind: str, command: list[str] | None, 
         auth_failed = return_code != 0 and "로그인에 실패" in recent
         reason = re.search(r"\(서버: ([^)]{1,160})\)", recent) if auth_failed else None
         health = record_task_result(
-            workspace, kind, return_code, auth_failed=auth_failed, auth_reason=reason.group(1) if reason else ""
+            workspace, kind, return_code, auth_failed=auth_failed, auth_reason=reason.group(1) if reason else "",
+            reason=_failure_reason(task_state.get("logs") or []) if return_code != 0 else "",
         )
         if return_code != 0:
             fails = health.get("consecutiveFailures", 0)
@@ -4757,6 +4959,11 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             code = params.get("code", [""])[0]
             state = params.get("state", [""])[0]
             error = params.get("error", [""])[0]
+            if state and oauth_state_purpose(state) == "drive-pick":
+                # Drive 고르기 창에서 돌아왔다 (token.json 은 건드리지 않는다)
+                title, message, ok = finish_drive_pick(state, code, error, params.get("picked_file_ids", [""])[0])
+                self.send_html(title, message, success=ok)
+                return
             if error:
                 self.send_html(
                     "Google OAuth 연결 실패",
@@ -4869,6 +5076,29 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 if not uid_text.isdigit():
                     raise ValueError("방금 옮긴 메일이에요. 메일을 다시 받은 뒤 열어 주세요.")
                 self.send_json(email_reader.load_draft(int(uid_text), params.get("folder", ["draft"])[0]))
+            except Exception as exc:
+                self.send_json({"ok": False, "message": str(exc)}, HTTPStatus.BAD_REQUEST)
+            return
+        if route == "/api/mail/attachment":
+            # 읽기 화면의 첨부 받기 (?uid=&folder=&part=). 이름은 서버 구조/파트 머리말에서 다시 읽는다.
+            try:
+                import email_reader
+                from urllib.parse import quote
+
+                uid_text = params.get("uid", [""])[0]
+                if not uid_text.isdigit():
+                    self.send_json({"ok": False, "pendingTrash": True, "message": "방금 휴지통으로 옮긴 메일이에요. 메일을 다시 받은 뒤(잠시 뒤) 해 주세요."}, HTTPStatus.CONFLICT)
+                    return
+                name, mime, data = email_reader.fetch_attachment(
+                    int(uid_text), params.get("folder", ["inbox"])[0], params.get("part", [""])[0]
+                )
+                name = Path(name.replace("\\", "/")).name or "첨부파일"
+                self.send_response(HTTPStatus.OK)
+                self.send_header("Content-Type", mime or "application/octet-stream")
+                self.send_header("Content-Length", str(len(data)))
+                self.send_header("Content-Disposition", f"attachment; filename*=UTF-8''{quote(name)}")
+                self.end_headers()
+                self.wfile.write(data)
             except Exception as exc:
                 self.send_json({"ok": False, "message": str(exc)}, HTTPStatus.BAD_REQUEST)
             return
@@ -5119,8 +5349,8 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             return
         if route == "/api/drive/list":
             # 메일 첨부용 Drive 창. 폴더 안(parent) 또는 검색(q) 결과를 폴더·파일로 나눠 준다.
-            # drive.readonly 를 받은 토큰이면 내 Drive 전체·공유 문서함, 예전 토큰(drive.file 만)은 이 앱이 올린 파일만 보인다
-            # (fullAccess 로 알려 화면이 'Google 다시 연결' 을 권한다).
+            # 보통 토큰(drive.file)은 이 앱이 올린 파일만 보인다 — fullAccess=false 면 화면이 '구글 고르기 창' 단추를 보인다
+            # (/api/drive/pick). 1.12.38~39 에 drive.readonly 를 허락해 둔 토큰은 내 Drive 전체·공유 문서함이 보인다.
             parent = (params.get("parent", [""])[0] or "root").strip()
             q = (params.get("q", [""])[0] or "").strip()
             token = (params.get("pageToken", [""])[0] or "").strip() or None
@@ -5161,13 +5391,20 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             except Exception as exc:
                 self.send_json({"ok": False, "folders": [], "files": [], "message": str(exc)}, HTTPStatus.BAD_REQUEST)
             return
+        if route == "/api/drive/picked":
+            # Drive 고르기 창(/api/drive/pick)의 결과. 화면이 브라우저에서 고르는 동안 물어본다
+            pick = drive_picks.get(params.get("state", [""])[0])
+            if not pick or pick.get("user_id") != workspace.user_id:
+                self.send_json({"status": "gone", "files": []})
+            else:
+                self.send_json({k: pick.get(k) for k in ("status", "files", "message")})
+            return
         if route == "/api/drive/get":
             file_id = params.get("id", [""])[0]
             try:
                 import base64 as _b64
-                import drive_uploader
-                service = drive_uploader.get_drive_service()
-                meta = service.files().get(fileId=file_id, fields="name,size,mimeType", supportsAllDrives=True).execute()
+                service = drive_service_for_file(workspace, file_id)
+                meta =service.files().get(fileId=file_id, fields="name,size,mimeType", supportsAllDrives=True).execute()
                 name = meta.get("name", "file")
                 mime = str(meta.get("mimeType", ""))
                 if mime.startswith("application/vnd.google-apps."):
@@ -5217,7 +5454,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
     # ===== 체험 모드 (demo_mode) =====
     # 화면 서버가 바깥 서버에 묻는 라우트를 체험 중에는 여기서 먼저 받는다. 소켓 차단(demo_mode)은 빠뜨린 곳을 위한 안전망.
     DEMO_BLOCKED_GET = {
-        "/api/mail/eml", "/api/mail/draft", "/api/mail-image", "/api/drive/list", "/api/drive/get",
+        "/api/mail/eml", "/api/mail/attachment", "/api/mail/draft", "/api/mail-image", "/api/drive/list", "/api/drive/get", "/api/drive/picked",
         "/api/place-search", "/api/fglp", "/api/seminars",
     }
     DEMO_BLOCKED_POST = {
@@ -5226,7 +5463,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         "/api/mail/move", "/api/mail/folder-create", "/api/mail/translate", "/api/timetable/import-image",
         "/api/timetable/import-link", "/api/samsung-notes/send", "/api/samsung-notes/organize", "/api/organize-files",
         "/api/assignment/open", "/api/storage/cleanup", "/api/storage/trash-browser", "/api/google/credentials", "/api/google/connect",
-        "/api/google/disconnect", "/api/gcal/sync-academic", "/api/gcal/sync", "/api/local-autosave/run",
+        "/api/google/disconnect", "/api/drive/pick", "/api/gcal/sync-academic", "/api/gcal/sync", "/api/local-autosave/run",
         # 내 컴퓨터(문서·다운로드 폴더)에 가짜 자료를 쓰지 않는다
         "/api/save-local", "/api/export-ics",
         # AI CLI 는 바깥 서비스에 묻는다
@@ -6117,6 +6354,22 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 self.send_json({"ok": False, "message": str(exc)}, HTTPStatus.BAD_REQUEST)
             return
 
+        if route == "/api/drive/pick":
+            # Drive 전체·공유 문서함에서 첨부할 파일을 구글 고르기 창으로 (create_drive_pick_url). 결과는 /api/drive/picked
+            try:
+                payload = self.read_body_json()
+                auth_url, pick_state = create_drive_pick_url(workspace, base_url, getattr(self, "_session_token", None))
+                opened = False
+                if payload.get("openBrowser") and not MULTI_USER_MODE:
+                    try:
+                        opened = webbrowser.open(auth_url)
+                    except Exception:
+                        opened = False
+                self.send_json({"ok": True, "authUrl": auth_url, "state": pick_state, "openedInBrowser": opened})
+            except Exception as exc:
+                self.send_json({"ok": False, "message": str(exc)}, HTTPStatus.BAD_REQUEST)
+            return
+
         if route == "/api/google/connect":
             try:
                 payload = self.read_body_json()
@@ -6236,9 +6489,11 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 self.send_json({"ok": False, "message": str(exc)}, HTTPStatus.BAD_REQUEST)
             return
         if route == "/api/window":
-            # 앱 상단 바의 최소화·최대화·닫기 단추
-            action = str((self.read_body_json() or {}).get("action") or "")
-            self.send_json(_window_chrome_call(action))
+            # 앱 상단 바의 최소화·최대화·닫기 단추, 맥은 끌 곳 알림(regions)
+            body = self.read_body_json()
+            body = body if isinstance(body, dict) else {}
+            action = str(body.get("action") or "")
+            self.send_json(_window_chrome_call(action, body))
             return
         if route == "/api/ui-prefs":
             try:

@@ -26,7 +26,7 @@
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
 <link href="https://fonts.googleapis.com/css2?family=Lora:wght@600;700&family=Noto+Serif+KR:wght@600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="style.css?v=fc2fe1ba">
 </head>
 <body>
 
@@ -36,7 +36,6 @@
     <nav aria-label="주요 메뉴">
       <a href="#why">소개</a>
       <a href="#features">기능</a>
-      <a href="#tips">꿀기능</a>
       <a href="#privacy">개인정보</a>
       <a href="#faq">질문</a>
     </nav>
@@ -110,148 +109,252 @@
   </div>
 </section>
 
-<!-- 기능: 화면마다 하나씩 -->
+<!-- 기능: 파트별로 (LMS 강의자료 · 학교 메일 · 학사일정·공지 · 마감·세미나 일정) -->
 <section class="section" id="features">
   <div class="container">
     <div class="center reveal">
       <p class="kicker"><span>02</span>기능</p>
       <h2>켜 두기만 하면, 알아서 모입니다</h2>
-      <p class="sub">한 번 로그인해 두면 메일은 5분(앱을 안 볼 때는 15분), 과제 마감은 1시간, 강의자료는 3시간마다 확인해 새로 생긴 것만 가져옵니다.</p>
+      <p class="sub">한 번 로그인해 두면 새로 생긴 것만 알아서 가져옵니다.</p>
+      <ul class="parts-nav" aria-label="기능 파트">
+        <li><a href="#lms"><span>1</span>LMS 강의자료</a></li>
+        <li><a href="#mail"><span>2</span>학교 메일</a></li>
+        <li><a href="#academic"><span>3</span>학사일정·공지</a></li>
+        <li><a href="#deadlines"><span>4</span>마감·세미나 일정</a></li>
+      </ul>
     </div>
 
-    <article class="feature reveal">
-      <div class="copy">
-        <p class="tag">대시보드 · 과제 마감</p>
-        <h3>오늘 할 일과 마감이 먼저 보여요</h3>
-        <p>첫 화면에 오늘 남은 수업, 7일 안에 끝나는 과제, 안 읽은 메일이 모입니다.</p>
-        <ul class="checks">
-          <li>모든 과목의 과제를 D-day 순으로 한 목록에</li>
-          <li>미제출 과제는 '제출하러 가기'로 LMS 제출 화면을 바로 열기</li>
-          <li>시험·수강신청 같은 학사일정 D-day</li>
-          <li>주간 시간표는 에브리타임 시간표 링크로 한 번에</li>
-        </ul>
+    <!-- PART 1. 직접 하던 일 ↔ 정리된 탐색기, 그리고 클라우드 -->
+    <div class="part" id="lms">
+      <div class="part-head reveal">
+        <p class="part-no">PART 1</p>
+        <h3>LMS 강의자료</h3>
       </div>
-      <figure class="window">
-        <div class="bar" aria-hidden="true"><i></i><i></i><i></i><span>과제 마감</span></div>
-        <img src="img/app-deadlines.webp" width="1440" height="900" loading="lazy" alt="과제 마감 화면: 과목별 과제가 D-day 순으로 정리되고 '제출하러 가기' 버튼이 있다">
-      </figure>
-    </article>
 
-    <article class="feature flip reveal">
-      <div class="copy">
-        <p class="tag">강의자료</p>
-        <h3>LMS 폴더 그대로, 새 자료는 알아서</h3>
-        <p>새로 올라온 강의자료만 골라 내려받아, LMS의 주차·강의 폴더 구조 그대로 정리합니다.</p>
-        <ul class="checks">
-          <li>내 컴퓨터와 Google Drive에 과목·주차 폴더로. 고친 자료는 새 판으로 바꿔요</li>
-          <li>클라우드 폴더에도 복사해 휴대폰에서도 보기</li>
-          <li>여러 파일을 골라 한꺼번에 저장 <small>(Windows는 삼성 노트로 보내기도)</small></li>
-        </ul>
-        <ul class="svc-list" aria-label="강의자료를 보낼 수 있는 곳">
+      <div class="ba reveal">
+        <div class="ba-col before">
+          <p class="ba-label">지금까지 · 직접</p>
+          <h4>과목마다, 매주 되풀이하던 일</h4>
+          <ol class="chores">
+            <li><b>LMS 로그인</b></li>
+            <li><b>과목 들어가기</b></li>
+            <li><b>파일 하나씩 내려받기</b></li>
+            <li><b>다운로드 폴더에서 찾기</b></li>
+            <li><b>과목 폴더로 옮기기</b></li>
+          </ol>
+          <figure class="xp messy" role="img" aria-label="정리되지 않은 다운로드 폴더. 과목이 섞인 파일과 Lecture 05 (1).pdf 같은 겹친 사본, 카톡 사진까지 38개가 쌓여 있다">
+            <div class="xp-top"><span class="xp-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="xp-tab"><i class="fi dir"></i>다운로드</span><span class="xp-ctl" aria-hidden="true"><i>—</i><i>□</i><i>✕</i></span></div>
+            <div class="xp-body">
+              <div class="xp-list">
+                <div class="xp-row head"><span>이름</span><span>크기</span></div>
+                <div class="xp-row"><span><i class="fi pdf"></i>Lecture 05.pdf</span><span>2.4MB</span></div>
+                <div class="xp-row dup"><span><i class="fi pdf"></i>Lecture 05 (1).pdf</span><span>2.4MB</span></div>
+                <div class="xp-row"><span><i class="fi pdf"></i>HW3.pdf</span><span>0.8MB</span></div>
+                <div class="xp-row"><span><i class="fi img"></i>KakaoTalk_20261020_1532.jpg</span><span>1.1MB</span></div>
+                <div class="xp-row"><span><i class="fi ppt"></i>week3_final_v2.pptx</span><span>5.6MB</span></div>
+                <div class="xp-row dup"><span><i class="fi pdf"></i>다운로드 (2).pdf</span><span>0.3MB</span></div>
+                <div class="xp-row"><span><i class="fi word"></i>Lab_Report_Template.docx</span><span>0.1MB</span></div>
+                <div class="xp-row dup"><span><i class="fi pdf"></i>lecture06 (1).pdf</span><span>3.1MB</span></div>
+              </div>
+            </div>
+            <div class="xp-status">항목 38개</div>
+          </figure>
+          <p class="repeat"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 2l4 4-4 4"/><path d="M3 11V9a3 3 0 0 1 3-3h15"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v2a3 3 0 0 1-3 3H3"/></svg>과목 수 × 한 학기 내내</p>
+        </div>
+
+        <div class="ba-arrow" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg></div>
+
+        <div class="ba-col after">
+          <p class="ba-label">Daling · 자동</p>
+          <h4>켜 두면 이렇게 정리돼 있어요</h4>
+          <figure class="xp" role="img" aria-label="파일 탐색기. 문서 › 붕어빵 파일 정리 아래에 과목 폴더 네 개가 있고, 일반물리학Ⅱ 안은 LMS처럼 공지사항·Assignments·Course Materials, 그 안에 Week 1~3 폴더. Week 3에는 강의 슬라이드·과제 PDF 네 개가 있고 하나는 방금 새로 받은 것">
+            <div class="xp-top"><span class="xp-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="xp-tab"><i class="fi dir"></i>Week 3</span><span class="xp-ctl" aria-hidden="true"><i>—</i><i>□</i><i>✕</i></span></div>
+            <div class="xp-tools"><span class="xp-btns" aria-hidden="true">←→↑</span><span class="xp-addr">문서 › 붕어빵 파일 정리 › 일반물리학Ⅱ › Course Materials › <b>Week 3</b></span><span class="xp-search">Week 3 검색</span></div>
+            <div class="xp-body">
+              <ul class="xp-nav">
+                <li class="open"><i class="fi dir"></i>붕어빵 파일 정리</li>
+                <li class="l1 open"><i class="fi dir"></i>일반물리학Ⅱ</li>
+                <li class="l2 has"><i class="fi dir"></i>공지사항</li>
+                <li class="l2 has"><i class="fi dir"></i>Assignments</li>
+                <li class="l2 open"><i class="fi dir"></i>Course Materials</li>
+                <li class="l3"><i class="fi dir"></i>Week 1</li>
+                <li class="l3"><i class="fi dir"></i>Week 2</li>
+                <li class="l3 sel"><i class="fi dir"></i>Week 3</li>
+                <li class="l1 has"><i class="fi dir"></i>미적분학Ⅱ</li>
+                <li class="l1 has"><i class="fi dir"></i>프로그래밍 기초</li>
+                <li class="l1 has"><i class="fi dir"></i>글쓰기와 소통</li>
+              </ul>
+              <div class="xp-list">
+                <div class="xp-row head"><span>이름</span><span>받은 날짜</span><span>크기</span></div>
+                <div class="xp-row"><span><i class="fi pdf"></i>Lecture 05 - Gauss's Law.pdf</span><span>10-19 09:12</span><span>2.4MB</span></div>
+                <div class="xp-row"><span><i class="fi pdf"></i>Lecture 06 - Electric Potential.pdf</span><span>10-21 09:05</span><span>3.1MB</span></div>
+                <div class="xp-row"><span><i class="fi pdf"></i>Problem Set 3.pdf</span><span>10-21 13:40</span><span>0.8MB</span></div>
+                <div class="xp-row new"><span><i class="fi pdf"></i>Recitation 3 Solutions.pdf<em class="badge-new">새로 받음</em></span><span>방금</span><span>1.2MB</span></div>
+              </div>
+            </div>
+            <div class="xp-status">항목 4개</div>
+          </figure>
+          <p class="ba-note">LMS와 같은 과목·주차 폴더로. 교수님이 고친 자료는 새 판으로 바꿔 넣어요.</p>
+        </div>
+      </div>
+
+      <div class="cloud reveal">
+        <div class="copy">
+          <p class="tag">클라우드에도</p>
+          <h4>Google Drive에도 같은 모양으로</h4>
+          <p>Drive의 <b>AutoSaver</b> 폴더와 클라우드 폴더에도 똑같이 정리돼, 휴대폰·태블릿에서 바로 열어요.</p>
+          <ul class="svc-list" aria-label="강의자료를 보낼 수 있는 곳">
           <li><span class="logo"><svg aria-hidden="true" focusable="false" viewBox="0 0 87.3 78"><path d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8h-27.5c0 1.55.4 3.1 1.2 4.5z" fill="#0066da"/><path d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44a9.06 9.06 0 0 0 -1.2 4.5h27.5z" fill="#00ac47"/><path d="m73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5h-27.502l5.852 11.5z" fill="#ea4335"/><path d="m43.65 25 13.75-23.8c-1.35-.8-2.9-1.2-4.5-1.2h-18.5c-1.6 0-3.15.45-4.5 1.2z" fill="#00832d"/><path d="m59.8 53h-32.3l-13.75 23.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.45 4.5-1.2z" fill="#2684fc"/><path d="m73.4 26.5-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8 16.15 28h27.45c0-1.55-.4-3.1-1.2-4.5z" fill="#ffba00"/></svg></span>Google Drive</li>
           <li><span class="logo"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path fill="#0364b8" d="M9.8 8.2a5.3 5.3 0 0 1 8.9 2.3 3.9 3.9 0 0 1 1.2 7.6H7.4l2.4-9.9Z"/><path fill="#0078d4" d="M9.6 8.4 7 18.1H5.2a3.7 3.7 0 0 1-.8-7.3 5 5 0 0 1 5.2-2.4Z"/><path fill="#28a8ea" d="M20 11.2a3.5 3.5 0 0 1-.6 6.9H7.4l3.1-5.3a4 4 0 0 1 5-1.6l4.5 0Z"/></svg></span>OneDrive</li>
           <li><span class="logo"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path fill="#3e9bf0" d="M17.6 18H6.8a4.3 4.3 0 0 1-.6-8.5 5.9 5.9 0 0 1 11.2 1.6 3.5 3.5 0 0 1 .2 6.9Z"/></svg></span>iCloud Drive</li>
           <li><span class="logo"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="#0061ff"><path d="m7 3 5 3.2-5 3.2L2 6.2 7 3Zm10 0 5 3.2-5 3.2-5-3.2L17 3ZM2 12.6l5-3.2 5 3.2-5 3.2-5-3.2Zm15-3.2 5 3.2-5 3.2-5-3.2 5-3.2ZM7 17l5-3.2 5 3.2-5 3.2L7 17Z"/></svg></span>Dropbox</li>
           <li><span class="logo"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><rect width="20" height="20" x="2" y="2" rx="5" fill="#03c75a"/><path fill="#fff" d="M8 7h2.6l3.1 4.6V7H16v10h-2.6l-3.1-4.6V17H8V7Z"/></svg></span>네이버 MYBOX</li>
         </ul>
+        </div>
+        <figure class="gd" role="img" aria-label="Google Drive 화면. 내 드라이브 › AutoSaver 아래에 과목 폴더 네 개가 있고, 일반물리학Ⅱ › Course Materials › Week 3 에 내 컴퓨터와 같은 강의자료가 올라가 있다">
+          <div class="gd-top"><span class="gd-brand"><svg aria-hidden="true" focusable="false" viewBox="0 0 87.3 78"><path d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8h-27.5c0 1.55.4 3.1 1.2 4.5z" fill="#0066da"/><path d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44a9.06 9.06 0 0 0 -1.2 4.5h27.5z" fill="#00ac47"/><path d="m73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5h-27.502l5.852 11.5z" fill="#ea4335"/><path d="m43.65 25 13.75-23.8c-1.35-.8-2.9-1.2-4.5-1.2h-18.5c-1.6 0-3.15.45-4.5 1.2z" fill="#00832d"/><path d="m59.8 53h-32.3l-13.75 23.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.45 4.5-1.2z" fill="#2684fc"/><path d="m73.4 26.5-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8 16.15 28h27.45c0-1.55-.4-3.1-1.2-4.5z" fill="#ffba00"/></svg>Drive</span><span class="gd-search">Drive에서 검색</span></div>
+          <div class="gd-body">
+            <div class="gd-crumb">내 드라이브 › <b>AutoSaver</b></div>
+            <p class="gd-h">폴더</p>
+            <div class="gd-folders">
+              <span class="sel"><i class="fi dir"></i>일반물리학Ⅱ</span>
+              <span><i class="fi dir"></i>미적분학Ⅱ</span>
+              <span><i class="fi dir"></i>프로그래밍 기초</span>
+              <span><i class="fi dir"></i>글쓰기와 소통</span>
+            </div>
+            <div class="gd-crumb">일반물리학Ⅱ › Course Materials › <b>Week 3</b></div>
+            <div>
+              <div class="xp-row"><span><i class="fi pdf"></i>Lecture 05 - Gauss's Law.pdf</span><span>10월 19일</span></div>
+              <div class="xp-row"><span><i class="fi pdf"></i>Lecture 06 - Electric Potential.pdf</span><span>10월 21일</span></div>
+              <div class="xp-row"><span><i class="fi pdf"></i>Problem Set 3.pdf</span><span>10월 21일</span></div>
+              <div class="xp-row new"><span><i class="fi pdf"></i>Recitation 3 Solutions.pdf</span><span>방금</span></div>
+            </div>
+          </div>
+        </figure>
       </div>
-      <figure class="window">
-        <div class="bar" aria-hidden="true"><i></i><i></i><i></i><span>자료</span></div>
-        <img src="img/app-files.webp" width="1440" height="900" loading="lazy" alt="자료 화면: 과목 폴더를 펼치면 공지사항, Assignments, Course Materials 아래 Week 폴더와 PDF 파일이 LMS와 같은 구조로 보인다">
-      </figure>
-    </article>
+    </div>
 
-    <article class="feature reveal">
-      <div class="copy">
-        <p class="tag">학교 메일</p>
-        <h3>학교 메일을 앱 안에서 읽고 씁니다</h3>
-        <p>웹메일에 따로 로그인하지 않아도 받은 메일을 보고 바로 답장할 수 있어요.</p>
-        <ul class="checks">
-          <li>세미나·행사, 행정·학생팀, 취업·진로처럼 자동 분류</li>
-          <li>임시 보관함의 메일을 열면 그 자리에서 이어 쓰기</li>
-          <li>영어 메일 번역 <small>(내 컴퓨터의 AI 프로그램으로)</small></li>
-        </ul>
+    <!-- PART 2. 학교 메일 -->
+    <div class="part" id="mail">
+      <div class="part-head reveal">
+        <p class="part-no">PART 2</p>
+        <h3>학교 메일</h3>
       </div>
-      <figure class="window">
-        <div class="bar" aria-hidden="true"><i></i><i></i><i></i><span>메일함</span></div>
-        <img src="img/app-emails.webp" width="1440" height="900" loading="lazy" alt="메일함 화면: 왼쪽에 분류별 메일함, 가운데에 날짜별 메일 목록, 오른쪽에 고른 메일 본문">
-      </figure>
-    </article>
 
-    <article class="feature flip reveal">
-      <div class="copy">
-        <p class="tag">캘린더</p>
-        <h3>마감과 학사일정, 내 일정을 한 달력에</h3>
-        <p>과제 마감과 학사일정, 공휴일, 메일 속 행사가 저절로 채워지고, 내 일정도 함께 적어 둘 수 있어요.</p>
-        <ul class="checks">
-          <li>과제 마감·학교 행사·세미나·내 일정을 색으로 나눠 보기</li>
-          <li>Google Calendar의 Daling 전용 캘린더로 보내기</li>
-          <li>마감 목록을 캘린더 파일(.ics)로 내보내기</li>
-        </ul>
+      <article class="feature reveal">
+        <div class="copy">
+          <p class="tag">받은 메일</p>
+          <h3>앱 안에서 읽고 바로 답장</h3>
+          <ul class="checks">
+            <li>세미나·행정·취업 메일 자동 분류</li>
+            <li>답 없는 메일엔 리마인드 초안</li>
+            <li>영어 메일 번역</li>
+          </ul>
+        </div>
+        <figure class="window">
+          <div class="bar" aria-hidden="true"><i></i><i></i><i></i><span>메일함</span></div>
+          <img src="img/app-emails.webp" width="1440" height="900" loading="lazy" alt="메일함 화면: 왼쪽에 분류별 메일함, 가운데에 날짜별 메일 목록, 오른쪽에 고른 메일 본문">
+        </figure>
+      </article>
+
+      <div class="tip-hero has-film reveal" id="compose">
+        <div class="copy">
+          <p class="tag">AI 메일 쓰기</p>
+          <h3>할 말만 적으면 AI가 메일로 써요</h3>
+          <ul class="checks">
+            <li><b>/ai [할 말]</b> 쓰고 <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>Enter</kbd> — 내 컴퓨터의 Claude·Gemini·Codex가 이어 써요. API 키는 필요 없어요.</li>
+            <li>인사·자기소개는 <kbd>Tab</kbd> 한 번</li>
+          </ul>
+        </div>
+        <figure class="film">
+          <video muted loop playsinline preload="none" width="1600" height="1112" poster="img/film-ai.webp?v=0c93e7d3" aria-label="실제 앱 화면 녹화: 받는 사람에 홍길동을 넣고 Tab 으로 인사와 자기소개를 넣은 뒤 '/ai [금요일 마감 HW6, 병원 진료 때문에 월요일까지 내도 되는지 여쭤보기]'를 쓰고 Ctrl+Enter 를 누르자, 그 자리에 이번 주 금요일(10월 30일)까지인 HW6를 다음 주 월요일(11월 2일)까지 내도 될지 정중히 묻는 문단이 써진다">
+            <source src="img/film-ai.mp4?v=9a5a96b0" type="video/mp4">
+          </video>
+          <button class="film-toggle" type="button" data-pause="영상 멈추기" data-play="영상 재생" aria-label="영상 재생"></button>
+        </figure>
       </div>
-      <figure class="window">
-        <div class="bar" aria-hidden="true"><i></i><i></i><i></i><span>캘린더</span></div>
-        <img src="img/app-calendar.webp" width="1440" height="900" loading="lazy" alt="캘린더 화면: 10월 달력에 중간고사 기간, 과제 마감, 가을 축제, 스터디 일정이 색깔별로 표시된다">
-      </figure>
-    </article>
+
+      <div class="tip-hero has-film reveal">
+        <div class="copy">
+          <p class="tag">과목 · 교수 · 조교</p>
+          <h3>과목 이름만 쳐도 교수·조교가</h3>
+          <ul class="checks">
+            <li>과목 카드에서 <b>'[과목 01분반]'</b> 제목이 채워진 메일을 바로</li>
+            <li>보낸 사람 옆에 '일반물리Ⅱ 3분반 교수' 같은 꼬리표</li>
+          </ul>
+        </div>
+        <figure class="film">
+          <video muted loop playsinline preload="none" width="1600" height="1112" poster="img/film-staff.webp?v=e771ebf8" aria-label="실제 앱 화면 녹화: 받는 사람 칸에 '일반물리'를 치자 그 과목 교수와 조교 네 명이 분반과 함께 나오고, 그중 한 명을 고른다">
+            <source src="img/film-staff.mp4?v=e3417040" type="video/mp4">
+          </video>
+          <button class="film-toggle" type="button" data-pause="영상 멈추기" data-play="영상 재생" aria-label="영상 재생"></button>
+        </figure>
+      </div>
+    </div>
+
+    <!-- PART 3. 학사일정·공지 -->
+    <div class="part" id="academic">
+      <div class="part-head reveal">
+        <p class="part-no">PART 3</p>
+        <h3>학사일정·공지</h3>
+      </div>
+      <article class="feature flip reveal">
+        <div class="copy">
+          <p class="tag">캘린더</p>
+          <h3>학사일정과 내 일정을 한 달력에</h3>
+          <ul class="checks">
+            <li>시험·수강신청·휴일이 달력에 저절로</li>
+            <li>학교 공지(장학·채용·소식)도 앱 안에서</li>
+            <li>Google Calendar로 보내기</li>
+          </ul>
+        </div>
+        <figure class="window">
+          <div class="bar" aria-hidden="true"><i></i><i></i><i></i><span>캘린더</span></div>
+          <img src="img/app-calendar.webp" width="1440" height="900" loading="lazy" alt="캘린더 화면: 10월 달력에 중간고사 기간, 과제 마감, 가을 축제, 스터디 일정이 색깔별로 표시된다">
+        </figure>
+      </article>
+    </div>
+
+    <!-- PART 4. 마감·세미나 일정 -->
+    <div class="part" id="deadlines">
+      <div class="part-head reveal">
+        <p class="part-no">PART 4</p>
+        <h3>마감·세미나 일정</h3>
+      </div>
+      <article class="feature reveal">
+        <div class="copy">
+          <p class="tag">과제 마감</p>
+          <h3>모든 과목의 마감을 D-day 순으로</h3>
+          <ul class="checks">
+            <li>'제출하러 가기'로 LMS 제출 화면 바로 열기</li>
+            <li>마감이 다가오면 알림</li>
+            <li>Google Calendar·.ics로 내보내기</li>
+          </ul>
+        </div>
+        <figure class="window">
+          <div class="bar" aria-hidden="true"><i></i><i></i><i></i><span>과제 마감</span></div>
+          <img src="img/app-deadlines.webp" width="1440" height="900" loading="lazy" alt="과제 마감 화면: 과목별 과제가 D-day 순으로 정리되고 '제출하러 가기' 버튼이 있다">
+        </figure>
+      </article>
+      <div class="tip-hero reveal">
+        <div class="copy">
+          <p class="tag">세미나 일정</p>
+          <h3>세미나·행사 메일이 오면 달력에 저절로</h3>
+          <p>날짜·연사·장소까지 읽어 일정으로 넣어요.</p>
+        </div>
+      </div>
+    </div>
 
     <div class="more reveal">
       <h3 class="block-title">그 밖에도</h3>
       <div class="extras">
-        <div class="extra"><b>통합 검색</b><span>과목·자료·과제·메일·일정을 검색창 하나로. 초성으로도 찾아요.</span></div>
-        <div class="extra"><b>알림</b><span>마감이 다가오거나 새 자료·과목 공지가 올라오면 알려 줘요.</span></div>
-        <div class="extra"><b>셔틀버스</b><span>출퇴근·순환 셔틀 시간표를 앱 안에서 바로.</span></div>
-        <div class="extra"><b>해외 파견 지도</b><span>FGLP·학점교류 대학을 세계지도에서. 대학 사진·학기·현지 시각까지.</span></div>
-        <div class="extra"><b>영어 화면</b><span>설정에서 앱 전체를 English로 바꿀 수 있어요.</span></div>
-        <div class="extra"><b>체험 모드</b><span>계정 없이 예시 데이터로 모든 화면을 둘러봐요. 학교·메일·Google에는 연결하지 않아요.</span></div>
+        <div class="extra"><b>통합 검색</b><span>검색창 하나로, 초성으로도</span></div>
+        <div class="extra"><b>셔틀버스</b><span>셔틀 시간표를 앱 안에서</span></div>
+        <div class="extra"><b>해외 파견 지도</b><span>FGLP·학점교류 대학을 지도에서</span></div>
+        <div class="extra"><b>영어 화면</b><span>앱 전체를 English로</span></div>
+        <div class="extra"><b>체험 모드</b><span>계정 없이 예시로 둘러보기</span></div>
+        <div class="extra"><b>알림</b><span>새 자료·공지가 오면</span></div>
       </div>
-    </div>
-  </div>
-</section>
-
-<!-- 꿀기능: 학교 서비스를 따로 쓸 때는 못 하던 것만 -->
-<section class="section tint" id="tips">
-  <div class="container">
-    <div class="center reveal">
-      <p class="kicker"><span>03</span>꿀기능</p>
-      <h2>알아 두면 시간이 확 줄어드는 기능</h2>
-      <p class="sub">LMS와 웹메일을 따로 쓸 때는 할 수 없던 일들입니다.</p>
-    </div>
-
-    <div class="tip-hero reveal">
-      <div class="copy">
-        <p class="tag">과목 · 교수 · 조교</p>
-        <h3>과목 이름 하나로 교수·조교와 메일까지</h3>
-        <ul class="checks">
-          <li>메일 받는 사람 칸에 <b>'일반물리'</b>만 쳐도 그 과목 교수님이 분반과 함께 나와요. 메일을 주고받은 조교도 같이 나와요.</li>
-          <li>과목 카드마다 이번 학기 교수·조교가 분반과 함께 붙어 있고, 편지 아이콘으로 <b>'[과목 01분반]'</b> 제목이 채워진 메일을 바로 써요.</li>
-          <li>메일함에서 '일반화학', 'General Chemistry' 어떻게 쳐도 그 과목 메일이 찾아지고, 보낸 사람 옆에는 '일반물리Ⅱ 3분반 교수' 같은 꼬리표가 붙어요.</li>
-        </ul>
-      </div>
-      <div class="strips">
-        <figure class="shot-strip"><img src="img/feat-staff.webp" width="2160" height="321" loading="lazy" alt="메일 쓰기 받는 사람 칸에 '일반물리'를 치자 그 과목 교수와 조교가 분반·주소와 함께 나온 모습"></figure>
-        <figure class="shot-strip"><img src="img/feat-courses.webp" width="2160" height="770" loading="lazy" alt="강의 화면의 과목 카드 세 장. 카드마다 다음 마감과 함께 교수·조교 이름이 분반과 함께 붙어 있다"></figure>
-      </div>
-    </div>
-
-    <div class="tip-hero reveal" id="compose">
-      <div class="copy">
-        <p class="tag">교수님께 메일 쓰기</p>
-        <h3>인사와 자기소개는 회색 글씨, <kbd>Tab</kbd> 한 번이면 들어가요</h3>
-        <ul class="checks">
-          <li>받는 사람을 고르면 첫인사·자기소개·끝인사가 회색 글씨로 미리 보여요. <b>Tab</b>을 누르거나 글씨를 누르면 그대로 써져요.</li>
-          <li>한국인 교수님께는 한국어 공식 메일 순서로, 외국인 교수님께는 영어로.</li>
-          <li>자기소개에는 과목·학수번호·분반과 내 학번이 LMS에서 알아서 들어가요.</li>
-          <li>용건은 <b>/ai 할 말</b>을 쓰고 <kbd>Ctrl</kbd>+<kbd>Enter</kbd>(Mac은 <kbd>⌘</kbd>+<kbd>Enter</kbd>). 내 컴퓨터의 Claude·Gemini·Codex가 그 자리에 이어 써요.</li>
-        </ul>
-      </div>
-      <figure class="shot-strip"><img src="img/feat-compose.webp" width="2160" height="312" loading="lazy" alt="메일 쓰기 창. 받는 사람 홍길동 교수님을 고르자 '홍길동 교수님께, 안녕하십니까.' 아래에 과목·분반·학번이 담긴 자기소개가 회색 글씨로 보이고 옆에 Tab 표시가 있다"></figure>
-    </div>
-
-    <div class="tips reveal">
-      <div class="tip"><p class="tag">일정</p><b>세미나 메일 → 달력</b><span>메일 속 날짜는 물론 연사·제목·장소까지 읽어 달력과 Google Calendar에 넣어요.</span></div>
-      <div class="tip"><p class="tag">메일</p><b>리마인드 메일 초안</b><span>답이 없는 보낸 메일에서 ⋮ › '리마인드 메일 쓰기'를 누르면 원문을 인용한 [Reminder] 초안이 바로 열려요.</span></div>
-      <div class="tip"><p class="tag">검색</p><b>말로 찾기</b><span>검색창 맨 아래 'AI 에게 물어보기'로 "지난주 화학 실험 공지"처럼 말로 찾아요. <small>(내 컴퓨터의 AI 프로그램으로)</small></span></div>
     </div>
   </div>
 </section>
@@ -260,7 +363,7 @@
 <section class="section" id="privacy">
   <div class="container trust">
     <div class="reveal">
-      <p class="kicker"><span>04</span>개인정보</p>
+      <p class="kicker"><span>03</span>개인정보</p>
       <h2><em>내 컴퓨터</em>에서만 돌아갑니다</h2>
       <p class="sub">Daling에는 개발자가 운영하는 서버가 없습니다. 자료와 계정 정보는 <b>내 컴퓨터</b>에 저장되고 개발자에게 보내지 않습니다. 내가 연결한 Google과, 내가 직접 부른 AI 프로그램에만 필요한 것을 보냅니다.</p>
       <ul class="checks">
@@ -271,7 +374,7 @@
       <p style="margin-top:18px"><a href="./privacy">개인정보처리방침 전문 보기 →</a></p>
     </div>
     <div class="perm reveal">
-      <div class="row"><div><b><span class="logo"><svg aria-hidden="true" focusable="false" viewBox="0 0 87.3 78"><path d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8h-27.5c0 1.55.4 3.1 1.2 4.5z" fill="#0066da"/><path d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44a9.06 9.06 0 0 0 -1.2 4.5h27.5z" fill="#00ac47"/><path d="m73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5h-27.502l5.852 11.5z" fill="#ea4335"/><path d="m43.65 25 13.75-23.8c-1.35-.8-2.9-1.2-4.5-1.2h-18.5c-1.6 0-3.15.45-4.5 1.2z" fill="#00832d"/><path d="m59.8 53h-32.3l-13.75 23.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.45 4.5-1.2z" fill="#2684fc"/><path d="m73.4 26.5-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8 16.15 28h27.45c0-1.55-.4-3.1-1.2-4.5z" fill="#ffba00"/></svg></span>Google Drive</b><code>drive.file</code> <code>drive.readonly</code></div><div><p>앱이 만든 과목·주차 폴더에 강의자료를 올리고, 이미 올린 파일인지 확인합니다.</p><p>메일에 Drive 파일을 첨부할 때 내 Drive·공유 문서함의 파일 목록을 보여 주고, 고른 파일만 내려받습니다. 읽기만 해서 다른 파일을 고치거나 지우지 못하며, 연결할 때 이 권한만 꺼도 나머지는 그대로 됩니다.</p></div></div>
+      <div class="row"><div><b><span class="logo"><svg aria-hidden="true" focusable="false" viewBox="0 0 87.3 78"><path d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8h-27.5c0 1.55.4 3.1 1.2 4.5z" fill="#0066da"/><path d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44a9.06 9.06 0 0 0 -1.2 4.5h27.5z" fill="#00ac47"/><path d="m73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5h-27.502l5.852 11.5z" fill="#ea4335"/><path d="m43.65 25 13.75-23.8c-1.35-.8-2.9-1.2-4.5-1.2h-18.5c-1.6 0-3.15.45-4.5 1.2z" fill="#00832d"/><path d="m59.8 53h-32.3l-13.75 23.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.45 4.5-1.2z" fill="#2684fc"/><path d="m73.4 26.5-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8 16.15 28h27.45c0-1.55-.4-3.1-1.2-4.5z" fill="#ffba00"/></svg></span>Google Drive</b><code>drive.file</code></div><div><p>앱이 만든 과목·주차 폴더에 강의자료를 올리고, 이미 올린 파일인지 확인합니다.</p><p>메일에 Drive 파일을 첨부할 때는 Google 파일 고르기 창에서 고른 파일만 열 수 있습니다. 고르지 않은 파일은 보거나 고치지 못합니다.</p></div></div>
       <div class="row"><div><b><span class="logo"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path fill="#4285F4" d="M18.316 5.684H24v12.632h-5.684V5.684zM5.684 24h12.632v-5.684H5.684V24zM18.316 5.684V0H1.895A1.894 1.894 0 0 0 0 1.895v16.421h5.684V5.684h12.632zm-7.207 6.25v-.065c.272-.144.5-.349.687-.617s.279-.595.279-.982c0-.379-.099-.72-.3-1.025a2.05 2.05 0 0 0-.832-.714 2.703 2.703 0 0 0-1.197-.257c-.6 0-1.094.156-1.481.467-.386.311-.65.671-.793 1.078l1.085.452c.086-.249.224-.461.413-.633.189-.172.445-.257.767-.257.33 0 .602.088.816.264a.86.86 0 0 1 .322.703c0 .33-.12.589-.36.778-.24.19-.535.284-.886.284h-.567v1.085h.633c.407 0 .748.109 1.02.327.272.218.407.499.407.843 0 .336-.129.614-.387.832s-.565.327-.924.327c-.351 0-.651-.103-.897-.311-.248-.208-.422-.502-.521-.881l-1.096.452c.178.616.505 1.082.977 1.401.472.319.984.478 1.538.477a2.84 2.84 0 0 0 1.293-.291c.382-.193.684-.458.902-.794.218-.336.327-.72.327-1.149 0-.429-.115-.797-.344-1.105a2.067 2.067 0 0 0-.881-.689zm2.093-1.931l.602.913L15 10.045v5.744h1.187V8.446h-.827l-2.158 1.557zM22.105 0h-3.289v5.184H24V1.895A1.894 1.894 0 0 0 22.105 0zm-3.289 23.5l4.684-4.684h-4.684V23.5zM0 22.105C0 23.152.848 24 1.895 24h3.289v-5.184H0v3.289z"/></svg></span>Google Calendar</b><code>calendar.app.created</code></div><p>앱 전용 캘린더를 하나 만들어 과제 마감·학사일정·메일 속 일정을 넣고 고칩니다. 앱이 만든 캘린더만 열 수 있어, 내 다른 캘린더와 일정은 보지도 바꾸지도 못합니다.</p></div>
       <div class="row"><div><b>그 밖의 연결</b></div><p>DGIST LMS·메일(학교 계정으로 로그인), 학교 홈페이지·공공데이터(공개 정보), 새 버전 확인(GitHub). <code>/ai</code>나 'AI 에게 물어보기'를 누를 때만 내 컴퓨터의 AI 프로그램(Claude·Gemini·Codex)으로 그 일에 필요한 글을 보냅니다. Google에서 받은 정보는 광고나 AI 학습에 쓰지 않고, AI로 보내지 않습니다.</p></div>
     </div>
@@ -282,7 +385,7 @@
 <section class="section tint" id="download">
   <div class="container">
     <div class="center reveal">
-      <p class="kicker"><span>05</span>내려받기</p>
+      <p class="kicker"><span>04</span>내려받기</p>
       <h2>무료로 쓰세요</h2>
       <p class="sub">오픈 소스(Apache License 2.0)로 공개된 무료 앱입니다.</p>
     </div>
@@ -366,7 +469,7 @@
       <h3 class="block-title">설치한 다음에는</h3>
       <div class="steps three">
         <div class="step"><h3>학교 계정 넣기</h3><p>설정에서 LMS와 학교 메일 계정을 넣습니다. 비밀번호는 암호화해서 <b>내 컴퓨터</b>에만 두고, 어디로도 보내지 않습니다.</p></div>
-        <div class="step"><h3><span class="logo"><svg aria-hidden="true" focusable="false" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="m6.3 14.7 6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-7.9l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg></span>Google 연결 <small>(선택)</small></h3><p>Drive와 Calendar로 보내고 싶을 때만 연결하세요. 연결하지 않아도 앱은 그대로 씁니다.<small>'Google에서 확인하지 않은 앱' 창이 뜨면 <b>고급 → Daling(으)로 이동</b>을 누르세요. Drive 전체 읽기 권한을 Google이 심사하는 동안 뜹니다.</small></p></div>
+        <div class="step"><h3><span class="logo"><svg aria-hidden="true" focusable="false" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="m6.3 14.7 6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-7.9l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg></span>Google 연결 <small>(선택)</small></h3><p>Drive와 Calendar로 보내고 싶을 때만 연결하세요. 연결하지 않아도 앱은 그대로 씁니다.</p></div>
         <div class="step"><h3>켜 두기만 하면 끝</h3><p>처음 켜면 화면을 하나씩 안내해 줘요. 그 뒤로는 새 자료와 메일이 알아서 모입니다.</p></div>
       </div>
     </div>
@@ -377,7 +480,7 @@
 <section class="section" id="faq">
   <div class="narrow">
     <div class="center reveal">
-      <p class="kicker"><span>06</span>자주 묻는 질문</p>
+      <p class="kicker"><span>05</span>자주 묻는 질문</p>
       <h2>궁금한 점</h2>
     </div>
     <div class="faq reveal">
@@ -396,8 +499,7 @@
     <p><strong>Daling</strong> is a free, open-source desktop app for Windows, macOS and Linux made for DGIST students. It collects course materials and assignment deadlines from the DGIST LMS, school e-mail, the academic calendar and campus notices into one dashboard, and organizes them into the user's own <strong>Google Drive</strong> and <strong>Google Calendar</strong>.</p>
     <p>The app runs entirely on the user's computer. There is no developer-operated server, and no user data or credentials are ever sent to the developer.</p>
     <ul>
-      <li><strong>Google Drive (<code>drive.file</code>)</strong> — uploads course materials into course/week folders the app creates, and checks whether a file was already uploaded.</li>
-      <li><strong>Google Drive, read-only (<code>drive.readonly</code>)</strong> — when the user attaches a Drive file to a school e-mail, lists the files in My Drive and Shared with me so the user can pick one, and downloads only the file the user picks to attach it. The app never changes or deletes these files, and the user can leave this permission off when connecting.</li>
+      <li><strong>Google Drive (<code>drive.file</code>)</strong> — uploads course materials into course/week folders the app creates, and checks whether a file was already uploaded. When the user attaches a Drive file to a school e-mail, the user picks it in Google's file picker, and the app downloads only the files picked there.</li>
       <li><strong>Google Calendar (<code>calendar.app.created</code>, <code>calendar.calendarlist.readonly</code>)</strong> — creates one dedicated calendar and adds or updates assignment deadlines, academic-calendar events and dates found in school e-mail there. It can only open calendars the app created; the calendar list is read only to find that calendar by name.</li>
     </ul>
     <p>Google user data is used only on the user's computer to provide these features; it is not sold, shared, used for advertising, or used to train AI models. Read the <a href="./privacy#english">Privacy Policy</a> and <a href="./terms#english">Terms of Service</a>. Contact: <a href="mailto:tutleblue12@gmail.com">tutleblue12@gmail.com</a></p>
@@ -435,12 +537,28 @@
     items.forEach((el) => el.classList.add("in"));
   }
 
+  // 시연 영상: 화면에 보일 때만 돌리고, 움직임 줄이기를 켠 사람에게는 멈춘 장면만. 단추로 멈추고 다시 틀 수 있다
+  const calm = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  document.querySelectorAll(".film").forEach((fig) => {
+    const v = fig.querySelector("video"), btn = fig.querySelector(".film-toggle");
+    let held = calm, seen = false;
+    const show = () => { fig.classList.toggle("paused", v.paused); btn.setAttribute("aria-label", v.paused ? btn.dataset.play : btn.dataset.pause); };
+    const sync = () => { if (seen && !held) v.play().catch(show); else v.pause(); };
+    v.addEventListener("play", show); v.addEventListener("pause", show); show();
+    btn.addEventListener("click", () => { held = !v.paused; sync(); });
+    if ("IntersectionObserver" in window) {
+      new IntersectionObserver((es) => { seen = es[es.length - 1].isIntersecting; sync(); }, { threshold: 0.35 }).observe(v);
+    } else { seen = true; sync(); }
+  });
+
   // 내려받기 단추를 GitHub 릴리스의 최신 설치 파일로 바로 잇는다 (실패하면 HTML 에 적어 둔 주소 그대로).
   // Windows 는 정식 릴리스만, Mac 은 베타(pre-release)도 본다.
   // 첫 화면 단추는 Windows·Mac 이면 그 설치 파일로 바로, 휴대폰·리눅스면 내려받기 구역으로.
   const ua = navigator.userAgent;
   const os = /Windows/i.test(ua) ? "win" : /Macintosh|Mac OS X/i.test(ua) && !/iPhone|iPad|Mobile/i.test(ua) ? "mac"
     : /Linux|X11/i.test(ua) && !/Android|Mobile/i.test(ua) ? "linux" : "";
+  // 탐색기 그림을 맥이면 Finder 처럼 (왼쪽 위 점 세 개)
+  if (os === "mac") document.documentElement.classList.add("os-mac");
   const hero = document.querySelector("[data-hero-dl]");
   const pointHero = () => {
     const link = os && document.querySelector(`[data-dl="${os}"]`);

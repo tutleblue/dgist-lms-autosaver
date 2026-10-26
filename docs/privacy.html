@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
 <link href="https://fonts.googleapis.com/css2?family=Lora:wght@600;700&family=Noto+Serif+KR:wght@600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="style.css?v=fc2fe1ba">
 </head>
 <body>
 
@@ -65,7 +65,8 @@
 <h3>접근하는 데이터</h3>
 <ul>
   <li><strong>Google Drive</strong> (<code>https://www.googleapis.com/auth/drive.file</code>): 앱이 만들거나 앱으로 연 파일·폴더만 접근합니다. Drive에 파일을 올리고 고치는 일은 이 권한으로만 합니다.</li>
-  <li><strong>Google Drive 읽기</strong> (<code>https://www.googleapis.com/auth/drive.readonly</code>): 메일에 Drive 파일을 첨부할 때, 내 Drive와 공유 문서함의 파일 목록을 보여 주고 이용자가 고른 파일을 내려받는 데만 씁니다. 읽기 전용이라 이용자의 파일을 고치거나 지울 수 없습니다. Google 연결 화면에서 이 권한만 꺼도 나머지 기능은 그대로 쓸 수 있습니다(그때는 Daling이 올린 파일만 첨부할 수 있습니다).</li>
+  <li><strong>Google Drive 파일 고르기</strong> (같은 <code>drive.file</code> 권한): 메일에 Drive 파일을 첨부할 때 Google이 띄우는 파일 고르기 창(Google Picker)에서 이용자가 고른 파일만 앱이 열 수 있습니다. 고른 파일만 내려받아 그 메일에 붙이고(Google 문서·시트·슬라이드는 PDF로), 따로 저장하지 않습니다. 고르지 않은 파일은 보거나 고칠 수 없습니다.</li>
+  <li><strong>예전에 허락한 Drive 읽기</strong> (<code>https://www.googleapis.com/auth/drive.readonly</code>): 1.12.38~1.12.39에서 이 권한을 허락한 경우, 앱은 이 권한을 메일에 첨부할 파일 목록을 보여 주는 데만 씁니다. 지금 판은 이 권한을 새로 요청하지 않으며, Google을 다시 연결하면 없어집니다.</li>
   <li><strong>Google Calendar</strong> (<code>https://www.googleapis.com/auth/calendar.app.created</code>): 앱 전용 보조 캘린더를 만들고, 그 캘린더 안의 일정을 만들고 고칩니다. 앱이 만든 캘린더만 열 수 있으며, 이용자의 다른 캘린더와 일정은 보거나 바꿀 수 없습니다.</li>
   <li><strong>Google Calendar 목록</strong> (<code>https://www.googleapis.com/auth/calendar.calendarlist.readonly</code>): 이미 만들어 둔 앱 전용 캘린더를 이름으로 찾기 위해 캘린더 목록(이름)만 읽습니다. 목록 속 다른 캘린더의 일정은 읽지 않습니다.</li>
 </ul>
@@ -143,7 +144,8 @@
   <p>Connecting Google is optional. Only when the user connects a Google account does the app request:</p>
   <ul>
     <li><strong>Google Drive</strong> (<code>drive.file</code>) — access limited to files and folders the app creates or the user opens with the app. Used to upload course materials into course/week folders, to check whether a file was already uploaded, and to download a file the user opens from the app. All writing to Drive uses only this permission.</li>
-    <li><strong>Google Drive, read-only</strong> (<code>drive.readonly</code>) — used only when the user attaches a Drive file to a school e-mail: the app lists the names, types, sizes and modified times of files in My Drive and Shared with me, and downloads only the file the user picks (Google Docs, Sheets and Slides are exported as PDF) to attach it to that mail. When the user presses Send, the mail goes through the school mail server to the recipients the user chose. The file list and downloaded file are not stored by the app. This permission is read-only, so the app cannot change or delete the user's files, and the user can leave it off on the Google consent screen; everything else keeps working (only files Daling uploaded can then be attached).</li>
+    <li><strong>Google Drive file picker</strong> (same <code>drive.file</code> permission) — when the user attaches a Drive file to a school e-mail, Google's file picker (Google Picker) opens in the user's browser, and the app can open only the files the user picks there. The app downloads only those files (Google Docs, Sheets and Slides are exported as PDF) to attach them to that mail, and does not store them. When the user presses Send, the mail goes through the school mail server to the recipients the user chose. Files the user does not pick stay out of the app's reach.</li>
+    <li><strong>Earlier read-only Drive grant</strong> (<code>drive.readonly</code>) — if the user granted it in versions 1.12.38–1.12.39, the app uses it only to list files the user can attach to a school e-mail. Current versions no longer request it, and it goes away when the user reconnects Google.</li>
     <li><strong>Google Calendar</strong> (<code>calendar.app.created</code>) — used to create one dedicated secondary calendar and to create and update events (assignment deadlines, academic-calendar events and dates mentioned in school e-mail) in that calendar. Events created by the app carry a private extended property so they are never duplicated. This permission only opens calendars the app created; the app cannot see or change the user's other calendars or events.</li>
     <li><strong>Google Calendar list</strong> (<code>calendar.calendarlist.readonly</code>) — used only to find the app's existing dedicated calendar by name in the user's calendar list. The app does not read events on any other calendar.</li>
   </ul>

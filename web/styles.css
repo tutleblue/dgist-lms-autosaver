@@ -4694,6 +4694,34 @@ tbody tr:hover {
   padding: 11px 14px;
 }
 .read-summary[hidden] { display: none; }
+/* 첨부 칸: 받는 사람 줄 아래 칩. 누르면 받는다 */
+.read-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 20px;
+}
+.read-att {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  min-width: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-soft);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.read-att:hover:not(:disabled) { border-color: var(--accent); }
+.read-att:disabled { opacity: 0.55; cursor: default; }
+.read-att .icon { flex: none; width: 16px; height: 16px; }
+.read-att-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.read-att-size { flex: none; color: var(--text-soft); font-size: 12px; }
+.read-att-get { color: var(--text-soft); }
 .read-body {
   font-size: 15px;
   /* 한글은 줄 간격이 넉넉해야 읽힌다 */
@@ -10511,20 +10539,77 @@ body.mail-resizing iframe { pointer-events: none; } /* 끄는 중 본문 iframe 
 
 /* ===== 창 제목 줄 = 상단 바 (설치 앱, html.custom-frame) =====
    기본 제목 줄을 없앴으므로 상단 바 빈 곳이 창 끌기 자리다(app-region: drag, WebView2 가 진짜 제목 줄처럼 다룬다).
-   단추·입력칸 위는 눌러야 하므로 끌기에서 뺀다. 창 단추는 오른쪽 위에 고정하고 상단 바는 그만큼 비워 둔다. */
+   창 단추는 오른쪽 위에 고정하고 상단 바는 그만큼 비워 둔다.
+
+   끌기 자리는 '빈 곳에 놓은 몇 개의 사각형'으로만 만든다. 예전엔 상단 바·왼쪽 메뉴 전체를 drag 로 두고
+   단추마다 no-drag 구멍을 뚫었는데, WebView2 는 그 모양을 사각형 조각마다 자식 창 하나로 만든다(67개 실측).
+   돌아가는 고리(진행 칩·메일 새로고침) 같은 끝없는 애니메이션이 있으면 매 프레임 그 창들을 UI 스레드에서
+   다시 배치해 창이 '응답 없음'이 됐다(2026-10-26 실측: 진행 칩만 띄워도 20초 중 27/27번 3초 넘게 멈춤,
+   끌기 조각 1~15개면 0번). 그래서 아래에 단추가 없는 자리 — 위·아래 여백 띠, 왼쪽 메뉴 맨 위 여백,
+   단추 묶음 사이 빈 칸(.drag-gap, app.js placeDragGaps) — 에만 drag 를 두고 no-drag 구멍은 쓰지 않는다. */
 :root { --winctl-w: 138px; --winctl-h: 48px; }
-.custom-frame .topbar {
+.custom-frame .topbar { padding-right: calc(var(--winctl-w) + 12px); }
+.custom-frame .topbar::before,
+.custom-frame .topbar::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: var(--winctl-w);
+  height: 8px; /* 상단 바 위·아래 여백(8~12px)보다 얇게: 단추 위에 걸치지 않게 */
+  pointer-events: none;
   -webkit-app-region: drag;
   app-region: drag;
-  padding-right: calc(var(--winctl-w) + 12px);
 }
-.custom-frame .topbar :is(button, input, a, label, select, kbd, .search-wrap, .search-pop, .top-progress, .sync-pill, .nowbar-compact) {
-  -webkit-app-region: no-drag;
-  app-region: no-drag;
+.custom-frame .topbar::before { top: 0; }
+.custom-frame .topbar::after { bottom: 0; }
+.drag-gap {
+  position: absolute;
+  pointer-events: none;
+  -webkit-app-region: drag;
+  app-region: drag;
 }
-/* 왼쪽 메뉴의 빈 곳(위 여백)으로도 끌 수 있게 */
-.custom-frame .sidebar { -webkit-app-region: drag; app-region: drag; }
-.custom-frame .sidebar > * { -webkit-app-region: no-drag; app-region: no-drag; }
+/* 왼쪽 메뉴 맨 위 여백으로도 끌 수 있게 (휴대폰 폭에서는 메뉴가 아래 탭 막대라 뺀다) */
+@media (min-width: 761px) {
+  .custom-frame .sidebar::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 20px; /* 위 여백 22px */
+    pointer-events: none;
+    -webkit-app-region: drag;
+    app-region: drag;
+  }
+}
+@media (min-width: 761px) and (max-width: 1100px) {
+  .custom-frame .sidebar::before { height: 12px; } /* 아이콘 레일은 위 여백 14px */
+}
+/* 좁은 창에서도 끌 자리를 남긴다 (2026-10-26 사용자: '앱 크기를 줄이면 끌어서 옮기기가 전혀 안 된다').
+   CSS 1100px 이하에서는 검색칸이 남는 자리를 다 채워 단추 사이 틈이 0개였고, 옮길 수 있는 곳은 아래 8px 띠와
+   왼쪽 위 4px 뿐이었다(위 8px 띠는 WebView2 가 위쪽 크기 조절로 돌려준다, 시험 창 실측). 검색칸 폭을 묶고
+   단추 묶음 앞에 늘 빈 칸(64px)을 두면 placeDragGaps 가 그 칸을 끌기 자리로 만든다. 960px 이하는 ←/→,
+   860px 이하는 시계의 날짜를 빼서(휴대폰 배치처럼) 진행 칩이 떠도 줄이 넘치지 않게 한다.
+   단추 묶음은 줄어들며 두 줄로 접히던 것을 한 줄로 둔다. */
+@media (min-width: 761px) and (max-width: 1100px) {
+  .custom-frame .topbar > .search-wrap:not(.email-search) { flex: 0 1 280px; min-width: 48px; margin-right: 64px; }
+  .custom-frame .topbar > .topbar-mail { flex: 0 1 560px; min-width: 0; margin-right: 64px; }
+  .custom-frame .topbar > .topbar-actions { flex: none; margin-left: auto; }
+  /* 진행 칩(180~240px)이 뜨면 줄이 넘쳐 단추가 창 단추 밑으로 밀렸다 → 좁게(글은 말줄임) */
+  .custom-frame .topbar .top-progress { min-width: 0; width: 150px; max-width: 150px; }
+}
+@media (min-width: 761px) and (max-width: 960px) {
+  .custom-frame .topbar > .nav-arrows { display: none; }
+}
+@media (min-width: 761px) and (max-width: 860px) {
+  .custom-frame .topbar .nowbar-compact .nowbar-date { display: none; }
+}
+/* 휴대폰 배치: 시계가 첫 줄을 통째로 차지해 단추 옆에 빈 곳이 없었다 → 글자 폭만 쓰게 */
+@media (max-width: 760px) {
+  .custom-frame .topbar .nowbar-compact { justify-self: start; }
+}
+/* 소개 중에는 끌기 칸을 뺀다: 말풍선이 그 위에 뜨면 그 부분을 눌러도 창이 끌린다 */
+body.tour-open .drag-gap { display: none; }
 
 .win-controls {
   position: fixed;
@@ -10635,6 +10720,9 @@ body.mail-resizing iframe { pointer-events: none; } /* 끄는 중 본문 iframe 
 .cfield.cfield-attach > .cfield-body { grid-column: 3 / -1; }
 /* 주소찾기가 없는 줄(제목)은 입력칸을 끝까지 */
 .cfield > .cfield-body:last-child { grid-column: 3 / -1; }
+/* 영어 화면: 'Individually'·'Important' 가 52px 칸에서 'Individ'·'Importa' 로 잘렸다 */
+html[lang="en"] .cfield,
+html[lang="en"] .cfield.cfield-attach { grid-template-columns: 70px 104px minmax(0, 1fr) auto; }
 
 /* 메일 쓰기 위 막대: 뒤로(34)·보내기(37)·미리보기·임시저장(36)·버리기(34) → 모두 36 */
 .compose-bar { align-items: center; }
@@ -10790,7 +10878,6 @@ html.log-open .log-close { display: grid; flex: none; }
 .topbar-mail > :not(.email-search) { flex: none; }
 .topbar-mail #emailSortSelect { height: 40px; border-radius: 999px; padding: 0 12px; }
 .topbar-mail .mail-refresh { width: 40px; height: 40px; border-radius: 50%; }
-.custom-frame .topbar-mail :is(button, select) { -webkit-app-region: no-drag; app-region: no-drag; }
 @media (min-width: 1101px) {
   .custom-frame .app-shell.mail-focus .topbar { grid-template-columns: minmax(0, 1fr) minmax(320px, 720px) minmax(0, 1fr); }
   .custom-frame .topbar .topbar-mail { grid-column: 2; }
@@ -10805,7 +10892,8 @@ html.log-open .log-close { display: grid; flex: none; }
   .custom-frame .app-shell.mail-focus .topbar { display: flex; }
   .custom-frame .topbar > .nav-arrows,
   .custom-frame .topbar > .topbar-actions { flex: none; }
-  .custom-frame .topbar > .search-wrap:not(.email-search) { flex: 0 1 520px; min-width: 200px; margin: 0 auto; width: auto; }
+  /* 검색창은 440px 까지: 520px 이면 오른쪽 동기화 칩까지 틈이 28px 뿐이라 창을 끌 곳이 없었다(2026-10-26, placeDragGaps) */
+  .custom-frame .topbar > .search-wrap:not(.email-search) { flex: 0 1 440px; min-width: 200px; margin: 0 auto; width: auto; }
   .custom-frame .topbar > .topbar-mail { flex: 0 1 720px; min-width: 320px; margin: 0 auto; }
   .custom-frame .topbar > .topbar-actions { margin-left: 0; }
 }
@@ -10951,6 +11039,27 @@ html.log-open .log-close { display: grid; flex: none; }
 .win-btn { width: 40px; height: 32px; border-radius: 8px; }
 .win-btn:focus { outline: none; }
 .win-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* ===== 맥: 제목 줄 = 상단 바 (html.custom-frame.mac-frame, mac_window.py, 2026-10-26) =====
+   사용자 맥 사진: 밝은 앱 위에 검은 제목 줄과 화면 이름('과제 마감')이 따로 떴다 → Windows 처럼 상단 바를 제목 줄로.
+   위 custom-frame 규칙을 그대로 쓰되, 창 단추는 운영체제 신호등(닫기·최소화·확대)이 왼쪽 위
+   상단 바 첫 줄 가운데 높이에 앉는다. 그래서 오른쪽 단추 자리는 비우지 않고 왼쪽 위만 비운다.
+   끌기는 WKWebView 가 app-region 을 몰라 app.js macDragRegions 가 같은 곳을 사각형으로 재서 앱에 알린다. */
+.mac-frame { --winctl-w: 16px; } /* 상단 바 오른쪽 여백을 원래(28px)대로 */
+@media (min-width: 761px) {
+  /* 신호등이 왼쪽 메뉴 맨 위에 앉으므로 메뉴 내용(시계 카드)은 상단 바 아래부터 (맥 메일·메모의 옆 막대처럼) */
+  .mac-frame:not(.mac-fullscreen) .sidebar { padding-top: max(22px, calc(var(--topbar-h, 60px) + 4px)); }
+  /* 그만큼 내려가 가장 낮은 창(560px)에서 아래 '의견 보내기'·상태 카드가 49px 잘렸다 → 메뉴 목록이 줄며 스크롤 */
+  .mac-frame .sidebar .nav-list { min-height: 0; overflow-y: auto; scrollbar-width: none; }
+}
+@media (max-width: 760px) {
+  /* 좁은 창: 메뉴가 아래 탭바가 되면 신호등은 상단 바 첫 줄 왼쪽에 앉는다 → 작은 시계를 그만큼 민다 */
+  .mac-frame:not(.mac-fullscreen) .topbar { padding-left: 80px; }
+  .mac-frame:not(.mac-fullscreen) .topbar .search-wrap { margin-left: -68px; }
+  /* 메일함은 좁은 창에서 상단 바를 숨겼는데, 그러면 신호등이 메일 목록 머리 위에 겹친다 → 첫 줄만 남긴다 */
+  .mac-frame .app-shell.mail-focus .topbar { display: grid; grid-template-areas: "now actions"; }
+  .mac-frame .app-shell.mail-focus .topbar .search-wrap:not(.email-search) { display: none; }
+}
 
 /* ===== 스크롤은 상단 바 아래 본문에서만 (2026-10-14) =====
    문서 전체가 스크롤되어 스크롤 막대 자리가 창 오른쪽 끝을 맨 위(창 단추 옆)부터 맨 아래까지 차지했다

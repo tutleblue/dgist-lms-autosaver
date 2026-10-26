@@ -368,12 +368,14 @@ GOOGLE_CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar.app.created"
 GOOGLE_CALENDAR_LIST_SCOPE = "https://www.googleapis.com/auth/calendar.calendarlist.readonly"
 # 예전에 연결한 사람의 token.json 에는 이 권한이 남아 있다. 그대로 계속 쓸 수 있다.
 GOOGLE_LEGACY_CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar"
-# 메일 'Drive에서 첨부' 가 내 Drive 전체(공유받은 파일 포함)를 보려면 읽기 권한이 든다. drive.file 만으로는 Daling 이
-# 올린 파일(붕어빵·AutoSaver 폴더)만 보였다(2026-10-22 사용자: '전체 폴더가 안 나온다' → 권한 넓히기로 결정).
-# 구글은 이것을 '제한된 범위' 로 분류한다: 구글 심사(보안 평가 포함)를 받기 전까지 연결할 때 '확인되지 않은 앱' 경고가 뜬다.
-# 쓰기는 지금처럼 drive.file 로만 한다(읽기 전용이라 남의 파일을 고치거나 지울 수 없다).
+# Drive 전체 읽기. 1.12.38 에서 메일 'Drive에서 첨부' 가 내 Drive 전체·공유 문서함을 보려고 요청했으나 1.12.40 에서 다시 뺐다.
+# 구글은 이것을 '제한된 범위' 로 분류한다: 심사(시연 영상·보안 평가) 전엔 연결할 때 '확인되지 않은 앱' 경고가 뜨고,
+# 이 권한을 받은 사람이 평생 100명을 넘을 수 없다(2026-10-25 콘솔 '대상': 100명 중 3명). 예전 토큰은 drive.file 뿐이라
+# 업데이트하자마자 '다시 연결' 을 요구한 것도 문제였다. Drive 전체에서 고르는 일은 구글 고르기 창(Picker, web_ui.create_drive_pick_url)
+# 이 맡는다 — 고른 파일에만 drive.file 권한이 생기고, 민감하지 않은 범위라 심사가 필요 없다.
+# 이미 이 권한을 허락한 토큰은 그대로 쓴다(Drive 창이 전체를 보여 준다). 새로 요청하지만 않는다.
 GOOGLE_DRIVE_READ_SCOPE = "https://www.googleapis.com/auth/drive.readonly"
-GOOGLE_SCOPES = [GOOGLE_DRIVE_SCOPE, GOOGLE_CALENDAR_SCOPE, GOOGLE_CALENDAR_LIST_SCOPE, GOOGLE_DRIVE_READ_SCOPE]
+GOOGLE_SCOPES = [GOOGLE_DRIVE_SCOPE, GOOGLE_CALENDAR_SCOPE, GOOGLE_CALENDAR_LIST_SCOPE]
 
 
 def granted_token_json(creds) -> str:

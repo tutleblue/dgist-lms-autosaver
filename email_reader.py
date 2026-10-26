@@ -388,6 +388,41 @@ class MiniIMAP:
                 out[match.group(1).decode("ascii")] = literal
         return out
 
+    NAME_PEEK_MAX = 2 * 1024 * 1024
+
+    def _fill_nameless(self, msg_id: int, parts: list[dict]) -> None:
+        """구조에 이름이 빠진 첨부는 메일 앞부분을 받아 그 파트 머리말에서 이름을 읽는다.
+
+        학교 서버는 RFC 2231 꼴(filename*=utf-8''…) 이름을 구조에서 버린다(2026-10-25 실측: ("ATTACHMENT" NIL)).
+        예전 앱이 보낸 첨부가 보낸 편지함에서 '첨부파일' 로만 보였던 까닭. 파트 머리말만 달라는 BODY[n.MIME] 은
+        이 서버가 무시하고 메일 전체를 준다(실측) → 그 첨부 머리말이 들어갈 만큼만 앞에서부터 자른다.
+        구조의 크기는 전송 인코딩 뒤 크기라 앞 파트들의 합 + 머리말 여유면 넉넉하다.
+        """
+        nameless = [i for i, p in enumerate(parts) if p["disposition"] == "attachment" and not p["filename"]]
+        if not nameless:
+            return
+        upto = sum(int(p.get("size") or 0) for p in parts[: nameless[-1]]) + 16000 + 2000 * len(parts)
+        if upto > self.NAME_PEEK_MAX:
+            return
+        try:
+            status, lines = self.cmd(f"UID FETCH {msg_id} (BODY.PEEK[]<0.{upto}>)")
+            head = max((lit for _l, lit in lines if lit), key=len, default=b"")
+            if status != "OK" or not head:
+                return
+            import email as email_lib
+            from email import policy
+
+            leaves = [m for m in email_lib.message_from_bytes(head, policy=policy.default).walk() if not m.is_multipart()]
+        except Exception:
+            return
+        if len(leaves) < nameless[-1] + 1:
+            return  # 잘린 곳이 머리말 앞이었다 — 어긋난 이름을 붙이느니 그대로 둔다
+        for i in nameless:
+            try:
+                parts[i]["filename"] = str(leaves[i].get_filename() or "").strip()
+            except Exception:
+                pass
+
     def fetch_message(self, msg_id: int) -> dict:
         """메일 한 통을 그 메일의 구조에 맞게 받는다.
 
@@ -416,6 +451,7 @@ class MiniIMAP:
         else:
             # 구조를 못 읽는 서버를 만나면 예전 방식으로 되돌아간다
             wanted = [("1", PLAIN_FETCH_LIMIT), ("2", HTML_FETCH_LIMIT)]
+        self._fill_nameless(msg_id, parts)
         return {
             "headers": headers,
             "seen": seen,
@@ -443,6 +479,26 @@ def decode_mime_words(value: str) -> str:
         else:
             parts.append(chunk)
     return "".join(parts).strip()
+
+
+def _encoded_filename(name: str) -> str:
+    """첨부 이름을 학교 웹메일과 같은 꼴(name="=?utf-8?b?…?=")로.
+
+    파이썬 기본(RFC 2231, filename*=utf-8''…)은 학교 메일 서버가 구조에서 이름을 버려
+    보낸 편지함·받는 사람 웹메일에서 이름 없는 '첨부파일' 로 보였다(2026-10-25 실측).
+    인코딩 낱말 하나가 75자를 넘지 않게 45바이트씩 끊는다(글자 중간에서 자르지 않음).
+    """
+    if name.isascii():
+        return name
+    words, chunk = [], ""
+    for ch in name:
+        if chunk and len((chunk + ch).encode("utf-8")) > 45:
+            words.append(chunk)
+            chunk = ch
+        else:
+            chunk += ch
+    words.append(chunk)
+    return " ".join(f"=?utf-8?b?{base64.b64encode(w.encode('utf-8')).decode('ascii')}?=" for w in words)
 
 
 def parse_headers(raw: bytes) -> dict[str, str]:
@@ -929,7 +985,10 @@ def attachment_parts(parts: list[dict]) -> list[dict]:
                 "part": part["part"],
                 "name": part["filename"] or "첨부파일",
                 "type": part["type"],
-                "size": part["size"],
+                "size": part["size"],  # 전송 인코딩 뒤 크기 (base64 면 실제의 약 4/3)
+                "encoding": part["encoding"],
+                # 이름을 파트 머리말까지 보고 정했다는 표시 (없는 예전 '첨부파일' 은 한 번 다시 받는다 — _fetch_with.stale)
+                "nameChecked": True,
             }
         )
     return out
@@ -1461,6 +1520,8 @@ def _fetch_with(client: "MiniIMAP", days: int, max_count: int) -> list[dict]:
             mail = cached.get(f"{key}:{msg_id}")
             if not mail:
                 return True
+            if any(a.get("name") == "첨부파일" and not a.get("nameChecked") for a in mail.get("attachments") or []):
+                return True  # 이름을 못 읽었던 첨부(예전 앱이 보낸 것) — 이 메일만 다시 받는다
             return int(mail.get("bodyVersion", 1) or 1) < BODY_VERSION
 
         fresh = [i for i in ids if stale(i)]
@@ -1967,6 +2028,33 @@ def fetch_raw_message(uid: int, folder_key: str = "inbox") -> bytes:
     return max(chunks, key=len)
 
 
+ATTACH_DOWNLOAD_MAX = 40 * 1024 * 1024
+
+
+def fetch_attachment(uid: int, folder_key: str, part: str) -> tuple[str, str, bytes]:
+    """첨부 한 개를 (이름, 형식, 내용) 으로. 읽기만(BODY.PEEK).
+
+    예전엔 읽기 화면에 첨부 칸이 없어 받은·보낸 메일의 첨부를 앱에서 볼 수도 받을 수도 없었다(2026-10-25 사용자).
+    """
+    if not re.fullmatch(r"\d+(?:\.\d+)*", str(part or "")):
+        raise ValueError("첨부 번호가 올바르지 않습니다.")
+    with imap_session() as client:
+        raw = _folder_raw(client, folder_key) or "INBOX"
+        if not client.select_folder(raw):
+            raise RuntimeError("메일함을 열지 못했습니다.")
+        _headers, _seen, parts = client.fetch_structure(int(uid))
+        info = next((p for p in parts if p["part"] == part), None)
+        if not info:
+            raise RuntimeError("첨부를 찾지 못했습니다. 메일을 다시 받은 뒤 해 주세요.")
+        if info["size"] > ATTACH_DOWNLOAD_MAX:
+            raise RuntimeError("첨부가 너무 커서 앱에서 받을 수 없어요. 학교 웹메일에서 받아 주세요.")
+        client._fill_nameless(int(uid), parts)
+        data = client.fetch_parts(int(uid), [(part, info["size"] + 4096)]).get(part, b"")
+    if not data and info["size"]:
+        raise RuntimeError("첨부를 받지 못했습니다.")
+    return info["filename"] or "첨부파일", info["type"], decode_part_bytes(data, info["encoding"])
+
+
 def load_draft(uid: int, folder_key: str = "draft", max_attach: int = 20 * 1024 * 1024) -> dict:
     """임시 보관함의 메일을 '메일 쓰기' 에 다시 채울 모양으로 (받는 사람·참조·숨은참조·제목·본문·첨부·번호).
 
@@ -2131,10 +2219,11 @@ def build_message(account: str, to_list: list[str], subject: str, body: str,
                 raise ValueError("첨부파일 총 용량은 20MB를 넘을 수 없습니다.")
             guessed, _ = mimetypes.guess_type(filename)
             maintype, subtype2 = (guessed.split("/", 1) if guessed else ("application", "octet-stream"))
-            part = MIMEBase(maintype, subtype2)
+            encoded = _encoded_filename(filename)
+            part = MIMEBase(maintype, subtype2, name=encoded)
             part.set_payload(raw)
             encoders.encode_base64(part)
-            part.add_header("Content-Disposition", "attachment", filename=("utf-8", "", filename))
+            part.add_header("Content-Disposition", "attachment", filename=encoded)
             msg.attach(part)
     else:
         msg = MIMEText(body or "", subtype, "utf-8")
@@ -2156,10 +2245,14 @@ def build_message(account: str, to_list: list[str], subject: str, body: str,
 
 
 def _message_bytes(msg) -> bytes:
-    """IMAP 에 넣을 모양 (줄끝 CRLF)."""
+    """IMAP 에 넣을 모양 (줄끝 CRLF).
+
+    받는 사람에게 간 것(msg.as_string, compat32)과 같은 글자로 넣는다. policy.SMTP 는 긴 머리말을 다시 접으며
+    첨부 이름을 RFC 2231 꼴로 바꿔 놓아 서버가 이름을 버렸다.
+    """
     from email import policy
 
-    return msg.as_bytes(policy=policy.SMTP)
+    return msg.as_bytes(policy=policy.compat32.clone(linesep="\r\n"))
 
 
 DRAFT_HEADER = "X-Bungeoppang-Draft"

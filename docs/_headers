@@ -7,3 +7,8 @@
   Content-Type: text/plain; charset=utf-8
   Cache-Control: no-cache
   X-Content-Type-Options: nosniff
+
+# 2026-10-26: HTML 은 매번 새로 받는데 style.css 는 4시간 캐시돼, 새 HTML + 옛 CSS 로 기능 구역이 통째로 깨져 보였다.
+# CSS 는 늘 서버에 확인하고(바뀐 게 없으면 304), HTML 쪽 링크에도 ?v=<내용 해시> 를 붙인다.
+/style.css
+  Cache-Control: public, max-age=0, must-revalidate

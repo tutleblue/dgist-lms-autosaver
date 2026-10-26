@@ -1,0 +1,174 @@
+# 맥 창 제목 줄 점검 — 상단 바가 제목 줄 노릇을 하는지 실제 맥(M칩·인텔)에서 잰다 (mac_window.py)
+#
+# 왜 있나: 2026-10-26 사용자 맥 사진에서 밝은 앱 위에 검은 기본 제목 줄과 화면 이름('과제 마감')이 따로 떴다.
+# Windows 처럼 제목 줄을 없애고 상단 바를 제목 줄로 쓰게 했는데, 개발 PC 에 맥이 없어 여기서 잰다.
+# 앱을 DALING_WINDOW_SELFTEST=<폴더> 로 켜면 mac_window._selftest 가 창 안에서 스스로 재어 JSON 을 남기고,
+# 사진이 필요할 때 shot-*.request 를 만든다 → 이 워크플로가 screencapture 로 찍는다.
+#  - wide/narrow/dark.json: 제목 줄 투명·제목 숨김·전체 크기 내용, 신호등 자리(상단 바 첫 줄 가운데에 오는지),
+#    단추·검색칸을 누르면 웹이 받고 빈 곳을 누르면 창 끌기로 가는지(가짜 마우스 이벤트)
+#  - drag-ready/after.json: cliclick 으로 진짜 마우스를 끌어 창이 옮겨졌는지 (러너가 손쉬운 사용 권한을 주면)
+# 진짜 서버에는 아무것도 보내지 않는다 (계정 없는 새 러너 + 가짜 서버 주소를 미리 넣음, .github/diag/lib.sh).
+name: mac-window
+
+on:
+  push:
+    branches: ["diag/mac-window"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mac-window-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build:
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+    uses: ./.github/workflows/mac.yml
+    secrets: inherit
+
+  window:
+    name: window (${{ matrix.arch }})
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            runner: macos-latest
+          - arch: x86_64
+            runner: macos-15-intel
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    env:
+      ARCH: ${{ matrix.arch }}
+      REPO: tutleblue/dgist-lms-autosaver
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: daling-mac-dmg-${{ matrix.arch }}
+          path: ${{ runner.temp }}/new
+
+      - name: 깔기
+        run: |
+          . .github/diag/lib.sh
+          install_dmg "$(ls "$RUNNER_TEMP"/new/daling-*-mac-$ARCH.dmg | head -1)"
+          preseed_config
+          brew install cliclick > /dev/null 2>&1 || echo "::warning::cliclick 을 깔지 못해 실제 끌기는 건너뜀"
+          echo "macOS $(sw_vers -productVersion) · $(defaults read -g AppleInterfaceStyle 2>/dev/null || echo Light)"
+
+      - name: 창 자가 점검
+        timeout-minutes: 8
+        run: |
+          . .github/diag/lib.sh
+          OUT="$LOGS/window"
+          mkdir -p "$OUT"
+          ( cd / && DALING_WINDOW_SELFTEST="$OUT" "$APP/Contents/MacOS/Daling" > "$LOGS/app-stdout.log" 2> "$LOGS/app-stderr.log" ) &
+          end=$((SECONDS + 300))
+          while [ $SECONDS -lt $end ] && [ ! -f "$OUT/done" ]; do
+            for req in "$OUT"/shot-*.request; do
+              [ -f "$req" ] || continue
+              name="$(basename "$req" .request)"
+              screencapture -x "$OUT/$name.png" || echo "::warning::$name 을 찍지 못함"
+              rm -f "$req"
+            done
+            if [ -f "$OUT/drag-ready.json" ] && [ ! -f "$OUT/drag-done.request" ]; then
+              read -r X Y < <(python3 -c 'import json,sys;d=json.load(open(sys.argv[1]))["dragScreen"];print(d[0],d[1])' "$OUT/drag-ready.json")
+              if command -v cliclick > /dev/null; then
+                # 상단 바 빈 곳을 눌러 오른쪽 아래로 150·100 끈다
+                # (m: 은 단추를 뗀 채 움직임이라 창이 안 따라왔다 → 누른 채 움직이는 dm:)
+                cliclick "m:$X,$Y" w:200 "dd:$X,$Y" w:150 "dm:$((X + 50)),$((Y + 30))" w:100 "dm:$((X + 150)),$((Y + 100))" w:150 "du:$((X + 150)),$((Y + 100))" \
+                  > "$OUT/cliclick.log" 2>&1 || echo "::warning::cliclick 실패 (손쉬운 사용 권한?)"
+                sleep 1
+                screencapture -x "$OUT/shot-drag.png" || true
+              fi
+              touch "$OUT/drag-done.request"
+            fi
+            sleep 0.5
+          done
+          [ -f "$OUT/done" ] || { echo "::error::자가 점검이 300초 안에 끝나지 않음"; screencapture -x "$OUT/shot-stuck.png" || true; }
+          stop_app
+
+      - name: 판정
+        if: always()
+        run: |
+          python3 - <<'PY' | tee -a "$GITHUB_STEP_SUMMARY"
+          import json, os, pathlib
+          out = pathlib.Path(os.environ["GITHUB_WORKSPACE"]) / "logs" / "window"
+          arch = os.environ["ARCH"]
+          print(f"### 맥 창 제목 줄 ({arch})\n")
+          err = out / "install-error.txt"
+          if err.exists():
+              print(f"- 창 손질 실패: `{err.read_text(encoding='utf-8')}`")
+          bad = 0
+          def check(name, ok, detail=""):
+              global bad
+              bad += 0 if ok else 1
+              print(f"| {name} | {'통과' if ok else '**실패**'} | {detail} |")
+          print("| 항목 | 결과 | 값 |\n|---|---|---|")
+          for label in ("wide", "narrow", "dark"):
+              f = out / f"{label}.json"
+              if not f.exists():
+                  check(f"{label} 재기", False, "파일 없음")
+                  continue
+              d = json.loads(f.read_text(encoding="utf-8"))
+              if label == "wide":
+                  print(f"| macOS | - | {d.get('macos')} · 배율 {d.get('scale')} |")
+              check(f"{label}: 제목 줄 투명·숨김·전체 크기", d["styleMaskFullSize"] and d["titlebarTransparent"] and d["titleHidden"])
+              want = d["lightsWanted"]["cy"]
+              lights = d.get("lights") or []
+              cys = [l["cy"] for l in lights]
+              check(f"{label}: 신호등 높이 = 상단 바 가운데({want})", len(lights) == 3 and all(abs(c - want) <= 2 for c in cys), f"{cys}")
+              xs = [l["x"] for l in lights]
+              check(f"{label}: 신호등 왼쪽 끝 = {d['lightsWanted']['x']}", bool(xs) and abs(xs[0] - d["lightsWanted"]["x"]) <= 2, f"{xs}")
+              hits = d.get("hits", {})
+              for name, want_drag in (("topbarEmpty", True), ("sidebarEmpty", True), ("button", False), ("search", False), ("nowbar", False)):
+                  h = hits.get(name)
+                  if not h:
+                      continue
+                  # 끌 곳은 웹뷰가 받아 우리 판정이 끌기로, 단추는 웹뷰가 받아 웹으로
+                  check(f"{label}: {name} → {'끌기' if want_drag else '웹'}", h["toWebview"] and h["drag"] == want_drag, f"hit {h['hit'][:2]} drag={h['drag']}")
+              z = hits.get("zoomLight")
+              if z:
+                  check(f"{label}: 확대 신호등은 웹뷰가 아닌 단추가 받음", not z["toWebview"], f"{z['hit'][:2]}")
+              for name, c in (d.get("clicks") or {}).items():
+                  want_web = name in ("button", "search")
+                  # 끌 곳은 우리 판정(drag=True)까지 와야 한다. 빈 판정이면 제목 줄 등 다른 것이 먹은 것
+                  ok = c["webGotMouseDown"] == want_web and (want_web or c["decision"].get("drag") is True)
+                  check(f"{label}: 가짜 클릭 {name} → {'웹' if want_web else '끌기'}", ok,
+                        f"web={c['webGotMouseDown']} {c.get('webTarget') or ''} 판정={c['decision'] or '없음'}")
+          ready, after = out / "drag-ready.json", out / "drag-after.json"
+          errs = out / "js-errors.json"
+          if errs.exists():
+              e = json.loads(errs.read_text(encoding="utf-8"))
+              check("화면 오류 없음", not e, "; ".join(map(str, e))[:300])
+          if ready.exists() and after.exists():
+              a = json.loads(ready.read_text(encoding="utf-8"))["frame"]
+              b = json.loads(after.read_text(encoding="utf-8"))["frame"]
+              moved = (round(b[0] - a[0]), round(b[1] - a[1]))
+              # 러너가 손쉬운 사용 권한을 안 주면 cliclick 이 아무것도 못 한다 → 판정에서 빼고 알린다
+              print(f"| 실제 마우스 끌기 | {'통과' if moved == (150, 100) else '참고'} | 창 이동 {moved} (기대 (150, 100)) |")
+          print()
+          if bad:
+              print(f"실패 {bad}건")
+          pathlib.Path(os.environ["RUNNER_TEMP"], "window-bad").write_text(str(bad))
+          PY
+          [ "$(cat "$RUNNER_TEMP/window-bad" 2>/dev/null || echo 1)" = 0 ]
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mac-window-${{ matrix.arch }}
+          path: logs/
+          retention-days: 14
