@@ -14160,9 +14160,112 @@ $("#mailRailFold")?.addEventListener("click", () => setMailRailFolded(true, true
   });
 })();
 
+/* ===== 맥: 끌 곳 알리기 =====
+   맥 창(mac_window.py)도 제목 줄을 투명하게 하고 상단 바를 제목 줄로 쓴다. 그런데 WKWebView 는 CSS app-region 을
+   모르므로, styles.css '창 제목 줄 = 상단 바' 의 끌 곳(상단 바·왼쪽 메뉴의 빈 곳)과 단추 자리를 사각형으로 재서
+   앱에 알려 준다. 앱은 누른 자리가 끌 곳이면 웹에 넘기지 않고 맥 고유의 창 끌기를 한다.
+   신호등(닫기·최소화·확대)은 운영체제 것을 그대로 쓰고, 상단 바 첫 줄 가운데 높이(cy)로 옮겨 달라고 함께 보낸다. */
+const MAC_NO_DRAG =
+  "button, input, a, label, select, textarea, summary, kbd, [role='button'], [tabindex], [contenteditable], " +
+  ".search-wrap, .search-pop, .top-progress, .sync-pill, .nowbar-compact, .demo-pill";
+function macDragRegions() {
+  let last = "";
+  let timer = 0;
+  const box = (el) => {
+    const r = el.getBoundingClientRect();
+    return r.width > 0 && r.height > 0 ? [r.left, r.top, r.width, r.height].map((n) => Math.round(n * 10) / 10) : null;
+  };
+  const center = (el) => {
+    const r = el && el.getBoundingClientRect();
+    return r && r.width > 0 ? [Math.round(r.left + r.width / 2), Math.round(r.top + r.height / 2)] : null;
+  };
+  const measure = () => {
+    const drag = [];
+    const nodrag = [];
+    const areas = [];
+    const bar = document.querySelector(".topbar");
+    const barBox = bar && getComputedStyle(bar).display !== "none" ? box(bar) : null;
+    if (barBox) {
+      drag.push(barBox);
+      areas.push(bar);
+      bar.querySelectorAll(MAC_NO_DRAG).forEach((el) => {
+        const b = box(el);
+        if (b) nodrag.push(b);
+      });
+    }
+    const side = document.querySelector(".sidebar");
+    const sideBox = side ? box(side) : null;
+    // 왼쪽 세로 메뉴일 때만 (좁은 창에서는 아래 탭바가 된다). Windows 처럼 메뉴의 빈 틈만 끈다(.sidebar > * 는 빼고)
+    if (sideBox && sideBox[1] <= 1 && sideBox[3] > 200) {
+      drag.push(sideBox);
+      areas.push(side);
+      [...side.children].forEach((el) => {
+        const b = box(el);
+        if (b) nodrag.push(b);
+      });
+    }
+    // 위를 덮은 것(대화 상자·소개·알림 등)은 끌지 않는다: 끌 곳 위를 띄엄띄엄 찍어 보고, 맨 위가 끌 곳 밖의 것이면
+    // 끌 곳을 품지 않는 가장 큰 조상(덮개 전체)을 뺀다
+    const seen = new Set();
+    drag.forEach(([x, y, w, h]) => {
+      for (let py = y + 4; py < y + h; py += 32) {
+        for (let px = x + 4; px < x + w; px += 32) {
+          const hit = document.elementFromPoint(px, py);
+          if (!hit || areas.some((a) => a.contains(hit))) continue;
+          let top = hit;
+          while (top.parentElement && top.parentElement !== document.body && !areas.some((a) => top.parentElement.contains(a))) {
+            top = top.parentElement;
+          }
+          if (seen.has(top)) continue;
+          seen.add(top);
+          const b = box(top);
+          if (b) nodrag.push(b);
+        }
+      }
+    });
+    const anchor = bar && (bar.querySelector(".topbar-actions") || bar);
+    const ar = anchor ? anchor.getBoundingClientRect() : null;
+    return {
+      action: "regions",
+      w: window.innerWidth,
+      drag,
+      nodrag,
+      cy: ar && ar.height > 0 ? Math.round(ar.top + ar.height / 2) : 30,
+      lx: sideBox && sideBox[2] < 100 && sideBox[1] <= 1 ? 12 : 20, // 메일함의 좁은(72px) 메뉴 안에 신호등이 들어가게
+      // 앱의 자가 점검(CI)이 눌러 볼 자리
+      probe: { button: center(document.getElementById("themeFlip")), search: center(bar && bar.querySelector(".search-wrap")), nowbar: center(document.getElementById("nowBar")) },
+    };
+  };
+  const send = () => {
+    timer = 0;
+    const body = JSON.stringify(measure());
+    if (body === last) return;
+    last = body;
+    api("/api/window", { method: "POST", body }).catch(() => {});
+  };
+  const later = (ms = 80) => {
+    if (!timer) timer = setTimeout(send, ms);
+  };
+  // 화면이 바뀌면(대화 상자·메뉴 열림, 창 크기) 다시 잰다. 시계 글자처럼 글만 바뀌는 것은 보지 않는다(1초마다 잴 까닭이 없다)
+  const textOnly = (r) =>
+    r.type === "childList" && [...r.addedNodes, ...r.removedNodes].every((n) => n.nodeType === Node.TEXT_NODE);
+  new MutationObserver((records) => {
+    if (!records.every(textOnly)) later();
+  }).observe(document.body, {
+    subtree: true,
+    childList: true,
+    attributes: true,
+    attributeFilter: ["class", "hidden", "style", "open"],
+  });
+  window.addEventListener("resize", () => later(60));
+  document.addEventListener("transitionend", () => later(), true);
+  send();
+}
+
 /* ===== 창 제목 줄 = 상단 바 (Spotify 처럼) =====
-   설치 앱은 회색 기본 제목 줄을 없앤다(window_chrome.py). 그러면 상단 바 빈 곳을 끌어 창을 옮기고(두 번 누르면 최대화),
-   오른쪽 끝 단추로 최소화·최대화·닫기를 한다. 개발 서버(브라우저)에서는 custom=false 라 아무것도 안 바뀐다. */
+   설치 앱은 회색 기본 제목 줄을 없앤다(Windows: window_chrome.py, 맥: mac_window.py). 그러면 상단 바 빈 곳을 끌어
+   창을 옮기고(두 번 누르면 최대화), Windows 는 오른쪽 끝 단추로 최소화·최대화·닫기를 한다(맥은 왼쪽 위 신호등).
+   개발 서버(브라우저)에서는 custom=false 라 아무것도 안 바뀐다. */
 (function bindWindowChrome() {
   const box = $("#winControls");
   if (!box) return;
@@ -14183,18 +14286,34 @@ $("#mailRailFold")?.addEventListener("click", () => setMailRailFolded(true, true
     // 설정 판은 상단 바 아래부터 덮는다(스크롤 막대가 창 끝까지 올라가지 않게)
     if (bar && bar.offsetHeight) document.documentElement.style.setProperty("--topbar-h", `${bar.offsetHeight}px`);
   };
+  // 맥 전체 화면에서는 신호등이 메뉴 막대와 함께 숨으므로 그 자리를 비워 두지 않는다
+  const paintMac = (st) => document.documentElement.classList.toggle("mac-fullscreen", !!(st && st.fullscreen));
   const refresh = () =>
     api("/api/window")
-      .then((st) => paintMax(st.maximized))
+      .then((st) => {
+        paintMax(st.maximized);
+        if (st.mac) paintMac(st);
+      })
       .catch(() => {});
   api("/api/window")
     .then((st) => {
       if (!st || !st.custom) return;
       document.documentElement.classList.add("custom-frame");
       placeMailSearch(); // 메일함에서 켜졌으면 검색창을 상단 바로
-      box.hidden = false;
+      if (st.mac) {
+        document.documentElement.classList.add("mac-frame");
+        paintMac(st);
+      } else {
+        box.hidden = false; // 맥은 운영체제 신호등을 쓰므로 앱의 창 단추를 그리지 않는다
+      }
       paintMax(st.maximized);
       fitHeight();
+      if (st.mac) {
+        // 상단 바 높이는 창 크기 말고도 화면(메일함 등)마다 바뀐다. 맥은 왼쪽 메뉴가 이 높이만큼 내려가므로 늘 따라간다
+        const bar = document.querySelector(".topbar");
+        if (bar && window.ResizeObserver) new ResizeObserver(fitHeight).observe(bar);
+        macDragRegions();
+      }
       let timer = 0;
       window.addEventListener("resize", () => {
         clearTimeout(timer);

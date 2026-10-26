@@ -84,6 +84,7 @@ hiddenimports = [
     # 맥 전용
     "mac_keychain",
     "mac_keychain_lab",  # CI '키체인 실험' 전용 (smoke 에서만 부름)
+    "mac_window",  # 제목 줄 = 상단 바 (app.py 가 창을 만들 때 늦게 불러온다)
     "smoke_test",
     "webview.platforms.cocoa",
     "AppKit",

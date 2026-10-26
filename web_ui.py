@@ -3171,8 +3171,17 @@ def get_course_announcements(workspace: UserWorkspace) -> dict[str, Any]:
 UI_THEMES = ("auto", "graphite", "graphite-dark", "claude", "light", "navy", "dark")  # 그래파이트 두 개는 2026-10-14 추가
 
 
-def _window_chrome_call(action):
-    """창 제목 줄을 앱이 그리는지(custom)와 최대화 여부. 개발 서버(브라우저)에서는 custom=False."""
+def _window_chrome_call(action, payload=None):
+    """창 제목 줄을 앱이 그리는지(custom)와 최대화 여부. 개발 서버(브라우저)에서는 custom=False.
+
+    맥은 mac_window(신호등은 운영체제 것, 화면이 끌 곳을 regions 로 알려 준다), Windows 는 window_chrome.
+    """
+    if sys.platform == "darwin":
+        try:
+            import mac_window
+        except Exception:
+            return {"custom": False, "maximized": False}
+        return mac_window.command(action, payload) if action else mac_window.state()
     try:
         import window_chrome
     except Exception:
@@ -6236,9 +6245,11 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 self.send_json({"ok": False, "message": str(exc)}, HTTPStatus.BAD_REQUEST)
             return
         if route == "/api/window":
-            # 앱 상단 바의 최소화·최대화·닫기 단추
-            action = str((self.read_body_json() or {}).get("action") or "")
-            self.send_json(_window_chrome_call(action))
+            # 앱 상단 바의 최소화·최대화·닫기 단추, 맥은 끌 곳 알림(regions)
+            body = self.read_body_json()
+            body = body if isinstance(body, dict) else {}
+            action = str(body.get("action") or "")
+            self.send_json(_window_chrome_call(action, body))
             return
         if route == "/api/ui-prefs":
             try:

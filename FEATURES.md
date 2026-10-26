@@ -969,6 +969,12 @@ Microsoft Store 정책 10.3.1(로그인 앱은 심사용 시험 계정을 줄 �
 - 단추: `#winControls`(Segoe Fluent 아이콘) → `GET/POST /api/window {action: minimize|maximize|close}`. 개발 서버는 `custom:false` 라 화면이 그대로다.
 - 최대화 뒤 복원하면 WinForms 가 없앤 제목 줄 높이를 다시 더해 창이 29px씩 길어졌다(820→849→878). `WM_SIZE` 로 최대화 직전 크기를 기억했다가 복원 직후 크기만 되돌린다.
 - 화면: `html.custom-frame` 에서 넓은 창은 검색창 가운데(Spotify), 상단 바·사이드바 바탕을 이어 붙이고 본문 왼쪽 위를 둥글게. 메일함에도 상단 바를 둔다(창 단추가 읽기 도구를 덮었다).
+- **맥(2026-10-26, `mac_window.py`)**: 사용자 맥 사진에서 밝은 앱 위에 검은 기본 제목 줄과 화면 이름('과제 마감')이 따로 떴다. pywebview 가 제목 줄 뷰를 `windowBackgroundColor` 로 칠해 다크 모드에서 검은 띠가 된다. `app.py` 가 `window.events.before_show` 에 `mac_window.install` 을 걸어:
+  - 제목 줄 투명·제목 숨김·`NSWindowStyleMaskFullSizeContentView`·구분선 없음, pywebview 가 칠한 바탕은 `clearColor`. `frameless` 는 크기 조절·신호등이 사라져 쓰지 않는다.
+  - 신호등(닫기·최소화·확대)은 운영체제 것을 그대로 두고 상단 바 첫 줄 가운데 높이(`cy`)·왼쪽 `lx`(메일함의 72px 메뉴에선 12)로 옮긴다(Tauri `trafficLightPosition` 방식: 제목 줄 컨테이너 높이를 늘리고 단추 자리를 바꿈). 창 크기·전체 화면·키 창 알림마다 다시 놓는다.
+  - 끌기: WKWebView 는 CSS `app-region` 을 모른다. `app.js macDragRegions` 가 상단 바·세로 메뉴(끌 곳)와 그 안의 단추·입력칸·덮개(안 끌 곳)를 사각형으로 재서 `POST /api/window {action:"regions"}` 로 보낸다(DOM 이 바뀔 때만, 같은 값이면 안 보냄). pywebview 의 `WebKitHost.mouseDown:` 을 `objc.classAddMethods` 로 바꿔 끼워 끌 곳이면 `performWindowDragWithEvent_`, 두 번 누르면 시스템 설정(`AppleActionOnDoubleClick`)대로. 하위 클래스로 바꾸면 pywebview 안의 `super(BrowserView.WebKitHost, self)` 가 끝없이 돈다.
+  - 화면: `html.mac-frame` — 넓은 창은 세로 메뉴 내용을 상단 바 높이(`--topbar-h`, ResizeObserver 로 따라감) 아래부터, 좁은 창(≤760px)은 상단 바 왼쪽 80px 를 비운다. 메일함 좁은 창은 상단 바 첫 줄을 남긴다(숨기면 신호등이 목록 머리에 겹침). 가장 낮은 창(560px)에서 메뉴 아래가 49px 잘려 메뉴 목록이 스크롤된다.
+  - 점검: 개발 PC 에 맥이 없어 `.github/workflows/mac-window.yml`(`diag/mac-window` 브랜치·수동) 이 M칩·인텔에서 `DALING_WINDOW_SELFTEST` 로 켜 신호등 자리·누른 자리 판정·가짜 클릭·스크린샷·실제 끌기(cliclick)를 잰다. 끌기 손맛·창 크기 바꿀 때 깜빡임은 맥 사용자 확인이 필요하다.
 
 ## 단추 교통정리 (2026-10-14)
 

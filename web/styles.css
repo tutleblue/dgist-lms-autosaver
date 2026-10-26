@@ -10952,6 +10952,27 @@ html.log-open .log-close { display: grid; flex: none; }
 .win-btn:focus { outline: none; }
 .win-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
+/* ===== 맥: 제목 줄 = 상단 바 (html.custom-frame.mac-frame, mac_window.py, 2026-10-26) =====
+   사용자 맥 사진: 밝은 앱 위에 검은 제목 줄과 화면 이름('과제 마감')이 따로 떴다 → Windows 처럼 상단 바를 제목 줄로.
+   위 custom-frame 규칙을 그대로 쓰되, 창 단추는 운영체제 신호등(닫기·최소화·확대)이 왼쪽 위
+   상단 바 첫 줄 가운데 높이에 앉는다. 그래서 오른쪽 단추 자리는 비우지 않고 왼쪽 위만 비운다.
+   끌기는 WKWebView 가 app-region 을 몰라 app.js macDragRegions 가 같은 곳을 사각형으로 재서 앱에 알린다. */
+.mac-frame { --winctl-w: 16px; } /* 상단 바 오른쪽 여백을 원래(28px)대로 */
+@media (min-width: 761px) {
+  /* 신호등이 왼쪽 메뉴 맨 위에 앉으므로 메뉴 내용(시계 카드)은 상단 바 아래부터 (맥 메일·메모의 옆 막대처럼) */
+  .mac-frame:not(.mac-fullscreen) .sidebar { padding-top: max(22px, calc(var(--topbar-h, 60px) + 4px)); }
+  /* 그만큼 내려가 가장 낮은 창(560px)에서 아래 '의견 보내기'·상태 카드가 49px 잘렸다 → 메뉴 목록이 줄며 스크롤 */
+  .mac-frame .sidebar .nav-list { min-height: 0; overflow-y: auto; scrollbar-width: none; }
+}
+@media (max-width: 760px) {
+  /* 좁은 창: 메뉴가 아래 탭바가 되면 신호등은 상단 바 첫 줄 왼쪽에 앉는다 → 작은 시계를 그만큼 민다 */
+  .mac-frame:not(.mac-fullscreen) .topbar { padding-left: 80px; }
+  .mac-frame:not(.mac-fullscreen) .topbar .search-wrap { margin-left: -68px; }
+  /* 메일함은 좁은 창에서 상단 바를 숨겼는데, 그러면 신호등이 메일 목록 머리 위에 겹친다 → 첫 줄만 남긴다 */
+  .mac-frame .app-shell.mail-focus .topbar { display: grid; grid-template-areas: "now actions"; }
+  .mac-frame .app-shell.mail-focus .topbar .search-wrap:not(.email-search) { display: none; }
+}
+
 /* ===== 스크롤은 상단 바 아래 본문에서만 (2026-10-14) =====
    문서 전체가 스크롤되어 스크롤 막대 자리가 창 오른쪽 끝을 맨 위(창 단추 옆)부터 맨 아래까지 차지했다
    ('스크롤 막대가 왜 창 끝까지 있냐'). Spotify 처럼 창은 고정하고 상단 바 아래 본문(.workspace)만 스크롤한다.

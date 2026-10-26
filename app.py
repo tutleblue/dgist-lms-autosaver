@@ -1087,7 +1087,7 @@ def main() -> None:
     if window_chrome:
         window_chrome.enable_webview_drag_regions()
         window_chrome.install_async(WINDOW_TITLE)
-    webview.create_window(
+    window = webview.create_window(
         WINDOW_TITLE,
         url,
         width=width,
@@ -1097,6 +1097,15 @@ def main() -> None:
         # 휴대폰 비율로 줄여도 쓸 수 있게 화면을 다시 짰다(좁으면 아래 탭 막대). 예전 900×640 은 정사각형·세로 창을 막았다.
         min_size=(360, 560),
     )
+    if sys.platform == "darwin":
+        # 맥도 기본 제목 줄을 투명하게 하고 상단 바를 제목 줄로 쓴다 (mac_window 설명 참고).
+        # 창을 보이기 직전(before_show, 메인 스레드)에 바꿔야 회색 줄이 한 번 번쩍이지 않는다. 못 바꾸면 기본 제목 줄 그대로
+        try:
+            import mac_window
+
+            window.events.before_show += mac_window.install
+        except Exception:
+            pass
     # 창이 뜬 뒤 아이콘을 입힌다 (pywebview는 Windows에서 아이콘 인자를 지원하지 않음)
     threading.Thread(target=apply_window_icon, daemon=True).start()
     if server is not None and sys.platform == "darwin":
