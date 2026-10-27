@@ -1757,7 +1757,11 @@ def _mark_events(emails: list[dict[str, Any]], config: dict[str, Any], school_ev
         school = any(w in head for w in _SCHOOL_EVENT_WORDS)
         mail["interestHits"] = hits[:4]
         mail["schoolEvent"] = school
-        if any(w in str(mail.get("subject", "")).lower() for w in email_reader._TALK_WORDS):
+        if mail.get("isReply") or re.match(r"^\s*(re|답장|회신)\s*:", str(mail.get("subject", "")), re.IGNORECASE):
+            # 답장은 일정 안내가 아니라 주고받는 말이다. '[특별근로장학] 근로시간 변경 요청' 답장이 관심사 '장학' 과
+            # 본문 날짜로 캘린더에 올라갔다(2026-10-28). 분류의 '답신' 과 같은 기준
+            mail["calendar"] = False
+        elif any(w in str(mail.get("subject", "")).lower() for w in email_reader._TALK_WORDS):
             # 세미나: 설정에서 고른 분야와 맞을 때만 (학교 전체 행사는 그대로). Gemini 점수는 보지 않는다:
             # 분야를 골랐는데도 점수 하나로 다른 학과 세미나가 올라오면 고른 뜻이 없어진다
             mail["calendar"] = bool(school or any(w in topic_words for w in hits))
