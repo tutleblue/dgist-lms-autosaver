@@ -383,6 +383,79 @@ section { position: relative; }
 .gd .xp-row { grid-template-columns: minmax(0, 1fr) 6em; }
 @media (max-width: 900px) { .cloud { grid-template-columns: minmax(0, 1fr); gap: 24px; margin-top: 40px; } }
 
+/* ── 세미나 (2026-10-26 사용자: 메일을 하나하나 열어 언제인지 헷갈리던 일 → 달력에 한눈에 → 내 캘린더와 연결을 강조) ──
+   왼쪽은 세미나 메일이 섞인 받은 편지함, 오른쪽은 한 주 달력, 아래는 Google Calendar 일정 목록 */
+.fi.mail { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect x='1.5' y='3.5' width='13' height='9' rx='1.5' fill='none' stroke='%239a958b'/%3E%3Cpath d='M2.2 4.6 8 9l5.8-4.4' fill='none' stroke='%239a958b'/%3E%3C/svg%3E"); }
+.xp.inbox .xp-tab .fi { width: 14px; height: 14px; }
+.xp-row.unread > span:first-child { color: var(--ink); font-weight: 650; }
+.xp-row.unread > span:first-child::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--c-lms); flex: none; margin-right: -2px; }
+.wk { --sem: var(--c-due); --sch: #c9a227; --due: #c4573f; }
+.wk-head { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 12px; padding: 9px 12px; border-bottom: 1px solid var(--line); }
+.wk-legend { margin-left: auto; display: flex; gap: 10px; font-size: .72rem; color: var(--faint); }
+.wk-legend i, .gc-cals i { display: inline-block; width: 9px; height: 9px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+.wk-legend .sem i { background: var(--sem); } .wk-legend .sch i { background: var(--sch); } .wk-legend .due i { background: var(--due); }
+.wk-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); flex: 1; }
+.wk-day { display: flex; flex-direction: column; gap: 5px; min-width: 0; min-height: 150px; padding: 7px 5px 9px; border-right: 1px solid var(--line); }
+.wk-day:last-child { border-right: 0; }
+.wk-day > b { display: flex; align-items: baseline; gap: 5px; padding: 0 3px 2px; font-size: .72rem; font-weight: 600; color: var(--faint); }
+.wk-day > b em { font-style: normal; font-size: .92rem; color: var(--ink); }
+.wk-day.today { background: color-mix(in srgb, var(--sem) 6%, transparent); }
+.wk-day.today > b em { color: var(--surface); background: var(--sem); border-radius: 999px; padding: 0 7px; }
+.ev { --ev: var(--sem); display: block; min-width: 0; padding: 4px 6px 5px; border-radius: 6px; border-left: 3px solid var(--ev);
+  background: color-mix(in srgb, var(--ev) 14%, var(--surface)); font-size: .72rem; line-height: 1.3; }
+.ev.sch { --ev: var(--sch); } .ev.due { --ev: var(--due); }
+.ev.sel { box-shadow: 0 0 0 2px var(--ev); }
+.ev b, .ev span { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ev b { font-weight: 650; color: var(--ink); }
+.ev span { color: var(--muted); font-size: .68rem; }
+.wk-detail { display: grid; gap: 2px; padding: 10px 14px 12px; border-top: 1px solid var(--line); font-size: .8rem;
+  background: color-mix(in srgb, var(--sem) 7%, var(--surface)); }
+.wk-detail b { font-size: .9rem; }
+.wk-detail span { color: var(--muted); }
+.wk-merge { justify-self: start; margin-top: 4px; font-style: normal; font-size: .7rem; font-weight: 700; color: var(--ok);
+  border: 1px solid currentColor; border-radius: 999px; padding: 0 8px; }
+.wk-day > b, .wk-day > b em { white-space: nowrap; }
+/* 휴대폰 폭: 요일과 날짜를 위아래로 (옆으로 두면 'Mo n 2 6' 처럼 갈라졌다) */
+@container (max-width: 480px) {
+  .wk-legend { display: none; } .ev span { display: none; } .ev { padding: 3px 4px; }
+  .wk-day { min-height: 116px; padding: 6px 3px 8px; }
+  .wk-day > b { flex-direction: column; align-items: center; gap: 2px; padding: 0 0 3px; }
+}
+/* Google Calendar 일정 목록. 색은 Google 이 주는 캘린더 색(포도·블루베리)을 그대로, 흰 글씨라 테마와 상관없이 */
+.gc { margin: 0; border-radius: 12px; overflow: hidden; border: 1px solid var(--line-strong); background: var(--surface); box-shadow: var(--shadow-lg);
+  font-size: .82rem; line-height: 1.4; container-type: inline-size; --g-sem: #8e24aa; --g-mine: #3f51b5; }
+.gc-top { display: flex; align-items: center; gap: 14px; padding: 9px 14px; background: var(--surface-soft); border-bottom: 1px solid var(--line); }
+.gc-top .gd-brand svg { width: 20px; height: 20px; }
+.gc-month { font-size: 1rem; font-weight: 600; white-space: nowrap; }
+.gc-sync { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; font-size: .74rem; font-weight: 700; color: var(--ok); white-space: nowrap; }
+.gc-sync svg { width: 14px; height: 14px; }
+.gc-body { display: grid; grid-template-columns: minmax(0, 32%) minmax(0, 1fr); }
+.gc-cals { list-style: none; margin: 0; padding: 14px 12px; display: grid; gap: 9px; align-content: start; border-right: 1px solid var(--line); }
+.gc-cals li { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gc-cals .h { font-size: .72rem; font-weight: 600; color: var(--faint); }
+.gc-cals i { width: 13px; height: 13px; vertical-align: -2px; }
+.gc-cals .mine i { background: var(--g-mine); } .gc-cals .sem i { background: var(--g-sem); }
+.gc-cals .sem { font-weight: 650; }
+.gc-agenda { padding: 6px 14px 10px; }
+.gc-day { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.gc-day:last-child { border-bottom: 0; }
+.gc-date { text-align: center; font-size: .7rem; color: var(--muted); line-height: 1.2; }
+.gc-date b { display: grid; place-items: center; width: 32px; height: 32px; margin: 2px auto 0; border-radius: 50%; font-size: 1.15rem; font-weight: 500; color: var(--ink); }
+.gc-day.today .gc-date { color: var(--g-mine); font-weight: 600; }
+.gc-day.today .gc-date b { background: var(--g-mine); color: #fff; }
+.gc-evs { display: grid; gap: 5px; min-width: 0; }
+.gc-ev { display: block; min-width: 0; padding: 5px 10px 6px; border-radius: 6px; background: var(--g-sem); color: #fff; }
+.gc-ev.mine { background: var(--g-mine); }
+.gc-ev b, .gc-ev span { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gc-ev b { font-weight: 600; }
+.gc-ev span { font-size: .72rem; opacity: .9; }
+@container (max-width: 460px) {
+  .gc-body { grid-template-columns: minmax(0, 1fr); }
+  .gc-cals { display: flex; flex-wrap: wrap; gap: 6px 14px; padding: 10px 14px; border-right: 0; border-bottom: 1px solid var(--line); }
+  .gc-cals .h, .gc-month { display: none; }
+}
+.cloud + .feature { margin-top: 48px; border-top: 1px solid var(--line); }
+
 /* ── 시작하기 ── */
 .steps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; margin-top: 40px; counter-reset: step; }
 .step { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 24px 22px; position: relative; }

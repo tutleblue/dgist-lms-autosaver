@@ -24,7 +24,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Lora:wght@600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="../style.css?v=fc2fe1ba">
+<link rel="stylesheet" href="../style.css?v=2afe714b">
 <style>
   /* 영어 페이지는 제목도 Lora, 본문은 Inter */
   :root { --font-serif: "Lora", Georgia, serif; --font-sans: "Inter", "Segoe UI", system-ui, sans-serif; }
@@ -123,7 +123,7 @@
         <li><a href="#lms"><span>1</span>LMS course files</a></li>
         <li><a href="#mail"><span>2</span>School mail</a></li>
         <li><a href="#academic"><span>3</span>Academic calendar &amp; notices</a></li>
-        <li><a href="#deadlines"><span>4</span>Deadlines &amp; seminars</a></li>
+        <li><a href="#deadlines"><span>4</span>Seminars &amp; deadlines</a></li>
       </ul>
     </div>
 
@@ -322,8 +322,79 @@
     <div class="part" id="deadlines">
       <div class="part-head reveal">
         <p class="part-no">PART 4</p>
-        <h3>Deadlines &amp; seminars</h3>
+        <h3>Seminars &amp; deadlines</h3>
       </div>
+
+      <div class="ba reveal">
+        <div class="ba-col before">
+          <p class="ba-label">UNTIL NOW · BY HAND</p>
+          <h4>Opening seminar mail one by one</h4>
+          <ol class="chores">
+            <li><b>Find seminar mail in the inbox</b></li>
+            <li><b>Open each for the date and room</b></li>
+            <li><b>Check reposts and room changes too</b></li>
+            <li><b>"When was it again?" Search again</b></li>
+          </ol>
+          <figure class="xp messy inbox" role="img" aria-label="An inbox where seminar and event mail is mixed with scholarship and career notices, with reposts, room changes and schedule changes arriving separately">
+            <div class="xp-top"><span class="xp-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="xp-tab"><i class="fi mail"></i>Inbox</span><span class="xp-ctl" aria-hidden="true"><i>—</i><i>□</i><i>✕</i></span></div>
+            <div class="xp-body">
+              <div class="xp-list">
+                <div class="xp-row unread"><span><i class="fi mail"></i>[Seminar] Quantum Materials Seminar</span><span>10-21</span></div>
+                <div class="xp-row"><span><i class="fi mail"></i>[Reminder] Colloquium this Friday</span><span>10-23</span></div>
+                <div class="xp-row dup"><span><i class="fi mail"></i>[Room change] Physics seminar</span><span>10-24</span></div>
+                <div class="xp-row"><span><i class="fi mail"></i>Fall scholarship applications open</span><span>10-24</span></div>
+                <div class="xp-row dup"><span><i class="fi mail"></i>[Repost] Business model seminar</span><span>10-25</span></div>
+                <div class="xp-row unread"><span><i class="fi mail"></i>[Seminar] Deep Learning for Biology</span><span>10-25</span></div>
+                <div class="xp-row"><span><i class="fi mail"></i>Career fair sign-up</span><span>10-26</span></div>
+                <div class="xp-row dup"><span><i class="fi mail"></i>Re: Seminar schedule change</span><span>10-26</span></div>
+              </div>
+            </div>
+            <div class="xp-status">37 unread</div>
+          </figure>
+          <p class="repeat"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 2l4 4-4 4"/><path d="M3 11V9a3 3 0 0 1 3-3h15"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v2a3 3 0 0 1-3 3H3"/></svg>Every time a seminar mail arrives</p>
+        </div>
+
+        <div class="ba-arrow" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg></div>
+
+        <div class="ba-col after">
+          <p class="ba-label">DALING · AUTOMATIC</p>
+          <h4>All on one calendar, at a glance</h4>
+          <figure class="xp wk" role="img" aria-label="One week (Oct 26–30) on Daling's calendar. Seminars in purple, school events in yellow and deadlines in red sit on their days, and the selected seminar shows its date, room, speaker and talk title. Three mails were merged into one event">
+            <div class="xp-top"><span class="xp-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="xp-tab">Calendar</span><span class="xp-ctl" aria-hidden="true"><i>—</i><i>□</i><i>✕</i></span></div>
+            <div class="wk-head"><b>Oct 26 – 30</b><span class="wk-legend"><span class="sem"><i></i>Seminar</span><span class="sch"><i></i>School event</span><span class="due"><i></i>Deadline</span></span></div>
+            <div class="wk-grid">
+              <div class="wk-day"><b>Mon <em>26</em></b><span class="ev due"><b>HW5 due</b><span>General Physics II</span></span></div>
+              <div class="wk-day"><b>Tue <em>27</em></b><span class="ev"><b>Physics colloquium</b><span>16:00</span></span></div>
+              <div class="wk-day today"><b>Wed <em>28</em></b><span class="ev sel"><b>Quantum Materials</b><span>16:00 · E7 101</span></span></div>
+              <div class="wk-day"><b>Thu <em>29</em></b><span class="ev"><b>Deep Learning for Biology</b><span>14:00</span></span><span class="ev sch"><b>Career fair</b><span>13:00</span></span></div>
+              <div class="wk-day"><b>Fri <em>30</em></b><span class="ev"><b>Business model seminar</b><span>10:00</span></span><span class="ev due"><b>HW6 due</b><span>General Physics II</span></span></div>
+            </div>
+            <div class="wk-detail"><b>Quantum Materials Seminar</b><span>Wed, Oct 28 · 16:00 · E7 101</span><span>Speaker Prof. Mongryong Lee · Topological Phases in 2D Materials</span><em class="wk-merge">3 mails → 1 event</em></div>
+          </figure>
+          <p class="ba-note">Date, speaker and venue are read from the mail. Reposts merge into one event.</p>
+        </div>
+      </div>
+
+      <div class="cloud reveal">
+        <div class="copy">
+          <p class="tag">Your calendar</p>
+          <h4>In your Google Calendar too</h4>
+          <p>Turn it on once and new seminars go to your Google Calendar, with speaker and venue, so they're on your phone too.</p>
+          <ul class="checks"><li>Only one calendar the app made is touched. Your other events stay as they are.</li></ul>
+        </div>
+        <figure class="gc" role="img" aria-label="Google Calendar schedule view. Between your own event (club meeting), seminars and school events from the 'DGIST mail events' calendar appear with their venue, marked 'Just synced'">
+          <div class="gc-top"><span class="gd-brand"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path fill="#4285F4" d="M18.316 5.684H24v12.632h-5.684V5.684zM5.684 24h12.632v-5.684H5.684V24zM18.316 5.684V0H1.895A1.894 1.894 0 0 0 0 1.895v16.421h5.684V5.684h12.632zm-7.207 6.25v-.065c.272-.144.5-.349.687-.617s.279-.595.279-.982c0-.379-.099-.72-.3-1.025a2.05 2.05 0 0 0-.832-.714 2.703 2.703 0 0 0-1.197-.257c-.6 0-1.094.156-1.481.467-.386.311-.65.671-.793 1.078l1.085.452c.086-.249.224-.461.413-.633.189-.172.445-.257.767-.257.33 0 .602.088.816.264a.86.86 0 0 1 .322.703c0 .33-.12.589-.36.778-.24.19-.535.284-.886.284h-.567v1.085h.633c.407 0 .748.109 1.02.327.272.218.407.499.407.843 0 .336-.129.614-.387.832s-.565.327-.924.327c-.351 0-.651-.103-.897-.311-.248-.208-.422-.502-.521-.881l-1.096.452c.178.616.505 1.082.977 1.401.472.319.984.478 1.538.477a2.84 2.84 0 0 0 1.293-.291c.382-.193.684-.458.902-.794.218-.336.327-.72.327-1.149 0-.429-.115-.797-.344-1.105a2.067 2.067 0 0 0-.881-.689zm2.093-1.931l.602.913L15 10.045v5.744h1.187V8.446h-.827l-2.158 1.557zM22.105 0h-3.289v5.184H24V1.895A1.894 1.894 0 0 0 22.105 0zm-3.289 23.5l4.684-4.684h-4.684V23.5zM0 22.105C0 23.152.848 24 1.895 24h3.289v-5.184H0v3.289z"/></svg>Calendar</span><span class="gc-month">October 2026</span><span class="gc-sync"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 0 1-15.5 6.2L3 16"/><path d="M3 21v-5h5"/><path d="M3 12a9 9 0 0 1 15.5-6.2L21 8"/><path d="M21 3v5h-5"/></svg>Just synced</span></div>
+          <div class="gc-body">
+            <ul class="gc-cals"><li class="h">My calendars</li><li class="mine"><i></i>Personal</li><li class="sem"><i></i>DGIST mail events</li></ul>
+            <div class="gc-agenda">
+              <div class="gc-day today"><span class="gc-date">Wed<b>28</b></span><span class="gc-evs"><span class="gc-ev sem"><b>Quantum Materials Seminar</b><span>16:00–17:00 · E7 101</span></span><span class="gc-ev mine"><b>Club meeting</b><span>19:00–21:00</span></span></span></div>
+              <div class="gc-day"><span class="gc-date">Thu<b>29</b></span><span class="gc-evs"><span class="gc-ev sem"><b>Career fair</b><span>13:00–14:00</span></span><span class="gc-ev sem"><b>Deep Learning for Biology</b><span>14:00–15:00</span></span></span></div>
+              <div class="gc-day"><span class="gc-date">Fri<b>30</b></span><span class="gc-evs"><span class="gc-ev sem"><b>Business model seminar</b><span>10:00–11:00</span></span></span></div>
+            </div>
+          </div>
+        </figure>
+      </div>
+
       <article class="feature reveal">
         <div class="copy">
           <p class="tag">Deadlines</p>
@@ -339,13 +410,6 @@
           <img src="../img/en/app-deadlines.webp" width="1440" height="900" loading="lazy" alt="Deadlines screen: assignments from each course sorted by D-day with a 'Go submit' button">
         </figure>
       </article>
-      <div class="tip-hero reveal">
-        <div class="copy">
-          <p class="tag">Seminars</p>
-          <h3>Seminar and event mail lands on your calendar</h3>
-          <p>Date, speaker and venue are read and added as an event.</p>
-        </div>
-      </div>
     </div>
 
     <div class="more reveal">

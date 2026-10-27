@@ -43,8 +43,8 @@ SWEEP_GET = (
     "/api/course-catalog?q=", "/api/course-staff", "/api/course-state", "/api/course-terms", "/api/deadlines",
     "/api/deadlines.ics", "/api/demo", "/api/dgist-api/status", "/api/diagnostics", "/api/directory?q=",
     "/api/drive/get", "/api/drive/list", "/api/drive/picked?state=", "/api/email-body?id=1", "/api/emails", "/api/fglp", "/api/file?path=x",
-    "/api/files", "/api/files/bulk", "/api/health", "/api/local-autosave/job", "/api/mail-image",
-    "/api/mail/discard-draft", "/api/mail/draft?uid=1", "/api/mail/eml", "/api/mail/folders", "/api/mail/me", "/api/mail/pending",
+    "/api/files", "/api/files/bulk", "/api/health", "/api/local-autosave/job", "/api/lock", "/api/mail-image",
+    "/api/mail/attachment", "/api/mail/big-upload?job=", "/api/mail/discard-draft", "/api/mail/draft?uid=1", "/api/mail/eml", "/api/mail/folders", "/api/mail/me", "/api/mail/pending",
     "/api/my-events", "/api/notices", "/api/place-search?q=", "/api/samsung-notes/job", "/api/samsung-notes/status",
     "/api/school-events", "/api/selection", "/api/seminars", "/api/shelves", "/api/shuttle", "/api/status",
     "/api/storage", "/api/task", "/api/timetable", "/api/tutorial", "/api/ui-prefs", "/api/update/check",
@@ -58,9 +58,9 @@ _SWEEP_PATHS = {r.split("?")[0] for r in SWEEP_GET}
 SWEEP_POST = (
     "/api/acknowledge-courses", "/api/ai/continue", "/api/ai/draft", "/api/ai/polish", "/api/ai/profile",
     "/api/ai/search", "/api/assignment/open", "/api/autostart", "/api/boot-done", "/api/config", "/api/config/import",
-    "/api/delete-email", "/api/directory/import", "/api/drive/pick", "/api/export-ics", "/api/files/bulk", "/api/gcal/sync",
+    "/api/delete-email", "/api/directory/import", "/api/drive/pick", "/api/drive/share", "/api/export-ics", "/api/files/bulk", "/api/gcal/sync",
     "/api/gcal/sync-academic", "/api/google/connect", "/api/google/credentials", "/api/google/disconnect",
-    "/api/local-autosave/run", "/api/mail/discard-draft", "/api/mail/flow", "/api/mail/folder-create", "/api/mail/me",
+    "/api/local-autosave/run", "/api/mail/big-cancel", "/api/mail/discard-draft", "/api/mail/flow", "/api/mail/folder-create", "/api/mail/me",
     "/api/mail/move", "/api/mail/reminder", "/api/mail/save-draft", "/api/mail/star", "/api/mail/translate",
     "/api/mark-all-read", "/api/mark-read", "/api/my-events/delete", "/api/my-events/save", "/api/organize-files",
     "/api/presence",
@@ -75,7 +75,7 @@ SWEEP_POST = (
 # 파일 관리자·브라우저를 실제로 여는 길
 SWEEP_POST_SKIP = (
     "/api/demo", "/api/restart", "/api/window", "/api/pick-folder", "/api/open-downloads", "/api/open-url",
-    "/api/open-app-url", "/api/mail/open-link",
+    "/api/open-app-url", "/api/mail/open-link", "/api/open-file",
 )
 
 
@@ -353,6 +353,46 @@ def run(app) -> int:
                 raise RuntimeError("끈 뒤에도 체험 폴더가 남음")
             return f"자료 {files} · 메일 {mails} · 바깥 연결 막힘 · 끄면 지워짐"
 
+        def app_lock_check():
+            # 앱 잠금(네 자리): 정하고 잠그면 데이터 API 가 423, 첫 화면에 잠금 표시, 틀리면 남은 횟수, 맞으면 풀리고, 끄면 파일이 없어진다.
+            # 임시 데이터 폴더의 app_lock.json 만 쓴다
+            import urllib.error
+            import urllib.request
+
+            def post(path: str, payload: dict) -> dict:
+                req = urllib.request.Request(base + path, data=json.dumps(payload).encode(),
+                                             headers={"Content-Type": "application/json"}, method="POST")
+                with urllib.request.urlopen(req, timeout=20) as resp:
+                    return json.loads(resp.read().decode("utf-8"))
+
+            def status_of(path: str) -> int:
+                try:
+                    return _get(base, path)[0]
+                except urllib.error.HTTPError as err:
+                    return err.code
+
+            if _json(base, "/api/lock").get("enabled"):
+                raise RuntimeError("빈 데이터 폴더인데 잠금이 켜져 있음")
+            if not post("/api/lock/set", {"pin": "2580"}).get("ok"):
+                raise RuntimeError("비밀번호를 정하지 못함")
+            try:
+                post("/api/lock/lock", {})
+                if status_of("/api/emails") != 423 or status_of("/api/ui-prefs") != 200:
+                    raise RuntimeError("잠갔는데 데이터 API 가 열려 있거나 잠금 화면용 길이 막힘")
+                _status, body, _ = _get(base, "/")
+                if b'data-locked="1"' not in body:
+                    raise RuntimeError("첫 화면에 잠금 표시가 없음")
+                wrong = post("/api/lock/unlock", {"pin": "0000"})
+                if wrong.get("ok") or wrong.get("triesLeft") != 4:
+                    raise RuntimeError(f"틀린 비밀번호 답이 이상함: {wrong}")
+                if not post("/api/lock/unlock", {"pin": "2580"}).get("ok") or status_of("/api/emails") != 200:
+                    raise RuntimeError("맞는 비밀번호로 안 풀림")
+            finally:
+                post("/api/lock/off", {"current": "2580"})
+            if (web_ui.AUTOSAVER_ROOT / "app_lock.json").exists():
+                raise RuntimeError("끈 뒤에도 app_lock.json 이 남음")
+            return "423 으로 막힘 · 틀리면 4번 남음 · 풀림 · 끄면 지워짐"
+
         def api_sweep():
             # 화면이 부르는 GET 을 모두 한 번씩 (2026-10-21 사용자: 'Windows 기능이 맥·리눅스에서도 다 되는지 점검').
             # 점검 PC 에는 맥이 없어 기능별 화면 서버 코드가 맥·리눅스에서 도는지를 CI 의 이 점검으로 본다.
@@ -471,6 +511,7 @@ def run(app) -> int:
         check("GET /", index)
         check("GET /app.js", app_js)
         check("체험 모드", demo_mode_check)
+        check("앱 잠금", app_lock_check)
         check("교원 주소록", faculty_directory)
         check("화면 API 전부 (체험 모드)", api_sweep)
         check("화면 API 전부 POST (체험 모드)", post_sweep)

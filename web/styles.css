@@ -1879,59 +1879,47 @@ select:focus {
   position: relative;
 }
 
-@keyframes course-jiggle {
-  0% { transform: rotate(-0.7deg) translateY(0); }
-  25% { transform: rotate(0.7deg) translateY(-0.6px); }
-  50% { transform: rotate(-0.55deg) translateY(0); }
-  75% { transform: rotate(0.6deg) translateY(0.6px); }
-  100% { transform: rotate(-0.7deg) translateY(0); }
-}
-
+/* 편집 중: 카드는 제자리에 두고 테두리만 (흔들림은 카드 수만큼 애니메이션이 쉬지 않고 돌아 무거웠다, 2026-10-27) */
 .course-grid.editing .course-card {
-  animation: course-jiggle 0.32s ease-in-out infinite;
-  transform-origin: 50% 50%;
+  outline: 1.5px dashed var(--border-strong);
+  outline-offset: 2px;
 }
-/* 카드마다 살짝 어긋나게 — 한 몸처럼 흔들리지 않도록 */
-.course-grid.editing .course-card:nth-child(3n + 2) { animation-delay: -0.11s; }
-.course-grid.editing .course-card:nth-child(3n + 3) { animation-delay: -0.22s; }
-.course-grid.editing .course-card:nth-child(4n + 1) { animation-duration: 0.35s; }
 
+/* 숨기기 단추: 빨간 ✕ 대신 앱의 다른 단추와 같은 모양. 숨긴 과목은 '숨긴 과목 복원' 으로 되돌린다 */
 .course-remove {
   position: absolute;
-  top: -7px;
-  left: -7px;
+  top: -10px;
+  left: -10px;
   z-index: 2;
-  width: 23px;
-  height: 23px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
   border-radius: 50%;
-  border: none;
-  background: var(--red);
-  color: #fff;
-  font-size: 12px;
-  line-height: 1;
-  font-weight: 700;
+  /* 카드와 같은 surface 면 어두운 테마에서 테두리 없는 아이콘처럼 묻혔다 */
+  border: 1px solid var(--border-strong);
+  background: var(--surface-soft);
+  color: var(--text-soft);
   display: grid;
   place-items: center;
   cursor: pointer;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.28);
-  animation: course-remove-pop 0.18s ease-out;
+  box-shadow: 0 3px 10px -4px rgba(31, 30, 29, 0.3);
+  transition: color 0.12s, border-color 0.12s, background 0.12s;
+  animation: course-remove-in 0.14s ease-out;
 }
+.course-remove .icon { width: 15px; height: 15px; }
 .course-remove:hover {
-  filter: brightness(1.12);
+  color: var(--red);
+  border-color: var(--red);
+}
+.course-remove:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+@keyframes course-remove-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
-@keyframes course-remove-pop {
-  from { transform: scale(0.4); opacity: 0; }
-  to { transform: scale(1); opacity: 1; }
-}
-
-/* 흔들림에 민감한 사용자 배려 */
 @media (prefers-reduced-motion: reduce) {
-  .course-grid.editing .course-card {
-    animation: none;
-    outline: 2px dashed var(--border-strong);
-    outline-offset: 2px;
-  }
+  .course-remove { animation: none; transition: none; }
 }
 
 .course-card-top {
@@ -5393,78 +5381,119 @@ textarea:focus {
 }
 
 
-/* ===== 대시보드 편집 ===== */
+/* ===== 대시보드 편집 =====
+   편집을 켜도 카드가 한 픽셀도 움직이지 않게 한다 (2026-10-27).
+   예전에는 카드 위에 22px 를 비워 조작 줄을 얹어 모든 카드가 37px 씩 밀렸고,
+   카드마다 크기·그림자 애니메이션이 한꺼번에 돌아 들어가는 순간이 끊겼다.
+   - 테두리는 outline (자리를 차지하지 않는다), 조작 알약은 카드 오른쪽 위 모서리에 걸쳐 띄운다
+   - 움직임은 알약이 나타나는 투명도와 끌 때의 translate 뿐 */
 .hero-panel { position: relative; }
-.dash-edit-toggle {
+.dash-tools {
   position: absolute;
   top: 0;
   right: 0;
-}
-
-/* 꺼 둔 블록은 평소엔 안 보이고, 편집 중에는 흐리게 보여야 다시 켤 수 있다 */
-.dash-off { display: none; }
-.dash-editing .dash-off {
-  display: block;
-  opacity: 0.42;
-  filter: saturate(0.5);
-}
-
-.dash-editing [data-block] {
-  position: relative;
-  outline: 1px dashed var(--border);
-  outline-offset: 3px;
-  border-radius: var(--radius);
-  cursor: grab;
-  /* 휴대폰에서 끌 때 화면이 같이 스크롤되지 않게 */
-  touch-action: none;
-}
-.dash-editing [data-block]:active { cursor: grabbing; }
-/* 편집 중에는 안쪽 버튼·입력이 눌리지 않게 (조작 줄만 살린다) */
-.dash-editing [data-block] > :not(.dash-bar) { pointer-events: none; }
-.dash-editing [data-block] .dash-bar { pointer-events: auto; }
-
-.dash-bar {
   display: flex;
   align-items: center;
   gap: 6px;
-  margin-bottom: 8px;
-  padding: 5px 8px;
-  border-radius: var(--radius-sm);
-  background: var(--surface-soft);
-  border: 1px solid var(--border);
 }
-.dash-grip { color: var(--text-faint); font-size: 12px; letter-spacing: -2px; cursor: grab; }
+
+/* 꺼 둔 블록은 평소엔 안 보이고, 편집 중에는 흐리게 보여야 다시 켤 수 있다.
+   편집 중에도 display 는 원래 값을 그대로 쓴다 (block 으로 바꾸면 flex·grid 카드가 흐트러진다) */
+#view-dashboard:not(.dash-editing) > .dash-off { display: none !important; }
+.dash-editing .dash-off > :not(.dash-bar) { opacity: 0.4; }
+
+.dash-editing [data-block] {
+  position: relative;
+  outline: 1.5px dashed var(--border-strong);
+  outline-offset: 3px;
+  cursor: grab;
+  /* 휴대폰에서 끌 때 화면이 같이 스크롤되지 않게 */
+  touch-action: none;
+  transition: outline-color 0.15s ease;
+}
+.dash-editing [data-block]:hover { outline-color: var(--accent); }
+.dash-editing [data-block]:active { cursor: grabbing; }
+/* 편집 중에는 안쪽 버튼·입력이 눌리지 않게 (조작 알약만 살린다) */
+.dash-editing [data-block] > :not(.dash-bar) { pointer-events: none; }
+.dash-editing [data-block] .dash-bar { pointer-events: auto; }
+/* 접기 단추는 알약 자리와 겹친다. 자리는 그대로 두고 안 보이게만 */
+.dash-editing .fold-toggle { visibility: hidden; }
+
+/* 조작 알약: 카드 위 모서리에 걸쳐 떠 있다 (카드 안쪽 자리를 빼앗지 않는다) */
+.dash-bar {
+  position: absolute;
+  top: -15px;
+  right: 14px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  max-width: calc(100% - 28px);
+  padding: 2px 3px 2px 4px;
+  border-radius: 99px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: 0 4px 14px -6px rgba(31, 30, 29, 0.28);
+  animation: dash-bar-in 0.16s ease-out both;
+}
+@keyframes dash-bar-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.dash-grip {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 24px;
+  color: var(--text-faint);
+  cursor: grab;
+}
+.dash-grip .icon { width: 15px; height: 15px; }
 .dash-name {
-  flex: 1;
   min-width: 0;
+  max-width: 160px;
+  padding: 0 4px 0 1px;
   font-size: 11.5px;
-  font-weight: 600;
+  font-weight: 650;
   color: var(--text-soft);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.dash-sep {
+  flex: none;
+  width: 1px;
+  height: 14px;
+  margin: 0 3px;
+  background: var(--border);
+}
 .dash-btn {
   flex: none;
-  border: 1px solid var(--border);
-  background: var(--surface);
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
   color: var(--text-soft);
-  font: inherit;
-  font-size: 11px;
-  padding: 2px 8px;
-  border-radius: 99px;
   cursor: pointer;
+  transition: background 0.12s, color 0.12s;
 }
+.dash-btn .icon { width: 15px; height: 15px; }
 .dash-btn:hover { background: var(--surface-soft); color: var(--text); }
-.dash-btn.on { border-color: var(--accent); color: var(--accent-strong); }
+.dash-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* 숨김·반 폭처럼 켜진 상태는 강조색 바탕 */
+.dash-btn[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent-strong); }
 
-/* 끌어 올린 카드: 살짝 떠오르고 그림자가 진다 */
+/* 끌어 올린 카드: 그림자만 진다. 크기는 그대로 (scale 을 걸면 글자가 다시 그려지며 흐려졌다) */
 .dash-lift {
   z-index: 5;
   will-change: transform;
   cursor: grabbing;
-  box-shadow: 0 14px 30px -10px rgba(31, 30, 29, 0.32);
-  border-radius: var(--radius);
+  outline-color: var(--accent);
+  box-shadow: 0 18px 36px -14px rgba(31, 30, 29, 0.36);
   /* 끄는 동안에는 transition이 없어야 손을 그대로 따라온다 */
   transition: none !important;
 }
@@ -5472,15 +5501,24 @@ textarea:focus {
 body.dash-dragging-now { user-select: none; }
 body.dash-dragging-now * { cursor: grabbing !important; }
 
+/* 편집 버튼 자체도 상태가 보이게 (강의 '편집' 도 같은 모양) */
+.dash-edit-toggle.on,
+#courseEditButton.on {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
 /* 휴대폰에서는 손가락으로 누를 만큼 키운다 */
 @media (max-width: 760px) {
-  .dash-bar { gap: 8px; padding: 6px 8px; }
-  .dash-btn { min-width: 40px; min-height: 34px; font-size: 12px; }
-  .dash-grip { font-size: 14px; padding: 0 2px; }
+  .dash-bar { top: -18px; }
+  .dash-btn { width: 34px; height: 34px; }
+  .dash-grip { width: 24px; height: 34px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .dash-editing [data-block] { transition: none; }
+  .dash-bar { animation: none; }
+  .dash-editing [data-block], .dash-btn { transition: none; }
   .dash-lift { box-shadow: none; }
 }
 
@@ -6199,8 +6237,6 @@ body.dash-dragging-now * { cursor: grabbing !important; }
 #view-dashboard > * { grid-column: span 2; }
 #view-dashboard > .dash-half { grid-column: span 1; }
 
-.dash-fold-all { position: absolute; top: 0; right: 108px; }
-
 /* 접기 버튼 */
 .fold-toggle {
   flex: none;
@@ -6261,135 +6297,24 @@ body.dash-dragging-now * { cursor: grabbing !important; }
 .dash-half .panel-header h2 { font-size: 14px; }
 .dash-half .panel-header p { display: none; }
 
-/* 편집 중에는 접기 버튼을 잠근다 (순서 바꾸기가 우선) */
-.dash-editing .fold-toggle { opacity: 0.3; pointer-events: none; }
-
 /* 좁은 화면에서는 나누지 않고 한 줄씩 */
 @media (max-width: 900px) {
   #view-dashboard { grid-template-columns: minmax(0, 1fr); }
   #view-dashboard > *,
   #view-dashboard > .dash-half { grid-column: span 1; }
-  .dash-fold-all { position: static; }
   .dash-half .panel-header p { display: block; }
 }
+
+/* 켤 때 저장된 접힘을 칠하는 한 번은 움직이지 않는다 (restoreDashPrefs) */
+.no-fold-anim .fold-wrap,
+.no-fold-anim .fold-body > *,
+.no-fold-anim .fold-toggle .icon { transition: none !important; }
 
 @media (prefers-reduced-motion: reduce) {
   .fold-wrap, .fold-body > *, .fold-toggle .icon { transition: none; }
   .fold-peek { animation: none; }
 }
 
-/* ===== 편집 모드 새 단장 =====
-   예전에는 카드 위에 회색 줄이 하나 얹히는 식이라 투박했다.
-   이제 카드가 살짝 떠오르고, 조작 버튼은 떠 있는 알약 하나로 모은다. */
-.dash-editing [data-block] {
-  outline: none;
-  box-shadow: 0 0 0 1.5px var(--accent-soft), var(--shadow);
-  border-radius: var(--radius);
-  transition: box-shadow 0.2s ease, transform 0.2s cubic-bezier(0.22, 1, 0.36, 1);
-  animation: block-wake 0.36s cubic-bezier(0.34, 1.4, 0.5, 1) both;
-}
-.dash-editing [data-block]:hover {
-  box-shadow: 0 0 0 1.5px var(--accent), var(--shadow);
-  transform: translateY(-2px);
-}
-/* 편집을 켜면 카드들이 차례로 살짝 깨어난다 */
-@keyframes block-wake {
-  from { transform: scale(0.985); }
-  to   { transform: scale(1); }
-}
-.dash-editing [data-block]:nth-child(2) { animation-delay: 0.03s; }
-.dash-editing [data-block]:nth-child(3) { animation-delay: 0.06s; }
-.dash-editing [data-block]:nth-child(4) { animation-delay: 0.09s; }
-.dash-editing [data-block]:nth-child(n + 5) { animation-delay: 0.12s; }
-
-/* 조작 줄: 카드 안에 얹지 않고 위쪽에 떠 있는 알약으로 */
-.dash-bar {
-  position: absolute;
-  top: -13px;
-  left: 12px;
-  right: 12px;
-  z-index: 3;
-  margin: 0;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 6px 4px 8px;
-  border-radius: 99px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  box-shadow: 0 6px 18px -8px rgba(31, 30, 29, 0.28);
-  animation: bar-drop 0.28s cubic-bezier(0.34, 1.4, 0.5, 1) both;
-}
-@keyframes bar-drop {
-  from { opacity: 0; transform: translateY(-6px) scale(0.96); }
-  to   { opacity: 1; transform: translateY(0) scale(1); }
-}
-/* 카드 안쪽이 알약에 가리지 않도록 */
-.dash-editing [data-block] { padding-top: 22px; }
-.dash-editing .dash-bar + * { margin-top: 0; }
-
-.dash-grip {
-  color: var(--text-faint);
-  font-size: 13px;
-  letter-spacing: -2px;
-  cursor: grab;
-  padding: 0 2px;
-}
-.dash-name {
-  flex: 1;
-  min-width: 0;
-  font-size: 11.5px;
-  font-weight: 700;
-  color: var(--text);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.dash-btn {
-  flex: none;
-  border: none;
-  background: var(--surface-soft);
-  color: var(--text-soft);
-  font: inherit;
-  font-size: 11px;
-  font-weight: 600;
-  padding: 4px 9px;
-  border-radius: 99px;
-  cursor: pointer;
-  transition: background 0.15s, color 0.15s, transform 0.12s;
-}
-.dash-btn:hover { background: var(--accent-soft); color: var(--accent-strong); transform: translateY(-1px); }
-.dash-btn:active { transform: translateY(0) scale(0.94); }
-.dash-btn.on { background: var(--accent); color: #fff; }
-
-/* 끌어 올린 카드 */
-.dash-lift {
-  z-index: 5;
-  cursor: grabbing;
-  box-shadow: 0 0 0 2px var(--accent), 0 18px 36px -12px rgba(31, 30, 29, 0.34);
-  transition: none !important;
-}
-
-/* 편집 버튼 자체도 상태가 보이게 */
-.dash-edit-toggle.on {
-  background: var(--accent);
-  color: #fff;
-  border-color: var(--accent);
-}
-
-
-
-
-
-
-
-
-
-@media (prefers-reduced-motion: reduce) {
-  .dash-editing [data-block],
-  .dash-bar { animation: none; }
-  .dash-btn { transition: none; }
-}
 
 /* 미리보기가 툭 튀어나오지 않고 천천히 스며들게 */
 .tt-ghost { animation: tt-ghost-in 0.36s cubic-bezier(0.22, 1, 0.36, 1); }
@@ -9854,8 +9779,6 @@ html.vt-quick::view-transition-new(topbar) { animation: vt-soft-fade 0.15s ease 
 .drive-scope-note .button { flex: none; }
 .drive-picked { margin-right: auto; font-size: 12.5px; color: var(--text-soft); }
 
-.drive-row.too-big { opacity: .45; cursor: not-allowed; }
-.drive-row.too-big:hover { background: none; }
 
 /* ===== 받는 사람 칩 (app.js setupRecipientChips) =====
    웹메일처럼 한 사람씩 칩으로. 예전엔 쉼표로 이은 글자 한 줄이라 누가 들어갔는지 읽기 어려웠다. */
@@ -10164,7 +10087,7 @@ body.mail-resizing iframe { pointer-events: none; } /* 끄는 중 본문 iframe 
   .update-ready { display: none !important; }
 
   /* 화면 머리 */
-  .dash-edit-toggle { position: static; }
+  .dash-tools { position: static; }
   .hero-panel .hero-sub { margin-left: 0; }
 
   /* 과제 마감: 한 줄에 다 넣으면 오른쪽이 잘렸다 → 두 줄 */
@@ -11481,4 +11404,204 @@ html[data-demo] .demo-stripe {
 @media (prefers-reduced-motion: reduce) {
   .wm-stage { transition: opacity 0.2s ease; }
   .wm-stage.ready .wm-pin-dot { animation: none; }
+}
+
+/* ===== 앱 잠금 (네 자리 비밀번호, 2026-10-27) =====
+   화면 전체를 바탕색 한 장으로 덮고 가운데에 로고·점 네 개·숫자판만 둔다(사용자: '최대한 멀끔하게').
+   잠겨 있으면 서버가 <html data-locked> 를 달아 app.js 가 뜨기 전 첫 그림부터 이 판만 보인다. 그동안 뒤의 앱은
+   visibility 로 숨긴다(덮개가 사라지는 동안 비치지 않게, 그리고 혹시 덮개가 안 떠도 내용이 보이지 않게).
+   <dialog> 의 기본 모양(가운데 상자·테두리·최대 폭)은 다 지운다. 판에 transform 을 걸지 않는다 — 안으로 옮겨 오는
+   창 단추(position: fixed)가 판 기준으로 밀린다. 끝없는 애니메이션은 두지 않는다(창 제목 줄 = 상단 바 절: 끌기 조각 재배치). */
+.st-tile.violet { background: var(--violet-soft); color: var(--violet); }
+.lock-screen { display: none; }
+html[data-locked] .lock-screen,
+.lock-screen[open] {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483000; /* 첫 그림(아직 showModal 전)에도 맨 위 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 48px 16px 24px;
+  border: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  overflow: auto;
+  outline: none;
+  animation: lock-in 0.18s ease-out;
+}
+.lock-screen::backdrop { background: transparent; }
+html[data-locked] .app-shell { visibility: hidden; }
+/* 판이 떠 있는 동안 뒤 문서의 스크롤 막대가 오른쪽에 비치지 않게 */
+html[data-locked],
+html:has(.lock-screen[open]) { overflow: hidden; }
+#stLock select { width: auto; min-width: 128px; }
+.lock-sub,
+.lock-msg,
+.lock-forgot p { text-wrap: balance; }
+.lock-screen.leaving { opacity: 0; transition: opacity 0.16s ease; }
+@keyframes lock-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+/* 창 제목 줄 대신 끌 자리: 위쪽 빈 띠 하나 (창 단추 자리는 비운다) */
+.lock-drag {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: var(--winctl-w);
+  height: 40px;
+  pointer-events: none;
+  -webkit-app-region: drag;
+  app-region: drag;
+}
+.lock-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  max-width: 300px;
+  margin: auto;
+}
+.lock-logo {
+  width: 52px;
+  height: 52px;
+  border-radius: 15px;
+  object-fit: contain;
+  background: var(--bp-bg);
+  box-shadow: 0 0 0 1px var(--border);
+}
+.lock-title {
+  margin: 14px 0 0;
+  font: 600 21px/1.2 var(--font-serif);
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+.lock-sub {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--text-soft);
+  text-align: center;
+}
+.lock-dots {
+  display: flex;
+  gap: 16px;
+  margin-top: 26px;
+}
+.lock-dots i {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1.5px solid var(--border-strong);
+  transition: background-color 0.12s ease, border-color 0.12s ease, transform 0.12s ease;
+}
+.lock-dots i.on {
+  background: var(--text);
+  border-color: var(--text);
+  transform: scale(1.08);
+}
+.lock-dots.wrong i { border-color: var(--red); }
+.lock-dots.wrong { animation: lock-shake 0.36s cubic-bezier(0.36, 0.07, 0.19, 0.97); }
+@keyframes lock-shake {
+  20%, 60% { translate: -7px 0; }
+  40%, 80% { translate: 7px 0; }
+}
+.lock-msg {
+  min-height: 18px;
+  margin: 14px 0 0;
+  font-size: 12.5px;
+  line-height: 18px;
+  color: var(--red);
+  text-align: center;
+}
+.lock-msg.quiet { color: var(--text-faint); }
+.lock-pad {
+  display: grid;
+  grid-template-columns: repeat(3, 64px);
+  gap: 12px 24px;
+  margin-top: 14px;
+}
+.lock-pad button {
+  width: 64px;
+  height: 64px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text);
+  font: 400 25px/1 var(--font-sans);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: background-color 0.12s ease, scale 0.08s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.lock-pad button:hover { background: var(--bg-deep); }
+.lock-pad button:active,
+.lock-pad button.pressed { background: var(--border); scale: 0.94; }
+.lock-pad button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.lock-pad .lock-pad-text {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text-soft);
+}
+.lock-pad .lock-pad-text:empty { visibility: hidden; }
+.lock-pad .lock-pad-icon svg {
+  width: 24px;
+  height: 24px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vertical-align: middle;
+}
+.lock-pad .lock-pad-icon { color: var(--text-soft); }
+.lock-screen.waiting .lock-pad button:not(.lock-pad-text) { opacity: 0.35; pointer-events: none; }
+.lock-forgot {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  margin-top: 18px;
+}
+.lock-forgot[hidden] { display: none; }
+.lock-forgot p {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-soft);
+  text-align: center;
+}
+.lock-forgot input {
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+}
+.lock-forgot input:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: transparent; }
+.lock-forgot-actions { display: flex; gap: 8px; }
+.lock-forgot-actions .button { flex: 1; justify-content: center; }
+/* 낮은 창(앱 최소 높이 560px)에서도 숫자판이 잘리지 않게 줄인다 */
+@media (max-height: 660px) {
+  .lock-screen[open], html[data-locked] .lock-screen { padding-top: 40px; }
+  .lock-logo { width: 40px; height: 40px; border-radius: 12px; }
+  .lock-title { margin-top: 10px; font-size: 19px; }
+  .lock-dots { margin-top: 18px; }
+  .lock-msg { margin-top: 10px; }
+  .lock-pad { grid-template-columns: repeat(3, 56px); gap: 8px 22px; margin-top: 8px; }
+  .lock-pad button { width: 56px; height: 56px; font-size: 22px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html[data-locked] .lock-screen, .lock-screen[open] { animation: none; }
+  .lock-dots.wrong { animation: none; }
+  .lock-screen.leaving { transition: none; }
 }

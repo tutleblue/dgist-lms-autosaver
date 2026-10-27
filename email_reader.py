@@ -275,17 +275,24 @@ class MiniIMAP:
         """
         self.tag_n += 1
         tag = f"A{self.tag_n:03d}"
-        self.sock.sendall(f"{tag} APPEND {self._quote(raw_folder)} {flags} {{{len(data)}}}\r\n".encode())
-        line = self.file.readline()
-        if not line.startswith(b"+"):
-            return False  # 서버가 거절(NO/BAD)
-        self.sock.sendall(data + b"\r\n")
-        while True:
+        # 소켓 시간 제한(20초)은 sendall 전체에 걸린다(파이썬 3.5~). 34MB 메일(첨부 24MB)의 사본이 여기서 끊겨
+        # 보낸 편지함에 안 남았다(2026-10-27 실측). 크기에 맞춰 늘린다 — 초당 128KB 를 바닥으로.
+        old_timeout = self.sock.gettimeout()
+        self.sock.settimeout(max(old_timeout or 20, 20 + len(data) // (128 * 1024)))
+        try:
+            self.sock.sendall(f"{tag} APPEND {self._quote(raw_folder)} {flags} {{{len(data)}}}\r\n".encode())
             line = self.file.readline()
-            if not line:
-                raise ConnectionError("서버 연결이 끊겼습니다.")
-            if line.startswith(tag.encode() + b" "):
-                return line.split(b" ", 2)[1] == b"OK"
+            if not line.startswith(b"+"):
+                return False  # 서버가 거절(NO/BAD)
+            self.sock.sendall(data + b"\r\n")
+            while True:
+                line = self.file.readline()
+                if not line:
+                    raise ConnectionError("서버 연결이 끊겼습니다.")
+                if line.startswith(tag.encode() + b" "):
+                    return line.split(b" ", 2)[1] == b"OK"
+        finally:
+            self.sock.settimeout(old_timeout)
 
     def search_header(self, name: str, value: str, days: int = 60) -> list[int]:
         """헤더 값이 맞는 메일 UID.
@@ -2029,6 +2036,10 @@ def fetch_raw_message(uid: int, folder_key: str = "inbox") -> bytes:
 
 
 ATTACH_DOWNLOAD_MAX = 40 * 1024 * 1024
+# 보내는 메일 첨부 합계 상한. 학교 SMTP 가 EHLO 에서 SIZE 36700160(35MB, 메일 한 통 전체)을 알린다(2026-10-27 실측).
+# 첨부는 base64 로 4/3 배 + 76자마다 줄바꿈이라 약 1.37배 → 원본 25MB 가 약 34.3MB. 그보다 큰 파일은 화면이
+# Google Drive 에 올려 링크로 보낸다(web_ui.start_big_upload). 예전엔 화면 10MB · 서버 20MB 로 따로 놀았다.
+SEND_ATTACH_MAX = 25 * 1024 * 1024
 
 
 def fetch_attachment(uid: int, folder_key: str, part: str) -> tuple[str, str, bytes]:
@@ -2055,7 +2066,7 @@ def fetch_attachment(uid: int, folder_key: str, part: str) -> tuple[str, str, by
     return info["filename"] or "첨부파일", info["type"], decode_part_bytes(data, info["encoding"])
 
 
-def load_draft(uid: int, folder_key: str = "draft", max_attach: int = 20 * 1024 * 1024) -> dict:
+def load_draft(uid: int, folder_key: str = "draft", max_attach: int = 0) -> dict:
     """임시 보관함의 메일을 '메일 쓰기' 에 다시 채울 모양으로 (받는 사람·참조·숨은참조·제목·본문·첨부·번호).
 
     예전엔 임시 보관함의 메일을 받은 메일처럼 읽기 화면에 띄워 이어 쓸 수 없었다(2026-10-22 사용자).
@@ -2095,8 +2106,8 @@ def load_draft(uid: int, folder_key: str = "draft", max_attach: int = 20 * 1024 
             inline[cid] = (ctype, data)  # 본문 그림은 편집기에서 보이게 data: 로 넣는다
             continue
         total += len(data)
-        if total > max_attach:
-            raise ValueError("첨부파일이 20MB 를 넘어 이어 쓸 수 없어요. 웹메일에서 열어 주세요.")
+        if total > (max_attach or SEND_ATTACH_MAX):
+            raise ValueError("첨부파일이 25MB 를 넘어 이어 쓸 수 없어요. 웹메일에서 열어 주세요.")
         attachments.append({
             "filename": unicodedata.normalize("NFC", str(filename or "첨부파일")),
             "size": len(data),
@@ -2215,8 +2226,8 @@ def build_message(account: str, to_list: list[str], subject: str, body: str,
             except Exception:
                 continue
             total += len(raw)
-            if total > 20 * 1024 * 1024:  # 20MB 상한
-                raise ValueError("첨부파일 총 용량은 20MB를 넘을 수 없습니다.")
+            if total > SEND_ATTACH_MAX:
+                raise ValueError("첨부파일 총 용량은 25MB를 넘을 수 없어요. 큰 파일은 Drive 링크로 보내 주세요.")
             guessed, _ = mimetypes.guess_type(filename)
             maintype, subtype2 = (guessed.split("/", 1) if guessed else ("application", "octet-stream"))
             encoded = _encoded_filename(filename)
@@ -2311,10 +2322,14 @@ def send_email(to_addr: str, subject: str, body: str,
     recipients = _bare(to_list + cc_list + bcc_list)  # bcc는 헤더에 안 넣고 수신자에만 포함
     print(f"메일 발송 중... → {len(recipients)}명, 첨부 {len(attachments or [])}개 ({host}:{port})")
     context = ssl.create_default_context()
+    text = msg.as_string()
+    # 시간 제한은 큰 메일을 다 올리는 시간에도 걸린다(sendall 전체). 첨부 25MB 면 메일이 34MB 라 40초로는
+    # 느린 망에서 끊긴다 — 크기에 맞춰 늘린다(초당 128KB 바닥). MiniIMAP.append 도 같은 까닭으로 늘린다.
+    timeout = 40 + len(text) // (128 * 1024)
     # local_hostname을 ASCII로 고정 (Windows PC 이름에 한글이 있으면 EHLO 인코딩 오류)
-    with smtplib.SMTP_SSL(host, port, timeout=40, context=context, local_hostname="localhost") as server:
+    with smtplib.SMTP_SSL(host, port, timeout=timeout, context=context, local_hostname="localhost") as server:
         server.login(account, password)
-        refused = server.sendmail(account, recipients, msg.as_string())
+        refused = server.sendmail(account, recipients, text)
     print(f"메일 발송 완료 (거절 {len(refused)}명)")
 
     # 보낸 편지함에 사본 + 이 메일의 임시저장본 정리. 실패해도 보내기는 이미 끝났다.

@@ -38,6 +38,11 @@ const icons = {
   settings: '<svg viewBox="0 0 24 24"><path d="M12.2 2h-.4a2 2 0 0 0-2 1.7l-.1.7a2 2 0 0 1-2.9 1.2l-.6-.4a2 2 0 0 0-2.6.3l-.2.3a2 2 0 0 0-.3 2.6l.4.6a2 2 0 0 1-1.2 2.9l-.7.1A2 2 0 0 0 2 13.8v.4a2 2 0 0 0 1.7 2l.7.1a2 2 0 0 1 1.2 2.9l-.4.6a2 2 0 0 0 .3 2.6l.3.2a2 2 0 0 0 2.6.3l.6-.4a2 2 0 0 1 2.9 1.2l.1.7a2 2 0 0 0 2 1.7h.4a2 2 0 0 0 2-1.7l.1-.7a2 2 0 0 1 2.9-1.2l.6.4a2 2 0 0 0 2.6-.3l.2-.3a2 2 0 0 0 .3-2.6l-.4-.6a2 2 0 0 1 1.2-2.9l.7-.1a2 2 0 0 0 1.7-2v-.4a2 2 0 0 0-1.7-2l-.7-.1a2 2 0 0 1-1.2-2.9l.4-.6a2 2 0 0 0-.3-2.6l-.3-.2a2 2 0 0 0-2.6-.3l-.6.4a2 2 0 0 1-2.9-1.2l-.1-.7A2 2 0 0 0 12.2 2Z"/><circle cx="12" cy="12" r="3"/></svg>',
   sync: '<svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 0 0-15.5-6.2L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 15.5 6.2L21 16"/><path d="M16 16h5v5"/></svg>',
   x: '<svg viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>',
+  lock: '<svg viewBox="0 0 24 24"><rect width="16" height="11" x="4" y="11" rx="2.5"/><path d="M8 11V7.5a4 4 0 0 1 8 0V11"/></svg>',
+  grip: '<svg viewBox="0 0 24 24"><circle cx="9" cy="6" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="9" cy="18" r="1"/><circle cx="15" cy="6" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="18" r="1"/></svg>',
+  eyeOff: '<svg viewBox="0 0 24 24"><path d="M9.9 4.24A9.1 9.1 0 0 1 12 5c6.5 0 10 7 10 7a18.5 18.5 0 0 1-2.16 3.19"/><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/><path d="M17.94 17.94A10.1 10.1 0 0 1 12 19c-6.5 0-10-7-10-7a18.4 18.4 0 0 1 5.06-5.94"/><path d="m2 2 20 20"/></svg>',
+  colHalf: '<svg viewBox="0 0 24 24"><rect width="18" height="14" x="3" y="5" rx="2"/><path d="M12 5v14"/></svg>',
+  colFull: '<svg viewBox="0 0 24 24"><rect width="18" height="14" x="3" y="5" rx="2"/></svg>',
   menu: '<svg viewBox="0 0 24 24"><path d="M4 6h16"/><path d="M4 12h16"/><path d="M4 18h16"/></svg>',
   undo: '<svg viewBox="0 0 24 24"><path d="M3 7v6h6"/><path d="M3 13a9 9 0 1 0 3-7.7L3 8"/></svg>',
   user: '<svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>',
@@ -158,11 +163,57 @@ function iconHtml(name, extraClass = "") {
   return `<span class="icon ${extraClass}" data-icon="${name}" data-icon-drawn="${name}"><svg><use href="#ic-${name}"></use></svg></span>`;
 }
 
+/* 앱 잠금 상태 (아래 '앱 잠금' 절). api() 가 맨 처음 불리기 전에 있어야 해서 여기 둔다.
+   잠겨 있으면 서버가 <html data-locked> 를 달아 보내므로 켤 때는 그것을 보고 시작한다 */
+const appLock = {
+  locked: document.documentElement.dataset.locked === "1",
+  enabled: false,
+  idle: 10,
+  canReset: false,
+  waiters: [], // 풀리기를 기다리는 api() 요청들
+  pending: new Map(), // 같은 GET 은 하나만 기다린다
+  mode: "unlock", // unlock | current | new | confirm
+  flow: null, // 설정에서 연 흐름 { kind: on|change|off, current, first, resolve }
+  digits: "",
+  busy: false,
+  waitTimer: 0,
+  lastInput: Date.now(),
+  relocked: false,
+};
+// 잠긴 동안에도 서버가 받아 주는 길 (web_ui DashboardHandler.LOCK_OPEN_GET/POST, /api/lock/*)
+const LOCK_OPEN_GET = new Set(["/api/lock", "/api/ui-prefs", "/api/window"]);
+function lockOpenRoute(path, options = {}) {
+  const route = String(path).split("?")[0];
+  if (route === "/api/lock" || route.startsWith("/api/lock/")) return true;
+  return String(options.method || "GET").toUpperCase() === "GET" ? LOCK_OPEN_GET.has(route) : route === "/api/window";
+}
+function untilUnlocked() {
+  return appLock.locked ? new Promise((resolve) => appLock.waiters.push(resolve)) : Promise.resolve();
+}
+
 async function api(path, options = {}) {
+  if (appLock.locked && !lockOpenRoute(path, options)) {
+    // 잠긴 동안은 보내지 않고(서버가 423 으로 거절한다) 풀리면 이어서 보낸다. 켤 때 첫 화면 요청들도 여기서 기다린다.
+    // 12초마다 오는 확인 같은 같은 GET 은 하나만 기다리게 해, 오래 잠가 두었다 풀 때 요청이 한꺼번에 몰리지 않게 한다
+    const key = String(options.method || "GET").toUpperCase() === "GET" ? String(path) : "";
+    if (key && appLock.pending.has(key)) return appLock.pending.get(key);
+    const run = untilUnlocked().then(() => api(path, options));
+    if (key) {
+      appLock.pending.set(key, run);
+      const done = () => appLock.pending.delete(key);
+      run.then(done, done);
+    }
+    return run;
+  }
   const response = await fetch(path, {
     headers: { "Content-Type": "application/json" },
     ...options,
   });
+  if (response.status === 423 && !lockOpenRoute(path, options)) {
+    // 서버는 잠겼다는데 화면은 몰랐다(다른 창에서 잠금 등) → 잠금 판을 띄우고 풀리면 다시 보낸다
+    lockApp({ tell: false });
+    return api(path, options);
+  }
   const data = await response.json();
   if (!response.ok) {
     throw new Error(data.message || "요청에 실패했습니다.");
@@ -190,6 +241,16 @@ function openOutside(url) {
   const route = String(url).startsWith("/") ? "/api/open-app-url" : "/api/open-url";
   const body = route === "/api/open-app-url" ? { path: url } : { url };
   api(route, { method: "POST", body: JSON.stringify(body) }).catch((error) => showToast(humanError(error)));
+}
+
+/* 강의자료 열기: 이미 내 컴퓨터에 있는 파일을 기본 앱으로 바로 연다(/api/open-file).
+   예전엔 /api/file(첨부파일로 보내기)을 창에 띄워 '다운로드'가 한 번 더 일어났다(2026-10-27). 공유 웹사이트 모드만 내려받기. */
+function openLocalFile(name) {
+  if (state.status?.mode === "multi-user") {
+    openOutside(`/api/file?name=${encodeURIComponent(name)}`);
+    return;
+  }
+  api("/api/open-file", { method: "POST", body: JSON.stringify({ name }) }).catch((error) => showToast(humanError(error)));
 }
 
 /** 'Ctrl+K'·'Ctrl K'(검색창 kbd) → 맥에서는 '⌘K', 'Alt+←/→' → '⌘[ / ⌘]'. 다른 운영체제는 그대로 */
@@ -1665,7 +1726,10 @@ async function markAllRead() {
 }
 
 /* ===== 인앱 작성 화면 ===== */
+let composeGen = 0; // 새로 쓸 때마다 올린다 — 늦게 끝난 전달 첨부가 다른 메일에 붙지 않게
+
 function openCompose({ to = "", cc = "", bcc = "", subject = "", body = "", inReplyTo = "", references = "", title = "새 메일" } = {}) {
+  composeGen += 1;
   const form = $("#composeForm");
   form.elements.to.value = to;
   form.elements.cc.value = cc;
@@ -1800,7 +1864,17 @@ function composeHasContent() {
 }
 
 /* 첨부는 웹메일처럼 표로 보여 준다 (파일명 · 출처 · 용량 · 지우기) */
-const ATTACH_LIMIT = 10 * 1024 * 1024; // 학교 메일 기준 10MB
+/* 학교 SMTP 는 메일 한 통 35MB 까지(EHLO SIZE 36700160, 2026-10-27 실측). 첨부는 base64 로 약 1.37배가 되니
+   원본 합계 25MB 까지 그대로 붙이고(email_reader.SEND_ATTACH_MAX), 넘는 파일은 Gmail 처럼 내 Drive 에 올려
+   링크로 보낸다(2GB 까지, web_ui.start_big_upload). 예전엔 화면 10MB · 서버 20MB 에서 막혔다. */
+const ATTACH_LIMIT = 25 * 1024 * 1024;
+const BIG_ATTACH_MAX = 2 * 1024 * 1024 * 1024;
+const isLinkAtt = (a) => Boolean(a.link || a.job);
+
+function attachStatus(a) {
+  if (a.job && !a.link) return a.failed ? "올리기 실패" : `올리는 중 ${a.progress || 0}%`;
+  return a.source || "내 PC";
+}
 
 function renderAttachments() {
   if (typeof scheduleAutosave === "function") scheduleAutosave();
@@ -1809,12 +1883,12 @@ function renderAttachments() {
   wrap.innerHTML = atts
     .map(
       (a, i) => `
-      <div class="attach-row">
+      <div class="attach-row${isLinkAtt(a) ? " link" : ""}" data-idx="${i}">
         <span class="ar-name" title="${escapeHtml(a.filename)}">
-          <span class="icon" data-icon="paperclip"></span>
+          <span class="icon" data-icon="${isLinkAtt(a) ? "cloud" : "paperclip"}"></span>
           ${escapeHtml(a.filename)}
         </span>
-        <span class="ar-from">${escapeHtml(a.source || "내 PC")}</span>
+        <span class="ar-from"${isLinkAtt(a) ? ` title="${escapeHtml("링크가 있는 사람은 누구나 볼 수 있어요")}"` : ""}>${escapeHtml(attachStatus(a))}</span>
         <span class="ar-size">${formatBytes(a.size)}</span>
         <button type="button" class="attach-remove" data-idx="${i}" aria-label="제거">✕</button>
       </div>`,
@@ -1825,10 +1899,11 @@ function renderAttachments() {
   const hint = $("#dropzoneHint");
   if (hint) hint.hidden = atts.length > 0;
 
-  const total = atts.reduce((s, a) => s + a.size, 0);
+  const total = atts.filter((a) => !isLinkAtt(a)).reduce((s, a) => s + a.size, 0);
+  const links = atts.filter(isLinkAtt).length;
   const note = $("#attachNote");
   if (note) {
-    note.textContent = `${formatBytes(total)} / ${formatBytes(ATTACH_LIMIT)}`;
+    note.textContent = `${formatBytes(total)} / ${formatBytes(ATTACH_LIMIT)}${links ? ` · Drive 링크 ${links}개` : ""}`;
     // 학교 메일 한도를 넘으면 눈에 띄게
     note.classList.toggle("over", total > ATTACH_LIMIT);
   }
@@ -1837,7 +1912,90 @@ function renderAttachments() {
 function formatBytes(n) {
   if (n < 1024) return `${n}B`;
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)}KB`;
-  return `${(n / 1024 / 1024).toFixed(1)}MB`;
+  if (n < 1024 * 1024 * 1024) return `${(n / 1024 / 1024).toFixed(1)}MB`;
+  return `${(n / 1024 / 1024 / 1024).toFixed(2)}GB`;
+}
+
+/* 내 PC 에서 넣은 파일(고르기·끌어 놓기 공통). 그대로 붙일 자리가 남았으면 첨부로, 아니면 Drive 링크로. */
+async function addAttachmentFiles(files) {
+  let added = 0;
+  for (const file of files) {
+    const name = nfcName(file.name);
+    const used = (state.attachments || []).filter((a) => !isLinkAtt(a)).reduce((n, a) => n + a.size, 0);
+    if (file.size + used <= ATTACH_LIMIT) {
+      state.attachments.push({ filename: name, size: file.size, content: await fileToBase64(file) });
+      added += 1;
+    } else if (file.size > BIG_ATTACH_MAX) {
+      showToast(`${shortText(name, 30)}은(는) 2GB를 넘어 보낼 수 없어요.`);
+    } else {
+      uploadBigAttachment(file, name); // 기다리지 않는다 — 올리는 동안 계속 쓸 수 있다
+      added += 1;
+    }
+  }
+  renderAttachments();
+  return added;
+}
+
+async function uploadBigAttachment(file, name) {
+  const item = { filename: name, size: file.size, content: "", source: "Drive 링크", job: "pending", progress: 0 };
+  state.attachments.push(item);
+  renderAttachments();
+  showToast(`${shortText(name, 30)}은(는) 25MB가 넘어 Drive에 올려 링크로 보내요`);
+  const setRow = () => {
+    const i = state.attachments.indexOf(item);
+    const cell = i >= 0 ? $(`#composeAttachments .attach-row[data-idx="${i}"] .ar-from`) : null;
+    if (cell) cell.textContent = attachStatus(item);
+  };
+  try {
+    const res = await fetch(`/api/mail/big-upload?name=${encodeURIComponent(name)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/octet-stream" },
+      body: file,
+    });
+    const data = await res.json();
+    if (!res.ok || !data.job) throw new Error(data.message || "올리지 못했어요");
+    item.job = data.job;
+    if (!state.attachments.includes(item)) {
+      // 받는 사이에 뺐다
+      api("/api/mail/big-cancel", { method: "POST", body: JSON.stringify({ job: item.job }) }).catch(() => {});
+      return;
+    }
+    for (;;) {
+      await new Promise((r) => setTimeout(r, 800));
+      if (!state.attachments.includes(item)) return; // 빼면 서버에 멈추라고 이미 알렸다
+      const st = await api(`/api/mail/big-upload?job=${encodeURIComponent(item.job)}`);
+      if (st.status === "uploading") {
+        item.progress = st.total ? Math.floor((st.sent / st.total) * 100) : 0;
+        setRow();
+        continue;
+      }
+      if (st.status !== "done") throw new Error(st.message || "올리지 못했어요");
+      item.link = st.link;
+      item.driveId = st.id;
+      renderAttachments();
+      showToast(`${shortText(name, 30)}을(를) Drive에 올렸어요`);
+      return;
+    }
+  } catch (error) {
+    item.failed = true;
+    setRow();
+    showToast(`${shortText(name, 30)}: ${humanError(error)}`);
+  }
+}
+
+/* 보낼 때 본문 끝에 붙이는 Drive 링크 묶음 (Gmail 의 'Google Drive 파일' 칸과 같은 자리) */
+function bigLinksBlock(items, html) {
+  if (!items.length) return "";
+  if (!html) {
+    return `\n\n[Google Drive 로 보낸 파일]\n${items.map((a) => `${a.filename} (${formatBytes(a.size)})\n${a.link}`).join("\n")}`;
+  }
+  const rows = items
+    .map(
+      (a) =>
+        `<div style="margin:4px 0">📎 <a href="${escapeHtml(a.link)}">${escapeHtml(a.filename)}</a> <span style="color:#5f6368">(${formatBytes(a.size)})</span></div>`,
+    )
+    .join("");
+  return `<div style="margin-top:16px;padding:10px 12px;border:1px solid #dadce0;border-radius:8px"><div style="font-size:12px;color:#5f6368;margin-bottom:4px">Google Drive 로 보낸 파일</div>${rows}</div>`;
 }
 
 function fileToBase64(file) {
@@ -1870,14 +2028,7 @@ function bindComposeFiles() {
     event.preventDefault();
     zone.classList.remove("drag-over");
     const files = [...(event.dataTransfer.files || [])];
-    for (const file of files) {
-      const content = await fileToBase64(file);
-      state.attachments.push({ filename: nfcName(file.name), size: file.size, content });
-    }
-    if (files.length) {
-      renderAttachments();
-      showToast(`${files.length}개 파일을 첨부했습니다.`);
-    }
+    if (files.length && (await addAttachmentFiles(files))) showToast(`${files.length}개 파일을 첨부했습니다.`);
   });
 }
 
@@ -2485,11 +2636,16 @@ function collectDraft() {
    - 내용이 그대로면 서버에 다시 넣지 않는다(서명 비교).
    - 자동 저장에는 첨부가 3MB 를 넘으면 첨부를 빼고 넣는다(15초마다 수 MB 를 올리지 않게).
      '임시저장' 단추는 첨부까지 모두 넣는다.
-   - 앱을 껐다 켜면 '메일 쓰기' 를 열 때 이어서 쓸지 묻는다(restoreDraftIfAny). */
+   - 앱을 껐다 켜면 '메일 쓰기' 를 열 때 이어서 쓸지 묻는다(restoreDraftIfAny).
+   - 첨부도 함께 되살린다. 예전엔 이 컴퓨터 저장본에 첨부가 없어 '이어서 쓰기' 하면 본문만 돌아왔고,
+     그대로 보내 받는 사람은 파일을 못 받았다(2026-10-27 사용자 신고, 보낸 편지함 실측: 첨부 0개).
+     같은 실행 안에서는 메모리(memAtts)에서 전부, 껐다 켜면 합계 1.5MB 까지 이 컴퓨터 저장본에서 되살리고,
+     못 되살린 파일은 이름을 알려 다시 넣게 한다. */
 const AUTOSAVE_LOCAL_MS = 1500;
 const AUTOSAVE_SERVER_MS = 15000;
 const AUTOSAVE_ATTACH_MAX = 3 * 1024 * 1024;
-const autosave = { local: 0, server: 0, lastSig: "", busy: false, pending: false, dirty: false };
+const LOCAL_ATTACH_MAX = 1.5 * 1024 * 1024; // localStorage 는 한 곳에 5MB 남짓이라 첨부 내용은 이만큼만
+const autosave = { local: 0, server: 0, lastSig: "", busy: false, pending: false, dirty: false, memAtts: null };
 
 function ensureDraftId() {
   const form = $("#composeForm");
@@ -2518,10 +2674,24 @@ function saveLocalDraft() {
   if (!d) return;
   d.draftId = ensureDraftId();
   d.replaceUid = $("#composeForm").dataset.replaceUid || "";
+  const atts = state.attachments || [];
+  autosave.memAtts = { id: d.draftId, list: atts.slice() };
+  let room = LOCAL_ATTACH_MAX; // 앞에서부터 들어가는 만큼만 내용을 담는다
+  const listed = (withContent) =>
+    atts.map((a) => {
+      const fits = withContent && Number(a.size || 0) <= room;
+      if (fits) room -= Number(a.size || 0);
+      return { filename: a.filename, size: a.size, source: a.source, link: a.link, content: fits ? a.content : "" };
+    });
   try {
-    localStorage.setItem(DRAFT_KEY, JSON.stringify(d));
+    localStorage.setItem(DRAFT_KEY, JSON.stringify({ ...d, attachments: listed(true) }));
   } catch (error) {
-    /* 저장소가 막혀 있으면 서버 쪽만 쓴다 */
+    // 저장소가 꽉 찼으면 첨부는 이름만 남긴다(되살릴 때 다시 넣으라고 알린다). 그마저 막혀 있으면 서버 쪽만 쓴다.
+    try {
+      localStorage.setItem(DRAFT_KEY, JSON.stringify({ ...d, attachments: listed(false) }));
+    } catch {
+      /* 무시 */
+    }
   }
 }
 
@@ -2537,7 +2707,7 @@ async function saveDraftToServer({ auto }) {
   }
   autosave.busy = true;
   saveLocalDraft();
-  const atts = state.attachments || [];
+  const atts = (state.attachments || []).filter((a) => !isLinkAtt(a)); // Drive 링크는 파일이 아니다
   const attBytes = atts.reduce((n, a) => n + Number(a.size || 0), 0);
   const withAtts = !auto || attBytes <= AUTOSAVE_ATTACH_MAX;
   draftNote(auto ? "자동 저장 중…" : "저장하는 중…");
@@ -2550,7 +2720,7 @@ async function saveDraftToServer({ auto }) {
         ...d,
         draftId: ensureDraftId(),
         replaceUid: $("#composeForm").dataset.replaceUid || "",
-        attachments: withAtts ? atts.map((a) => ({ filename: a.filename, content: a.content })) : [],
+        attachments: withAtts ? atts.filter((a) => a.content).map((a) => ({ filename: a.filename, content: a.content })) : [],
       }),
     });
     autosave.lastSig = sig;
@@ -2660,7 +2830,7 @@ async function restoreDraftIfAny() {
   } catch (error) {
     draft = null;
   }
-  if (!draft || !(draft.to || draft.subject || draft.body)) return false;
+  if (!draft || !(draft.to || draft.subject || draft.body || draft.attachments?.length)) return false;
   const when = draft.savedAt ? formatEmailDate(draft.savedAt) : "";
   if (!(await uiConfirm(`쓰다 만 메일이 있어요${when ? ` (${when} 자동 저장)` : ""}. 이어서 쓸까요?`, { title: "쓰던 메일", ok: "이어서 쓰기", cancel: "새로 쓰기", icon: "edit" }))) {
     // 새로 쓰기: 이 컴퓨터 저장본만 지운다. 서버 임시 보관함 것은 그대로 둔다(거기서 열 수 있다).
@@ -2682,8 +2852,19 @@ async function restoreDraftIfAny() {
   }
   setComposeBody(draft.body);
   resetMailFlow();
+  // 첨부: 같은 실행이면 메모리에서 그대로, 아니면 이 컴퓨터 저장본에 내용이 있는 것만
+  const mem = autosave.memAtts && draft.draftId && autosave.memAtts.id === draft.draftId ? autosave.memAtts.list : null;
+  const saved = draft.attachments || [];
+  composeGen += 1;
+  state.attachments = mem ? mem.slice() : saved.filter((a) => a.content || a.link);
+  const missing = mem ? [] : saved.filter((a) => !a.content && !a.link).map((a) => a.filename);
+  renderAttachments();
   autosave.lastSig = draftSignature(collectDraft());
   draftNote(when ? `${when}에 저장한 내용` : "");
+  if (missing.length) {
+    showToast(`첨부 ${missing.length}개는 다시 넣어 주세요: ${shortText(missing.join(", "), 60)}`);
+    draftNote(`첨부 ${missing.length}개를 다시 넣어 주세요`);
+  }
   return true;
 }
 
@@ -2725,7 +2906,8 @@ async function toggleStarOnServer(mail) {
   }
 }
 
-/* 전달: 원문을 인용해 새 메일로 */
+/* 전달: 원문을 인용해 새 메일로. 원래 첨부도 서버에서 받아 붙인다 — 예전엔 본문만 옮겨
+   받는 사람이 파일을 못 받았다(2026-10-27 사용자 신고). 한도(ATTACH_LIMIT)를 넘는 것은 빼고 알린다. */
 async function forwardCurrentEmail() {
   const mail = state.replyContext;
   if (!mail) return;
@@ -2736,7 +2918,53 @@ async function forwardCurrentEmail() {
     `\n\n---------- 전달된 메일 ----------\n` +
     `보낸사람: ${mail.fromName || ""} <${mail.fromEmail || ""}>\n` +
     `날짜: ${when}\n제목: ${mail.subject || ""}\n\n`;
-  openCompose({ to: "", subject, body: header + (mail.body || mail.snippet || "") });
+  openCompose({ to: "", subject, body: header + quotableText(mail) });
+  await attachOriginalFiles(mail);
+}
+
+/* 답장·전달에 옮길 원문. 평문 파트에 그림 태그를 그대로 넣어 보내는 메일이 있다 — 학과 공지에서
+   '<img src=" base64,iVBOR…' 가 3,600자 이어져 받는 사람에게 그대로 갔다(2026-10-27 Gmail 실측). 태그와 긴 base64 만 뺀다. */
+function quotableText(mail) {
+  return String(mail.body || mail.snippet || "")
+    .replace(/<img\b[^>]*(?:>|$)/gi, "")
+    .replace(/[A-Za-z0-9+/=]{200,}/g, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trimEnd();
+}
+
+async function attachOriginalFiles(mail) {
+  const atts = (mail.attachments || []).filter((a) => a.part);
+  if (!atts.length) return;
+  if (!/^\d+$/.test(String(mail.uid ?? ""))) {
+    showToast(`원래 첨부 ${atts.length}개는 메일을 다시 받은 뒤 넣을 수 있어요`);
+    return;
+  }
+  const gen = composeGen; // 받는 동안 다른 메일을 열면 거기에 붙이지 않는다
+  showToast(`원래 첨부 ${atts.length}개 붙이는 중`);
+  const skipped = [];
+  let total = 0;
+  for (const att of atts) {
+    const name = nfcName(att.name || "첨부파일");
+    try {
+      const q = new URLSearchParams({ uid: String(mail.uid), folder: mail.folder || "inbox", part: att.part });
+      const res = await fetch(`/api/mail/attachment?${q}`);
+      if (!res.ok) throw new Error(String(res.status));
+      const blob = await res.blob();
+      if (total + blob.size > ATTACH_LIMIT) {
+        skipped.push(name);
+        continue;
+      }
+      const content = await fileToBase64(blob);
+      if (state.mailPane !== "compose" || composeGen !== gen) return;
+      total += blob.size;
+      state.attachments.push({ filename: name, size: blob.size, content, source: "원래 메일" });
+      renderAttachments();
+    } catch {
+      skipped.push(name);
+    }
+  }
+  if (skipped.length) showToast(`첨부 ${skipped.length}개는 붙이지 못했어요: ${shortText(skipped.join(", "), 60)}`);
+  else showToast(`원래 첨부 ${atts.length}개를 붙였어요`);
 }
 
 /* ⋮ 메뉴 항목 처리 */
@@ -2901,7 +3129,7 @@ async function replyToCurrentEmail(all = false) {
   await ensureMailBody(mail);
   const subject = /^\s*re\s*:/i.test(mail.subject) ? mail.subject : `Re: ${mail.subject}`;
   const when = mail.date ? formatEmailDate(mail.date) : "";
-  const quoted = (mail.body || mail.snippet || "")
+  const quoted = quotableText(mail)
     .split("\n")
     .map((line) => `> ${line}`)
     .join("\n");
@@ -3536,11 +3764,20 @@ function renderCourses() {
         course.korean.toLowerCase().includes(query)),
   );
 
-  // 편집 모드: 카드 흔들림 + 제거 버튼
+  // 편집 모드: 카드에 테두리 + 숨기기 단추 (흔들림은 카드 42장이 쉬지 않고 움직여 무거웠다)
   grid.classList.toggle("editing", !!state.courseEditMode);
   const editLabel = $("#courseEditLabel");
   if (editLabel) editLabel.textContent = state.courseEditMode ? "완료" : "편집";
-  $("#courseEditButton")?.setAttribute("aria-pressed", String(!!state.courseEditMode));
+  const editBtn = $("#courseEditButton");
+  if (editBtn) {
+    editBtn.setAttribute("aria-pressed", String(!!state.courseEditMode));
+    editBtn.classList.toggle("on", !!state.courseEditMode);
+    const icon = editBtn.querySelector(".icon");
+    if (icon && icon.dataset.icon !== (state.courseEditMode ? "check" : "edit")) {
+      icon.dataset.icon = state.courseEditMode ? "check" : "edit";
+      installIcons(editBtn);
+    }
+  }
   const restoreBtn = $("#restoreCoursesButton");
   if (restoreBtn) {
     restoreBtn.hidden = hidden.length === 0;
@@ -3552,7 +3789,7 @@ function renderCourses() {
     .map((course) => {
       const enabled = state.selection.courses[course.label] !== false;
       const removeBtn = state.courseEditMode
-        ? `<button type="button" class="course-remove" data-remove="${escapeHtml(course.label)}" aria-label="과목 제거" title="목록에서 제거">✕</button>`
+        ? `<button type="button" class="course-remove" data-remove="${escapeHtml(course.label)}" aria-label="과목 숨기기" title="목록에서 숨기기">${iconHtml("eyeOff")}</button>`
         : "";
       const nextLine = course.next
         ? `다음 마감 <b>${formatDue(course.next.due)}</b> · ${escapeHtml(shortText(course.next.name, 30))}`
@@ -3590,7 +3827,7 @@ function renderCourses() {
   grid.querySelectorAll("[data-syllabus]").forEach((btn) => {
     btn.addEventListener("click", (event) => {
       event.stopPropagation();
-      openOutside(`/api/file?name=${encodeURIComponent(btn.dataset.syllabus)}`);
+      openLocalFile(btn.dataset.syllabus);
     });
   });
 
@@ -6555,21 +6792,17 @@ function bindEvents() {
   $("#attachButton").addEventListener("click", () => $("#attachInput").click());
   $("#attachInput").addEventListener("change", async (event) => {
     const files = [...event.target.files];
-    for (const file of files) {
-      if (file.size > 20 * 1024 * 1024) {
-        showToast(`${file.name}은(는) 20MB를 넘어 제외됐습니다.`);
-        continue;
-      }
-      const content = await fileToBase64(file);
-      state.attachments.push({ filename: nfcName(file.name), size: file.size, content });
-    }
     event.target.value = "";
-    renderAttachments();
+    await addAttachmentFiles(files);
   });
   $("#composeAttachments").addEventListener("click", (event) => {
     const rm = event.target.closest(".attach-remove");
     if (rm) {
-      state.attachments.splice(Number(rm.dataset.idx), 1);
+      const [gone] = state.attachments.splice(Number(rm.dataset.idx), 1);
+      // 이 메일 때문에 Drive 에 올린 파일은 멈추거나 Drive 휴지통으로 (Drive 에서 고른 원래 파일은 그대로)
+      if (gone?.job && gone.job !== "pending") {
+        api("/api/mail/big-cancel", { method: "POST", body: JSON.stringify({ job: gone.job }) }).catch(() => {});
+      }
       renderAttachments();
     }
   });
@@ -6598,7 +6831,9 @@ function bindEvents() {
       html: composeIsRich() || $("#htmlModeToggle").checked,
       inReplyTo: form.dataset.inReplyTo || "",
       references: form.dataset.references || "",
-      attachments: (state.attachments || []).map((a) => ({ filename: a.filename, content: a.content })),
+      attachments: (state.attachments || [])
+        .filter((a) => !isLinkAtt(a))
+        .map((a) => ({ filename: a.filename, content: a.content })),
       draftId: form.dataset.draftId || "",
       replaceUid: form.dataset.replaceUid || "",
     };
@@ -6606,6 +6841,36 @@ function bindEvents() {
       showToast("받는 사람 주소를 입력해 주세요.");
       return;
     }
+    // Drive 에 올리는 중인 큰 첨부는 링크가 생겨야 보낼 수 있다
+    const pendingBig = (state.attachments || []).filter((a) => isLinkAtt(a) && !a.link);
+    if (pendingBig.length) {
+      const failed = pendingBig.some((a) => a.failed);
+      showToast(failed ? "Drive에 못 올린 첨부가 있어요. 빼고 다시 넣어 주세요." : "큰 첨부를 Drive에 올리는 중이에요. 끝나면 보내 주세요.");
+      return;
+    }
+    // 내용이 빠진 첨부(되살리지 못한 것)는 서버가 조용히 건너뛰므로 보내기 전에 막는다
+    const empty = (state.attachments || []).filter((a) => !a.content && !isLinkAtt(a));
+    if (empty.length) {
+      showToast(`첨부 ${empty.length}개를 다시 넣어 주세요: ${shortText(empty.map((a) => a.filename).join(", "), 60)}`);
+      return;
+    }
+    // 첨부를 말했는데 첨부가 없으면 한 번 묻는다. 인용·전달된 원문은 빼고 내가 쓴 부분만 본다.
+    if (!(state.attachments || []).length) {
+      const mine = String(payload.body || "")
+        .replace(/<[^>]+>/g, " ")
+        .split(/-{5,}\s*(?:원본 메일|전달된 메일)/)[0];
+      // 답장 제목은 상대가 쓴 것이라(Re: 자료 첨부합니다) 내가 새로 쓸 때만 본다
+      if (/첨부|attach/i.test(`${payload.inReplyTo ? "" : subject} ${mine}`)) {
+        const go = await uiConfirm("본문에 '첨부'가 있는데 첨부한 파일이 없어요. 그대로 보낼까요?", {
+          title: "첨부 확인",
+          icon: "paperclip",
+          ok: "그대로 보내기",
+          cancel: "파일 넣기",
+        });
+        if (!go) return;
+      }
+    }
+    payload.body += bigLinksBlock((state.attachments || []).filter(isLinkAtt), payload.html);
 
     // '개별' — 한 명씩 따로 보내 서로의 주소가 안 보이게 한다
     const separately = Boolean($("#sendSeparately")?.checked);
@@ -6907,7 +7172,7 @@ function bindEvents() {
 
     const openBtn = event.target.closest("[data-open-file]");
     if (openBtn && !openBtn.disabled) {
-      openOutside(`/api/file?name=${encodeURIComponent(openBtn.dataset.openFile)}`);
+      openLocalFile(openBtn.dataset.openFile);
       return;
     }
     const notesBtn = event.target.closest("[data-to-notes]");
@@ -7337,6 +7602,7 @@ function initTheme() {
   api("/api/ui-prefs")
     .then((prefs) => {
       if (prefs?.theme && prefs.theme !== state.themeChoice) applyTheme(prefs.theme, { save: false });
+      restoreDashPrefs(prefs);
       initLanguage(prefs?.lang);
       paintLanguageChoice(prefs?.lang);
     })
@@ -9165,6 +9431,43 @@ function saveDashLayout() {
   } catch (error) {
     /* 저장 못 해도 이번 실행에는 반영된다 */
   }
+  saveDashPrefs();
+}
+
+/* 앱 창 저장소(localStorage)는 앱을 끌 때마다 지워진다(pywebview 사생활 모드).
+   그래서 화면 편집 결과가 다시 켜면 사라졌다 — 데이터 폴더의 ui_prefs.json 에도 둔다 */
+let dashPrefsTimer = 0;
+function saveDashPrefs() {
+  window.clearTimeout(dashPrefsTimer);
+  dashPrefsTimer = window.setTimeout(() => {
+    const body = { dashLayout: state.dashLayout || [], dashFold: state.dashFold || {} };
+    api("/api/ui-prefs", { method: "POST", body: JSON.stringify(body) }).catch(() => {});
+  }, 400);
+}
+
+/** 켤 때 ui_prefs.json 에 적힌 배치·접힘으로 맞춘다 (initTheme 이 받아 온 값) */
+function restoreDashPrefs(prefs) {
+  const layout = Array.isArray(prefs?.dashLayout) && prefs.dashLayout.length ? prefs.dashLayout : null;
+  const fold = prefs?.dashFold && Object.keys(prefs.dashFold).length ? prefs.dashFold : null;
+  if (!layout && !fold) return;
+  try {
+    if (layout) localStorage.setItem(DASH_STORE, JSON.stringify(layout));
+    if (fold) localStorage.setItem(FOLD_STORE, JSON.stringify(fold));
+  } catch (error) {
+    /* 저장소를 못 써도 아래에서 바로 칠한다 */
+  }
+  if (layout) {
+    state.dashLayout = loadDashLayout();
+    applyDashLayout();
+  }
+  if (fold) {
+    state.dashFold = { ...FOLD_DEFAULT, ...fold };
+    // 켜자마자 접히는 움직임이 보이지 않게 한 번만 애니메이션 없이
+    const view = $("#view-dashboard");
+    view?.classList.add("no-fold-anim");
+    applyFold();
+    window.setTimeout(() => view?.classList.remove("no-fold-anim"), 60);
+  }
 }
 
 function applyDashLayout() {
@@ -9187,7 +9490,17 @@ function renderDashEditor() {
   const editing = !!state.dashEditing;
   $("#view-dashboard")?.classList.toggle("dash-editing", editing);
   const label = $("#dashEditLabel");
-  if (label) label.textContent = editing ? "편집 끝내기" : "화면 편집";
+  if (label) label.textContent = editing ? "완료" : "화면 편집";
+  const toggle = $("#dashEditToggle");
+  if (toggle) {
+    toggle.classList.toggle("on", editing);
+    toggle.setAttribute("aria-pressed", String(editing));
+    const icon = toggle.querySelector(".icon");
+    if (icon && icon.dataset.icon !== (editing ? "check" : "edit")) {
+      icon.dataset.icon = editing ? "check" : "edit";
+      installIcons(toggle);
+    }
+  }
 
   const layout = state.dashLayout || [];
   dashBlocks().forEach((el) => {
@@ -9203,15 +9516,19 @@ function renderDashEditor() {
       bar.className = "dash-bar";
       el.prepend(bar);
     }
+    const half = layout[idx]?.size === "half";
+    // 같은 값이면 다시 그리지 않는다 (아이콘을 새로 넣을 때마다 알약이 깜빡였다)
+    const sig = `${half}|${off}`;
+    if (bar.dataset.sig === sig) return;
+    bar.dataset.sig = sig;
     bar.innerHTML = `
-      <span class="dash-grip" title="끌어서 순서 바꾸기">⋮⋮</span>
+      <span class="dash-grip" title="끌어서 순서 바꾸기">${iconHtml("grip")}</span>
       <span class="dash-name">${escapeHtml(el.dataset.blockLabel || el.dataset.block)}</span>
-      <button type="button" class="dash-btn" data-dash-up title="위로">↑</button>
-      <button type="button" class="dash-btn" data-dash-down title="아래로">↓</button>
-      <button type="button" class="dash-btn" data-dash-size title="반 폭으로 나누기 / 한 줄 전체로">${
-        layout[idx]?.size === "half" ? "반폭" : "전체"
-      }</button>
-      <button type="button" class="dash-btn ${off ? "" : "on"}" data-dash-toggle title="${off ? "보이기" : "숨기기"}">${off ? "숨김" : "보임"}</button>`;
+      <span class="dash-sep" aria-hidden="true"></span>
+      <button type="button" class="dash-btn" data-dash-up title="위로" aria-label="위로">${iconHtml("chevronUp")}</button>
+      <button type="button" class="dash-btn" data-dash-down title="아래로" aria-label="아래로">${iconHtml("chevronDown")}</button>
+      <button type="button" class="dash-btn" data-dash-size aria-pressed="${half}" title="${half ? "한 줄 전체로" : "반 폭으로 나누기"}" aria-label="${half ? "한 줄 전체로" : "반 폭으로 나누기"}">${iconHtml(half ? "colHalf" : "colFull")}</button>
+      <button type="button" class="dash-btn" data-dash-toggle aria-pressed="${off}" title="${off ? "보이기" : "숨기기"}" aria-label="${off ? "보이기" : "숨기기"}">${iconHtml(off ? "eyeOff" : "eye")}</button>`;
   });
 }
 
@@ -9417,6 +9734,7 @@ function saveFold() {
   } catch (error) {
     /* 저장 못 해도 이번 실행에는 반영된다 */
   }
+  saveDashPrefs();
 }
 
 /** 각 블록에 접기 버튼과 요약 줄을 달아 준다 (한 번만) */
@@ -9519,10 +9837,16 @@ function bindDashEditor() {
   applyDashLayout();
   setupFold();
 
-  $("#dashEditToggle")?.addEventListener("click", (event) => {
+  $("#dashEditToggle")?.addEventListener("click", () => {
     state.dashEditing = !state.dashEditing;
-    // 편집 중인지 버튼 자체로도 보이게
-    event.currentTarget.classList.toggle("on", state.dashEditing);
+    renderDashEditor();
+  });
+  // Esc 로 편집 끝내기 (끄는 중이거나 창·입력칸이 열려 있으면 그쪽이 먼저)
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape" || !state.dashEditing || event.defaultPrevented) return;
+    if (document.body.classList.contains("dash-dragging-now")) return;
+    if (event.target.closest?.("input, textarea, select, [contenteditable='true'], dialog")) return;
+    state.dashEditing = false;
     renderDashEditor();
   });
 
@@ -9630,7 +9954,7 @@ function bindDashDrag(view) {
 
     // 보이는 위치 = 제자리(baseTop) + offset. 손을 따라가도록 offset을 정한다.
     drag.offset = event.clientY - drag.grabY + (drag.startTop - drag.baseTop);
-    drag.el.style.transform = `translateY(${drag.offset}px) scale(1.015)`;
+    drag.el.style.transform = `translateY(${drag.offset}px)`;
 
     /* 자리 바꾸기는 '바로 옆 카드와 한 칸씩'만 한다.
        중심이 어느 카드 영역에 들어왔는지로 판단하면, 카드 높이가 제각각일 때
@@ -9672,11 +9996,18 @@ function bindDashDrag(view) {
       const node = nodes.get(r.key);
       if (node) view.appendChild(node);
     });
+    /* 다시 붙이는 순간 끌던 카드의 포인터 붙잡기가 풀린다(문서에서 잠깐 빠지므로).
+       그대로 두면 창 밖에서 손을 놓았을 때 pointerup 이 오지 않아 카드가 떠 있는 채로 남았다 (2026-10-27 실측) */
+    try {
+      drag.el.setPointerCapture(event.pointerId);
+    } catch (error) {
+      /* 이미 손을 놓았으면 무시 */
+    }
     flip(before);
     // 자리가 바뀌었으니 '제자리'를 다시 재고, 손 위치는 그대로 유지한다
     drag.baseTop = naturalTop(drag.el);
     drag.offset = event.clientY - drag.grabY + (drag.startTop - drag.baseTop);
-    drag.el.style.transform = `translateY(${drag.offset}px) scale(1.015)`;
+    drag.el.style.transform = `translateY(${drag.offset}px)`;
   });
 
   const finish = (event) => {
@@ -10112,6 +10443,409 @@ function renderNowBar() {
   }
 }
 
+/* ===== 앱 잠금 (네 자리 비밀번호, 2026-10-27) =====
+   사용자: '로그인 없이도 얻을 수 있는 정보가 앱에 너무 많다' → 카카오톡처럼 네 자리로 잠그는 선택 기능.
+   - 켜는 곳: 설정 › 앱 잠금(스위치·자동 잠금 시간·바꾸기·지금 잠그기). Ctrl+L(맥 ⌘L) 로 바로 잠근다.
+   - 잠기는 때: 앱을 켤 때, 손대지 않고 정한 시간이 지났을 때(기본 10분), 지금 잠그기.
+   - 서버(web_ui 앱 잠금)가 잠긴 동안 데이터 API 를 423 으로 거절하고, 화면의 api() 는 풀릴 때까지 기다린다(맨 위 appLock).
+   - 잠금 판(#lockScreen)은 <dialog> 를 showModal 로 띄운다: 열려 있던 다른 대화 상자 위에 오고 나머지는 손댈 수 없다.
+     Esc 를 거듭 누르면 브라우저가 cancel 을 막지 못하고 닫으므로(close watcher) 닫히면 바로 다시 띄운다.
+     창 단추(#winControls, Windows 설치 앱)는 그동안 판 안으로 옮겨 최소화·닫기를 그대로 쓴다.
+   - 같은 판으로 비밀번호 정하기(on)·바꾸기(change)·끄기(off)를 한다. 숫자는 화면 숫자판이나 키보드(숫자·Backspace). */
+const LOCK_TEXT = {
+  unlock: ["Daling", "비밀번호를 입력하세요"],
+  current: ["지금 비밀번호", "확인을 위해 지금 비밀번호를 입력하세요"],
+  new: ["새 비밀번호", "숫자 네 자리를 정하세요"],
+  confirm: ["한 번 더", "같은 숫자를 한 번 더 입력하세요"],
+};
+const lockPost = (body) => ({ method: "POST", body: JSON.stringify(body) });
+
+function paintLock() {
+  const [title, sub] = LOCK_TEXT[appLock.mode] || LOCK_TEXT.unlock;
+  $("#lockTitle").textContent = appLock.mode === "unlock" ? title : tr(title);
+  $("#lockSub").textContent = tr(sub);
+  $("#lockAside").textContent = appLock.mode === "unlock" ? tr("잊었어요") : tr("취소");
+  paintLockDots();
+}
+
+function paintLockDots() {
+  const dots = $("#lockDots");
+  [...dots.children].forEach((dot, i) => dot.classList.toggle("on", i < appLock.digits.length));
+  dots.setAttribute("aria-label", tr(`네 자리 중 ${appLock.digits.length}자리 입력`));
+}
+
+function lockMessage(text, quiet = false) {
+  const msg = $("#lockMsg");
+  msg.textContent = text || "";
+  msg.classList.toggle("quiet", quiet);
+}
+
+function lockShake() {
+  const dots = $("#lockDots");
+  dots.classList.remove("wrong");
+  void dots.offsetWidth; // 연달아 틀려도 다시 흔들리게
+  dots.classList.add("wrong");
+  window.setTimeout(() => dots.classList.remove("wrong"), 600);
+}
+
+function setLockMode(mode) {
+  appLock.mode = mode;
+  appLock.digits = "";
+  lockMessage("");
+  paintLock();
+}
+
+function showLockScreen(mode = "unlock") {
+  const screen = $("#lockScreen");
+  if (!screen) return;
+  screen.classList.remove("leaving");
+  closeLockForgot();
+  setLockMode(mode);
+  if (mode === "unlock") document.documentElement.dataset.locked = "1";
+  const ctl = $("#winControls");
+  if (ctl && ctl.parentElement !== screen) screen.append(ctl);
+  if (!screen.open) {
+    try {
+      screen.showModal();
+    } catch {
+      screen.setAttribute("open", "");
+    }
+  }
+  screen.focus();
+}
+
+function hideLockScreen() {
+  const screen = $("#lockScreen");
+  if (!screen) return;
+  delete document.documentElement.dataset.locked; // 뒤의 앱이 판이 옅어지는 동안 드러난다
+  window.clearInterval(appLock.waitTimer);
+  screen.classList.remove("waiting");
+  screen.classList.add("leaving");
+  const finish = () => {
+    if (!screen.classList.contains("leaving")) return; // 그사이 다시 잠갔다
+    screen.classList.remove("leaving");
+    if (screen.open) screen.close();
+    const ctl = $("#winControls");
+    if (ctl && ctl.parentElement === screen) document.body.insertBefore(ctl, screen);
+  };
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) finish();
+  else window.setTimeout(finish, 170);
+}
+
+/** 지금 잠근다 (자동 잠금·지금 잠그기·Ctrl+L). tell=false 는 서버가 먼저 잠겼다고 알려 온 때 */
+function lockApp({ tell = true } = {}) {
+  if (appLock.flow) endLockFlow(false);
+  if (!appLock.locked) appLock.relocked = true;
+  appLock.locked = true;
+  showLockScreen("unlock");
+  if (tell) {
+    api("/api/lock/lock", lockPost({}))
+      .then((r) => {
+        if (!r.ok) unlockDone(); // 그사이 다른 곳에서 잠금을 껐다
+      })
+      .catch(() => {});
+  }
+}
+
+function unlockDone() {
+  appLock.locked = false;
+  appLock.digits = "";
+  appLock.lastInput = Date.now();
+  hideLockScreen();
+  appLock.waiters.splice(0).forEach((resolve) => resolve());
+  if (appLock.relocked) {
+    // 잠가 둔 사이 바뀐 것(새 메일·작업 끝)을 바로 받는다. 켤 때 잠금은 첫 화면 요청들이 기다렸다가 간다
+    appLock.relocked = false;
+    pollLight.last = Date.now();
+    pollLight();
+  }
+}
+
+function lockFailed(r) {
+  appLock.digits = "";
+  lockShake();
+  paintLockDots();
+  if (r.waitSeconds) return startLockWait(r.waitSeconds);
+  const left = Number(r.triesLeft || 0);
+  lockMessage(left && left <= 2 ? tr(`맞지 않아요 · ${left}번 더 틀리면 잠시 막혀요`) : tr(r.message || "비밀번호가 맞지 않아요."));
+}
+
+/** 다섯 번 틀리면 서버가 잠시 막는다(30초부터 늘어남). 그동안 숫자판을 흐리게 하고 남은 시간을 보여 준다 */
+function startLockWait(seconds) {
+  const screen = $("#lockScreen");
+  const until = Date.now() + seconds * 1000;
+  window.clearInterval(appLock.waitTimer);
+  screen.classList.add("waiting");
+  const tick = () => {
+    const left = Math.ceil((until - Date.now()) / 1000);
+    if (left <= 0) {
+      window.clearInterval(appLock.waitTimer);
+      screen.classList.remove("waiting");
+      lockMessage("");
+      return;
+    }
+    lockMessage(left > 60 ? tr(`${Math.ceil(left / 60)}분 뒤에 다시 해 보세요`) : tr(`${left}초 뒤에 다시 해 보세요`), true);
+  };
+  tick();
+  appLock.waitTimer = window.setInterval(tick, 1000);
+}
+
+function lockPress(key) {
+  const screen = $("#lockScreen");
+  if (key === "aside") {
+    if (appLock.mode === "unlock") openLockForgot();
+    else endLockFlow(false);
+    return;
+  }
+  if (appLock.busy || screen.classList.contains("waiting")) return;
+  if (key === "back") {
+    appLock.digits = appLock.digits.slice(0, -1);
+    paintLockDots();
+    return;
+  }
+  if (!/^\d$/.test(key) || appLock.digits.length >= 4) return;
+  if (!appLock.digits) lockMessage(""); // 다시 누르기 시작하면 지난 안내를 지운다
+  appLock.digits += key;
+  paintLockDots();
+  // 넷째 점이 찬 것을 잠깐 보인 뒤 확인한다
+  if (appLock.digits.length === 4) window.setTimeout(lockSubmit, 90);
+}
+
+async function lockSubmit() {
+  const pin = appLock.digits;
+  const flow = appLock.flow;
+  if (pin.length !== 4 || appLock.busy) return;
+  appLock.busy = true;
+  try {
+    if (appLock.mode === "unlock") {
+      const r = await api("/api/lock/unlock", lockPost({ pin }));
+      return r.ok ? unlockDone() : lockFailed(r);
+    }
+    if (!flow) return;
+    if (appLock.mode === "current") {
+      // 끄기는 바로 끄고(서버가 지금 비밀번호를 본다), 바꾸기는 맞는지만 보고 새 비밀번호로 넘어간다
+      const r =
+        flow.kind === "off"
+          ? await api("/api/lock/off", lockPost({ current: pin }))
+          : await api("/api/lock/check", lockPost({ pin }));
+      if (!r.ok) return lockFailed(r);
+      if (flow.kind === "off") return endLockFlow(true, r);
+      flow.current = pin;
+      return setLockMode("new");
+    }
+    if (appLock.mode === "new") {
+      flow.first = pin;
+      return setLockMode("confirm");
+    }
+    if (pin !== flow.first) {
+      lockShake();
+      setLockMode("new");
+      return lockMessage(tr("두 번 넣은 숫자가 달라요. 다시 정해 주세요."));
+    }
+    const r = await api("/api/lock/set", lockPost({ pin, current: flow.current }));
+    return r.ok ? endLockFlow(true, r) : lockFailed(r);
+  } catch (error) {
+    appLock.digits = "";
+    paintLockDots();
+    lockMessage(humanError(error));
+  } finally {
+    appLock.busy = false;
+  }
+}
+
+/** 설정에서 여는 흐름: on(새로 정하기) · change(지금 → 새 → 한 번 더) · off(지금). 끝나면 true/false */
+function lockFlow(kind) {
+  if (appLock.flow) return Promise.resolve(false);
+  return new Promise((resolve) => {
+    appLock.flow = { kind, current: "", first: "", resolve };
+    showLockScreen(kind === "on" ? "new" : "current");
+  });
+}
+
+function endLockFlow(ok, status) {
+  const flow = appLock.flow;
+  appLock.flow = null;
+  if (status) applyLockStatus(status);
+  if (!appLock.locked) hideLockScreen();
+  flow?.resolve(ok);
+}
+
+function openLockForgot() {
+  const can = appLock.canReset;
+  $("#lockPad").hidden = true;
+  $("#lockDots").hidden = true;
+  $("#lockForgot").hidden = false;
+  $("#lockSub").textContent = tr("비밀번호를 잊었나요?");
+  $("#lockForgotText").textContent = can
+    ? tr("앱에 저장된 학교 메일 비밀번호를 넣으면 잠금이 꺼져요.")
+    : tr("앱에 저장된 학교 계정 비밀번호가 없어 여기서는 풀 수 없어요.");
+  $("#lockForgotInput").hidden = !can;
+  $("#lockForgotSubmit").hidden = !can;
+  lockMessage("");
+  if (can) $("#lockForgotInput").focus();
+}
+
+function closeLockForgot() {
+  const form = $("#lockForgot");
+  if (!form || form.hidden) return;
+  form.hidden = true;
+  $("#lockForgotInput").value = "";
+  $("#lockPad").hidden = false;
+  $("#lockDots").hidden = false;
+  lockMessage("");
+  paintLock();
+  $("#lockScreen").focus();
+}
+
+async function submitLockForgot(event) {
+  event.preventDefault();
+  const input = $("#lockForgotInput");
+  if (!input.value || appLock.busy) return;
+  appLock.busy = true;
+  try {
+    const r = await api("/api/lock/reset", lockPost({ password: input.value }));
+    if (!r.ok) {
+      input.select();
+      if (r.waitSeconds) startLockWait(r.waitSeconds);
+      else lockMessage(tr(r.message || "학교 계정 비밀번호가 맞지 않아요."));
+      return;
+    }
+    input.value = "";
+    appLock.enabled = false;
+    paintLockCard();
+    unlockDone();
+    showToast(tr("앱 잠금을 껐어요. 설정에서 새 비밀번호를 정할 수 있어요."));
+  } catch (error) {
+    lockMessage(humanError(error));
+  } finally {
+    appLock.busy = false;
+  }
+}
+
+function applyLockStatus(s) {
+  if (!s) return;
+  if ("available" in s) appLock.available = Boolean(s.available);
+  if ("enabled" in s) appLock.enabled = Boolean(s.enabled);
+  if (s.idleMinutes != null) appLock.idle = Number(s.idleMinutes) || 0;
+  if ("canReset" in s) appLock.canReset = Boolean(s.canReset);
+  paintLockCard();
+}
+
+function paintLockCard() {
+  const card = $("#stLock");
+  if (!card) return;
+  card.hidden = appLock.available === false;
+  $("#lockEnabled").checked = appLock.enabled;
+  $("#lockOptions").hidden = !appLock.enabled;
+  $("#lockIdle").value = String(appLock.idle);
+}
+
+function initAppLock() {
+  const screen = $("#lockScreen");
+  if (!screen) return;
+  // 숫자판은 눌러도 초점을 판에 둔다 — 단추에 초점이 가면 Enter·Space 가 그 숫자를 한 번 더 누른다
+  screen.querySelectorAll(".lock-pad button:not(.lock-pad-text)").forEach((btn) => (btn.tabIndex = -1));
+  $("#lockPad").addEventListener("pointerdown", (event) => {
+    if (event.target.closest("button:not(.lock-pad-text)")) event.preventDefault();
+  });
+  $("#lockPad").addEventListener("click", (event) => {
+    const btn = event.target.closest("[data-key]");
+    if (btn) lockPress(btn.dataset.key);
+  });
+  const flash = (key) => {
+    const btn = screen.querySelector(`.lock-pad [data-key="${key}"]`);
+    if (!btn) return;
+    btn.classList.add("pressed");
+    window.setTimeout(() => btn.classList.remove("pressed"), 110);
+  };
+  screen.addEventListener("keydown", (event) => {
+    // 판 아래 앱의 단축키(문서에 건 keydown)로 새지 않게 여기서 멈춘다
+    event.stopPropagation();
+    if (event.target.closest?.(".lock-forgot") || event.ctrlKey || event.metaKey || event.altKey) return;
+    if (/^[0-9]$/.test(event.key)) {
+      event.preventDefault();
+      flash(event.key);
+      lockPress(event.key);
+    } else if (event.key === "Backspace") {
+      event.preventDefault();
+      flash("back");
+      lockPress("back");
+    }
+  });
+  // 이미 다시 열려 있으면 그대로 둔다 — 늦게 온 close 가 그새 누른 숫자를 지우던 것(실측)
+  const reopen = () => {
+    if (appLock.locked && !screen.open) showLockScreen("unlock");
+  };
+  screen.addEventListener("cancel", (event) => {
+    event.preventDefault();
+    if (!$("#lockForgot").hidden) closeLockForgot();
+    else if (appLock.flow) endLockFlow(false);
+    // 거듭 누른 Esc 는 막을 수 없어(cancelable=false) 곧 닫힌다. close 이벤트는 늦게 올 때가 있어(실측 1초 넘게)
+    // 닫히자마자 다시 띄운다. 그 틈에도 <html data-locked> 라 판은 그대로 보이고 뒤의 앱은 숨어 있다
+    if (!event.cancelable && appLock.locked) window.setTimeout(reopen, 0);
+  });
+  screen.addEventListener("close", () => {
+    if (appLock.locked && !screen.classList.contains("leaving")) window.setTimeout(reopen, 0);
+    else if (appLock.flow && !screen.open) endLockFlow(false);
+  });
+  $("#lockForgot").addEventListener("submit", submitLockForgot);
+  $("#lockForgotBack").addEventListener("click", closeLockForgot);
+
+  // 설정 › 앱 잠금 (바꾸는 즉시 적용, '설정 저장' 과 따로)
+  $("#lockEnabled")?.addEventListener("click", async (event) => {
+    event.preventDefault(); // 흐름이 끝난 뒤 결과대로 칠한다
+    const turnOn = !appLock.enabled;
+    if (await lockFlow(turnOn ? "on" : "off")) showToast(turnOn ? tr("앱 잠금을 켰어요") : tr("앱 잠금을 껐어요"));
+    paintLockCard();
+  });
+  $("#lockIdle")?.addEventListener("change", (event) => {
+    api("/api/lock/idle", lockPost({ minutes: Number(event.target.value) }))
+      .then((r) => {
+        if (!r.ok) throw new Error(r.message);
+        applyLockStatus(r);
+        showToast(tr("자동 잠금 시간을 바꿨어요"));
+      })
+      .catch((error) => {
+        paintLockCard();
+        showToast(humanError(error));
+      });
+  });
+  $("#lockChangeButton")?.addEventListener("click", async () => {
+    if (await lockFlow("change")) showToast(tr("비밀번호를 바꿨어요"));
+  });
+  $("#lockNowButton")?.addEventListener("click", () => lockApp());
+  document.addEventListener("keydown", (event) => {
+    if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === "l") {
+      if (!appLock.enabled || appLock.locked || appLock.flow) return;
+      event.preventDefault();
+      lockApp();
+    }
+  });
+
+  // 자동 잠금: 마우스·키보드를 정한 시간 동안 안 쓰면. 창을 내려 두면 타이머가 늦게 돌 수 있어 돌아올 때도 본다
+  ["pointerdown", "keydown", "wheel", "mousemove", "touchstart"].forEach((type) =>
+    window.addEventListener(type, () => (appLock.lastInput = Date.now()), { passive: true, capture: true }),
+  );
+  const idleCheck = () => {
+    if (!appLock.enabled || appLock.locked || appLock.flow || !appLock.idle) return;
+    if (Date.now() - appLock.lastInput >= appLock.idle * 60 * 1000) lockApp();
+  };
+  window.setInterval(idleCheck, 15 * 1000);
+  document.addEventListener("visibilitychange", idleCheck);
+
+  if (appLock.locked) showLockScreen("unlock");
+  api("/api/lock")
+    .then((s) => {
+      applyLockStatus(s);
+      if (s.locked && !appLock.locked) lockApp({ tell: false });
+      else if (!s.locked && appLock.locked && !appLock.flow) unlockDone(); // 그새 풀렸다(다른 창에서)
+      if (s.waitSeconds && appLock.locked) startLockWait(s.waitSeconds);
+    })
+    .catch(() => {});
+}
+
+// 맨 먼저: 아래 초기화 중 하나가 오류를 내도 잠금 판은 동작하게
+initAppLock();
 installIcons();
 // 버전 글자(숨은 칸)만 채우는 GitHub 확인이라 첫 화면 요청들과 연결을 다투지 않게 3초 뒤로 미룬다 (켤 때 빨리 뜨게, 2026-10-15)
 window.setTimeout(() => {
@@ -10154,7 +10888,7 @@ api("/api/samsung-notes/job")
    창을 보고 있지 않으면 쉬고, 주기도 늘렸다.
    작업이 돌고 있을 때만 자주 확인한다. */
 window.setInterval(() => {
-  if (document.hidden) return;
+  if (document.hidden || appLock.locked) return; // 잠긴 동안은 묻지 않는다(풀 때 unlockDone 이 한 번 묻는다)
   const busy = !$("#topProgress")?.hidden;
   const gap = state.offline ? 5000 : busy ? 2000 : 12000;
   if (Date.now() - (pollLight.last || 0) < gap) return;
@@ -11750,6 +12484,16 @@ const TOUR_STEPS = [
   {
     chapter: "설정",
     view: "settings",
+    targets: ["#stLock .st-head"],
+    fallback: ['.nav-item[data-view="settings"]'],
+    pose: "shy",
+    area: "settings",
+    title: "남이 못 보게 잠그기",
+    text: "켜 두면 앱을 열 때마다 네 자리 비밀번호를 물어. 자리를 비울 땐 Ctrl+L 로 바로 잠가.",
+  },
+  {
+    chapter: "설정",
+    view: "settings",
     targets: ["#stStorage .st-head"],
     fallback: ['.nav-item[data-view="settings"]'],
     pose: "sprout",
@@ -12404,7 +13148,7 @@ function buildSearchResults(query, opts = {}) {
         .join(" · "),
       run: () => {
         if (f.status === "local") {
-          openOutside(`/api/file?name=${encodeURIComponent(f.localName)}`);
+          openLocalFile(f.localName);
         } else {
           setViewFilter("files", f.name);
         }
@@ -13008,6 +13752,8 @@ window.setInterval(() => checkForUpdate(false), 6 * 60 * 60 * 1000);
 let lastInputAt = Date.now();
 let lastPresence = null;
 function reportPresence() {
+  // 잠긴 동안은 알리지 않는다: 서버가 3분 뒤 '안 보는 중' 으로 쳐서 메일 확인을 늦춘다(잠근 사람은 보고 있지 않다)
+  if (appLock.locked) return;
   const idle = Date.now() - lastInputAt;
   const viewing =
     document.visibilityState === "visible" && ((document.hasFocus() && idle < 10 * 60 * 1000) || idle < 2 * 60 * 1000);
@@ -13649,7 +14395,7 @@ function uiButtons(message, buttons, opts = {}) {
    앱 권한(drive.file) 때문에 이 앱이 올린 파일만 보인다 — 강의자료는 전부 여기 있다. 다른 파일은 'Drive 전체에서 고르기'
    (구글 고르기 창, pickFromGoogleDrive). */
 const DRIVE_FOLDER = "application/vnd.google-apps.folder";
-const DRIVE_ATTACH_MAX = 20 * 1024 * 1024; // 서버(/api/drive/get)와 같은 한도
+const DRIVE_ATTACH_MAX = 25 * 1024 * 1024; // 서버(/api/drive/get)와 같은 한도. 넘는 파일은 링크로 붙인다(attachDriveFiles)
 
 function driveFileIcon(mime) {
   if (mime === DRIVE_FOLDER) return "folder";
@@ -13706,11 +14452,11 @@ async function openDrivePicker() {
   const rowHtml = (f) => {
     const folder = f.mimeType === DRIVE_FOLDER;
     const on = picked.has(f.id);
-    // 메일 한 통에 붙일 수 있는 크기를 넘는 파일은 처음부터 못 고르게 한다
+    // 메일 한 통에 붙일 수 있는 크기를 넘는 파일은 링크로 보낸다고 미리 알린다
     const tooBig = !folder && Number(f.size || 0) > DRIVE_ATTACH_MAX;
     return `
-      <div class="drive-row${folder ? " folder" : ""}${on ? " on" : ""}${tooBig ? " too-big" : ""}" role="option" aria-selected="${on}"
-           aria-disabled="${tooBig}" title="${tooBig ? "20MB가 넘어 메일에 붙일 수 없어요" : ""}"
+      <div class="drive-row${folder ? " folder" : ""}${on ? " on" : ""}" role="option" aria-selected="${on}"
+           title="${tooBig ? "25MB가 넘어 링크로 보내요 (링크가 있는 사람은 누구나 볼 수 있어요)" : ""}"
            data-id="${escapeHtml(f.id)}" tabindex="0">
         ${folder ? "" : `<span class="drive-check">${on ? iconHtml("check") : ""}</span>`}
         <span class="drive-row-icon">${iconHtml(driveFileIcon(f.mimeType))}</span>
@@ -13718,7 +14464,7 @@ async function openDrivePicker() {
         <span class="drive-row-meta">${
           folder
             ? iconHtml("chevronDown")
-            : `${escapeHtml(driveKind(f.mimeType, f.name))}${f.size ? ` · ${formatBytes(Number(f.size))}` : ""}${tooBig ? " · 너무 큼" : ""}`
+            : `${escapeHtml(driveKind(f.mimeType, f.name))}${f.size ? ` · ${formatBytes(Number(f.size))}` : ""}${tooBig ? " · 링크로 보냄" : ""}`
         }</span>
       </div>`;
   };
@@ -13764,10 +14510,6 @@ async function openDrivePicker() {
       search.value = "";
       trail.push({ id: f.id, name: f.name });
       load();
-      return;
-    }
-    if (Number(f.size || 0) > DRIVE_ATTACH_MAX) {
-      showToast("20MB가 넘는 파일은 메일에 붙일 수 없어요. Drive 링크로 보내 주세요.");
       return;
     }
     if (picked.has(id)) picked.delete(id);
@@ -13876,8 +14618,15 @@ async function attachDriveFiles(files) {
   const failed = [];
   for (const file of files) {
     try {
-      const got = await api(`/api/drive/get?id=${encodeURIComponent(file.id)}`);
-      state.attachments.push({ filename: got.filename, size: got.size, content: got.content });
+      const used = state.attachments.filter((a) => !isLinkAtt(a)).reduce((n, a) => n + a.size, 0);
+      if (Number(file.size || 0) + used > ATTACH_LIMIT) {
+        // 그대로 붙이면 학교 메일 한도를 넘는다 → 그 파일을 '링크가 있는 사람 보기' 로 열고 링크로 보낸다
+        const got = await api("/api/drive/share", { method: "POST", body: JSON.stringify({ id: file.id }) });
+        state.attachments.push({ filename: got.name || file.name, size: got.size || Number(file.size || 0), content: "", link: got.link, source: "Drive 링크" });
+      } else {
+        const got = await api(`/api/drive/get?id=${encodeURIComponent(file.id)}`);
+        state.attachments.push({ filename: got.filename, size: got.size, content: got.content });
+      }
       done += 1;
     } catch (error) {
       failed.push(file.name);

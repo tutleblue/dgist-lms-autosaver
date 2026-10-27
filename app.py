@@ -169,8 +169,14 @@ def _osascript(lines: list[str], args: list[str], timeout: float) -> None:
     subprocess.run(command, capture_output=True, timeout=timeout)
 
 
-def notify(title: str, message: str) -> None:
-    """Windows 토스트 알림 (winotify 미설치/실패 시 조용히 무시). 맥은 알림 센터."""
+def notify(title: str, message: str, private: bool = False) -> None:
+    """Windows 토스트 알림 (winotify 미설치/실패 시 조용히 무시). 맥은 알림 센터.
+
+    private=True(과제·자료·공지 이름이 든 알림)는 앱이 잠겨 있으면 내용을 숨긴다. 제목은 '새 공지 2건' 처럼 개수뿐이라 둔다.
+    잠금을 켠 사람은 자리를 비운 사이 화면에 뜨는 알림으로도 내용이 보이지 않기를 바란다(web_ui 앱 잠금).
+    """
+    if private and web_ui.app_locked():
+        message = "Daling 잠금을 풀면 볼 수 있어요."
     if sys.platform == "darwin":
         # ad-hoc 서명 앱은 알림 권한(UNUserNotificationCenter)을 제대로 받을 수 없어 osascript 로 띄운다.
         # 알림 센터에는 '스크립트 편집기' 이름으로 보이므로 제목 줄에 앱 이름을 넣고 원래 제목은 부제로.
@@ -280,12 +286,12 @@ def check_deadline_alerts(workspace, config: dict) -> None:
 
     if len(hits) == 1:
         due, label, item = hits[0]
-        notify(f"과제 마감 {label} 전", line(due, item))
+        notify(f"과제 마감 {label} 전", line(due, item), private=True)
     else:
         text = "\n".join(line(d, i) for d, _, i in hits[:4])
         if len(hits) > 4:
             text += f"\n… 외 {len(hits) - 4}건"
-        notify(f"과제 마감 {len(hits)}건 임박", text)
+        notify(f"과제 마감 {len(hits)}건 임박", text, private=True)
 
 
 def _current_files(workspace) -> dict:
@@ -338,7 +344,7 @@ def check_new_file_alerts(workspace, config: dict) -> None:
         part for part in (f"새 강의자료 {len(new)}개" if new else "", f"새 판 {len(changed)}개" if changed else "") if part
     )
     text = "\n".join(lines[:4]) + (f"\n… 외 {len(lines) - 4}개" if len(lines) > 4 else "")
-    notify(title, text)
+    notify(title, text, private=True)
 
 
 def check_announcement_alerts(workspace, config: dict) -> None:
@@ -364,7 +370,7 @@ def check_announcement_alerts(workspace, config: dict) -> None:
     lines = [f"{label} · {i.get('title', '공지')}" for label, i in fresh[:4]]
     if len(fresh) > 4:
         lines.append(f"… 외 {len(fresh) - 4}건")
-    notify(f"새 공지 {len(fresh)}건", "\n".join(lines))
+    notify(f"새 공지 {len(fresh)}건", "\n".join(lines), private=True)
 
 
 def upcoming_deadline_summary(workspace, hours: int = 48) -> str:

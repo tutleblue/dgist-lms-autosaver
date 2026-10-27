@@ -18,6 +18,7 @@ import subprocess
 import sys
 import threading
 import time
+import unicodedata
 import webbrowser
 from dataclasses import dataclass
 from http.cookies import SimpleCookie
@@ -876,6 +877,77 @@ def finish_drive_pick(state: str, code: str, error: str, picked_ids: str) -> tup
     except Exception as exc:
         pick.update(status="error", message=str(exc))
         return "파일 고르기 실패", str(exc), False
+
+
+# ===== 큰 첨부 → Google Drive 링크 =====
+# 학교 SMTP 는 메일 한 통 35MB(첨부 원본 약 25MB, email_reader.SEND_ATTACH_MAX)까지만 받는다. 그보다 큰 파일은
+# Gmail 처럼 내 Drive 'Daling 메일 첨부' 폴더에 올리고 '링크가 있는 사람 보기' 로 열어 본문에 링크를 넣는다
+# (받는 사람은 대부분 학교 주소라 구글 계정으로 나눠 줄 수 없다). 앱이 만든 파일이라 drive.file 권한으로 된다.
+BIG_ATTACH_MAX = 2 * 1024 * 1024 * 1024
+BIG_ATTACH_FOLDER = "Daling 메일 첨부"
+big_uploads: dict[str, dict[str, Any]] = {}  # job → {"user_id", "status": uploading|done|error|cancelled, "sent", "total", "name", "id", "link", "message", "cancel"}
+
+
+def _big_drive_service():
+    """화면 서버의 다른 요청과 Drive 접속(httplib2, 스레드에 안전하지 않음)을 나눠 쓰지 않게 따로 만든다.
+    로그인 창은 열지 않는다 — 연결이 없으면 DriveLoginRequired."""
+    import drive_uploader
+    from googleapiclient.discovery import build
+
+    creds = drive_uploader.authorize_drive(interactive=False)
+    return build("drive", "v3", credentials=creds, cache_discovery=False)
+
+
+def start_big_upload(user_id: str, path: Path, name: str, size: int) -> str:
+    job = secrets.token_hex(8)
+    big_uploads[job] = {"user_id": user_id, "status": "uploading", "sent": 0, "total": size, "name": name, "cancel": False}
+    threading.Thread(target=_run_big_upload, args=(job, path), daemon=True, name="big-attach").start()
+    return job
+
+
+def _run_big_upload(job_id: str, path: Path) -> None:
+    job = big_uploads[job_id]
+    try:
+        import mimetypes
+
+        import drive_uploader
+        from googleapiclient.http import MediaFileUpload
+
+        service = _big_drive_service()
+        folder = drive_uploader.get_or_create_folder(service, BIG_ATTACH_FOLDER)
+        mime = mimetypes.guess_type(job["name"])[0] or "application/octet-stream"
+        media = MediaFileUpload(str(path), mimetype=mime, resumable=True, chunksize=8 * 1024 * 1024)
+        request = service.files().create(
+            body={"name": job["name"], "parents": [folder]}, media_body=media, fields="id,webViewLink"
+        )
+        response = None
+        while response is None:
+            if job["cancel"]:
+                job["status"] = "cancelled"
+                return
+            status, response = request.next_chunk()
+            if status:
+                job["sent"] = int(status.resumable_progress)
+        file_id = response["id"]
+        if job["cancel"]:  # 다 올라간 뒤에 지웠으면 휴지통으로
+            service.files().update(fileId=file_id, body={"trashed": True}).execute()
+            job["status"] = "cancelled"
+            return
+        service.permissions().create(fileId=file_id, body={"type": "anyone", "role": "reader"}, fields="id").execute()
+        job.update(
+            status="done", sent=job["total"], id=file_id,
+            link=response.get("webViewLink") or f"https://drive.google.com/file/d/{file_id}/view",
+        )
+    except Exception as exc:  # noqa: BLE001 - 화면에 이유를 보여 준다
+        login = type(exc).__name__ == "DriveLoginRequired"
+        job.update(status="error", message="구글 연결이 필요해요. 설정에서 Google 을 연결해 주세요." if login else str(exc))
+    finally:
+        shutil.rmtree(path.parent, ignore_errors=True)
+
+
+def trash_big_attachment(file_id: str) -> None:
+    """작성 중에 뺀 큰 첨부는 Drive 휴지통으로 (지우지 않는다 — 30일 안에 되살릴 수 있다)."""
+    _big_drive_service().files().update(fileId=file_id, body={"trashed": True}).execute()
 
 
 def drive_service_for_file(workspace: UserWorkspace, file_id: str):
@@ -2477,6 +2549,9 @@ def record_boot_done(workspace: UserWorkspace) -> dict[str, Any]:
         "pageRequested": round(BOOT.get("page", start) - start, 2) if BOOT.get("page") else None,
         "firstScreen": round(BOOT["done"] - start, 2),
     }
+    if BOOT.get("unlock"):
+        # 앱 잠금을 켜 두었으면 firstScreen 에 비밀번호를 누른 시간이 들어간다. 언제 풀었는지 같이 적어 둔다
+        entry["unlocked"] = round(BOOT["unlock"] - start, 2)
     path = workspace.root / "boot_times.json"
     rows = read_json(path, [])
     rows = (rows if isinstance(rows, list) else [])[-29:] + [entry]
@@ -3394,7 +3469,32 @@ def get_ui_prefs(workspace: UserWorkspace) -> dict[str, Any]:
         "theme": theme if theme in UI_THEMES else None,
         "lang": lang if lang in UI_LANGS else None,
         "mailLayout": layout,
+        "dashLayout": _clean_dash_layout(data.get("dashLayout")),
+        "dashFold": _clean_dash_fold(data.get("dashFold")),
     }
+
+
+# 대시보드 '화면 편집' 결과(블록 순서·숨김·폭)와 블록 접힘. 예전에는 창 저장소에만 두어
+# 앱을 다시 켜면 기본 배치로 돌아갔다(2026-10-27 실측: 재시작 뒤 localStorage 가 비어 있음)
+DASH_BLOCK_KEY = re.compile(r"^[a-z][a-z0-9_-]{0,31}$")
+
+
+def _clean_dash_layout(rows: Any) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for row in rows[:40] if isinstance(rows, list) else []:
+        key = str(row.get("key") or "") if isinstance(row, dict) else ""
+        if not DASH_BLOCK_KEY.match(key) or key in seen:
+            continue
+        seen.add(key)
+        out.append({"key": key, "off": bool(row.get("off")), "size": "half" if row.get("size") == "half" else "full"})
+    return out
+
+
+def _clean_dash_fold(fold: Any) -> dict[str, bool]:
+    if not isinstance(fold, dict):
+        return {}
+    return {str(k): bool(v) for k, v in list(fold.items())[:40] if DASH_BLOCK_KEY.match(str(k))}
 
 
 # 화면 언어. None 이면 화면이 윈도우 언어를 보고 고른다 (한국어가 아니면 영어)
@@ -3402,7 +3502,7 @@ UI_LANGS = ("ko", "en")
 
 
 def save_ui_prefs(workspace: UserWorkspace, payload: dict[str, Any]) -> dict[str, Any]:
-    """테마·언어 중 보낸 것만 바꾼다."""
+    """테마·언어·메일함 칸·대시보드 배치 중 보낸 것만 바꾼다."""
     data = read_json(workspace.root / "ui_prefs.json", {})
     data = data if isinstance(data, dict) else {}
     if "theme" in payload:
@@ -3428,9 +3528,232 @@ def save_ui_prefs(workspace: UserWorkspace, payload: dict[str, Any]) -> dict[str
         if "railFolded" in incoming:
             layout["railFolded"] = bool(incoming["railFolded"])
         data["mailLayout"] = layout
+    if isinstance(payload.get("dashLayout"), list):
+        data["dashLayout"] = _clean_dash_layout(payload["dashLayout"])
+    if isinstance(payload.get("dashFold"), dict):
+        data["dashFold"] = _clean_dash_fold(payload["dashFold"])
     workspace.root.mkdir(parents=True, exist_ok=True)
     atomic_write_text(workspace.root / "ui_prefs.json", json.dumps(data, ensure_ascii=False))
     return {"ok": True, **{k: data.get(k) for k in ("theme", "lang")}}
+
+
+# ===== 앱 잠금: 네 자리 비밀번호 (2026-10-27) =====
+# 앱을 켜면 메일·과제·자료가 로그인 없이 다 보인다(사용자: '로그인 없이도 얻을 수 있는 정보가 너무 많다').
+# 켜 두면 앱을 켤 때·자동 잠금·'지금 잠그기' 뒤에 네 자리를 물어본다. 화면만 덮으면 같은 PC 의 브라우저로
+# http://127.0.0.1:<포트>/api/emails 를 열어 그대로 볼 수 있으므로, 잠겨 있는 동안에는 서버가 데이터 API 를
+# 423 으로 거절한다(LOCK_OPEN_GET/POST 만 통과). 데이터 폴더의 파일 자체를 지키는 것은 아니다(그건 운영체제 계정 몫).
+# 비밀번호는 PBKDF2 해시로만 app_lock.json 에 둔다 — config.json 이 아니라서 '설정 내보내기' 파일에 섞이지 않는다.
+# 체험 모드여도 진짜 데이터 폴더(AUTOSAVER_ROOT)의 파일을 쓴다: 잠금은 앱에 거는 것이다.
+APP_LOCK_PATH = AUTOSAVER_ROOT / "app_lock.json"
+LOCK_IDLE_CHOICES = (0, 1, 5, 10, 30, 60)  # 자동 잠금(분), 0 = 안 함
+LOCK_TRIES = 5  # 이만큼 틀릴 때마다 잠깐 막는다: 30초 → 1분 → 2분 … 15분까지 (네 자리는 만 개뿐이라)
+LOCK_ITERATIONS = 200_000
+_PIN_RE = re.compile(r"^\d{4}$")
+_app_lock: dict[str, Any] = {"locked": None}  # None = 아직 안 봄. 처음 물을 때 파일을 보고 정한다(켤 때 잠김)
+_app_lock_mutex = threading.Lock()
+
+
+def _lock_read() -> dict[str, Any]:
+    data = read_json(APP_LOCK_PATH, {})
+    return data if isinstance(data, dict) else {}
+
+
+def _lock_on(data: dict[str, Any]) -> bool:
+    return bool(isinstance(data.get("hash"), str) and isinstance(data.get("salt"), str) and data["hash"])
+
+
+def _lock_write(data: dict[str, Any]) -> None:
+    AUTOSAVER_ROOT.mkdir(parents=True, exist_ok=True)
+    atomic_write_text(APP_LOCK_PATH, json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
+
+
+def _pin_hash(pin: str, salt: str, iterations: int) -> str:
+    return hashlib.pbkdf2_hmac("sha256", pin.encode("utf-8"), bytes.fromhex(salt), iterations).hex()
+
+
+def _lock_wait(data: dict[str, Any]) -> int:
+    try:
+        return max(0, int(float(data.get("waitUntil") or 0) - time.time() + 0.999))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _lock_check(data: dict[str, Any], pin: str) -> bool:
+    """맞으면 틀린 횟수를 지우고, 틀리면 세어서 다섯 번마다 막는 시간을 건다. 파일은 여기서 쓴다(앱을 다시 켜도 이어짐)."""
+    good = False
+    if _PIN_RE.match(pin or "") and _lock_on(data):
+        try:
+            iterations = int(data.get("iterations") or LOCK_ITERATIONS)
+            good = secrets.compare_digest(_pin_hash(pin, data["salt"], iterations), data["hash"])
+        except (TypeError, ValueError):
+            good = False
+    _lock_count(data, good)
+    return good
+
+
+def _lock_count(data: dict[str, Any], good: bool) -> None:
+    if good:
+        if data.get("failures") or data.get("waitUntil"):
+            data["failures"], data["waitUntil"] = 0, 0
+            _lock_write(data)
+        return
+    failures = int(data.get("failures") or 0) + 1
+    data["failures"] = failures
+    if failures % LOCK_TRIES == 0:
+        data["waitUntil"] = time.time() + min(30 * 2 ** (failures // LOCK_TRIES - 1), 900)
+    _lock_write(data)
+
+
+def _lock_fail(data: dict[str, Any], message: str) -> dict[str, Any]:
+    wait = _lock_wait(data)
+    left = LOCK_TRIES - int(data.get("failures") or 0) % LOCK_TRIES
+    if wait:
+        message = "여러 번 틀려서 잠시 막았어요."
+    return {"ok": False, "message": message, "waitSeconds": wait, "triesLeft": 0 if wait else left}
+
+
+def _account_passwords(unseal: bool = True) -> list[str]:
+    """비밀번호를 잊었을 때 확인용: 앱에 이미 저장된 학교 메일·LMS 비밀번호 (새로 저장하는 것은 없다).
+    체험 중이어도 진짜 데이터 폴더의 config.json 을 본다. unseal=False 면 있는지만 본다 — 맥은 꺼낼 때마다
+    키체인을 열므로, 상태를 물을 때(GET /api/lock)는 꺼내지 않는다."""
+    data = read_json(AUTOSAVER_ROOT / "config.json", {})
+    data = data if isinstance(data, dict) else {}
+    out = []
+    for key in ("SCHOOL_EMAIL_PASSWORD", "LMS_PASSWORD"):
+        value = data.get(key)
+        if unseal and isinstance(value, str) and value.startswith(_SECRET_PREFIXES):
+            value = dpapi_unprotect(value)
+        if isinstance(value, str) and value:
+            out.append(value)
+    return out
+
+
+def app_locked() -> bool:
+    if MULTI_USER_MODE:
+        return False
+    with _app_lock_mutex:
+        if _app_lock["locked"] is None:
+            _app_lock["locked"] = _lock_on(_lock_read())
+        return bool(_app_lock["locked"])
+
+
+def lock_status() -> dict[str, Any]:
+    data = _lock_read()
+    on = _lock_on(data)
+    idle = data.get("idleMinutes", 10)
+    return {
+        "ok": True,
+        "available": not MULTI_USER_MODE,
+        "enabled": on,
+        "locked": app_locked(),
+        "idleMinutes": idle if idle in LOCK_IDLE_CHOICES else 10,
+        "waitSeconds": _lock_wait(data) if on else 0,
+        "canReset": on and bool(_account_passwords(unseal=False)),
+    }
+
+
+def lock_unlock(pin: str, open_it: bool = True) -> dict[str, Any]:
+    """open_it=False 는 맞는지만 본다(설정의 '바꾸기' 첫 단계). 틀린 횟수는 똑같이 센다."""
+    with _app_lock_mutex:
+        data = _lock_read()
+        if not _lock_on(data):
+            _app_lock["locked"] = False
+            return {"ok": True}
+        if _lock_wait(data):
+            return _lock_fail(data, "")
+        if not _lock_check(data, pin):
+            return _lock_fail(data, "비밀번호가 맞지 않아요." if open_it else "지금 비밀번호가 맞지 않아요.")
+        if not open_it:
+            return {"ok": True}
+        _app_lock["locked"] = False
+    BOOT.setdefault("unlock", time.time())  # 켤 때 걸린 시간 기록에 '비밀번호 푼 때' 를 함께 남긴다
+    return {"ok": True}
+
+
+def lock_now() -> dict[str, Any]:
+    with _app_lock_mutex:
+        if not _lock_on(_lock_read()):
+            return {"ok": False, "message": "앱 잠금이 꺼져 있어요."}
+        _app_lock["locked"] = True
+    return {"ok": True}
+
+
+def lock_set_pin(pin: str, current: str) -> dict[str, Any]:
+    """잠금 켜기(처음 정하기)와 비밀번호 바꾸기. 이미 켜져 있으면 지금 비밀번호부터 맞아야 한다."""
+    if not _PIN_RE.match(pin or ""):
+        return {"ok": False, "message": "숫자 네 자리로 정해 주세요."}
+    with _app_lock_mutex:
+        data = _lock_read()
+        if _lock_on(data):
+            if _lock_wait(data):
+                return _lock_fail(data, "")
+            if not _lock_check(data, current):
+                return _lock_fail(data, "지금 비밀번호가 맞지 않아요.")
+        salt = secrets.token_hex(16)
+        idle = data.get("idleMinutes", 10)
+        _lock_write({
+            "version": 1,
+            "salt": salt,
+            "hash": _pin_hash(pin, salt, LOCK_ITERATIONS),
+            "iterations": LOCK_ITERATIONS,
+            "idleMinutes": idle if idle in LOCK_IDLE_CHOICES else 10,
+            "failures": 0,
+            "waitUntil": 0,
+            "setAt": now_iso(),
+        })
+        _app_lock["locked"] = False  # 정한 사람이 지금 쓰고 있다
+    return {"ok": True, **lock_status()}
+
+
+def lock_turn_off(current: str) -> dict[str, Any]:
+    with _app_lock_mutex:
+        data = _lock_read()
+        if _lock_on(data):
+            if _lock_wait(data):
+                return _lock_fail(data, "")
+            if not _lock_check(data, current):
+                return _lock_fail(data, "지금 비밀번호가 맞지 않아요.")
+        APP_LOCK_PATH.unlink(missing_ok=True)  # 앱이 만든 파일(해시만 든)이라 지워도 된다
+        _app_lock["locked"] = False
+    return {"ok": True, **lock_status()}
+
+
+def lock_set_idle(minutes: Any) -> dict[str, Any]:
+    try:
+        minutes = int(minutes)
+    except (TypeError, ValueError):
+        minutes = -1
+    if minutes not in LOCK_IDLE_CHOICES:
+        return {"ok": False, "message": "고를 수 없는 시간이에요."}
+    with _app_lock_mutex:
+        data = _lock_read()
+        if not _lock_on(data):
+            return {"ok": False, "message": "앱 잠금이 꺼져 있어요."}
+        data["idleMinutes"] = minutes
+        _lock_write(data)
+    return {"ok": True, **lock_status()}
+
+
+def lock_reset_with_account(password: str) -> dict[str, Any]:
+    """비밀번호를 잊었을 때: 앱에 저장된 학교 메일(또는 LMS) 비밀번호가 맞으면 잠금을 끈다. 틀린 횟수는 네 자리와 함께 센다."""
+    with _app_lock_mutex:
+        data = _lock_read()
+        if not _lock_on(data):
+            _app_lock["locked"] = False
+            return {"ok": True, "enabled": False}
+        if _lock_wait(data):
+            return _lock_fail(data, "")
+        saved = _account_passwords()
+        if not saved:
+            return {"ok": False, "message": "앱에 저장된 학교 계정 비밀번호가 없어 여기서는 풀 수 없어요."}
+        good = any(secrets.compare_digest(str(password or "").encode("utf-8"), p.encode("utf-8")) for p in saved)
+        _lock_count(data, good)
+        if not good:
+            return _lock_fail(data, "학교 계정 비밀번호가 맞지 않아요.")
+        APP_LOCK_PATH.unlink(missing_ok=True)
+        _app_lock["locked"] = False
+    BOOT.setdefault("unlock", time.time())
+    return {"ok": True, "enabled": False}
 
 
 def get_tutorial_state(workspace: UserWorkspace) -> dict[str, Any]:
@@ -4856,6 +5179,37 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         ensure_data_files(workspace)
         return workspace
 
+    def receive_big_upload(self) -> None:
+        """큰 첨부 파일을 그대로 받아(JSON·base64 가 아니라 application/octet-stream, 1MB 씩 디스크로) Drive 로 올리는 일을 건다.
+        이 Content-Type 은 교차 출처에서 미리 묻지(preflight) 않고는 보낼 수 없어 JSON 요구와 같은 CSRF 막이가 된다."""
+        ctype = (self.headers.get("Content-Type") or "").split(";")[0].strip().lower()
+        length = int(self.headers.get("Content-Length") or 0)
+        if ctype != "application/octet-stream" or demo_mode.active() or not 0 < length <= BIG_ATTACH_MAX:
+            self.close_connection = True  # 본문(최대 2GB)을 읽지 않고 답하니 연결은 닫는다
+            message = demo_mode.BLOCK_MESSAGE if demo_mode.active() else "2GB 까지 Drive 링크로 보낼 수 있어요."
+            self.send_json({"ok": False, "message": message}, HTTPStatus.BAD_REQUEST)
+            return
+        import tempfile
+
+        params = parse_qs(urlparse(self.path).query)
+        name = Path(str(params.get("name", [""])[0]).replace("\\", "/")).name.strip() or "첨부파일"
+        folder = Path(tempfile.mkdtemp(prefix="daling-big-"))
+        path = folder / "upload.bin"
+        left = length
+        with open(path, "wb") as fh:
+            while left > 0:
+                chunk = self.rfile.read(min(left, 1024 * 1024))
+                if not chunk:
+                    break
+                fh.write(chunk)
+                left -= len(chunk)
+        if left:
+            shutil.rmtree(folder, ignore_errors=True)
+            self.send_json({"ok": False, "message": "파일을 끝까지 받지 못했어요."}, HTTPStatus.BAD_REQUEST)
+            return
+        job = start_big_upload(self.get_workspace().user_id, path, unicodedata.normalize("NFC", name), length)
+        self.send_json({"ok": True, "job": job})
+
     def read_body_json(self) -> dict[str, Any]:
         # 본문은 한 번만 읽을 수 있다. 체험 모드 문지기(_demo_post)가 먼저 읽어도 원래 처리가 같은 값을 받게 담아 둔다.
         if hasattr(self, "_body_json"):
@@ -4993,6 +5347,12 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                     str(exc),
                     success=False,
                 )
+            return
+        if route == "/api/lock":
+            self.send_json(lock_status())
+            return
+        if route.startswith("/api/") and route not in self.LOCK_OPEN_GET and app_locked():
+            self.send_locked()
             return
         if route == "/api/demo":
             self.send_json({**demo_mode.status(), "available": not MULTI_USER_MODE})
@@ -5399,10 +5759,19 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             else:
                 self.send_json({k: pick.get(k) for k in ("status", "files", "message")})
             return
+        if route == "/api/mail/big-upload":
+            # 큰 첨부를 Drive 에 올리는 진행 (?job=)
+            job = big_uploads.get(params.get("job", [""])[0])
+            if not job or job.get("user_id") != workspace.user_id:
+                self.send_json({"status": "gone"})
+            else:
+                self.send_json({k: job.get(k) for k in ("status", "sent", "total", "id", "link", "message")})
+            return
         if route == "/api/drive/get":
             file_id = params.get("id", [""])[0]
             try:
                 import base64 as _b64
+                import email_reader
                 service = drive_service_for_file(workspace, file_id)
                 meta =service.files().get(fileId=file_id, fields="name,size,mimeType", supportsAllDrives=True).execute()
                 name = meta.get("name", "file")
@@ -5413,8 +5782,8 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                     name = f"{name}.pdf"
                 else:
                     content = service.files().get_media(fileId=file_id, supportsAllDrives=True).execute()
-                if len(content) > 20 * 1024 * 1024:
-                    raise ValueError("파일이 20MB를 넘어 메일에 붙일 수 없습니다.")
+                if len(content) > email_reader.SEND_ATTACH_MAX:
+                    raise ValueError("파일이 25MB를 넘어 메일에 붙일 수 없어요. Drive 링크로 보내 주세요.")
                 self.send_json({
                     "filename": name,
                     "size": len(content),
@@ -5435,7 +5804,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body)
             return
-        if route in ("/", "/index.html") and demo_mode.active() and self.send_demo_index():
+        if route in ("/", "/index.html") and (demo_mode.active() or app_locked()) and self.send_demo_index():
             return
         # 화면 파일은 압축해서 준다 (app.js 316KB, styles.css 203KB → 1/4 정도)
         static_types = {
@@ -5451,15 +5820,56 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 return
         super().do_GET()
 
+    # ===== 앱 잠금 (app_locked) =====
+    # 잠긴 동안 통과시키는 것: 잠금 화면을 그리는 데 드는 것(테마·언어)과 창 단추·끌 곳(창 제목 줄 = 상단 바)뿐.
+    # /healthz 와 구글 로그인에서 돌아오는 길('/?code=')은 /api/ 밖이라 그대로 둔다(내용이 없거나, 연결을 시작한 사람만 씀).
+    LOCK_OPEN_GET = {"/api/lock", "/api/ui-prefs", "/api/window"}
+    LOCK_OPEN_POST = {"/api/window"}
+
+    def send_locked(self) -> None:
+        self.send_json({"ok": False, "locked": True, "message": "앱이 잠겨 있어요. 비밀번호를 넣어 주세요."}, HTTPStatus.LOCKED)
+
+    def handle_lock_post(self, route: str) -> None:
+        """POST /api/lock/<unlock|reset|lock|check|set|off|idle>. 확인·켜기·바꾸기·끄기·자동 잠금 시간은 풀린 상태에서만."""
+        payload = self.read_body_json()
+        payload = payload if isinstance(payload, dict) else {}
+        if MULTI_USER_MODE:
+            self.send_json({"ok": False, "message": "공유 웹사이트 모드에서는 쓸 수 없습니다."}, HTTPStatus.BAD_REQUEST)
+            return
+        action = route.rsplit("/", 1)[-1]
+        if action == "unlock":
+            result = lock_unlock(str(payload.get("pin") or ""))
+        elif action == "reset":
+            result = lock_reset_with_account(str(payload.get("password") or ""))
+        elif action == "lock":
+            result = lock_now()
+        elif app_locked():
+            self.send_locked()
+            return
+        elif action == "check":
+            result = lock_unlock(str(payload.get("pin") or ""), open_it=False)
+        elif action == "set":
+            result = lock_set_pin(str(payload.get("pin") or ""), str(payload.get("current") or ""))
+        elif action == "off":
+            result = lock_turn_off(str(payload.get("current") or ""))
+        elif action == "idle":
+            result = lock_set_idle(payload.get("minutes"))
+        else:
+            self.send_json({"ok": False, "message": "없는 요청입니다."}, HTTPStatus.NOT_FOUND)
+            return
+        # 틀린 비밀번호는 오류가 아니라 '맞지 않음' 이다. 화면이 메시지·남은 횟수를 그대로 보여 주도록 200 으로 준다
+        self.send_json(result)
+
     # ===== 체험 모드 (demo_mode) =====
     # 화면 서버가 바깥 서버에 묻는 라우트를 체험 중에는 여기서 먼저 받는다. 소켓 차단(demo_mode)은 빠뜨린 곳을 위한 안전망.
     DEMO_BLOCKED_GET = {
-        "/api/mail/eml", "/api/mail/attachment", "/api/mail/draft", "/api/mail-image", "/api/drive/list", "/api/drive/get", "/api/drive/picked",
+        "/api/mail/eml", "/api/mail/attachment", "/api/mail/draft", "/api/mail/big-upload", "/api/mail-image", "/api/drive/list", "/api/drive/get", "/api/drive/picked",
         "/api/place-search", "/api/fglp", "/api/seminars",
     }
     DEMO_BLOCKED_POST = {
         "/api/config", "/api/config/import", "/api/run", "/api/verify", "/api/refresh-deadlines", "/api/refresh-emails",
         "/api/update/apply", "/api/update/open-download", "/api/send-email", "/api/mail/save-draft",
+        "/api/mail/big-cancel", "/api/drive/share",
         "/api/mail/move", "/api/mail/folder-create", "/api/mail/translate", "/api/timetable/import-image",
         "/api/timetable/import-link", "/api/samsung-notes/send", "/api/samsung-notes/organize", "/api/organize-files",
         "/api/assignment/open", "/api/storage/cleanup", "/api/storage/trash-browser", "/api/google/credentials", "/api/google/connect",
@@ -5542,13 +5952,26 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         self.send_json({"ok": True, **demo_mode.status()})
 
     def send_demo_index(self) -> bool:
-        """체험 중 첫 화면: <html data-demo> 를 달고(처음 그릴 때부터 체험 띠를 보이게) 바깥 글꼴을 빼서 준다."""
+        """체험 중·잠긴 동안의 첫 화면. 체험 중: <html data-demo> 를 달고(처음 그릴 때부터 체험 띠를 보이게) 바깥 글꼴을 뺀다.
+        잠김: <html data-locked> 를 달아 첫 그림부터 잠금 화면만 보이게 하고, 고른 테마(다크)를 미리 칠하는 한 줄을 넣는다 —
+        테마는 app.js 가 /api/ui-prefs 로 늦게 받아서, 그대로 두면 다크 테마 사람도 밝은 잠금 화면이 번쩍 보였다."""
         try:
             text = (WEB_ROOT / "index.html").read_text(encoding="utf-8")
         except OSError:
             return False
-        text = text.replace("<html ", '<html data-demo="1" ', 1)
-        text = re.sub(r'\s*<link[^>]*id="webFonts"[^>]*>', "", text, count=1)
+        if demo_mode.active():
+            text = text.replace("<html ", '<html data-demo="1" ', 1)
+            text = re.sub(r'\s*<link[^>]*id="webFonts"[^>]*>', "", text, count=1)
+        if app_locked():
+            theme = get_ui_prefs(self.get_workspace()).get("theme")
+            theme = theme if theme in ("claude", "dark") else "auto"
+            paint = (
+                "<script>(function(t){if(t==='dark'||(t==='auto'&&window.matchMedia&&"
+                "matchMedia('(prefers-color-scheme: dark)').matches))document.documentElement.dataset.theme='dark';})"
+                f"({json.dumps(theme)});</script>"
+            )
+            text = text.replace("<html ", '<html data-locked="1" ', 1).replace("</head>", f"  {paint}\n  </head>", 1)
+        BOOT.setdefault("page", time.time())
         body = text.encode("utf-8")
         self.send_response(HTTPStatus.OK)
         self.send_header("Content-Type", "text/html; charset=utf-8")
@@ -5591,17 +6014,27 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def serve_download(self, workspace: UserWorkspace, name: str) -> None:
-        """다운로드 폴더의 파일을 첨부파일로 전송 (브라우저 모드용)."""
+    @staticmethod
+    def _stored_file(workspace: UserWorkspace, name: str) -> tuple[Path | None, dict, str]:
+        """강의자료 이름 → (내 컴퓨터의 실제 파일, 메타데이터, 이름). 다운로드 폴더 밖이거나 없으면 파일은 None."""
         safe_name = Path(str(name)).name
         if not safe_name:
-            self.send_json({"ok": False, "message": "파일 이름이 필요합니다."}, HTTPStatus.BAD_REQUEST)
-            return
+            return None, {}, ""
         download_path = get_download_path(workspace).resolve()
         metadata = read_json(workspace.file_metadata_log, {})
         meta = metadata.get(safe_name, {}) if isinstance(metadata, dict) else {}
         file_path = (download_path / stored_relpath(safe_name, meta)).resolve()
-        if not str(file_path).startswith(str(download_path)) or not file_path.is_file():
+        if not file_path.is_relative_to(download_path) or not file_path.is_file():
+            return None, meta, safe_name
+        return file_path, meta, safe_name
+
+    def serve_download(self, workspace: UserWorkspace, name: str) -> None:
+        """다운로드 폴더의 파일을 첨부파일로 전송 (브라우저 모드용)."""
+        file_path, meta, safe_name = self._stored_file(workspace, name)
+        if not safe_name:
+            self.send_json({"ok": False, "message": "파일 이름이 필요합니다."}, HTTPStatus.BAD_REQUEST)
+            return
+        if file_path is None:
             self.send_json({"ok": False, "message": "파일을 찾을 수 없습니다."}, HTTPStatus.NOT_FOUND)
             return
         display_name = str(meta.get("original_name", safe_name)) if isinstance(meta, dict) else safe_name
@@ -5654,6 +6087,13 @@ class DashboardHandler(SimpleHTTPRequestHandler):
     def _do_POST(self) -> None:
         if self.reject_bad_host():
             return
+        if urlparse(self.path).path == "/api/mail/big-upload":
+            if app_locked():
+                self.close_connection = True  # 본문(최대 2GB)을 읽지 않고 답하니 연결은 닫는다
+                self.send_locked()
+                return
+            self.receive_big_upload()
+            return
         if not self.csrf_ok():
             self.send_json(
                 {"ok": False, "message": "잘못된 요청입니다 (Content-Type: application/json 필요)."},
@@ -5667,6 +6107,12 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         workspace = self.get_workspace()
         base_url = self.request_base_url()
         route = urlparse(self.path).path
+        if route.startswith("/api/lock/"):
+            self.handle_lock_post(route)
+            return
+        if route not in self.LOCK_OPEN_POST and app_locked():
+            self.send_locked()
+            return
         if route == "/api/demo":
             self.toggle_demo()
             return
@@ -5824,6 +6270,37 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 self.send_json({"ok": True, "dropped": n})
             except Exception as exc:
                 self.send_json({"ok": False, "message": f"임시저장본을 지우지 못했습니다: {exc}"}, HTTPStatus.BAD_REQUEST)
+            return
+        if route == "/api/mail/big-cancel":
+            # 쓰는 중에 뺀 큰 첨부: 올리는 중이면 멈추고, 다 올라갔으면 Drive 휴지통으로. 이 앱이 올린 것(job)만.
+            payload = self.read_body_json()
+            job = big_uploads.get(str(payload.get("job", "")))
+            if not job or job.get("user_id") != workspace.user_id:
+                self.send_json({"ok": False, "message": "이미 끝난 일이에요."}, HTTPStatus.BAD_REQUEST)
+                return
+            job["cancel"] = True
+            try:
+                if job.get("status") == "done" and job.get("id"):
+                    trash_big_attachment(job["id"])
+                    job["status"] = "cancelled"
+                self.send_json({"ok": True})
+            except Exception as exc:
+                self.send_json({"ok": False, "message": str(exc)}, HTTPStatus.BAD_REQUEST)
+            return
+        if route == "/api/drive/share":
+            # Drive 에서 고른 25MB 넘는 파일은 내려받아 붙이지 않고 링크로 보낸다 — '링크가 있는 사람 보기' 로 연다
+            payload = self.read_body_json()
+            file_id = str(payload.get("id", "")).strip()
+            try:
+                service = drive_service_for_file(workspace, file_id)
+                service.permissions().create(
+                    fileId=file_id, body={"type": "anyone", "role": "reader"}, fields="id", supportsAllDrives=True
+                ).execute()
+                meta = service.files().get(fileId=file_id, fields="name,size,webViewLink", supportsAllDrives=True).execute()
+                self.send_json({"ok": True, "name": meta.get("name"), "size": int(meta.get("size") or 0),
+                                "link": meta.get("webViewLink") or f"https://drive.google.com/file/d/{file_id}/view"})
+            except Exception as exc:
+                self.send_json({"ok": False, "message": str(exc)}, HTTPStatus.BAD_REQUEST)
             return
         if route == "/api/mail/save-draft":
             # 임시저장을 서버의 '임시 보관함'에 넣는다 (웹메일·휴대폰에서도 이어서 쓰게)
@@ -6250,6 +6727,31 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                     raise ValueError("공유 웹사이트 모드에서는 쓰지 않습니다.")
                 url = f"http://127.0.0.1:{self.server.server_address[1]}{path}"
                 self.send_json({"ok": True, "opened": bool(webbrowser.open(url))})
+            except Exception as exc:
+                self.send_json({"ok": False, "message": str(exc)}, HTTPStatus.BAD_REQUEST)
+            return
+        if route == "/api/open-file":
+            # 강의자료 '열기'는 이미 내 컴퓨터에 있는 파일을 기본 앱(PDF 보기·한컴·파워포인트)으로 바로 연다.
+            # 예전엔 /api/file(첨부파일로 보내기)을 창에 띄워 '다운로드'가 한 번 더 일어났다
+            # (2026-10-27 사용자: '로컬에 저장돼 있다며, 바로 오픈이 아니잖아').
+            try:
+                if MULTI_USER_MODE:
+                    raise ValueError("공유 웹사이트 모드에서는 쓰지 않습니다.")
+                file_path, _meta, safe_name = self._stored_file(workspace, self.read_body_json().get("name") or "")
+                if file_path is None:
+                    raise FileNotFoundError("내 컴퓨터에서 이 파일을 찾지 못했어요. 자료를 다시 받아 주세요.")
+                if os.name == "nt":
+                    os.startfile(str(file_path))
+                elif sys.platform.startswith("linux"):
+                    import linux_support
+
+                    if not linux_support.open_external(str(file_path)):
+                        raise RuntimeError("파일을 열 프로그램을 찾지 못했어요 (xdg-open 없음)")
+                else:
+                    subprocess.Popen(["open", str(file_path)])
+                self.send_json({"ok": True, "path": str(file_path)})
+            except FileNotFoundError as exc:
+                self.send_json({"ok": False, "message": str(exc)}, HTTPStatus.NOT_FOUND)
             except Exception as exc:
                 self.send_json({"ok": False, "message": str(exc)}, HTTPStatus.BAD_REQUEST)
             return

@@ -80,6 +80,10 @@ DGIST 학생용 데스크톱 앱 "붕어빵"(저장소 이름 dgist-lms-autosave
 - 다가오는 마감, 다가오는 일정, 학교 공지, 학교 사이트 바로가기
 - 시험 기간 응원(`examSeason`, `EXAM_CHEERS`): 학사일정의 학부 중간·기말 시험 기준으로 7일 전(before)·시험 중(during)·마지막 날(last)·끝난 뒤 2일(after). 나우바 아래 줄에 짧은 문장(수업 중·직전 제외). 대시보드 인사 아래 줄(`#heroCheer`)은 1.12.13 에 뺐다(사용자: 거기엔 없어도 됨). 문장은 날짜로 골라 하루 동안 그대로. 나우바를 펼치면(수업이 없을 때) 달구 카드(`nowDalguCard`, `EXAM_DALGU`): 시기별 포즈·움직임(전 study/book 흔들림, 중 fight 주먹, 후 yay/lounge 폴짝)과 위 두 줄과 겹치지 않는 '달구가 하는 말'. 달구를 누르면 폴짝 뛰며 다음 말. 예전엔 펼친 칸이 나우바 아래 줄을 그대로 되풀이했다
 - 화면 편집(블록 순서 끌어 옮기기), 모두 접기
+  - 편집 화면(1.12.48): 켜도 카드가 움직이지 않는다. 테두리는 `outline`, 조작 알약(`.dash-bar`: 손잡이·이름·위·아래·반 폭/전체·보이기/숨기기, 앱 아이콘 `grip`·`chevronUp/Down`·`colHalf/colFull`·`eye/eyeOff`)은 카드 오른쪽 위 모서리에 걸쳐 띄운다. 켜진 상태(반 폭·숨김)는 `aria-pressed` 강조색. 접기 단추는 `visibility: hidden` 으로 자리만 남긴다. '화면 편집'↔'✓ 완료', Esc 로도 끝낸다. 숨긴 블록은 편집 중에 원래 display 그대로 알약 밖만 흐리게
+  - 예전 편집 화면 실측(2026-10-27, 같은 창): 카드마다 위에 22px 를 비워 모든 카드가 9~37px 밀렸고, 카드 크기·그림자 애니메이션이 한꺼번에 돌아 켤 때 33ms 프레임(120Hz 에서 4프레임 빠짐)이 났다. 지금은 밀림 0px·최대 8.7ms. '편집 끝내기' 글자가 길어 '모두 접기' 위에 겹치던 것도 두 단추를 `.dash-tools` 한 줄로 묶어 없앴다
+  - 끄는 카드는 `translateY` 만(`scale` 을 걸면 글자가 다시 그려지며 흐려졌다). 자리를 바꿀 때 카드를 다시 붙이면 포인터 붙잡기가 풀려, 창 밖에서 손을 놓으면 카드가 떠 있는 채로 남았다 → 다시 붙인 뒤 `setPointerCapture` 를 다시 건다
+  - 배치(`dashLayout`)·접힘(`dashFold`)은 `ui_prefs.json`(`/api/ui-prefs`, `restoreDashPrefs`)에도 둔다. 앱 창 저장소는 끌 때마다 지워져(pywebview 사생활 모드, 재시작 뒤 localStorage 비어 있음 실측) 예전에는 편집한 배치가 다시 켜면 기본으로 돌아갔다
 - 과목 변경 감지 배너 → "확인했어요" (`/api/acknowledge-courses`)
 
 ### 3.3 과제 마감 (`deadlines`)
@@ -104,7 +108,7 @@ DGIST 학생용 데스크톱 앱 "붕어빵"(저장소 이름 dgist-lms-autosave
 
 - 수강 과목 카드 (자료가 없는 과목도 `courses_state.json`에서 깔아 둠)
 - 과목마다 학년·학기, 학점(개설강좌에서 채움, `_fill_missing_credits`), 강의계획서 바로가기
-- 편집 모드로 과목 숨기기/복원
+- 편집 모드로 과목 숨기기/복원. 편집 중 카드는 흔들지 않고 점선 테두리만, 숨기기 단추는 빨간 ✕ 대신 앱 단추 모양의 `eyeOff`(1.12.48 — 흔들림은 카드 수만큼 애니메이션 19개가 쉬지 않고 돌았다)
 - 개설강좌 목록 (`/api/course-catalog`, `/api/course-terms`)
 
 ### 3.6 자료 (`files`)
@@ -186,6 +190,7 @@ DGIST 학생용 데스크톱 앱 "붕어빵"(저장소 이름 dgist-lms-autosave
 | 카드 | 내용 |
 |---|---|
 | 연결된 계정 | LMS·학교 메일·Google 줄마다 로고와 상태 알약(`renderAccountPills`, `renderGoogleSection`). 비밀번호는 DPAPI 암호화, 바꿀 때만 입력. 맨 아래 '체험 모드' 줄(`#demoRow`, 체험해 보기/체험 끝내기) |
+| 앱 잠금 | 스위치(켜면 네 자리를 두 번), 자동 잠금 시간(끄기·1·5·10·30분·1시간, 기본 10분), 비밀번호 바꾸기, 지금 잠그기(Ctrl+L). 바꾸는 즉시 적용되고 `config.json` 과 따로다. 아래 '앱 잠금' 절 |
 | 강의자료 저장 | 저장 위치 카드 두 개: 구글 드라이브(`AUTO_DRIVE_UPLOAD`, 구글 미연결이면 '로그인 필요'), 내 컴퓨터(스위치 + 이번 학기/모든 과목 → `AUTO_LOCAL_SAVE`, 폴더 바꾸기, 지금 맞추기). `renderSaveDestinations` |
 | └ 다른 클라우드 | OneDrive·Dropbox·iCloud Drive·네이버 MYBOX. 로그인 없이 PC 동기화 폴더 안 `붕어빵 강의자료\<과목>`에 넣는다 (`detect_cloud_roots`, `cloud_targets`, 설정 `CLOUD_SAVE`). 못 찾으면 '폴더 고르기'(`/api/pick-folder`)로 `path` 지정. '넣을 과목'(`SAVE_SCOPE`)과 '지금 맞추기'는 내 컴퓨터·클라우드 공통. 복사는 `autosave_local` → 위치마다 `_mirror_rows` (필기한 파일 보호 규칙 동일). 과목 아래는 LMS 하위 폴더(`lms_subfolders`) 그대로, 1.11.3까지 펼쳐 넣은 사본은 옮겨 놓는다 |
 | └ 차지하는 공간 | 같은 카드 아래. 앱(프로그램 + LMS 로그인용 브라우저 + 메일·설정 데이터) / 강의자료 / 내 컴퓨터 사본을 한 막대로(`/api/storage`의 `app`·`localSave`). Edge 를 쓰는 PC 에 예전 셸이 남았으면 막대 아래 '예전에 받은 LMS 브라우저' 줄과 '휴지통으로 보내기'(`/api/storage/trash-browser`). 접힌 '강의자료 정리하기'에서 학기·과목별 삭제(`/api/storage/cleanup`, 앱 보관함에서만) |
@@ -395,6 +400,8 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 | `/api/emails` | 메일 목록 (본문 없음) |
 | `/api/email-body?id=` | 본문, HTML(cid 주소 치환), 첨부 메타 |
 | `/api/mail/attachment?uid=&folder=&part=` | 첨부 한 개 내려받기 (이름은 서버에서 다시 읽음) |
+| `/api/mail/big-upload` (POST 파일 그대로 `?name=` · GET `?job=`) | 25MB 넘는 첨부를 Drive 'Daling 메일 첨부' 에 올려 링크로 (진행률) |
+| `/api/mail/big-cancel` (POST `{job}`), `/api/drive/share` (POST `{id}`) | 뺀 큰 첨부 멈춤·Drive 휴지통 / Drive 에서 고른 큰 파일을 링크 공유 |
 | `/api/mail-image?id=&n=` | 본문 그림 한 장 |
 | `/api/mail/folders`, `/api/mail/pending`, `/api/mail/eml` | 메일함 목록, 답장 대기, eml |
 | `/api/drive/list`, `/api/drive/get` | Drive 파일 (첨부용) |
@@ -403,12 +410,15 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 | `/api/local-autosave/job` | 내 컴퓨터 자동 저장 진행 |
 | `/api/dgist-api/status` | 공공데이터 키 확인 |
 | `/api/update/check` | 업데이트 확인 |
+| `/api/lock` | 앱 잠금 상태 `{available, enabled, locked, idleMinutes, waitSeconds, canReset}` (잠긴 동안에도 열림) |
 | `/api/mail/me` | 메일에 쓰는 내 정보: `manual`(직접 적은 값)·`auto`(LMS·조직도)·`me`(합친 값, 학년·영문 소속 포함) |
 
 ### POST
 
 | 경로 | 내용 |
 |---|---|
+| `/api/lock/unlock` `{pin}`, `/api/lock/reset` `{password}`, `/api/lock/lock` | 잠금 풀기, 저장된 학교 계정 비밀번호로 잠금 끄기, 지금 잠그기 (잠긴 동안에도 받음) |
+| `/api/lock/check` `{pin}`, `/api/lock/set` `{pin, current}`, `/api/lock/off` `{current}`, `/api/lock/idle` `{minutes}` | 지금 비밀번호 확인, 새로 정하기·바꾸기, 끄기, 자동 잠금 시간 (풀려 있을 때만) |
 | `/api/demo` | 체험 모드 켜기·끄기 `{on, lang}` (GET 은 상태: active·blocked 수·available) |
 | `/api/run` | 자료 동기화 (`mode`: fast/full) |
 | `/api/refresh-deadlines`, `/api/refresh-emails`, `/api/verify`, `/api/stop` | 작업 시작·중지 |
@@ -462,6 +472,7 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 | `health.json` | 종류별 마지막 성공·실패 |
 | `local_autosave.json` | 내 컴퓨터에 자동 복사한 파일의 크기·수정 시각 (사용자가 고쳤는지 판단용) |
 | `lms_profile.json` | 내 이름·학번·학교 메일·LMS 소속 (LMS `/users/me`, 전화번호 등은 받지 않음) |
+| `app_lock.json` | 앱 잠금: 비밀번호 PBKDF2 해시·소금, 자동 잠금 시간, 틀린 횟수·막힌 시각. 없으면 잠금 꺼짐 |
 | `ai_profile.json` | 직접 적은 내 정보(이름·영문 이름·학번·소속), 흐름 끄기, AI 고르기·실험실 스위치 |
 
 그 밖의 위치:
@@ -663,6 +674,21 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 - 시험할 때 주의: Git Bash 의 curl 에 한글 JSON 을 그대로 넣으면 UTF-8 이 아닌 코드페이지로 나가 `read_body_json` 에서 깨진다. 본문은 UTF-8 파일로 만들어 `--data-binary @파일` 로 보낸다.
 
 - 자동 저장(`scheduleAutosave`): 쓰다 멈추면 1.5초 뒤 이 컴퓨터(`localStorage` autosaver-mail-draft), 15초 뒤 서버 임시 보관함. 내용 서명이 같으면 다시 안 넣는다. 자동 저장은 첨부 3MB 넘으면 첨부를 뺀다('임시저장' 단추는 다 넣음). '←' 는 손댄 게 있으면 저장하고 닫기, 휴지통은 확인 뒤 `/api/mail/discard-draft` 로 서버 저장본까지 버린다. 메일 쓰기를 새로 열면 `restoreDraftIfAny` 가 이어 쓸지 묻고 같은 draftId 로 이어 저장한다.
+- **첨부가 받는 사람에게 안 가던 일** (2026-10-27, 1.12.46). 보내기(SMTP·MIME)는 멀쩡했다 — `/api/send-email` 로 보낸 시험 메일은 Gmail 에 두 첨부가 원본과 바이트까지 같게 도착. 빠진 곳은 화면이었다.
+  - 이어 쓰기: 이 컴퓨터 저장본(`saveLocalDraft`)에 첨부가 없어 '이어서 쓰기' 하면 본문만 돌아왔다(재현: 첨부 1개 → 화면 떠났다 돌아와 이어 쓰기 → 0개). 사용자가 앱에서 보낸 메일(보낸 편지함)에도 첨부 파트가 없었다. 이제 같은 실행 안에서는 메모리(`autosave.memAtts`, draftId 로 맞춤)에서 전부, 껐다 켜면 저장본에서 앞에서부터 합계 1.5MB(`LOCAL_ATTACH_MAX`)까지 내용째 되살린다. 못 담은 파일은 이름만 남겨 '첨부 N개는 다시 넣어 주세요' 로 알린다. 저장소가 꽉 차면 이름만 저장.
+  - 전달: 본문만 옮기고 원래 첨부는 버렸다. 이제 `attachOriginalFiles` 가 `/api/mail/attachment` 로 받아 붙인다(출처 '원래 메일', 합계 `ATTACH_LIMIT` 넘는 것은 빼고 알림, 받는 사이 다른 메일을 열면 `composeGen` 이 달라 붙이지 않음). 학과 공지 PDF 2개 실측 1.2초.
+  - 보내기 전 확인: 내가 쓴 부분(인용·전달 원문 앞)이나 새 메일 제목에 '첨부/attach' 가 있는데 첨부가 0개면 묻는다. 내용이 빈 첨부가 있으면 막는다(서버 `build_message` 는 base64 가 깨진 첨부를 조용히 건너뛴다).
+  - 답장·전달 인용(`quotableText`): 평문 파트에 `<img src="data:…">` 를 그대로 넣어 보내는 메일이 있고, `strip_css_text` 가 `data:image/png;` 를 CSS 선언으로 보고 지워 `<img src=" base64,iVBOR…` 가 남는다. 인용할 때 그림 태그와 200자 넘는 base64 줄을 뺀다(학과 공지 4,000 → 396자). 읽기 화면 평문 보기는 그대로다.
+  - 확인(Gmail 받은편지함): '[Daling 첨부 시험 2]' 첨부 2개 → 떠났다 새로고침 → 이어 쓰기 → 보내기, 원본과 바이트 같음. '[Daling 첨부 시험 3]' 학과 공지 전달, PDF 2개 도착.
+- **첨부 한도와 큰 파일** (2026-10-27, 1.12.47). 학교 SMTP 는 EHLO 에서 `SIZE 36700160`(메일 한 통 35MB)을 알린다. 첨부는 base64(4/3)+줄바꿈이라 약 1.37배 → 원본 합계 **25MB**(`email_reader.SEND_ATTACH_MAX`, 화면 `ATTACH_LIMIT`, `/api/drive/get`, 임시 메일 이어 쓰기 같은 값). 예전엔 화면 10MB · 서버 20MB 로 따로였고, 끌어 놓기는 크기를 안 봤다.
+  - 그대로 붙일 자리가 없는 파일(합계 25MB 초과, 2GB 까지 `BIG_ATTACH_MAX`)은 Gmail 처럼 Drive 링크로(`addAttachmentFiles` → `uploadBigAttachment`). 화면이 파일을 그대로(`application/octet-stream`, JSON·base64 아님) `/api/mail/big-upload?name=` 로 보내면 서버가 1MB 씩 임시 폴더에 받고(`receive_big_upload`), 스레드가 내 Drive 'Daling 메일 첨부' 폴더에 이어 올리기(8MB 조각)로 올린 뒤 '링크가 있는 사람 보기' 권한을 연다(`_run_big_upload`, 앱이 만든 파일이라 drive.file 로 된다). 화면은 0.8초마다 `GET /api/mail/big-upload?job=` 으로 % 를 그린다. 30MB 실측 약 34초.
+  - 이 POST 만 JSON 이 아니다. `application/octet-stream` 은 교차 출처에서 미리 묻기(preflight) 없이 못 보내므로 `csrf_ok` 와 같은 막이가 된다. 체험 중·2GB 초과는 본문을 읽지 않고 연결을 닫으며 거절.
+  - Drive 접속은 이 스레드에서 따로 만든다(`_big_drive_service`, 로그인 창 없음). httplib2 접속은 스레드에 안전하지 않아 `drive_uploader._service` 를 나눠 쓰지 않는다. 구글 연결이 없으면 '설정에서 Google 연결' 안내.
+  - 보낼 때 링크 묶음을 본문 끝에 붙인다(`bigLinksBlock`, HTML 이면 'Google Drive 로 보낸 파일' 칸). 올리는 중이면 보내기를 막는다. 쓰는 중에 빼면 `/api/mail/big-cancel` → 올리는 중이면 멈추고, 다 올라갔으면 Drive 휴지통(지우지 않음). 보낸 뒤의 파일은 그대로 둔다.
+  - 'Drive에서 첨부' 로 고른 25MB 넘는 파일은 내려받지 않고 `/api/drive/share` 로 '링크가 있는 사람 보기' 를 열어 링크로 붙인다(고르기 창에 '링크로 보냄' 표시, 예전엔 못 골랐다).
+  - 링크 첨부는 서버 임시저장(파일이 아니라 뺀다)에는 안 들어가고, 이 컴퓨터 저장본(`link`)에는 남아 이어 쓰기에서 돌아온다.
+  - **큰 메일의 보낸 편지함 사본**: 34MB 메일의 사본이 안 남았다. `MiniIMAP` 소켓 시간 제한 20초가 sendall 전체에 걸려(파이썬 3.5~) 끊겼다 — 32.8MB APPEND 실측 30.2초. `append` 는 크기에 맞춰 늘리고(20초 + 초당 128KB), SMTP 도 같은 까닭으로 40초 고정에서 크기에 맞춰 늘렸다. 사본 넣기가 실패하면 같은 try 의 임시저장본 정리도 건너뛰어 '(제목 없음)' 임시 메일이 남았다(같이 고쳐짐).
+  - 확인: '[Daling 첨부 시험 5]' 24MB 첨부 + 30MB Drive 링크 → Gmail 도착(메일 34.4MB), 링크는 로그인 없이 열림. 뺀 2MB 파일은 Drive 휴지통(trashed=True) 확인.
 
 ### 문의 · 오류 제보 · 아이디어 (`app.js` openFeedback)
 
@@ -1134,3 +1160,20 @@ Microsoft Store 정책 10.3.1(로그인 앱은 심사용 시험 계정을 줄 �
 - 한국어: 대학 공식 메일 순서로 — `○○○ 교수님께,` / `안녕하십니까.` → `저는 [과목(번호) 분반]을 수강하고 있는 [소속 학년 이름](학번 …)입니다.` → `다름이 아니라,` → `바쁘신 와중에 읽어 주셔서 감사합니다.` / `늘 건강하시고 좋은 하루 보내십시오.` → `[소속 학년 이름] 올림` / `학번 …`. 조교는 `안녕하세요`·`드림`, 부서는 `○○팀 담당자님께,`. 을/를은 과목 이름 끝 받침으로(`_eul`). 예전 꼴은 '안녕하세요, ○○ 교수님.' 으로 시작하고 '드림' 이었다.
 - 영어: 부서는 `office_en` 으로 영어 부서 이름(`Dear DGIST Scholarship Office,`, `Dear DGIST Counseling and Career Development Team,`), 한국인 직원·조교는 로마자 이름(`Dear Minsu Kim,`), 모르는 부서는 `Dear Sir or Madam,`. 예전엔 'Dear DGIST상담경력개발팀,' 처럼 한글이 그대로 들어갔다. 부서 낱말표는 `OFFICE_CORE_EN`·`OFFICE_SUFFIX_EN`, 모르는 낱말이 섞이면 지어내지 않는다.
 - 학과·전공 주소와 사람 이름 가리기(2026-10-21): '인공지능전공' 이 사람 이름으로 잡혀 'Dear Gongjineungjeongong In,' 이 나왔다. 이제 로마자 이름은 `looks_like_person`(띄어쓰기 없는 한글 2~4자, 흔한 성으로 시작, 부서·학과 아님)일 때만. 학과·전공·학부 주소는 `DEPT_FIELD_EN` 으로 `Dear DGIST Department of Artificial Intelligence,`(뇌과학과·에너지공학과는 '과', 화학물리학과는 '학과' 를 떼고 찾는다), 표에 없으면 `Dear Sir or Madam,`. 한국어는 `인공지능전공 담당자님께,`.
+
+## 앱 잠금 (2026-10-27, 1.12.50)
+
+사용자: '로그인 없이도 얻을 수 있는 정보가 앱에 너무 많다. 카카오톡처럼 네 자리 비밀번호로 잠그고, 설정에서 켜고 끌 수 있게.'
+**선택 기능**이다. 설정 › 앱 잠금(`#stLock`)에서 켠다(새 비밀번호 두 번). 끄기·바꾸기는 지금 비밀번호를 먼저 묻는다.
+
+- **저장**: `app_lock.json` 에 PBKDF2-HMAC-SHA256(20만 번, 소금 16바이트) 해시만 둔다. `config.json` 이 아니라 '설정 내보내기' 파일에 섞이지 않는다. 파일이 없으면 꺼진 것.
+- **잠기는 때**: 앱을 켤 때(서버가 처음 상태를 물을 때 파일을 보고 잠근다), 마우스·키보드를 정한 시간 동안 안 썼을 때(`idleMinutes`, 15초마다와 창으로 돌아올 때 확인), '지금 잠그기'·Ctrl+L(맥 ⌘L).
+- **서버가 막는다**: 화면만 덮으면 같은 PC 브라우저로 `http://127.0.0.1:<포트>/api/emails` 를 열어 볼 수 있으므로, 잠긴 동안 `/api/*` 는 423 `{locked:true}` 로 거절한다. 통과: `LOCK_OPEN_GET`(`/api/lock`·`/api/ui-prefs`·`/api/window`), `LOCK_OPEN_POST`(`/api/window`), `/api/lock/unlock|reset|lock`. 큰 첨부 올리기도 막는다. 잠긴 동안 `/` 는 `<html data-locked="1">` 과 테마를 미리 칠하는 한 줄을 넣어 보낸다 — 첫 화면이 번쩍이지 않고 잠금 판부터 뜬다.
+- **화면**(`app.js` 앱 잠금): `api()` 는 잠긴 동안 열린 경로가 아니면 풀릴 때까지 기다렸다 보낸다(같은 GET 은 하나로). 423 을 받으면 판을 띄우고 기다린다. 잠긴 동안 `pollLight`·`presence` 는 쉰다. 판은 `<dialog>.showModal` 이라 열려 있던 다른 창 위에 오고, Esc 를 거듭 눌러 브라우저가 닫아도(close watcher, `cancelable=false`) 바로 다시 띄운다. 늦게 온 `close` 가 그새 누른 숫자를 지우지 않게 이미 열려 있으면 그대로 둔다. Windows 창 단추(`#winControls`)는 그동안 판 안으로 옮겨 최소화·닫기를 그대로 쓴다. 숫자는 화면 숫자판·키보드 숫자·Backspace.
+- **틀리면**: 다섯 번마다 30초부터 두 배씩(최대 15분) 막는다. 서버가 `failures`·`waitUntil` 로 세므로 앱을 다시 켜도 이어진다. 막힌 동안은 맞는 숫자도 거절하고 판에 남은 시간을 보인다. 남은 기회가 두 번 이하면 '맞지 않아요 · N번 더 틀리면 잠시 막혀요'.
+- **잊었을 때**: '잊었어요' → 앱에 이미 저장된 학교 메일(또는 LMS) 비밀번호를 넣으면 잠금이 꺼진다(`/api/lock/reset`, 틀린 횟수는 같이 센다). 저장된 비밀번호가 없으면 여기서 풀 수 없다고만 알린다(그때는 데이터 폴더의 `app_lock.json` 을 지우면 꺼진다). 상태 확인(`canReset`)은 저장 여부만 보고 풀지 않는다 — 맥에서 키체인 창이 뜨지 않게.
+- **알림**: 잠긴 동안 마감·새 자료·공지 알림은 제목만 보이고 내용은 'Daling 잠금을 풀면 볼 수 있어요.' (`app.notify(..., private=True)`).
+- **켜는 시간 기록**: 잠금을 켜 두면 `boot_times.json` 의 `firstScreen` 에 비밀번호를 누르는 시간이 들어가므로 `unlocked`(푼 시각)를 함께 적는다.
+- **한계**: 앱 화면과 로컬 API 만 막는다. 데이터 폴더의 파일(`emails.json`, 받은 자료)은 그대로라 컴퓨터 계정 잠금을 대신하지 않는다. 여러 사람 모드(`MULTI_USER_MODE`)에는 없다(`available:false`, 카드 숨김). 체험 모드에서도 진짜 데이터 폴더의 `app_lock.json` 을 본다(잠금은 앱에 거는 것).
+- **점검**: `smoke_test.py` '앱 잠금' — 켜기(2580) → 잠그기 → `/api/emails` 423·`/api/ui-prefs` 200·`/` 에 `data-locked` → 틀린 숫자(남은 기회 4) → 풀기 → 끄기(파일 지워짐). `/api/lock` 은 GET 전수 점검(`SWEEP_GET`)에도 넣었다.
+- **실측**(개발 서버, 따로 둔 데이터 폴더): 잠긴 채 다시 열면 요청은 `/api/lock`·`ui-prefs`·`window` 뿐이고, 풀자마자 첫 화면 요청들이 이어 가고 `boot-done` 까지 간다. 1분 자동 잠금, 다섯 번 틀리면 30초 막힘(맞는 숫자도 거절), Esc 연타에도 판 유지, 켜기·바꾸기·끄기, 영어 화면, 높이 560px·폭 375px 에서 숫자판이 잘리지 않음.
