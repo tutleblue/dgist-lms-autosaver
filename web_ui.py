@@ -1617,6 +1617,19 @@ _SCHOOL_EVENT_WORDS = (
 )
 
 
+# 세미나는 설정의 관심사 중 분야(학과·주제) 낱말로만 고른다. '세미나·특강' 태그나 예전 관심사 문장의 '세미나' 는
+# 모든 세미나 제목에 들어 있어, 학과와 상관없이 세미나가 다 캘린더에 올라갔다(2026-10-28 실측: 캘린더 메일 행사
+# 12건 중 세미나 10건, 고르지 않은 뉴바이올로지·화학물리 포함).
+_GENERIC_TALK_WORDS = frozenset(w.lower() for w in _INTEREST_WORDS["세미나·특강"])
+
+
+def _word_hit(word: str, text: str) -> bool:
+    """짧은 영어 낱말은 낱말 경계로만. 'ai' 가 'Brain'·'main' 안에서 걸려 뇌과학 세미나가 '컴퓨터·AI' 로 잡혔다."""
+    if len(word) <= 3 and word.isascii():
+        return re.search(rf"(?<![a-z]){re.escape(word)}(?![a-z])", text) is not None
+    return word in text
+
+
 def _interest_words(config: dict[str, Any]) -> list[str]:
     tags = config.get("EMAIL_INTEREST_TAGS") or []
     words: list[str] = []
@@ -1712,6 +1725,8 @@ def _mark_events(emails: list[dict[str, Any]], config: dict[str, Any], school_ev
     import email_reader
 
     words = _interest_words(config)
+    # 분야를 하나도 안 고르고 '세미나·특강' 만 골랐으면 세미나를 다 올린다 (그 사람은 세미나 전부를 원한 것)
+    topic_words = [w for w in words if w not in _GENERIC_TALK_WORDS] or words
     for mail in emails:
         if not isinstance(mail, dict) or mail.get("folder") in ("sent", "draft", "trash", "spam"):
             continue
@@ -1738,12 +1753,17 @@ def _mark_events(emails: list[dict[str, Any]], config: dict[str, Any], school_ev
         if "seminar" not in mail:
             mail["seminar"] = email_reader.guess_seminar_info(str(mail.get("subject", "")), str(mail.get("body", "")))
         head = f"{mail.get('subject', '')} {mail.get('fromName', '')} {mail.get('fromEmail', '')}".lower()
-        hits = [w for w in words if w in head]
+        hits = [w for w in words if _word_hit(w, head)]
         school = any(w in head for w in _SCHOOL_EVENT_WORDS)
         mail["interestHits"] = hits[:4]
         mail["schoolEvent"] = school
-        # Gemini 가 매긴 점수가 있으면 그것도 인정한다
-        mail["calendar"] = bool(hits or school or (mail.get("score") or 0) >= 5)
+        if any(w in str(mail.get("subject", "")).lower() for w in email_reader._TALK_WORDS):
+            # 세미나: 설정에서 고른 분야와 맞을 때만 (학교 전체 행사는 그대로). Gemini 점수는 보지 않는다:
+            # 분야를 골랐는데도 점수 하나로 다른 학과 세미나가 올라오면 고른 뜻이 없어진다
+            mail["calendar"] = bool(school or any(w in topic_words for w in hits))
+        else:
+            # Gemini 가 매긴 점수가 있으면 그것도 인정한다
+            mail["calendar"] = bool(hits or school or (mail.get("score") or 0) >= 5)
 
     # 같은 행사를 여러 번 알린다(미리 알림·장소 수정·당일 알림). 같은 날 같은 행사는 가장 새 메일 하나만.
     def event_key(mail: dict[str, Any]) -> tuple[str, str]:

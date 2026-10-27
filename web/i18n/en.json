@@ -2161,5 +2161,6 @@
  "여러 번 틀려서 잠시 막았어요.": "Too many wrong tries. Please wait a moment.",
  "학교 계정 비밀번호가 맞지 않아요.": "That school account password is wrong.",
  "남이 못 보게 잠그기": "Lock it from prying eyes",
- "켜 두면 앱을 열 때마다 네 자리 비밀번호를 물어. 자리를 비울 땐 Ctrl+L 로 바로 잠가.": "Turn it on and the app asks for a 4-digit passcode every time it opens. Stepping away? Press Ctrl+L to lock it right away."
+ "켜 두면 앱을 열 때마다 네 자리 비밀번호를 물어. 자리를 비울 땐 Ctrl+L 로 바로 잠가.": "Turn it on and the app asks for a 4-digit passcode every time it opens. Stepping away? Press Ctrl+L to lock it right away.",
+ "고른 주제의 메일을 메일함 위쪽에 먼저 보여 줍니다. 세미나는 고른 분야와 맞는 것만 캘린더에 올립니다.": "Mail on topics you pick is shown first in your inbox. Only seminars in the fields you pick go on the calendar."
 }
