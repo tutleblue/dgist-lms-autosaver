@@ -391,6 +391,8 @@ section { position: relative; }
 .xp-row.unread > span:first-child::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--c-lms); flex: none; margin-right: -2px; }
 .wk { --sem: var(--c-due); --sch: #c9a227; --due: #c4573f; }
 .wk-head { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 12px; padding: 9px 12px; border-bottom: 1px solid var(--line); }
+.wk-pick { font-size: .72rem; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 1px 9px; }
+.wk-pick b { color: var(--ink); font-weight: 700; margin-left: 3px; }
 .wk-legend { margin-left: auto; display: flex; gap: 10px; font-size: .72rem; color: var(--faint); }
 .wk-legend i, .gc-cals i { display: inline-block; width: 9px; height: 9px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
 .wk-legend .sem i { background: var(--sem); } .wk-legend .sch i { background: var(--sch); } .wk-legend .due i { background: var(--due); }
