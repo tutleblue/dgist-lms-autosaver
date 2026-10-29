@@ -1,7 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
 """Daling 을 리눅스(x86_64) 폴더 묶음(onedir)으로 묶는다.
 
-Windows 판(bungeoppang.spec)·맥 판(packaging/mac/daling-mac.spec)과 같은 화면·데이터를 넣고, Windows 전용
+Windows 판(daling.spec)·맥 판(packaging/mac/daling-mac.spec)과 같은 화면·데이터를 넣고, Windows 전용
 (pythonnet·winotify·WinRT)과 맥 전용(pyobjc)은 뺀다. 리눅스 판은 GitHub Actions(.github/workflows/linux.yml)의
 ubuntu-22.04 에서만 만든다 — 묶은 파이썬·라이브러리가 빌드한 곳의 glibc(2.35)를 요구하므로 가장 오래된 대상에서 묶는다.
 
@@ -37,7 +37,7 @@ else:
     print("[Daling linux] data/ 가 없어 씨앗 데이터 없이 묶습니다.")
 
 # 공공데이터포털 기본 키와 데스크톱 OAuth 클라이언트: 공개 저장소에는 없고(.gitignore)
-# CI 가 secrets 에서 만든 파일이 있을 때만 넣는다 (bungeoppang.spec·daling-mac.spec 과 같은 규칙)
+# CI 가 secrets 에서 만든 파일이 있을 때만 넣는다 (daling.spec·daling-mac.spec 과 같은 규칙)
 _pdkey = PROJECT / "public_data_key.txt"
 if _pdkey.exists():
     datas.append((str(_pdkey), "."))

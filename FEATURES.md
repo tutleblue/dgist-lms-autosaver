@@ -1,6 +1,6 @@
-# 붕어빵 기능 지도 (FEATURES.md)
+# Daling 기능 지도 (FEATURES.md)
 
-DGIST 학생용 데스크톱 앱 "붕어빵"(저장소 이름 dgist-lms-autosaver)의 기능을 화면·백엔드·데이터 단위로 정리한 문서입니다.
+DGIST 학생용 데스크톱 앱 "Daling"(저장소 이름 dgist-lms-autosaver)의 기능을 화면·백엔드·데이터 단위로 정리한 문서입니다.
 작업 규칙과 명령어는 `CLAUDE.md`에 있습니다. 이 문서는 "무엇이 어디에 있는가"를 찾을 때 씁니다.
 
 - 기준 버전: `VERSION` 1.11.0 (2026-09-22 기준 코드)
@@ -31,15 +31,15 @@ DGIST 학생용 데스크톱 앱 "붕어빵"(저장소 이름 dgist-lms-autosave
 ## 2. 실행 구조
 
 ```
-붕어빵.exe (PyInstaller onedir, Python 3.14)
+Daling.exe (PyInstaller onedir, Python 3.14)
 ├─ 메인 스레드: pywebview 창 (WebView2) ─ http://127.0.0.1:<포트>
 ├─ 서버 스레드: ExclusiveHTTPServer + web_ui.DashboardHandler (API + 정적 파일)
 ├─ 스케줄러 스레드: app.scheduler_loop (30초마다 할 일 확인)
 ├─ 삼성 노트 스레드: web_ui.start_notes_job (요청 시)
-└─ 작업 프로세스: 붕어빵.exe --autosaver-job <sync|deadlines|emails|verify|google-oauth>
+└─ 작업 프로세스: Daling.exe --autosaver-job <sync|deadlines|emails|verify|google-oauth>
 ```
 
-- **포트**: 기본 8765. 다른 프로그램이 쓰고 있으면 8766~8785 중 빈 곳을 씁니다 (`app.start_server`). 이미 켜진 붕어빵은 `/healthz` 응답 모양(`ok`, `mode`)으로 알아보고 창만 엽니다.
+- **포트**: 기본 8765. 다른 프로그램이 쓰고 있으면 8766~8785 중 빈 곳을 씁니다 (`app.start_server`). 이미 켜진 Daling 은 `/healthz` 응답 모양(`ok`, `mode`)으로 알아보고 창만 엽니다.
 - **작업 프로세스**: 무거운 일(LMS 크롤, 메일 수집)은 별도 프로세스로 돌립니다. EXE에서는 `sys.executable -c`를 쓰면 창이 새로 뜨므로 반드시 `--autosaver-job` 플래그(`runtime_config.WORKER_FLAG`)로 부릅니다. 진행 로그는 `task_states`에 쌓이고 `/api/task`로 화면에 갑니다.
 - **공유 웹 모드**: `AUTOSAVER_MULTI_USER=1`이면 쿠키별 작업공간을 나눕니다 (`DEPLOYMENT.md`, Render). 데스크톱 앱은 단일 사용자 모드입니다.
 
@@ -132,7 +132,7 @@ DGIST 학생용 데스크톱 앱 "붕어빵"(저장소 이름 dgist-lms-autosave
 
 | 버튼 | action | 동작 |
 |---|---|---|
-| 내 컴퓨터에 저장 | (별도) `/api/save-local` | `문서\붕어빵 파일 정리\<과목>\`에 복사 |
+| 내 컴퓨터에 저장 | (별도) `/api/save-local` | `문서\Daling 파일 정리\<과목>\`에 복사 |
 | Drive에 올리기 | `drive` | 과목 폴더로 업로드, 이미 있으면 건너뜀 |
 | 삼성 노트로 | `notes` | 뒤에서 넣기 시작, 즉시 응답 (4.4절) |
 | 목록에서 빼기 | `hide` | 파일은 두고 목록에서만 뺌 (`hiddenFiles`) |
@@ -194,7 +194,7 @@ DGIST 학생용 데스크톱 앱 "붕어빵"(저장소 이름 dgist-lms-autosave
 | 연결된 계정 | LMS·학교 메일·Google 줄마다 로고와 상태 알약(`renderAccountPills`, `renderGoogleSection`). 비밀번호는 DPAPI 암호화, 바꿀 때만 입력. 맨 아래 '체험 모드' 줄(`#demoRow`, 체험해 보기/체험 끝내기) |
 | 앱 잠금 | 스위치(켜면 네 자리를 두 번), 자동 잠금 시간(끄기·1·5·10·30분·1시간, 기본 10분), 비밀번호 바꾸기, 지금 잠그기(Ctrl+L). 바꾸는 즉시 적용되고 `config.json` 과 따로다. 아래 '앱 잠금' 절 |
 | 강의자료 저장 | 저장 위치 카드 두 개: 구글 드라이브(`AUTO_DRIVE_UPLOAD`, 구글 미연결이면 '로그인 필요'), 내 컴퓨터(스위치 + 이번 학기/모든 과목 → `AUTO_LOCAL_SAVE`, 폴더 바꾸기, 지금 맞추기). `renderSaveDestinations` |
-| └ 다른 클라우드 | OneDrive·Dropbox·iCloud Drive·네이버 MYBOX. 로그인 없이 PC 동기화 폴더 안 `붕어빵 강의자료\<과목>`에 넣는다 (`detect_cloud_roots`, `cloud_targets`, 설정 `CLOUD_SAVE`). 못 찾으면 '폴더 고르기'(`/api/pick-folder`)로 `path` 지정. '넣을 과목'(`SAVE_SCOPE`)과 '지금 맞추기'는 내 컴퓨터·클라우드 공통. 복사는 `autosave_local` → 위치마다 `_mirror_rows` (필기한 파일 보호 규칙 동일). 과목 아래는 LMS 하위 폴더(`lms_subfolders`) 그대로, 1.11.3까지 펼쳐 넣은 사본은 옮겨 놓는다 |
+| └ 다른 클라우드 | OneDrive·Dropbox·iCloud Drive·네이버 MYBOX. 로그인 없이 PC 동기화 폴더 안 `Daling 강의자료\<과목>`에 넣는다(예전 판이 만든 `붕어빵 강의자료` 가 있으면 그곳, `web_ui.cloud_folder`) (`detect_cloud_roots`, `cloud_targets`, 설정 `CLOUD_SAVE`). 못 찾으면 '폴더 고르기'(`/api/pick-folder`)로 `path` 지정. '넣을 과목'(`SAVE_SCOPE`)과 '지금 맞추기'는 내 컴퓨터·클라우드 공통. 복사는 `autosave_local` → 위치마다 `_mirror_rows` (필기한 파일 보호 규칙 동일). 과목 아래는 LMS 하위 폴더(`lms_subfolders`) 그대로, 1.11.3까지 펼쳐 넣은 사본은 옮겨 놓는다 |
 | └ 차지하는 공간 | 같은 카드 아래. 앱(프로그램 + LMS 로그인용 브라우저 + 메일·설정 데이터) / 강의자료 / 내 컴퓨터 사본을 한 막대로(`/api/storage`의 `app`·`localSave`). Edge 를 쓰는 PC 에 예전 셸이 남았으면 막대 아래 '예전에 받은 LMS 브라우저' 줄과 '휴지통으로 보내기'(`/api/storage/trash-browser`). 접힌 '강의자료 정리하기'에서 학기·과목별 삭제(`/api/storage/cleanup`, 앱 보관함에서만) |
 | 자동으로 가져오기 | 메일(기본 5분)·과제 마감(60분)·강의자료(180분) 주기, 하루 한 번 전체 확인 시각(`SCHEDULE_TIME`) |
 | 구글 캘린더 | 머리의 스위치로 메일 일정 자동 등록, 캘린더 이름, 지금 넣기, 학사일정도 넣기 |
@@ -366,8 +366,8 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 | `setup.py`, `check_courses.py` | 옛 CLI 도구 |
 | `scripts/dev_server.py` | 소스 그대로 8794 포트에 대시보드 |
 | `scripts/build_seed.py` | 씨앗 데이터 만들기 |
-| `scripts/make_icons.py`, `scripts/extract_logo.py` | 아이콘 만들기 |
-| `bungeoppang.spec` | PyInstaller 설정 |
+| `scripts/make_icons.py` | 아이콘 만들기 |
+| `daling.spec` | PyInstaller 설정 |
 | `packaging/` | Inno Setup 스크립트와 빌드 스크립트 |
 | `web/index.html`, `web/app.js`, `web/styles.css` | 화면 전부 (프레임워크 없음) |
 
@@ -478,10 +478,10 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 | `ai_profile.json` | 직접 적은 내 정보(이름·영문 이름·학번·소속), 흐름 끄기, AI 고르기·실험실 스위치 |
 
 그 밖의 위치:
-- 설치 폴더: `%LOCALAPPDATA%\Programs\붕어빵`
+- 설치 폴더: `%LOCALAPPDATA%\Programs\Daling` (1.12.52 까지 `Programs\붕어빵`)
 - LMS 브라우저: 시스템 Edge(`C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe`). Edge 가 안 될 때만 Playwright headless shell 을 `%LOCALAPPDATA%\ms-playwright` 에 받음
-- 로컬 저장: `문서\붕어빵 파일 정리\<과목>\` (OneDrive 문서 폴더일 수 있음, `SHGetKnownFolderPath`로 찾음)
-- 삼성 노트 DB: `%LOCALAPPDATA%\Packages\SAMSUNGELECTRONICSCoLtd.SamsungNotes_wyx1vj98g3asy\LocalState\Storage.sqlite` (백업은 같은 폴더의 `Storage.sqlite.붕어빵백업-*`)
+- 로컬 저장: `문서\Daling 파일 정리\<과목>\` (예전 판이 만든 `문서\붕어빵 파일 정리` 가 있으면 그곳) (OneDrive 문서 폴더일 수 있음, `SHGetKnownFolderPath`로 찾음)
+- 삼성 노트 DB: `%LOCALAPPDATA%\Packages\SAMSUNGELECTRONICSCoLtd.SamsungNotes_wyx1vj98g3asy\LocalState\Storage.sqlite` (백업은 같은 폴더의 `Storage.sqlite.Daling백업-*`, 1.12.52 까지는 `…붕어빵백업-*`)
 
 ---
 
@@ -494,7 +494,7 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 | `EMAIL_ADDRESS`, `EMAIL_PASSWORD`*, `EMAIL_TO` | 동기화 결과 알림 메일 (선택) | |
 | `GEMINI_API_KEY`* | 번역·분류·시간표 이미지 | |
 | `DGIST_API_KEY`* | 공공데이터 인증키 | |
-| `DOWNLOAD_PATH`, `LOCAL_SAVE_PATH` | 받는 곳, 내 컴퓨터 저장 위치 | 데이터 폴더\downloads, 문서\붕어빵 파일 정리 |
+| `DOWNLOAD_PATH`, `LOCAL_SAVE_PATH` | 받는 곳, 내 컴퓨터 저장 위치 | 데이터 폴더\downloads, 문서\Daling 파일 정리 |
 | `AUTO_LOCAL_SAVE` | 내 컴퓨터에도 자동 저장: off / current / all | off |
 | `CLOUD_SAVE` | 클라우드 폴더 자동 저장 `{onedrive|dropbox|icloud|mybox: {on, path}}` (path 비면 자동으로 찾은 폴더) | 모두 꺼짐 |
 | `SAVE_SCOPE` | 내 컴퓨터·클라우드에 넣을 과목: current / all (`AUTO_LOCAL_SAVE`가 켜져 있으면 그 값이 우선) | current |
@@ -515,8 +515,8 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 
 | 단계 | 방법 |
 |---|---|
-| EXE | `.venv\Scripts\python.exe -m PyInstaller bungeoppang.spec --noconfirm` → `dist\붕어빵\` |
-| 설치 파일 | `packaging\build_installer.ps1` → `packaging\out\bungeoppang-<버전>-win-x64-setup.exe` (약 54MB) |
+| EXE | `.venv\Scripts\python.exe -m PyInstaller daling.spec --noconfirm` → `dist\Daling\` |
+| 설치 파일 | `packaging\build_installer.ps1` → `packaging\out\daling-<버전>-win-x64-setup.exe` (약 57MB) + 같은 파일의 예전 이름 사본 `bungeoppang-<버전>-…` |
 | 이 PC에 설치 | `packaging\build_installer.ps1 -Install` |
 | 맥 앱 (DMG) | GitHub Actions `.github/workflows/mac.yml` → `daling-<버전>-mac-arm64.dmg`(M칩)·`daling-<버전>-mac-x86_64.dmg`(인텔) 아티팩트 (아래 'macOS 판') |
 | 리눅스 앱 (AppImage·tar.gz) | GitHub Actions `.github/workflows/linux.yml` → `daling-<버전>-linux-x86_64.AppImage`·`.tar.gz` 아티팩트 (아래 '리눅스 판') |
@@ -606,9 +606,9 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 ### 앱 업데이트 (`updater.py`, GitHub 릴리스)
 
 - 확인: `/api/update/check` → api.github.com `releases/latest` 의 태그(v1.2.3)와 `VERSION` 비교. 켤 때 4초 뒤, 그 뒤 6시간마다 (`checkForUpdate`).
-- 설치: `/api/update/apply` → 첨부 `bungeoppang-<버전>-win-x64-setup.exe` 를 %TEMP%\bungeoppang-update 에 받고, GitHub 자산 digest(SHA-256)와 맞을 때만
+- 설치: `/api/update/apply` → 첨부 `daling-<버전>-win-x64-setup.exe` 를 %TEMP%\daling-update 에 받고, GitHub 자산 digest(SHA-256)와 맞을 때만
   `/SILENT /CLOSEAPPLICATIONS /RELAUNCH=1` 로 실행, 앱은 2초 뒤 스스로 끈다. 설치 스크립트 `ShouldRelaunch` 가 끝나고 앱을 다시 켠다. 진행은 `/api/update/job`.
-- 새 버전 내기: VERSION·changelog 올리고 빌드 → `gh release create v<버전> packaging/out/bungeoppang-<버전>-win-x64-setup.exe` (본문은 '- ' 줄로 짧게).
+- 새 버전 내기: VERSION·changelog 올리고 빌드 → `gh release create v<버전> packaging/out/daling-<버전>-win-x64-setup.exe packaging/out/bungeoppang-<버전>-win-x64-setup.exe` (각 `.sha256` 도) (본문은 '- ' 줄로 짧게).
 - 예전 방식(저장소 main 의 VERSION·raw 파일 교체)은 설치형에서 동작하지 않았고, main 이 1.8.6 에 멈춰 늘 '최신' 이었다.
 - 화면 전환(2026-09-28): 옛 화면을 먼저 지우고 0.1초 뒤 새 화면을 들이던 방식은 한 번 비어 보여 '깜빡임'으로 느껴졌다. 이제 `appview`·`sidebar`·`topbar` 모두 옛/새를 동시에 0.26~0.3초 겹쳐 바꾸고 `mix-blend-mode: plus-lighter` + `isolation` 으로 같은 부분의 밝기가 꺼지지 않게 한다(`vt-soft-*`). 실측: 모든 옛/새 애니메이션 delay 0.
 
@@ -619,7 +619,7 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 - 설정 키 `NOTIFY_DEADLINES`, `NOTIFY_NEW_FILES`(기본 켜짐, 화면 `notifyDeadlines`/`notifyNewFiles`, 누르는 즉시 저장). 예전의 '자동 동기화 완료/새 자료가 없습니다' 와 켤 때 48시간 요약 알림은 없앴다.
 - 메일함 ↔ 다른 화면 전환은 `html.vt-quick` 로 0.15초, 크기 변화 없이(`view-transition-group` 0초).
 
-- 설치 창 디자인: `bungeoppang.iss` 의 WizardStyle(modern dynamic windows11 hidebevels)·WizardBackColor(앱 --bg)·WizardImageFile(+DynamicDark). 그림은 `scripts/make_installer_art.py` (시스템 파이썬 Pillow, Noto Serif KR 제목 + 달구) → `packaging/art/`. 단계는 환영 → 추가 옵션 → 설치 → 완료 (언어·위치·준비됨 창은 뺐다). 문구는 [Messages] 에 앱 말투로.
+- 설치 창 디자인: `daling.iss` 의 WizardStyle(modern dynamic windows11 hidebevels)·WizardBackColor(앱 --bg)·WizardImageFile(+DynamicDark). 그림은 `scripts/make_installer_art.py` (시스템 파이썬 Pillow, Noto Serif KR 제목 + 달구) → `packaging/art/`. 단계는 환영 → 추가 옵션 → 설치 → 완료 (언어·위치·준비됨 창은 뺐다). 문구는 [Messages] 에 앱 말투로.
 - 앱 안 업데이트 화면: `#updateDialog` 카드(`setUpdateStep`, 확인→내려받기→검사→설치). 설치는 /VERYSILENT 라 윈도우 설치 창이 안 뜬다. 설치 직전 `update_done.json`(데이터 폴더)에 from/to 를 적고, 다시 켜진 앱은 `/api/whats-new` 의 `justUpdated` 로 '업데이트를 마쳤어요' 카드를 연다(본 뒤 지운다).
 
 
@@ -665,7 +665,7 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 ### 메일 보내기·임시저장 (`email_reader.send_email`, `save_draft`)
 
 - SMTP 로 보낸 뒤 IMAP `APPEND` 로 '보낸 편지함'에 사본을 넣는다. 예전엔 안 넣어서 앱·웹메일 어디에도 보낸 기록이 없었다.
-- 임시저장은 '임시 보관함'에 `(\Seen \Draft)` 로 넣고 `X-Bungeoppang-Draft: <draftId>` 헤더를 붙인다. 다시 저장하거나 보내면 같은 번호의 예전 판에 `\Deleted` 표시만 한다(EXPUNGE 금지).
+- 임시저장은 '임시 보관함'에 `(\Seen \Draft)` 로 넣고 `X-Daling-Draft: <draftId>` 헤더를 붙인다(1.12.52 까지 저장한 `X-Bungeoppang-Draft` 도 읽고 지운다). 다시 저장하거나 보내면 같은 번호의 예전 판에 `\Deleted` 표시만 한다(EXPUNGE 금지).
 - 이 서버는 `SEARCH HEADER` 를 받아도 빈 결과를 준다(실측). 그래서 `search_header` 는 최근 60일 메일의 그 헤더만 FETCH 해서 직접 비교한다.
 - 보내기 결과에 `refused`(서버가 거절한 주소)·`savedToSent` 를 돌려주고 화면 토스트에 붙인다.
 - **첨부 이름은 학교 웹메일과 같은 꼴**(`name="=?utf-8?b?…?="`, `_encoded_filename`, 1.12.41). 1.12.40 까지는 파이썬 기본 RFC 2231 꼴(`filename*=utf-8''…`)이었는데, 학교 서버가 이것을 구조(BODYSTRUCTURE)에서 버려 `("ATTACHMENT" NIL)` 이 됐다(2026-10-25 실측). 그래서 보낸 편지함에서 '첨부파일' 로만 보였다(파일 내용은 들어 있었음). 받는 사람이 학교 웹메일이면 같은 일이 났을 수 있다. 보낸 편지함 사본(`_message_bytes`)도 받는 사람에게 간 것과 같은 compat32 글자로 넣는다(policy.SMTP 는 머리말을 다시 접으며 RFC 2231 로 바꿨다).
@@ -724,7 +724,7 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 - 첫 창 크기 `app.initial_window_size`: 1320×880 을 바라되 작업 영역 −40 을 넘지 않게. 최소 크기 360×560(휴대폰 비율로 줄여 보기 가능).
 
 ## 학교 행사/세미나 + 기본 공공데이터 키 (2026-10-09)
-- `dgist_api.service_key`: 환경변수 → 설정(config.json) → config.py → `public_data_key.txt`(설치 파일에 묶은 기본 키). 키 파일은 `.gitignore`, `bungeoppang.spec` 이 있으면 묶고, CI 는 `secrets.DGIST_API_KEY` 로 만든다.
+- `dgist_api.service_key`: 환경변수 → 설정(config.json) → config.py → `public_data_key.txt`(설치 파일에 묶은 기본 키). 키 파일은 `.gitignore`, `daling.spec` 이 있으면 묶고, CI 는 `secrets.DGIST_API_KEY` 로 만든다.
 - 행사/세미나 서비스(`EvtntcListService01/getNtcList01`)는 성공을 `resultCode 100 / Success` 로 준다. 예전 `_raise_for_error` 는 이를 오류로 봤다. 항목: `seq, title, sdate(시작~끝), stime, place, tel, link, photo`. `fetch_notices` 가 `start/end/time/place/host/link` 로 바꾼다.
 - `web_ui.get_school_events`: `school_events.json` 6시간 캐시(모두가 한 키를 나눠 쓰므로). `GET /api/school-events[?force=1]`. 화면은 `loadSchoolEvents` → 캘린더 '학교 행사'(노랑).
 - 메일 행사 중복(`_mark_events`): 같은 날짜에서 앞 28자가 같거나, 괄호 꼬리표(`[(D-6!)…]`)·흔한 낱말을 뺀 낱말이 60% 이상 겹치면 하나만 남긴다(`_event_tokens`, `_same_event`). 학교 공식 행사와 같은 날 같은 행사면 메일 쪽을 빼고 `schoolEventId` 를 붙인다.
@@ -772,9 +772,12 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 - `stop_task(workspace, lane)`: 메일은 따로 도는 칸(`task_key(user, "emails")`)이라 예전처럼 `user_id` 칸만 보면 멈춘 메일 가져오기를 끌 수 없었다. `lane` 'mail'·'main'·빈 값(둘 다). `/api/stop` 본문 `{lane}`. 실패 알림도 그 작업의 칸(`key`)에 적는다.
 - 화면: '작업 중지'(`#runButton`)는 메일 칸이 직접 시킨 것이거나 30초 넘게 돌 때도 보인다. 메일함 새로고침 단추는 가져오는 동안 '가져오는 중 · 누르면 멈춤' 이고 누르면 메일만 멈춘다.
 
-## 이름·로고: Daling (2026-10-11)
-- 보이는 이름만 Daling: 창 제목·알림(`app.WINDOW_TITLE`), 화면 제목·설정 '앱' 카드, EXE 이름표(`FileDescription`·`ProductName`), 설치 화면·제어판·바로가기(`.iss` `AppName`), 설치 그림(`make_installer_art.py`), 첫 실행 소개·문의 메일 제목·설정 내보내기 파일 이름, 영어 번역.
-- 그대로 둔 것(기존 설치본이 앱 안 업데이트로 넘어오게): 실행 파일 `붕어빵.exe`, 설치 폴더(`.iss` `AppFolder` → `Programs\붕어빵`), AppId, 업데이트 파일 이름, 데이터 폴더, 사용자 자료 폴더 이름, 설정 백업의 `"app": "붕어빵"` 표시(불러오기 호환), 달구 말풍선의 붕어빵(간식) 농담.
+## 이름·로고: Daling (2026-10-11, 실행 파일·폴더까지 1.12.53)
+- 2026-10-11 보이는 이름을 Daling 으로: 창 제목·알림(`app.WINDOW_TITLE`), 화면 제목·설정 '앱' 카드, EXE 이름표(`FileDescription`·`ProductName`), 설치 화면·제어판·바로가기(`.iss` `AppName`), 설치 그림(`make_installer_art.py`), 첫 실행 소개·문의 메일 제목·설정 내보내기 파일 이름, 영어 번역.
+- 1.12.53 에 나머지도 바꿨다(사용자: "붕어빵이라는 이름은 모두 지우고"): 실행 파일 `Daling.exe`, 설치 폴더 `Programs\Daling`, 설치 파일 `daling-<버전>-win-x64-setup.exe`, 작업 표시줄 앱 ID `DGIST.Daling.App`, 사용자 자료 폴더 `Daling 파일 정리`·`Daling 강의자료`, 임시 메일 헤더 `X-Daling-Draft`, 달구 말풍선(간식).
+- 옛 설치본 넘겨받기: AppId 는 그대로라 옛 판 위에 설치하면 업데이트로 알아본다. `UsePreviousAppDir=no` 로 새 폴더에 깔고, `PrepareToInstall` 이 옛 폴더(`Programs\붕어빵`)에서 도는 앱·작업을 닫고 `[InstallDelete]` 가 그 폴더를 지운다(프로그램 파일만 있는 곳. 데이터는 `C:\lms-autosaver`).
+- 남겨 둔 예전 이름(지우면 옛 판·옛 자료가 끊긴다): ① 릴리스에 같은 설치 파일을 `bungeoppang-<버전>-…` 이름으로도 올린다 — 1.12.52 이하의 `updater.ASSET_PATTERN`·옛 한 줄 설치는 그 이름만 찾는다(`build_installer.ps1`·`release.yml` 이 사본을 만든다). ② 이미 있는 `붕어빵 파일 정리`·`붕어빵 강의자료` 는 계속 쓴다(옮기면 받은 기록 경로가 어긋나고 클라우드가 전부 다시 올린다). ③ `X-Bungeoppang-Draft` 도 읽는다. ④ 사설 인증서 주체 `CN=붕어빵 (…)` 는 만들 때 정해져 바꿀 수 없다. ⑤ 옛 바로가기·옛 시작 메뉴 폴더 지우기.
+- 작업 표시줄에 고정한 옛 아이콘은 `붕어빵.exe` 를 가리키므로 업데이트 뒤 다시 고정해야 한다.
 - 예전 '붕어빵' 바로가기는 설치 때 `[InstallDelete]` 로 지운다(바탕화면·시작 메뉴·시작 프로그램에 둘이 생기지 않게).
 - 로고: `design/logo/daling-source.webp`(흰 바탕 붓선) → `scripts/make_icons.py` 가 밝기를 불투명도로 바꿔 크림색 둥근 네모(`BG`) 위에 먹색으로 얹어 app.png·app.ico(16~256)·app-logo-120.png·favicon.svg·img/daling-mark.png 를 만든다. 16·24·32px 은 선을 굵게(MaxFilter). 화면의 로고 주소에는 `?v=daling` 을 붙였다(WebView2 캐시에 옛 물고기 그림이 남아 있었다).
 
@@ -915,7 +918,7 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 
 ## Microsoft Store 판 (MSIX, 2026-10-15)
 무료로 지금 받을 수 있는 공인 서명은 Store 뿐이다(위 표). Store 에서 받은 MSIX 는 Microsoft 가 다시 서명하므로 SmartScreen('PC 보호')·스마트 앱 컨트롤(SAC)·S 모드(Store 앱만 허용)에 막히지 않는다. EXE·MSI 를 그대로 내는 길(정책 10.2.9)은 공인 인증서 서명이 있어야 해서 안 된다.
-- 만들기: `packaging\msix\build_msix.ps1` — [1/6] `dist\붕어빵`(없거나 `-Build` 면 `build_installer.ps1 -Stage exe`) → [2/6] `build\msix\layout` 에 복사 + 매니페스트 → [3/6] `resources.pri` → [4/6] MakeAppx → [5/6] 서명 → [6/6] `-Install`(·`-Smoke`). `-Uninstall` 은 시험판 지우기.
+- 만들기: `packaging\msix\build_msix.ps1` — [1/6] `dist\Daling`(없거나 `-Build` 면 `build_installer.ps1 -Stage exe`) → [2/6] `build\msix\layout` 에 복사 + 매니페스트 → [3/6] `resources.pri` → [4/6] MakeAppx → [5/6] 서명 → [6/6] `-Install`(·`-Smoke`). `-Uninstall` 은 시험판 지우기.
   - 시험판 `packaging\out\daling-<버전>-win-x64.msix`: 이름 `<게시자>.Daling`, 게시자 = 사설 인증서 주체(`CN=붕어빵 (…), O=…`), 사설 서명. 73.8MB(Inno 설치 파일 57MB 보다 큼: MSIX 는 파일마다 따로 압축).
   - 제출판 `-Store -IdentityName … -Publisher … -PublisherDisplayName …` → `…-store.msix`: Partner Center 값으로, 서명 안 함(Store 가 서명). 가짜 값으로 묶기까지 확인.
   - 도구: Windows SDK 가 없으면 Microsoft 의 NuGet 패키지 `Microsoft.Windows.SDK.BuildTools` 10.0.26100.4654(22MB)를 `build\msix-tools` 에 한 번 받아 MakeAppx·MakePri·SignTool 을 쓴다. 셋 다 Microsoft 서명인지 확인한다(SDK 전체 설치는 관리자 권한이 든다).
@@ -928,22 +931,22 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 2026-10-15 이 PC 실측 (`<게시자>.Daling_1.12.28.0_x64__mm60x010zk88p`, 설치 위치 `C:\Program Files\WindowsApps\…`):
 - `daling.exe --autosaver-smoke` **14개 통과**. 작업 프로세스가 같은 패키지 이름으로 돎(`package=` 일치), node 실행, 업데이트는 Store 로.
 - `%LOCALAPPDATA%` **바로 아래에 새로 만든 폴더**: 패키지 안에서 만들면 `…\Packages\<패밀리>\LocalCache\Local` 로 가고 밖에서 안 보인다. 반대로 **설치 뒤에 밖에서 만든 바로 아래 폴더는 패키지 안에서 아예 안 보인다**(폴더 2개로 확인. 같은 EXE 를 패키지 밖에서 돌리면 보임). 설치 전부터 있던 `ms-playwright` 는 보인다.
-- **이미 있던 하위 폴더**(`Programs\붕어빵`, 삼성 노트 `LocalState`, `Temp`): 밖에서 만든 파일이 보이고, 안에서 새로 만든 파일·고친 내용이 진짜 자리에 그대로 간다 → 삼성 노트 DB·백업·저널도 진짜 자리에 쓰인다(실제 DB 에는 쓰지 않고 같은 성격의 폴더로 확인). 홈 폴더·`Temp` 도 진짜 자리.
+- **이미 있던 하위 폴더**(`Programs\Daling`, 삼성 노트 `LocalState`, `Temp`): 밖에서 만든 파일이 보이고, 안에서 새로 만든 파일·고친 내용이 진짜 자리에 그대로 간다 → 삼성 노트 DB·백업·저널도 진짜 자리에 쓰인다(실제 DB 에는 쓰지 않고 같은 성격의 폴더로 확인). 홈 폴더·`Temp` 도 진짜 자리.
 - 알림: 패키지 안에서 앱 ID 'Daling' 과 패키지 앱 ID 둘 다 알림 기록에 남았다(둘 다 뜸). 패키지 앱 ID 를 쓰는 까닭은 시작 메뉴의 Daling 과 같은 앱으로 묶기 위해서.
-- 창: `daling.exe` 로 켜면 서버가 0.8초 만에 뜨고(`/healthz`), 패키지 안 `붕어빵.exe` 의 'Daling' 창(1320×812)에 WebView2 로 대시보드가 그려진다(제목 줄 없는 모양까지 같음).
+- 창: `daling.exe` 로 켜면 서버가 0.8초 만에 뜨고(`/healthz`), 패키지 안 `Daling.exe` 의 'Daling' 창(1320×812)에 WebView2 로 대시보드가 그려진다(제목 줄 없는 모양까지 같음).
 - 따로 된 데이터로 띄워 볼 때는 `AUTOSAVER_ROOT`(web_ui) 와 `AUTOSAVER_DATA_ROOT`·`AUTOSAVER_CONFIG_PATH`(작업 프로세스)를 **모두** 바꿔야 한다. `AUTOSAVER_DATA_ROOT` 만 바꿨더니 화면은 실제 `C:\lms-autosaver` 를 읽었다(41초 만에 껐고 `boot_times.json`·`notices.json` 만 쓰임. 예약 작업은 켜고 45초 쉰 뒤라 돌지 않음). 실행 별칭은 부른 쪽의 환경 변수를 물려준다.
 - 확인 못 한 것: 작업 표시줄·시작 메뉴 아이콘 모양, 알림 클릭, 시작 시 자동 실행 켜기, SAC 켠 PC, 실제 LMS 동기화(Store 판으로 로그인).
 
 | 무엇 | Inno 설치판 | Store 판(MSIX) | 대응 |
 |---|---|---|---|
-| 설치 폴더 | `%LOCALAPPDATA%\Programs\붕어빵` | `C:\Program Files\WindowsApps\<패키지>` 읽기 전용 | 앱이 설치 폴더에 쓰는 곳 없음(코드 확인: `PROJECT_ROOT` 는 읽기만) |
+| 설치 폴더 | `%LOCALAPPDATA%\Programs\Daling` | `C:\Program Files\WindowsApps\<패키지>` 읽기 전용 | 앱이 설치 폴더에 쓰는 곳 없음(코드 확인: `PROJECT_ROOT` 는 읽기만) |
 | 데이터 `C:\lms-autosaver` | 그대로 | 그대로 (AppData 밖은 가상화 안 함) | 두 판이 같은 데이터를 나눠 쓴다. 앱을 지워도 남음 |
 | `%LOCALAPPDATA%` 에 새로 만드는 파일·폴더 | 그대로 | 패키지 전용 자리(`…\Packages\<패밀리>\LocalCache\Local`)로 돌려지고, 앱과 그 자식 프로세스에게만 원래 자리로 보인다. 이미 있는 파일 고치기는 진짜 자리에 | LMS 브라우저(`ms-playwright`)는 설치 전부터 진짜 자리에 있었으면 그것을 쓰고, 없으면 패키지 안에 받는다(앱을 지우면 같이 지워짐). 설치 뒤 Inno 판이 받은 것은 Store 판이 못 본다(실측, 아래) |
 | HKCU 쓰기 | 그대로 | 앱 전용 사본 | 앱은 레지스트리에 쓰지 않는다(winreg 없음) |
 | 시작 시 자동 실행 | 설치 때 고르면 시작프로그램 폴더 바로 가기 | 바로 가기를 만들어도 가상화돼 탐색기가 못 본다 → `StartupTask`(기본 꺼짐) | 켜기: 설정 › 앱 › 시작 프로그램(또는 작업 관리자 › 시작 앱)에서 Daling |
-| 작업 프로세스 | `붕어빵.exe --autosaver-job` | 같음. 자식 프로세스(작업·node·크로미움·알림 PowerShell)가 패키지 신원을 물려받는다 | `--autosaver-smoke` 가 작업 프로세스의 패키지 이름이 같은지 본다 |
+| 작업 프로세스 | `Daling.exe --autosaver-job` | 같음. 자식 프로세스(작업·node·크로미움·알림 PowerShell)가 패키지 신원을 물려받는다 | `--autosaver-smoke` 가 작업 프로세스의 패키지 이름이 같은지 본다 |
 | 앱 안 업데이트 | GitHub 설치 파일을 받아 조용히 설치 | 끔. 돌리면 Store 판과 따로 노는 Inno 판이 하나 더 깔린다 | `runtime_config.is_msix()` → `updater` 가 GitHub 에 묻지 않고 'Microsoft Store가 새 버전을 알아서 설치해요'. 새 버전은 Store 가 깐다 |
-| 작업 표시줄 앱 ID | `DGIST.Bungeoppang.App` 을 붙임 | 패키지가 정함(`<패밀리>!Daling`) | 패키지 안이면 `SetCurrentProcessExplicitAppUserModelID` 를 부르지 않는다(붙이면 창이 시작 메뉴의 Daling 과 다른 앱으로 묶인다) |
+| 작업 표시줄 앱 ID | `DGIST.Daling.App` 을 붙임 | 패키지가 정함(`<패밀리>!Daling`) | 패키지 안이면 `SetCurrentProcessExplicitAppUserModelID` 를 부르지 않는다(붙이면 창이 시작 메뉴의 Daling 과 다른 앱으로 묶인다) |
 | 알림 | winotify 앱 ID 'Daling' | 패키지 앱 ID 로 | `app.notify` 가 `msix_app_user_model_id()` 를 쓴다 |
 | WebView2 | 없으면 설치 파일이 깔아 줌 | MSIX 는 설치 프로그램을 못 돌린다 | Windows 11 은 기본 포함, 10 도 Edge 업데이트로 대부분 있음. 없으면 창 대신 기본 브라우저로 연다(`app.run_in_browser`) |
 | 명령 줄 | 실행 파일 경로 | 실행 별칭 `daling.exe` (`%LOCALAPPDATA%\Microsoft\WindowsApps`) | 점검: `daling.exe --autosaver-smoke` |
@@ -966,7 +969,7 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
      - 체험 표시(맨 위 줄무늬 띠·'체험 중 · 가짜 데이터' 알약·상태판 '체험 중')는 넣지 않는다(사용자 결정, 2026-10-15). 둘러보는 사람이 '체험 끝내기'를 기능으로 오해하지 않게. 첫 화면의 `<html data-demo>` 만 떼고 받아 보통 화면 코드로 그리므로 화면에 보이는 것은 모두 계정을 넣은 화면에도 있는 것이다. 체험 화면 그대로는 `--demo-badge`.
      - 구도: 캘린더는 메일에서 뽑은 세미나 날을 골라 상세에서 그 메일을 펼친 모습(연사·장소·본문), 자료는 '전체 목록'(과목 폴더 4개만으로는 화면이 빔), 메일함은 맨 위 메일을 연 모습. 가짜 데이터가 찍는 날 기준이라 날짜·'오늘 남은 수업' 수는 찍는 시각마다 다르다.
    - **제한된 기능 `runFullTrust` 사유** (영어로):
-     > Daling is a classic Win32 desktop app (Python, packaged with PyInstaller) that shows its UI in WebView2 served from a local 127.0.0.1 server. It starts its own helper processes (붕어빵.exe --autosaver-job) and Playwright's bundled Node.js driver to sign in to the university LMS with the system Microsoft Edge in headless mode (nothing is downloaded on Windows), saves course files to the user's own folders (C:\lms-autosaver, Documents) and can hand PDFs to Samsung Notes. These need full-trust desktop execution; the app cannot run in an AppContainer.
+     > Daling is a classic Win32 desktop app (Python, packaged with PyInstaller) that shows its UI in WebView2 served from a local 127.0.0.1 server. It starts its own helper processes (Daling.exe --autosaver-job) and Playwright's bundled Node.js driver to sign in to the university LMS with the system Microsoft Edge in headless mode (nothing is downloaded on Windows), saves course files to the user's own folders (C:\lms-autosaver, Documents) and can hand PDFs to Samsung Notes. These need full-trust desktop execution; the app cannot run in an AppContainer.
    - **인증 참고 사항(Notes for certification) — 정책 10.3.1** ('로그인이 필요하면 쓸 수 있는 시험 계정을 주라'): DGIST 계정은 학교가 재학생에게만 발급하는 SSO 계정이라 심사용으로 만들 수 없고, 이용자 계정을 넘기는 것은 학교 규정 위반이다. 대응은 앱 안 **체험 모드**(아래 '체험 모드' 절, 1.12.28~). 참고 사항 칸에 그대로 붙인다:
        > No test account is needed. DGIST LMS and school mail use SSO accounts that the university issues only to enrolled students, so we cannot create one for testers. Instead, the app has a built-in demo mode with sample data:
        > 1. Launch Daling. On the first intro card, click "Try without an account" (or, any time, the same button in the top bar, or Settings › Connected accounts › Demo mode › "Try the demo").

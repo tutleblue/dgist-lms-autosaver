@@ -1,7 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
 """Daling 을 macOS 앱(Daling.app)으로 묶는다. M칩(arm64)·인텔(x86_64) 따로 (DALING_MAC_ARCH, 없으면 이 맥의 칩).
 
-Windows 판(bungeoppang.spec)과 같은 화면·데이터를 넣고, Windows 전용(pythonnet·winotify·WinRT)은 뺀다.
+Windows 판(daling.spec)과 같은 화면·데이터를 넣고, Windows 전용(pythonnet·winotify·WinRT)은 뺀다.
 맥 판은 GitHub Actions(.github/workflows/mac.yml)의 macos-latest 에서만 만든다.
 
     python -m PyInstaller packaging/mac/daling-mac.spec --noconfirm     (저장소 맨 위에서)
@@ -48,7 +48,7 @@ else:
     print("[Daling mac] data/ 가 없어 씨앗 데이터 없이 묶습니다.")
 
 # 공공데이터포털 기본 키와 데스크톱 OAuth 클라이언트: 공개 저장소에는 없고(.gitignore)
-# CI 가 secrets 에서 만든 파일이 있을 때만 넣는다 (bungeoppang.spec 과 같은 규칙)
+# CI 가 secrets 에서 만든 파일이 있을 때만 넣는다 (daling.spec 과 같은 규칙)
 _pdkey = PROJECT / "public_data_key.txt"
 if _pdkey.exists():
     datas.append((str(_pdkey), "."))
@@ -198,8 +198,8 @@ app = BUNDLE(
             "NSAllowsLocalNetworking": True,
             "NSAllowsArbitraryLoadsInWebContent": True,
         },
-        # '내 컴퓨터에 저장' 은 문서\붕어빵 파일 정리 에 둔다. macOS 가 처음 한 번 묻는 창에 보이는 말
-        "NSDocumentsFolderUsageDescription": "받은 강의자료를 문서 폴더의 '붕어빵 파일 정리'에 저장합니다.",
+        # '내 컴퓨터에 저장' 은 문서\Daling 파일 정리 에 둔다. macOS 가 처음 한 번 묻는 창에 보이는 말
+        "NSDocumentsFolderUsageDescription": "받은 강의자료를 문서 폴더의 'Daling 파일 정리'에 저장합니다.",
         "NSDownloadsFolderUsageDescription": "고른 파일을 다운로드 폴더에서 읽거나 저장합니다.",
         "NSDesktopFolderUsageDescription": "고른 파일을 데스크톱에서 읽거나 저장합니다.",
         # 저장 폴더는 사용자가 고른다 (USB·외장 디스크·NAS, 클라우드 앱 폴더 ~/Library/CloudStorage 도 됨).

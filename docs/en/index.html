@@ -170,12 +170,12 @@
         <div class="ba-col after">
           <p class="ba-label">DALING · AUTOMATIC</p>
           <h4>Leave it running and it looks like this</h4>
-          <figure class="xp" role="img" aria-label="File Explorer: four course folders under Documents › 붕어빵 파일 정리. General Physics II holds Announcements, Assignments and Course Materials like the LMS, with Week 1 to 3 inside. Week 3 has four lecture and homework PDFs, one just downloaded">
+          <figure class="xp" role="img" aria-label="File Explorer: four course folders under Documents › Daling 파일 정리. General Physics II holds Announcements, Assignments and Course Materials like the LMS, with Week 1 to 3 inside. Week 3 has four lecture and homework PDFs, one just downloaded">
             <div class="xp-top"><span class="xp-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="xp-tab"><i class="fi dir"></i>Week 3</span><span class="xp-ctl" aria-hidden="true"><i>—</i><i>□</i><i>✕</i></span></div>
-            <div class="xp-tools"><span class="xp-btns" aria-hidden="true">←→↑</span><span class="xp-addr">Documents › 붕어빵 파일 정리 › General Physics II › Course Materials › <b>Week 3</b></span><span class="xp-search">Search Week 3</span></div>
+            <div class="xp-tools"><span class="xp-btns" aria-hidden="true">←→↑</span><span class="xp-addr">Documents › Daling 파일 정리 › General Physics II › Course Materials › <b>Week 3</b></span><span class="xp-search">Search Week 3</span></div>
             <div class="xp-body">
               <ul class="xp-nav">
-                <li class="open"><i class="fi dir"></i>붕어빵 파일 정리</li>
+                <li class="open"><i class="fi dir"></i>Daling 파일 정리</li>
                 <li class="l1 open"><i class="fi dir"></i>General Physics II</li>
                 <li class="l2 has"><i class="fi dir"></i>Announcements</li>
                 <li class="l2 has"><i class="fi dir"></i>Assignments</li>
@@ -464,7 +464,7 @@
             <h3>Windows</h3>
           </div>
           <p class="req">Windows 10 · 11 (64-bit) · Installer (.exe)</p>
-          <a class="btn primary" href="https://github.com/tutleblue/dgist-lms-autosaver/releases/download/v1.12.52/bungeoppang-1.12.52-win-x64-setup.exe" data-dl="win" download>
+          <a class="btn primary" href="https://github.com/tutleblue/dgist-lms-autosaver/releases/download/v1.12.53/daling-1.12.53-win-x64-setup.exe" data-dl="win" download>
             <span class="logo btn-logo"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M1.5 1.5h10v10h-10zM12.5 1.5h10v10h-10zM1.5 12.5h10v10h-10zM12.5 12.5h10v10h-10z"/></svg></span>
             Download for Windows
           </a>
@@ -623,7 +623,8 @@
       const pick = (re, allowPre) => {
         for (const rel of list) {
           if (rel.draft || (!allowPre && rel.prerelease)) continue;
-          const asset = (rel.assets || []).find((a) => re.test(a.name));
+          // 1.12.53 부터 같은 설치 파일이 새 이름(daling-…)과 예전 이름(bungeoppang-…) 두 벌로 올라간다. 새 이름을 먼저
+          const asset = (rel.assets || []).filter((a) => re.test(a.name)).sort((a, b) => /^daling-/i.test(b.name) - /^daling-/i.test(a.name))[0];
           if (asset) return asset;
         }
         return null;
@@ -641,7 +642,7 @@
         // the hero's "Latest 1.12.x" follows the stable (Windows) release
         if (osKey === "win" && v) document.querySelectorAll("[data-latest]").forEach((el) => { el.textContent = el.dataset.fmt.replace("{v}", v); });
       };
-      set("win", pick(/^(bungeoppang|daling)-[\d.]+-win-x64-setup\.exe$/i, false));
+      set("win", pick(/^(daling|bungeoppang)-[\d.]+-win-x64-setup\.exe$/i, false));
       set("mac", pick(/^daling-[\d.]+-mac-arm64\.dmg$/i, true));
       set("mac-intel", pick(/^daling-[\d.]+-mac-x86_64\.dmg$/i, true));
       set("linux", pick(/^daling-[\d.]+-linux-x86_64\.AppImage$/i, true));

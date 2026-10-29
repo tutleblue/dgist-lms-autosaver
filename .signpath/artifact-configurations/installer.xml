@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- SignPath 아티팩트 설정 'installer' : GitHub 아티팩트(zip) 안의 bungeoppang-<버전>-win-x64-setup.exe 를 서명. -->
+<!-- SignPath 아티팩트 설정 'installer' : GitHub 아티팩트(zip) 안의 daling-<버전>-win-x64-setup.exe 를 서명. -->
 <artifact-configuration xmlns="http://signpath.io/artifact-configuration/v1">
   <zip-file>
-    <pe-file path="bungeoppang-*-win-x64-setup.exe" max-matches="1" product-name="붕어빵">
+    <pe-file path="daling-*-win-x64-setup.exe" max-matches="1" product-name="Daling">
       <authenticode-sign />
     </pe-file>
   </zip-file>

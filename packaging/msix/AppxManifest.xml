@@ -6,7 +6,7 @@
   - 이름·게시자: 이 PC 시험판은 사설 인증서(CN=붕어빵 (jykim5215), O=jykim5215)와 같은 값,
     Store 제출판(-Store)은 Partner Center '제품 ID' 화면의 Package/Identity/Name·Publisher 값으로 바꿔 묶는다.
   - runFullTrust: PyInstaller 로 묶은 보통 데스크톱 앱(Win32)이라 꼭 필요하다. 제출할 때 사유를 적는다 (FEATURES.md 'Microsoft Store 판').
-  - 실행 파일 이름은 그대로 붕어빵.exe (작업 프로세스가 sys.executable 로 자기 자신을 다시 부른다).
+  - 실행 파일 이름은 Daling.exe (작업 프로세스가 sys.executable 로 자기 자신을 다시 부른다).
 -->
 <Package
   xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
@@ -36,7 +36,7 @@
   </Resources>
 
   <Applications>
-    <Application Id="Daling" Executable="붕어빵.exe" EntryPoint="Windows.FullTrustApplication">
+    <Application Id="Daling" Executable="Daling.exe" EntryPoint="Windows.FullTrustApplication">
       <uap:VisualElements
         DisplayName="Daling"
         Description="DGIST LMS 강의자료, 과제 마감, 학교 메일을 한 화면에 모아 주는 앱"
@@ -50,12 +50,12 @@
         <!-- Windows 시작 시 자동 실행. Inno 설치판의 '시작 시 자동 실행'(기본 꺼짐)과 같게 꺼 둔다.
              MSIX 앱은 시작 프로그램 폴더에 바로 가기를 만들어도 그 파일이 앱 전용 AppData 로 가상화돼 탐색기가 못 본다.
              켜기: 설정 > 앱 > 시작 프로그램 (또는 작업 관리자 > 시작 앱) 에서 Daling -->
-        <desktop:Extension Category="windows.startupTask" Executable="붕어빵.exe" EntryPoint="Windows.FullTrustApplication">
+        <desktop:Extension Category="windows.startupTask" Executable="Daling.exe" EntryPoint="Windows.FullTrustApplication">
           <desktop:StartupTask TaskId="DalingStartup" Enabled="false" DisplayName="Daling" />
         </desktop:Extension>
         <!-- 명령 줄 이름 daling.exe. 패키지 안의 실행 파일은 경로로 직접 켤 수 없어서, 설치본 점검
              (daling.exe autosaver-smoke 플래그)과 문제 신고 때 이 이름으로 부른다 -->
-        <uap3:Extension Category="windows.appExecutionAlias" Executable="붕어빵.exe" EntryPoint="Windows.FullTrustApplication">
+        <uap3:Extension Category="windows.appExecutionAlias" Executable="Daling.exe" EntryPoint="Windows.FullTrustApplication">
           <uap3:AppExecutionAlias>
             <desktop:ExecutionAlias Alias="daling.exe" />
           </uap3:AppExecutionAlias>

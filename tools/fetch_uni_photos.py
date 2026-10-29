@@ -36,7 +36,7 @@ ROOT = Path(__file__).resolve().parent.parent
 OUT_DIR = ROOT / "web" / "img" / "uni"
 META_PATH = ROOT / "uni_photos.json"
 
-UA = "bungeoppang-dgist-autosaver/1.0 (personal student app; contact: tutleblue12@gmail.com)"
+UA = "daling-dgist-autosaver/1.0 (personal student app; contact: tutleblue12@gmail.com)"
 CTX = ssl.create_default_context()
 
 # fglp.py 의 이름 → 위키백과 문서 제목

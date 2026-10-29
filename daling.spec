@@ -1,5 +1,5 @@
 # -*- mode: python ; coding: utf-8 -*-
-"""붕어빵을 EXE 한 벌로 묶는다.
+"""Daling 을 EXE 한 벌로 묶는다.
 
 왜 onefile 이 아니라 onedir 인가
   onefile 은 켤 때마다 임시 폴더에 전부 풀어 놓아 시작이 느리고, 백신이
@@ -10,7 +10,7 @@
   이름으로 동의 화면을 띄울 수 있다. 앱 안에서 각자 넣도록 해 두었다.
   (설정 → 계정 연결 → 파일 고르기)
 
-만들기:  python -m PyInstaller bungeoppang.spec --noconfirm
+만들기:  python -m PyInstaller daling.spec --noconfirm
 """
 
 from pathlib import Path
@@ -38,7 +38,7 @@ _seed = PROJECT / "data"
 if _seed.exists():
     datas.append((str(_seed), "data"))
 else:
-    print("[붕어빵] data/ 가 없어 씨앗 데이터 없이 묶습니다. "
+    print("[Daling] data/ 가 없어 씨앗 데이터 없이 묶습니다. "
           "처음 켤 때 학사일정·개설강좌를 직접 받아 옵니다.")
 
 # 공공데이터포털 기본 인증키(개설강좌·학사일정·학교 행사). 공개 저장소에는 없고(.gitignore)
@@ -47,13 +47,13 @@ _pdkey = PROJECT / "public_data_key.txt"
 if _pdkey.exists():
     datas.append((str(_pdkey), "."))
 else:
-    print("[붕어빵] public_data_key.txt 가 없어 공공데이터 기본 키 없이 묶습니다.")
+    print("[Daling] public_data_key.txt 가 없어 공공데이터 기본 키 없이 묶습니다.")
 
 _client = PROJECT / "google_client.json"
 if _client.exists():
     datas.append((str(_client), "."))
 else:
-    print("[붕어빵] google_client.json 이 없어 로그인 준비물 없이 묶습니다. "
+    print("[Daling] google_client.json 이 없어 로그인 준비물 없이 묶습니다. "
           "받는 사람이 설정에서 직접 넣어야 합니다.")
 
 hiddenimports = [
@@ -115,9 +115,9 @@ _version_file.write_text(f"""VSVersionInfo(
       StringStruct('CompanyName', 'Daling'),
       StringStruct('FileDescription', 'Daling - DGIST LMS AutoSaver'),
       StringStruct('FileVersion', '{_ver}'),
-      StringStruct('InternalName', 'bungeoppang'),
+      StringStruct('InternalName', 'daling'),
       StringStruct('LegalCopyright', 'Copyright 2026 Daling. Apache License 2.0'),
-      StringStruct('OriginalFilename', '붕어빵.exe'),
+      StringStruct('OriginalFilename', 'Daling.exe'),
       StringStruct('ProductName', 'Daling'),
       StringStruct('ProductVersion', '{_ver}')])]),
     VarFileInfo([VarStruct('Translation', [1042, 1200])])
@@ -130,7 +130,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name="붕어빵",
+    name="Daling",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -147,5 +147,5 @@ coll = COLLECT(
     a.datas,
     strip=False,
     upx=False,
-    name="붕어빵",
+    name="Daling",
 )

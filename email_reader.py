@@ -2077,7 +2077,7 @@ def load_draft(uid: int, folder_key: str = "draft", max_attach: int = 0) -> dict
     from email import policy
 
     msg = email_lib.message_from_bytes(fetch_raw_message(uid, folder_key), policy=policy.default)
-    draft_id = str(msg.get(DRAFT_HEADER, "") or "").strip()
+    draft_id = str(msg.get(DRAFT_HEADER, "") or msg.get(LEGACY_DRAFT_HEADER, "") or "").strip()
     subject = str(msg.get("Subject", "") or "")
     if draft_id and subject == "(제목 없음)":
         subject = ""  # 우리 앱이 빈 제목 대신 넣은 글자 (build_message)
@@ -2266,7 +2266,9 @@ def _message_bytes(msg) -> bytes:
     return msg.as_bytes(policy=policy.compat32.clone(linesep="\r\n"))
 
 
-DRAFT_HEADER = "X-Bungeoppang-Draft"
+# 1.12.52 까지는 X-Bungeoppang-Draft 로 적었다. 그때 저장한 임시 메일도 이어 쓰고 지울 수 있게 둘 다 읽는다
+DRAFT_HEADER = "X-Daling-Draft"
+LEGACY_DRAFT_HEADER = "X-Bungeoppang-Draft"
 
 
 def _drop_old_drafts(client, draft_id: str, replace_uid: int = 0) -> int:
@@ -2281,6 +2283,8 @@ def _drop_old_drafts(client, draft_id: str, replace_uid: int = 0) -> int:
     if not raw or not (draft_id or replace_uid) or not client.select_folder(raw):
         return 0
     uids = set(client.search_header(DRAFT_HEADER, draft_id)) if draft_id else set()
+    if draft_id:
+        uids |= set(client.search_header(LEGACY_DRAFT_HEADER, draft_id))
     if replace_uid and int(replace_uid) > 0:
         uids.add(int(replace_uid))
     n = 0

@@ -412,7 +412,7 @@ PLAYWRIGHT_HEADLESS = os.environ.get("AUTOSAVER_HEADLESS", "1").lower() not in {
 
 # ===== 하위 작업(새로고침·동기화) 실행 방식 =====
 # 소스로 돌 때는 `python -c "..."` 로 하위 프로세스를 띄우면 된다.
-# 그런데 EXE 로 묶이면 sys.executable 이 '붕어빵.exe' 라서, 같은 방식으로 부르면
+# 그런데 EXE 로 묶이면 sys.executable 이 'Daling.exe' 라서, 같은 방식으로 부르면
 # -c 가 무시된 채 앱이 통째로 다시 켜진다. (새로고침할 때마다 창이 하나씩 더 뜨고,
 #  정작 크롤링은 돌지 않는다) 그래서 EXE 일 때는 이 인자를 붙여
 # app.py 가 창을 띄우지 않고 작업만 하고 끝나도록 한다.

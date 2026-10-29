@@ -603,7 +603,7 @@ def _backup_db(db_path: Path) -> Path:
     from datetime import datetime
 
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    backup = db_path.with_name(f"Storage.sqlite.붕어빵백업-{stamp}")
+    backup = db_path.with_name(f"Storage.sqlite.Daling백업-{stamp}")
     shutil.copy2(db_path, backup)
     return backup
 

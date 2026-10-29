@@ -77,11 +77,11 @@ import web_ui
 
 HOST = "127.0.0.1"
 PORT = int(os.environ.get("AUTOSAVER_UI_PORT", "8765"))
-# 보이는 앱 이름(2026-10-11 붕어빵 → Daling). 실행 파일은 그대로 붕어빵.exe
+# 앱 이름. 실행 파일도 Daling.exe (1.12.53 부터)
 WINDOW_TITLE = "Daling"
 # 작업표시줄이 pythonw.exe나 옛 캐시가 아니라 이 앱을 별도 앱으로 인식하게 하는 식별자.
 # 바로가기(install.ps1)에도 같은 값을 넣어야 아이콘이 완전히 일치한다.
-APP_USER_MODEL_ID = "DGIST.Bungeoppang.App"
+APP_USER_MODEL_ID = "DGIST.Daling.App"
 # EXE 로 묶이면 화면 파일이 exe 옆 _internal 로 들어간다. 그때는 __file__ 이
 # 아니라 sys._MEIPASS 를 봐야 아이콘을 찾는다.
 _APP_ROOT = Path(getattr(sys, "_MEIPASS", "") or Path(__file__).resolve().parent)
@@ -576,7 +576,7 @@ def port_in_use(host: str, port: int) -> bool:
 
 
 def existing_dashboard(host: str, port: int) -> bool:
-    """포트를 점유한 프로세스가 이 앱(붕어빵)의 대시보드인지 확인.
+    """포트를 점유한 프로세스가 이 앱(Daling)의 대시보드인지 확인.
 
     200 만 보면 안 된다. 다른 웹 서버도 /healthz 에 200 을 줄 수 있다.
     우리 서버만 돌려주는 모양(ok·mode)까지 본다.
@@ -592,7 +592,7 @@ def existing_dashboard(host: str, port: int) -> bool:
 
 
 # 8765 가 막혀 있으면 이 범위에서 빈 곳을 찾는다.
-# (실제로 다른 개발 도구가 8765 에 웹 서버를 띄워 붕어빵이 "포트 사용 중" 으로 멈췄다)
+# (실제로 다른 개발 도구가 8765 에 웹 서버를 띄워 Daling이 "포트 사용 중" 으로 멈췄다)
 PORT_CANDIDATES = [PORT] + [p for p in range(8766, 8786) if p != PORT]
 
 
@@ -740,14 +740,14 @@ class _startup_lock:
 
 
 def start_server() -> ThreadingHTTPServer | None:
-    """서버를 띄우고 반환. 이미 붕어빵 대시보드가 떠 있으면 None.
+    """서버를 띄우고 반환. 이미 Daling 대시보드가 떠 있으면 None.
 
     쓰기로 한 포트는 전역 PORT 와 환경 변수에 적어 둔다
     (창 주소와 작업 프로세스가 같은 포트를 보게).
     """
     global PORT
 
-    # 1) 이미 켜진 붕어빵이 있으면 서버를 또 띄우지 않고 그 창만 연다
+    # 1) 이미 켜진 Daling이 있으면 서버를 또 띄우지 않고 그 창만 연다
     for port in PORT_CANDIDATES:
         if port_in_use(HOST, port) and existing_dashboard(HOST, port):
             PORT = port
@@ -807,7 +807,7 @@ def _bind_worker_output() -> None:
 def run_worker(job: str) -> int:
     """새로고침·동기화 같은 하위 작업을 창 없이 실행한다.
 
-    EXE 로 묶이면 sys.executable 이 '붕어빵.exe' 라서 `-c "..."` 방식이 통하지 않는다.
+    EXE 로 묶이면 sys.executable 이 'Daling.exe' 라서 `-c "..."` 방식이 통하지 않는다.
     그대로 두면 새로고침할 때마다 앱이 통째로 한 번 더 켜지고(창이 계속 늘어남),
     정작 크롤링은 시작도 못 한다. 그래서 EXE 는 이 함수로 들어온다.
 

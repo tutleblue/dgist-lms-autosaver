@@ -9,7 +9,7 @@
 #   그 대신 받은 파일이 GitHub 릴리스의 원본과 같은지 여기서 SHA-256(GitHub 이 자산마다 계산해 주는 digest)으로 확인한다.
 #   Microsoft Defender 검사는 그대로 받는다. 스마트 앱 컨트롤이 켜진 PC 는 서명 없는 앱을 그래도 막는다(아래 안내).
 #
-# 하는 일: GitHub 릴리스에서 bungeoppang-<버전>-win-x64-setup.exe 를 받아 확인 → 설치 창을 띄운다(개인정보 안내·바로가기 고르기).
+# 하는 일: GitHub 릴리스에서 daling-<버전>-win-x64-setup.exe 를 받아 확인 → 설치 창을 띄운다(개인정보 안내·바로가기 고르기).
 #   켜져 있는 Daling 은 설치 프로그램이 닫고 바꾼다. 설정·메일·받은 자료(C:\lms-autosaver)는 그대로다.
 #
 # 주의: 이 파일은 BOM 없는 UTF-8 이다 (CLAUDE.md 규칙 20 의 예외).
@@ -30,7 +30,8 @@
   function Say([string]$k, [string]$e, [string]$color = 'Gray') { Write-Host $(if ($ko) { $k } else { $e }) -ForegroundColor $color }
 
   $repo = 'tutleblue/dgist-lms-autosaver'
-  $pattern = '^bungeoppang-[\d.]+-win-x64-setup\.exe$'
+  # 1.12.52 까지의 릴리스에는 예전 이름(bungeoppang-…)만 있다
+  $pattern = '^(daling|bungeoppang)-[\d.]+-win-x64-setup\.exe$'
   $headers = @{ 'User-Agent' = 'Daling-Installer'; 'Accept' = 'application/vnd.github+json' }
 
   try {
@@ -44,7 +45,7 @@
       $releases = Invoke-RestMethod "https://api.github.com/repos/$repo/releases?per_page=10" -Headers $headers -UseBasicParsing
       foreach ($r in @($releases)) {
         if ($r.draft -or $r.prerelease) { continue }
-        $a = @($r.assets) | Where-Object { $_.name -match $pattern } | Select-Object -First 1
+        $a = @($r.assets) | Where-Object { $_.name -match $pattern } | Sort-Object { $_.name -notlike 'daling-*' } | Select-Object -First 1
         if ($a) {
           $tag = $r.tag_name; $name = $a.name; $url = $a.browser_download_url; $size = [long]$a.size
           $want = ([string]$a.digest -replace '^sha256:', '').ToLower()
@@ -62,7 +63,7 @@
       $resp = $req.GetResponse(); $final = $resp.ResponseUri.AbsoluteUri; $resp.Close()
       if ($final -match '/tag/(v[\d.]+)$') {
         $tag = $Matches[1]
-        $name = "bungeoppang-$($tag.TrimStart('v'))-win-x64-setup.exe"
+        $name = "daling-$($tag.TrimStart('v'))-win-x64-setup.exe"
         $url = "https://github.com/$repo/releases/download/$tag/$name"
         try {
           $wc = New-Object Net.WebClient

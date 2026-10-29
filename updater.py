@@ -5,7 +5,7 @@
 앱은 그것을 받아 조용히 설치한 뒤 다시 켠다.
 
   1) api.github.com/repos/<저장소>/releases/latest 에서 최신 릴리스(태그 v1.2.3)를 읽는다
-  2) 첨부된 bungeoppang-<버전>-win-x64-setup.exe 를 내려받는다
+  2) 첨부된 daling-<버전>-win-x64-setup.exe 를 내려받는다
   3) GitHub 이 붙여 주는 SHA-256(자산 digest) 과 맞는지 확인한다 — 안 맞거나 값이 없으면 설치하지 않는다
   4) 설치 파일을 /SILENT 로 실행하고 앱은 스스로 끈다. 설치가 끝나면 설치 프로그램이 앱을 다시 켠다(/RELAUNCH=1)
 
@@ -36,7 +36,9 @@ PROJECT_ROOT = Path(__file__).resolve().parent
 # 배포자 GitHub 저장소 (공개)
 REPO = "tutleblue/dgist-lms-autosaver"
 LATEST_RELEASE_API = f"https://api.github.com/repos/{REPO}/releases/latest"
-ASSET_PATTERN = re.compile(r"^bungeoppang-[\d.]+-win-x64-setup\.exe$")
+# 1.12.53 부터 설치 파일 이름이 daling-… 이다. 릴리스에는 예전 앱을 위한 같은 파일의 bungeoppang-… 사본도 있어
+# 둘 다 맞으면 앞에 오는 것을 고르므로, 새 이름만 찾는다
+ASSET_PATTERN = re.compile(r"^daling-[\d.]+-win-x64-setup\.exe$")
 # 맥 빌드(.github/workflows/mac.yml)가 만드는 DMG. M칩(arm64)·인텔(x86_64) 따로다 (인텔은 2026-10-21~).
 # 제 칩 것만 본다 — 인텔 맥에 M칩 판을 깔면 열리지 않는다.
 MAC_ASSET_PATTERNS = {
@@ -91,7 +93,7 @@ def _manual_note() -> str:
 # 설치 파일만 받는다. 다른 호스트로 넘어가는 주소는 쓰지 않는다 (GitHub 이 저장소를 옮기는 곳은 이 둘)
 ALLOWED_DOWNLOAD_HOSTS = ("github.com", "objects.githubusercontent.com", "release-assets.githubusercontent.com")
 VERSION_FILE = PROJECT_ROOT / "VERSION"
-USER_AGENT = "Bungeoppang-Updater"
+USER_AGENT = "Daling-Updater"
 
 
 def local_version() -> str:
@@ -278,7 +280,7 @@ def update_marker_path() -> Path:
 
         return Path(AUTOSAVER_DATA_ROOT) / "update_done.json"
     except Exception:
-        return Path(tempfile.gettempdir()) / "bungeoppang-update" / "update_done.json"
+        return Path(tempfile.gettempdir()) / "daling-update" / "update_done.json"
 
 
 def _write_update_marker(old: str, new: str) -> None:
@@ -305,7 +307,7 @@ def _run_update(on_ready_to_exit) -> None:
             # 확인할 값이 없으면 받은 파일이 진짜인지 알 수 없다. 설치하지 않는다.
             raise RuntimeError("설치 파일의 확인값(SHA-256)이 없어 설치하지 않았습니다.")
 
-        folder = Path(tempfile.gettempdir()) / "bungeoppang-update"
+        folder = Path(tempfile.gettempdir()) / "daling-update"
         folder.mkdir(parents=True, exist_ok=True)
         dest = folder / asset["name"]
         _set_job(stage="내려받기", message="새 버전을 내려받는 중", total=int(asset.get("size") or 0))
@@ -385,7 +387,7 @@ def mac_install_log_path() -> Path:
 
         return Path(AUTOSAVER_DATA_ROOT) / "update-mac.log"
     except Exception:
-        return Path(tempfile.gettempdir()) / "bungeoppang-update" / "update-mac.log"
+        return Path(tempfile.gettempdir()) / "daling-update" / "update-mac.log"
 
 
 def _mac_hand_off_secrets() -> Path | None:

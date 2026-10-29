@@ -25,7 +25,7 @@ PAGE = """<!doctype html>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta name="robots" content="noindex" />
-<title>붕어빵 받기</title>
+<title>Daling 받기</title>
 <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 <style>
   :root {
@@ -72,7 +72,7 @@ PAGE = """<!doctype html>
 <body>
 <main>
   <img src="/img/dalgu/hello.png" alt="" />
-  <h1>붕어빵은 설치해서 쓰는 앱이에요</h1>
+  <h1>Daling은 설치해서 쓰는 앱이에요</h1>
   <p>이 웹 주소에서는 LMS 동기화가 제대로 되지 않아 운영을 멈췄어요.
      윈도우 PC에 설치하면 자료 받기와 메일 확인이 모두 내 컴퓨터에서 돌아가요.</p>
   <a class="go" href="__RELEASES__">설치 파일 받기</a>
@@ -82,7 +82,7 @@ PAGE = """<!doctype html>
     <li>앱의 설정에서 LMS 계정을 다시 넣어요.</li>
   </ol>
   <small>이 주소에 넣었던 계정과 설정은 서버에서 지워졌어요.<br />
-  Bungeoppang is a Windows app — download the installer from the link above.</small>
+  Daling is a desktop app — download the installer from the link above.</small>
 </main>
 </body>
 </html>
@@ -96,7 +96,7 @@ ASSETS = {
 
 
 class NoticeHandler(BaseHTTPRequestHandler):
-    server_version = "BungeoppangNotice/1.0"
+    server_version = "DalingNotice/1.0"
 
     def _send(self, status: int, body: bytes, content_type: str, cache: str = "no-store") -> None:
         self.send_response(status)
@@ -141,7 +141,7 @@ class NoticeHandler(BaseHTTPRequestHandler):
 def main() -> None:
     host = os.environ.get("AUTOSAVER_UI_HOST", "0.0.0.0")
     port = int(os.environ.get("PORT") or os.environ.get("AUTOSAVER_UI_PORT") or "8765")
-    print(f"붕어빵 안내 페이지: http://{host}:{port}", flush=True)
+    print(f"Daling 안내 페이지: http://{host}:{port}", flush=True)
     ThreadingHTTPServer((host, port), NoticeHandler).serve_forever()
 
 

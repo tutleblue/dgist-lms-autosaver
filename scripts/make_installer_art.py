@@ -1,6 +1,6 @@
 """설치 화면(Inno Setup)에 쓰는 그림을 만든다.
 
-설치 창 왼쪽 큰 그림: 달구(web/img/dalgu/hello.png) + '붕어빵' 글자, 배경은 투명.
+설치 창 왼쪽 큰 그림: 달구(web/img/dalgu/hello.png) + 'Daling' 글자, 배경은 투명.
   배경색은 .iss 의 WizardImageBackColor(밝은 모드)·…DynamicDark(어두운 모드)가 칠한다.
   그래서 그림 한 벌로 두 모드를 다 맞춘다(어두운 모드 전용 그림 설정은 Inno 에 없다).
 오른쪽 위 작은 그림: 앱 로고.

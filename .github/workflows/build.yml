@@ -79,7 +79,7 @@ jobs:
         timeout-minutes: 5
         run: |
           New-Item -ItemType Directory -Force logs | Out-Null
-          # 실행 파일 이름(붕어빵.exe)을 스크립트에 적지 않고 찾는다 (dist 아래 폴더 하나, 그 안의 exe 하나)
+          # 실행 파일 이름(Daling.exe)을 스크립트에 적지 않고 찾는다 (dist 아래 폴더 하나, 그 안의 exe 하나)
           $exe = Get-ChildItem dist -Directory | ForEach-Object { Get-ChildItem $_.FullName -Filter *.exe } | Select-Object -First 1
           "점검: $($exe.FullName)"
           # 창 없는(console=False) EXE 라 출력은 파일로 받고, 성공 여부는 종료 코드로 본다 (smoke_test.py)
@@ -104,7 +104,7 @@ jobs:
           name: daling-windows-logs
           path: |
             logs/
-            build/bungeoppang/warn-bungeoppang.txt
+            build/daling/warn-daling.txt
           if-no-files-found: ignore
 
   mac:

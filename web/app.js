@@ -5578,14 +5578,14 @@ const EXAM_DALGU = {
     "모르는 건 표시만 해 두고 넘어가요",
     "어제 본 걸 5분만 다시 훑어봐요",
     "책상 정리하면 머리도 정리돼요",
-    "붕어빵 하나 먹고 다시 해요",
+    "간식 하나 먹고 다시 해요",
   ] },
   during: { poses: ["fight", "thumbs", "wink"], talk: [
     "시험장 가기 전에 화장실 꼭 들러요",
     "학생증 챙겼죠?",
     "첫 문제가 어려우면 뒤에서부터 풀어도 돼요",
     "끝난 과목은 답 맞춰 보지 말고 쉬어요",
-    "달구가 붕어빵 데워 놓을게요",
+    "달구가 간식 챙겨 놓을게요",
   ] },
   last: { poses: ["fight", "run"], talk: [
     "마지막 한 과목, 달구도 같이 달려요",
@@ -5594,7 +5594,7 @@ const EXAM_DALGU = {
   ] },
   after: { poses: ["yay", "lounge", "munch", "laugh"], talk: [
     "오늘은 알람 끄고 자요",
-    "붕어빵 파티해요!",
+    "간식 파티해요!",
     "보고 싶던 거 몰아 보기 어때요",
     "고생한 나한테 칭찬 한마디 해 줘요",
   ] },
@@ -11384,7 +11384,7 @@ function bindFglp() {
    동기화가 끝날 때마다 서버가 알아서 맞춘다(web_ui.autosave_local).
    여기서는 '지금 저장' 버튼과, 처음 켰을 때 한 번 맞추는 일만 한다.
    처음 켜면 수백 개를 복사할 수 있어 서버가 뒤에서 돌리고 진행만 받아 온다. */
-/** C:\Users\이름\OneDrive\문서\붕어빵 → 문서\붕어빵, 맥 /Users/이름/Documents/붕어빵 → Documents/붕어빵
+/** C:\Users\이름\OneDrive\문서\Daling → 문서\Daling, 맥 /Users/이름/Documents/Daling → Documents/Daling
     (전체 경로는 title 로 남긴다) */
 function friendlyPath(path) {
   return String(path || "")
@@ -11567,7 +11567,8 @@ function renderCloudDests() {
       const root = draft.path || c.root;
       const installed = Boolean(root);
       const on = installed && draft.on;
-      const where = installed ? `${friendlyPath(root)} › 붕어빵 강의자료` : "이 PC에서 찾지 못했어요";
+      // 폴더 이름은 서버가 정한다(예전 판에서 만든 '붕어빵 강의자료' 가 있으면 그것을 계속 쓴다)
+      const where = installed ? `${friendlyPath(root)} › ${c.folderName || "Daling 강의자료"}` : "이 PC에서 찾지 못했어요";
       return `
         <div class="st-cloud-card${on ? " on" : ""}${installed ? "" : " missing"}" data-cloud="${c.key}">
           <span class="st-cloud-logo" aria-hidden="true">${CLOUD_LOGOS[c.key] || ""}</span>
@@ -14643,7 +14644,7 @@ async function attachDriveFiles(files) {
 
 
 /* ===== 문의 · 오류 제보 · 아이디어 =====
-   만든 사람(FEEDBACK_TO)에게 붕어빵 메일 쓰기로 바로 보낸다.
+   만든 사람(FEEDBACK_TO)에게 Daling 메일 쓰기로 바로 보낸다.
    종류를 고르면 받는 사람·제목·본문 서식이 채워지고, 앱 정보(버전·운영체제·화면)를 아래에 붙인다.
    오류 제보에는 최근 앱 오류 기록(server_errors.log 마지막 한 건)도 붙인다.
    메일 주소·비밀번호·파일 경로 같은 개인 정보는 붙이지 않는다 — 보내기 전에 사용자가 다 볼 수 있다. */

@@ -2062,14 +2062,21 @@ def local_autosave_mode(config: dict[str, Any]) -> str:
 # ===== 클라우드 폴더에도 자동 저장 =====
 # 클라우드마다 계정 로그인(API)을 붙이지 않고, PC용 동기화 프로그램이 지켜보는 폴더에 넣는다.
 # 그러면 로그인·앱 등록·토큰이 필요 없고, 그 프로그램이 알아서 올린다.
-# 폴더 안에 '붕어빵 강의자료\<과목>\<파일>' 로 둔다.
+# 폴더 안에 'Daling 강의자료\<과목>\<파일>' 로 둔다. 1.12.52 까지는 '붕어빵 강의자료' 였다: 이미 그 폴더가
+# 있으면 그대로 쓴다(옮기면 동기화 프로그램이 전부 다시 올리고, 받은 기록의 경로도 어긋난다).
 CLOUD_PROVIDERS: tuple[tuple[str, str], ...] = (
     ("onedrive", "OneDrive"),
     ("dropbox", "Dropbox"),
     ("icloud", "iCloud Drive"),
     ("mybox", "네이버 MYBOX"),
 )
-CLOUD_FOLDER_NAME = "붕어빵 강의자료"
+CLOUD_FOLDER_NAME = "Daling 강의자료"
+LEGACY_CLOUD_FOLDER_NAME = "붕어빵 강의자료"
+
+
+def cloud_folder(root: Path) -> Path:
+    legacy = root / LEGACY_CLOUD_FOLDER_NAME
+    return legacy if legacy.is_dir() and not (root / CLOUD_FOLDER_NAME).exists() else root / CLOUD_FOLDER_NAME
 
 
 def _first_dir(candidates: list[Any]) -> Path | None:
@@ -2149,7 +2156,8 @@ def cloud_targets(config: dict[str, Any]) -> list[dict[str, Any]]:
             "installed": root is not None,
             "picked": bool(chosen),
             "root": str(root) if root else "",
-            "folder": str(root / CLOUD_FOLDER_NAME) if root else "",
+            "folder": str(cloud_folder(root)) if root else "",
+            "folderName": cloud_folder(root).name if root else CLOUD_FOLDER_NAME,
             "on": bool(saved[key]["on"] and root is not None),
         })
     return rows
@@ -2380,7 +2388,8 @@ def get_local_save_job() -> dict[str, Any]:
 def get_local_save_dir(workspace: UserWorkspace) -> Path:
     """'내 컴퓨터에 저장' 의 뿌리 폴더.
 
-    설정(LOCAL_SAVE_PATH)이 있으면 그곳, 없으면 문서\\붕어빵 파일 정리.
+    설정(LOCAL_SAVE_PATH)이 있으면 그곳, 없으면 문서\\Daling 파일 정리. 1.12.52 까지 쓰던
+    문서\\붕어빵 파일 정리 가 있으면 그것을 그대로 쓴다(옮기면 받은 기록의 경로가 어긋난다).
     실제 저장은 이 아래 과목별 폴더로 갈라진다.
     """
     config = read_config(workspace)
@@ -2392,7 +2401,10 @@ def get_local_save_dir(workspace: UserWorkspace) -> Path:
             return path
         except OSError:
             pass
-    return documents_dir() / "붕어빵 파일 정리"
+    legacy = documents_dir() / "붕어빵 파일 정리"
+    if legacy.is_dir() and not (documents_dir() / "Daling 파일 정리").exists():
+        return legacy
+    return documents_dir() / "Daling 파일 정리"
 
 
 SECRET_KEYS = (
@@ -2501,7 +2513,7 @@ def export_settings(workspace: UserWorkspace, include_secrets: bool = False) -> 
         for key in SECRET_KEYS:
             config.pop(key, None)
     return {
-        "app": "붕어빵",
+        "app": "Daling",
         "version": (PROJECT_ROOT / "VERSION").read_text(encoding="utf-8").strip()
         if (PROJECT_ROOT / "VERSION").exists()
         else "",
@@ -2517,7 +2529,7 @@ def import_settings(workspace: UserWorkspace, payload: dict[str, Any]) -> dict[s
     """내보낸 백업을 되돌린다. 빠진 항목은 기존 값을 유지한다."""
     data = payload.get("data") if isinstance(payload.get("data"), dict) else payload
     if not isinstance(data, dict) or "config" not in data:
-        raise ValueError("붕어빵에서 내보낸 백업 파일이 아닙니다.")
+        raise ValueError("Daling에서 내보낸 백업 파일이 아닙니다.")
 
     restored = []
     incoming = data.get("config")
@@ -2890,7 +2902,7 @@ def get_storage(workspace: UserWorkspace) -> dict[str, Any]:
 def pick_folder_dialog() -> str:
     """운영체제 기본 '폴더 선택' 창을 띄워 고른 경로를 돌려준다 (취소하면 빈 문자열).
 
-    예전에는 tkinter 를 썼는데, 설치 파일(bungeoppang.spec)이 크기를 줄이려고 tkinter 를 빼서
+    예전에는 tkinter 를 썼는데, 설치 파일(daling.spec)이 크기를 줄이려고 tkinter 를 빼서
     설치형 앱에서는 '폴더 바꾸기'·'폴더 고르기' 가 늘 실패했다. 맥에서는 tkinter 창을
     서버 스레드에서 열 수도 없다. 앱 창(pywebview)이 가진 폴더 창을 쓴다.
     개발 서버처럼 앱 창이 없을 때만 tkinter 로 대신한다.
@@ -3044,7 +3056,7 @@ def trash_old_browser(workspace: UserWorkspace) -> dict[str, Any]:
 
 
 def cloud_save_footprint(config: dict[str, Any]) -> dict[str, Any]:
-    """켜 둔 클라우드 폴더(붕어빵 강의자료)가 이 PC 에서 차지하는 크기."""
+    """켜 둔 클라우드 폴더(Daling 강의자료)가 이 PC 에서 차지하는 크기."""
     parts = []
     for cloud in cloud_targets(config):
         if not cloud["on"]:
@@ -4465,7 +4477,7 @@ def search_place(query: str) -> dict[str, Any]:
         url,
         headers={
             # Nominatim 은 신원을 밝히지 않으면 막는다
-            "User-Agent": "bungeoppang-dgist-autosaver/1.0 (personal student app)",
+            "User-Agent": "daling-dgist-autosaver/1.0 (personal student app)",
             "Accept": "application/json",
         },
     )
@@ -4711,7 +4723,7 @@ def append_log(user_id: str, line: str) -> None:
 def _mail_in_process(workspace: UserWorkspace) -> bool:
     """메일 새로고침을 이 서버 안에서 돌려도 되는지.
 
-    작업 프로세스(붕어빵.exe --autosaver-job emails)를 띄우는 데만 약 1초가 들었다(2026-10-21 실측: 작업 3.9초 중
+    작업 프로세스(Daling.exe --autosaver-job emails)를 띄우는 데만 약 1초가 들었다(2026-10-21 실측: 작업 3.9초 중
     메일 서버와 주고받기 2.7초). 메일은 브라우저도 안 띄우고 IMAP 만 쓰니 서버 안 스레드로 충분하다.
     다만 email_reader 는 모듈 전역(계정·저장 파일)을 쓰므로, 이 서버가 보는 데이터·설정 파일과 같은
     사람일 때(혼자 쓰는 앱)만. 여러 사람이 쓰는 웹 모드는 예전처럼 프로세스를 따로 띄운다.
@@ -5022,7 +5034,7 @@ def start_task(workspace: UserWorkspace, kind: str, sync_mode: str = "fast", aut
         return True, "작업을 시작했습니다."
 
     if getattr(sys, "frozen", False):
-        # EXE 에서는 sys.executable 이 '붕어빵.exe' 다.
+        # EXE 에서는 sys.executable 이 'Daling.exe' 다.
         # `-c "..."` 를 붙여도 무시되고 앱이 통째로 다시 켜지므로(창이 계속 늘어남),
         # app.py 의 작업 전용 진입점으로 들어가게 한다.
         from runtime_config import WORKER_FLAG
@@ -7073,7 +7085,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                     failed.append(safe_name or str(raw_name))
                     continue
                 display_name = str(meta.get("original_name", safe_name)) if isinstance(meta, dict) else safe_name
-                # 문서\붕어빵 파일 정리\<과목>\(<LMS 하위 폴더>)\ 로 담는다 (자동 저장·Drive 와 같은 정리 방식)
+                # 문서\Daling 파일 정리\<과목>\(<LMS 하위 폴더>)\ 로 담는다 (자동 저장·Drive 와 같은 정리 방식)
                 course = str(meta.get("course", "")) if isinstance(meta, dict) else ""
                 sub = layout_subfolders(
                     meta.get("folder_path") if isinstance(meta, dict) else None,

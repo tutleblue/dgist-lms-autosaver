@@ -1,6 +1,6 @@
-# CLAUDE.md — 붕어빵 (DGIST LMS AutoSaver) 작업 안내
+# CLAUDE.md — Daling (DGIST LMS AutoSaver) 작업 안내
 
-DGIST 학생용 **Windows·macOS(M칩·인텔)** 데스크톱 앱입니다(리눅스 판도 CI 로 빌드). 두 운영체제 규칙은 아래 '3. Windows·macOS 둘 다 지원'. **보이는 이름은 Daling**(2026-10-11, 예전 이름 붕어빵)이고, 실행 파일(`붕어빵.exe`)·설치 폴더(`Programs\붕어빵`)·데이터 폴더·업데이트 파일(`bungeoppang-*-setup.exe`)·사용자 자료 폴더(`문서\붕어빵 파일 정리`, `붕어빵 강의자료`)는 기존 설치본 업데이트를 위해 그대로 둡니다. 로고는 `design/logo/daling-source.webp` → `python scripts/make_icons.py`. LMS 강의자료·과제 마감·학교 메일·학사일정·공지를 자동으로 모아
+DGIST 학생용 **Windows·macOS(M칩·인텔)** 데스크톱 앱입니다(리눅스 판도 CI 로 빌드). 두 운영체제 규칙은 아래 '3. Windows·macOS 둘 다 지원'. **이름은 Daling** 입니다. 1.12.53 부터 실행 파일(`Daling.exe`)·설치 폴더(`Programs\Daling`)·설치 파일(`daling-*-setup.exe`)·사용자 자료 폴더(`문서\Daling 파일 정리`, `Daling 강의자료`)도 Daling 입니다. 예전 이름이 남은 곳은 옛 설치본을 넘겨받기 위한 것뿐입니다(FEATURES.md '이름·로고'). 데이터 폴더는 그대로입니다. 로고는 `design/logo/daling-source.webp` → `python scripts/make_icons.py`. LMS 강의자료·과제 마감·학교 메일·학사일정·공지를 자동으로 모아
 한 화면에서 보고, Google Drive·Google Calendar·삼성 노트·내 컴퓨터로 보냅니다.
 
 - **기능 전체 지도, API 목록, 데이터 파일, 설정 키는 `FEATURES.md`** 에 있습니다. 기능을 고치기 전에 해당 절을 먼저 읽습니다.
@@ -11,7 +11,7 @@ DGIST 학생용 **Windows·macOS(M칩·인텔)** 데스크톱 앱입니다(리�
 | 무엇 | 경로 |
 |---|---|
 | 저장소 | `C:\Users\jykim\바탕화면\dgist-lms-autosaver-main\dgist-lms-autosaver-main` (git `main`, 원격 `tutleblue/dgist-lms-autosaver`) |
-| 설치된 앱 | `%LOCALAPPDATA%\Programs\붕어빵\붕어빵.exe` |
+| 설치된 앱 | `%LOCALAPPDATA%\Programs\Daling\Daling.exe` |
 | 사용자 데이터 | `C:\lms-autosaver\` (설치 앱과 개발 서버가 **함께** 씀). 맥은 `~/Library/Application Support/Daling`(예전부터 쓰던 맥은 `~/.lms-autosaver`), 리눅스 `~/.lms-autosaver` — `runtime_config.default_data_root()` |
 | 맥·Windows CI 빌드 | `.github/workflows/build.yml`(main 푸시·수동) → Windows 설치 파일 + `mac.yml`(M칩·인텔 DMG 두 벌). 결과는 Actions 의 Artifacts. 릴리스에는 두 DMG 와 각 `.sha256` 을 모두 올린다 |
 | 파이썬 | 저장소의 `.venv` (Python 3.14). 시스템 `python`이 아니라 `.venv\Scripts\python.exe`를 씁니다 |
@@ -40,7 +40,7 @@ powershell -ExecutionPolicy Bypass -File packaging\msix\build_msix.ps1 -Install 
 .venv\Scripts\python.exe "$env:USERPROFILE\.claude\design-studio\tool\run_studio.py" --project .
 
 # 설치된 앱이 떠 있는 포트 찾기 (8765가 막혀 있으면 8766~8785)
-Get-NetTCPConnection -OwningProcess (Get-Process 붕어빵).Id -State Listen
+Get-NetTCPConnection -OwningProcess (Get-Process Daling).Id -State Listen
 ```
 
 파이썬 모듈을 직접 불러 시험할 때는 데이터 경로를 넘깁니다. `web_ui` 를 부를 때는 `AUTOSAVER_ROOT` 도 같은 폴더로 — `web_ui` 는 이것을 보고, 없으면 실제 `C:\lms-autosaver` 를 씁니다.
@@ -60,7 +60,7 @@ AUTOSAVER_DATA_ROOT=C:/lms-autosaver AUTOSAVER_CONFIG_PATH=C:/lms-autosaver/conf
 
 ### 사용자 데이터와 계정
 4. **비밀번호·API 키를 대신 입력하거나 파일·코드에 적지 않습니다.** 사용자가 채팅에 붙여 넣고 "넣어 달라"고 해도 설정 화면에서 직접 넣도록 안내합니다.
-   - 예외(사용자 결정, 2026-10-09): **공공데이터포털 기본 인증키**는 `public_data_key.txt`(저장소 루트, `.gitignore`)에 두고 설치 파일에만 묶습니다(`bungeoppang.spec`, CI 는 `secrets.DGIST_API_KEY`). 소스·커밋·공개 저장소에는 절대 넣지 않습니다. 모두가 한 키를 나눠 쓰므로 호출은 캐시를 거칩니다(`web_ui.get_school_events` 6시간).
+   - 예외(사용자 결정, 2026-10-09): **공공데이터포털 기본 인증키**는 `public_data_key.txt`(저장소 루트, `.gitignore`)에 두고 설치 파일에만 묶습니다(`daling.spec`, CI 는 `secrets.DGIST_API_KEY`). 소스·커밋·공개 저장소에는 절대 넣지 않습니다. 모두가 한 키를 나눠 쓰므로 호출은 캐시를 거칩니다(`web_ui.get_school_events` 6시간).
 5. 비밀 설정 키는 `web_ui.SECRET_KEYS`와 `runtime_config.SECRET_KEYS` **두 곳 모두**에 있어야 합니다. 한쪽에만 있으면 작업 프로세스가 `dpapi:` 암호문을 그대로 씁니다.
 6. 학교 포털 비밀번호 저장이 필요한 기능은 먼저 제안하지 않습니다.
 7. 데이터 파일(`C:\lms-autosaver\*.json`)에 쓰는 시험을 할 때는 설치된 앱을 먼저 끄고, 시험 전에 해당 파일을 백업합니다.
@@ -79,12 +79,12 @@ AUTOSAVER_DATA_ROOT=C:/lms-autosaver AUTOSAVER_CONFIG_PATH=C:/lms-autosaver/conf
 16. 삼성 노트 실험은 실제 노트를 만듭니다. 그 과목 강의자료처럼 들어가도 되는 파일로만 하고, 무엇이 들어갔는지 사용자에게 알립니다.
 
 ### EXE·Windows
-17. EXE에서 작업 프로세스를 띄울 때 `sys.executable -c`를 쓰지 않습니다(창이 새로 뜸). `붕어빵.exe --autosaver-job <kind>`를 씁니다.
+17. EXE에서 작업 프로세스를 띄울 때 `sys.executable -c`를 쓰지 않습니다(창이 새로 뜸). `Daling.exe --autosaver-job <kind>`를 씁니다.
 18. `console=False` EXE는 `sys.stdout`이 없고 한국어 Windows 기본 인코딩은 cp949입니다. 작업 출력은 `_bind_worker_output`이 UTF-8로 잡습니다.
 19. PyInstaller 결과물에서 `pythonnet`의 `runtimes\*`를 지우지 않습니다(pywebview가 깨짐).
 20. 한글이 든 `.ps1`은 **UTF-8 BOM**으로 저장합니다. BOM이 없으면 PowerShell 5.1이 구문 오류를 냅니다. **예외: `docs/install.ps1`은 BOM 없이** — `irm … | iex`가 BOM을 글자로 읽어 깨집니다(한글은 `docs/_headers`의 charset으로).
 21. 포트 8765는 다른 도구가 잡고 있을 수 있습니다. 앱은 빈 포트로 옮겨 뜨고(`app.start_server`), 서버는 `SO_EXCLUSIVEADDRUSE`로 혼자 잡습니다. **내가 띄우지 않은 프로세스는 끄지 않습니다.**
-22-1. **코드 서명**: `build_installer.ps1`이 사설 인증서(`CN=붕어빵 (…)`, 현재 사용자 `My` 저장소, 내보내기 불가)가 있으면 EXE·설치 파일·`unins000.exe`를 서명합니다(`packaging\sign_tools.ps1`). 2026-10-02 Defender가 서명·버전 정보 없는 EXE를 `Bearfoos.A!ml`로 오탐해 지운 뒤 넣었습니다. 루트 신뢰(`-Trust`)는 보안 설정이라 사용자가 직접 합니다. 배포용 공인 서명은 SignPath Foundation(무료, Apache-2.0 공개 조건)으로, 태그 `v<버전>`을 푸시하면 `.github/workflows/release.yml`이 CI에서 빌드·서명·릴리스합니다(`CODE_SIGNING.md`, `.signpath/`; SignPath 비밀이 없으면 건너뜀). CI용 패키지 판은 `requirements-build.txt`.
+22-1. **코드 서명**: `build_installer.ps1`이 사설 인증서(`CN=붕어빵 (…)` — 만들 때 정한 이름이라 바꿀 수 없음, 현재 사용자 `My` 저장소, 내보내기 불가)가 있으면 EXE·설치 파일·`unins000.exe`를 서명합니다(`packaging\sign_tools.ps1`). 2026-10-02 Defender가 서명·버전 정보 없는 EXE를 `Bearfoos.A!ml`로 오탐해 지운 뒤 넣었습니다. 루트 신뢰(`-Trust`)는 보안 설정이라 사용자가 직접 합니다. 배포용 공인 서명은 SignPath Foundation(무료, Apache-2.0 공개 조건)으로, 태그 `v<버전>`을 푸시하면 `.github/workflows/release.yml`이 CI에서 빌드·서명·릴리스합니다(`CODE_SIGNING.md`, `.signpath/`; SignPath 비밀이 없으면 건너뜀). CI용 패키지 판은 `requirements-build.txt`.
 22-2. **공인 서명이 생기기 전까지 경고 창은 한 줄 설치로 피합니다** (`docs/install.ps1`·`install.sh`, FEATURES.md '서명·한 줄 설치'). 릴리스에는 설치 파일마다 `<파일>.sha256`을 같이 올립니다(API 한도에 걸린 한 줄 설치가 씁니다). 맥 앱 안 업데이트도 묶은 `install.sh`로 바꿔 끼우므로, 이 파일을 고치면 `mac.yml`로 다시 점검합니다.
 22. 실행 파일 안의 파이썬 코드는 GitHub 파일 교체로 바뀌지 않습니다. 설치형 앱의 `updater.apply_update`는 막혀 있습니다.
 
@@ -128,11 +128,11 @@ AUTOSAVER_DATA_ROOT=C:/lms-autosaver AUTOSAVER_CONFIG_PATH=C:/lms-autosaver/conf
 ## 4. 구조 요약
 
 ```
-붕어빵.exe
+Daling.exe
 ├─ pywebview 창 ──HTTP──> web_ui.DashboardHandler (서버 스레드, 포트 8765~8785)
 ├─ app.scheduler_loop (매일 예약 동기화 + 메일 5분/마감 60분/자료 180분)
 ├─ web_ui.start_notes_job (삼성 노트, 뒤에서)
-└─ 붕어빵.exe --autosaver-job sync|deadlines|emails|verify|google-oauth
+└─ Daling.exe --autosaver-job sync|deadlines|emails|verify|google-oauth
      sync → main.run_job → lms_crawler.crawl_lms → Drive 업로드 → organize_downloads
 ```
 

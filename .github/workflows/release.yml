@@ -1,9 +1,9 @@
-# 붕어빵 Windows 빌드 + SignPath 코드 서명 + GitHub 릴리스
+# Daling Windows 빌드 + SignPath 코드 서명 + GitHub 릴리스
 #
 # 왜 CI 에서 빌드하나: SignPath Foundation(무료 공인 서명)은 '저장소 소스로 CI 가 만든 파일'만 서명해 준다.
 # 2026-10-02 Defender 가 서명 없는 EXE 를 Bearfoos.A!ml 로 오탐해 지웠다 (CODE_SIGNING.md).
 #
-# 흐름: PyInstaller → 붕어빵.exe 서명(SignPath) → Inno Setup → 설치 파일 서명(SignPath) → (태그면) 릴리스
+# 흐름: PyInstaller → Daling.exe 서명(SignPath) → Inno Setup → 설치 파일 서명(SignPath) → (태그면) 릴리스
 #  - 태그 v1.2.3 을 올리면 릴리스까지. 수동 실행(workflow_dispatch)은 서명된 설치 파일을 아티팩트로만 남긴다.
 #  - 서명 요청은 SignPath 에서 승인자가 '승인'을 눌러야 진행된다 (최대 1시간 기다림).
 #
@@ -95,7 +95,7 @@ jobs:
           if ((Get-AuthenticodeSignature packaging\MicrosoftEdgeWebview2Setup.exe).Status -ne "Valid") { throw "WebView2 부트스트래퍼 서명 확인 실패" }
           if (-not (Test-Path "C:\Program Files (x86)\Inno Setup 6\ISCC.exe")) { choco install innosetup -y --no-progress }
 
-      - name: PyInstaller (dist\붕어빵)
+      - name: PyInstaller (dist\Daling)
         shell: powershell   # build_installer.ps1 은 Windows PowerShell 5.1 기준 (UTF-8 BOM)
         run: powershell -NoProfile -ExecutionPolicy Bypass -File packaging\build_installer.ps1 -Stage exe
 
@@ -104,7 +104,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: unsigned-exe
-          path: dist/붕어빵/붕어빵.exe
+          path: dist/Daling/Daling.exe
           if-no-files-found: error
 
       - name: EXE 서명 (SignPath)
@@ -124,7 +124,7 @@ jobs:
         run: |
           $signed = Get-ChildItem signed-exe -Recurse -Filter *.exe | Select-Object -First 1
           if ((Get-AuthenticodeSignature $signed.FullName).Status -ne "Valid") { throw "서명된 EXE 확인 실패" }
-          Copy-Item $signed.FullName "dist\붕어빵\붕어빵.exe" -Force
+          Copy-Item $signed.FullName "dist\Daling\Daling.exe" -Force
 
       - name: Inno Setup (설치 파일)
         shell: powershell
@@ -135,7 +135,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: unsigned-setup
-          path: packaging/out/*-setup.exe
+          # 예전 이름 사본(bungeoppang-…)은 서명한 뒤 따로 만든다 (SignPath 는 한 파일만 서명)
+          path: packaging/out/daling-*-setup.exe
           if-no-files-found: error
 
       - name: 설치 파일 서명 (SignPath)
@@ -160,9 +161,13 @@ jobs:
           }
           # 서명하면 파일이 바뀌므로 확인값은 여기서 다시 만든다 (build_installer.ps1 과 같은 형식).
           # 한 줄 설치(docs/install.ps1)가 GitHub API 한도에 걸리면 이것으로 확인한다.
-          $setup = Get-ChildItem signed-setup -Recurse -Filter *-setup.exe | Select-Object -First 1
+          $setup = Get-ChildItem signed-setup -Recurse -Filter daling-*-setup.exe | Select-Object -First 1
           $hash = (Get-FileHash $setup.FullName -Algorithm SHA256).Hash.ToLower()
           [IO.File]::WriteAllText("$($setup.FullName).sha256", "$hash  $($setup.Name)`n", (New-Object Text.UTF8Encoding $false))
+          # 1.12.52 이하의 앱 안 업데이트·예전 한 줄 설치는 bungeoppang-… 이름만 찾는다. 같은 파일을 그 이름으로도 둔다
+          $legacy = Join-Path $setup.DirectoryName ($setup.Name -replace '^daling-', 'bungeoppang-')
+          Copy-Item $setup.FullName $legacy -Force
+          [IO.File]::WriteAllText("$legacy.sha256", "$hash  $(Split-Path $legacy -Leaf)`n", (New-Object Text.UTF8Encoding $false))
 
       - name: 빌드 출처 증명 (Sigstore)
         # 이 저장소의 이 워크플로가 만든 파일임을 공개 기록에 남긴다 (공개 저장소는 무료).
@@ -171,7 +176,7 @@ jobs:
         with:
           subject-path: |
             signed-setup/**/*-setup.exe
-            dist/붕어빵/붕어빵.exe
+            dist/Daling/Daling.exe
 
       - name: 서명된 설치 파일 보관
         uses: actions/upload-artifact@v4
@@ -187,12 +192,13 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $setup = Get-ChildItem signed-setup -Recurse -Filter *-setup.exe | Select-Object -First 1
-          # 앱의 업데이트 확인(updater.py)이 이 이름(bungeoppang-<버전>-win-x64-setup.exe)을 찾는다.
+          $setup = Get-ChildItem signed-setup -Recurse -Filter daling-*-setup.exe | Select-Object -First 1
+          $legacy = Join-Path $setup.DirectoryName ($setup.Name -replace '^daling-', 'bungeoppang-')
+          # 앱의 업데이트 확인(updater.py)이 daling-<버전>-win-x64-setup.exe 를, 1.12.52 이하는 bungeoppang-… 을 찾는다.
           # 맥·리눅스 파일을 먼저 올려 릴리스가 이미 있으면 거기에 붙인다
           gh release view "${{ github.ref_name }}" *> $null
           if ($LASTEXITCODE -eq 0) {
-            gh release upload "${{ github.ref_name }}" $setup.FullName "$($setup.FullName).sha256" --clobber
+            gh release upload "${{ github.ref_name }}" $setup.FullName "$($setup.FullName).sha256" $legacy "$legacy.sha256" --clobber
           } else {
-            gh release create "${{ github.ref_name }}" $setup.FullName "$($setup.FullName).sha256" --title "Daling $('${{ github.ref_name }}'.TrimStart('v'))" --generate-notes
+            gh release create "${{ github.ref_name }}" $setup.FullName "$($setup.FullName).sha256" $legacy "$legacy.sha256" --title "Daling $('${{ github.ref_name }}'.TrimStart('v'))" --generate-notes
           }

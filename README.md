@@ -24,7 +24,7 @@ DGIST LMS 강의 자료를 찾아 Google Drive에 정리하고, 새 자료 확�
 
 | 운영체제 | 파일 | 경고 창 없이 한 줄로 설치 |
 |---|---|---|
-| Windows 10·11 (x64) | `bungeoppang-<버전>-win-x64-setup.exe` | PowerShell 창에 `irm https://gudaling.dev/install.ps1 \| iex` |
+| Windows 10·11 (x64) | `daling-<버전>-win-x64-setup.exe` | PowerShell 창에 `irm https://gudaling.dev/install.ps1 \| iex` |
 | macOS 12 이상 — M칩(Apple Silicon) 맥 | `daling-<버전>-mac-arm64.dmg` | 터미널에 `curl -fsSL https://gudaling.dev/install.sh \| sh` (칩에 맞는 판을 알아서 고름) |
 | macOS 12 이상 — 인텔 맥 | `daling-<버전>-mac-x86_64.dmg` | 위와 같음 |
 | Linux (x86_64) | `daling-<버전>-linux-x86_64.AppImage` | 터미널에 `curl -fsSL https://gudaling.dev/install.sh \| sh` |

@@ -21,7 +21,7 @@
   --red-soft: #f8e6e6;
   --blue: #4d7192;
   --blue-soft: #e7eef4;
-  /* 붕어빵 로고: 베이지 바탕 + 노릇한 주황 */
+  /* 옛 로고 그림(.bp-*) 색: 베이지 바탕 + 노릇한 주황 */
   --bp-bg: #faf6ec;
   --bp-body: #f7be3c;
   --bp-hi: #fcd882;
@@ -76,7 +76,7 @@
   --red-soft: #442a2a;
   --blue: #92b2d8;
   --blue-soft: #2c3848;
-  /* 다크에서는 바탕을 어둡게 낮추고 붕어빵은 살짝 더 밝게 */
+  /* 다크에서는 바탕을 어둡게 낮추고 로고는 살짝 더 밝게 */
   --bp-bg: #f3edde;
   --bp-body: #f7be3c;
   --bp-hi: #fcd882;
@@ -456,7 +456,7 @@ body {
 }
 
 
-/* ===== 붕어빵 로고 파츠 ===== */
+/* ===== 옛 로고 그림 파츠 (.bp-*) ===== */
 .bp-body {
   fill: var(--bp-body);
   stroke: var(--bp-line);
@@ -466,7 +466,7 @@ body {
   fill: var(--bp-hi);
   stroke: none;
 }
-/* 붕어빵 틀 자국 (currentColor로 패턴 선 색을 물려준다) */
+/* 틀 자국 무늬 (currentColor로 패턴 선 색을 물려준다) */
 .bp-grid {
   color: var(--bp-line);
   opacity: 0.3;

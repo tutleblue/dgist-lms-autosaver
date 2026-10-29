@@ -1,8 +1,8 @@
 ﻿# Daling Microsoft Store 판(MSIX) 만들기 (+ 선택: 이 PC 에 시험 설치·점검)
 #
-#   # 이 PC 시험판: dist\붕어빵 을 MSIX 로 묶고 사설 인증서로 서명
+#   # 이 PC 시험판: dist\Daling 을 MSIX 로 묶고 사설 인증서로 서명
 #   powershell -ExecutionPolicy Bypass -File packaging\msix\build_msix.ps1
-#   # PyInstaller 부터 다시 (dist\붕어빵 이 없거나 코드를 고쳤을 때)
+#   # PyInstaller 부터 다시 (dist\Daling 이 없거나 코드를 고쳤을 때)
 #   powershell -ExecutionPolicy Bypass -File packaging\msix\build_msix.ps1 -Build
 #   # 묶고 이 PC 에 설치한 뒤 패키지 안에서 --autosaver-smoke
 #   powershell -ExecutionPolicy Bypass -File packaging\msix\build_msix.ps1 -Install -Smoke
@@ -12,12 +12,12 @@
 #   # 시험판 지우기
 #   powershell -ExecutionPolicy Bypass -File packaging\msix\build_msix.ps1 -Uninstall
 #
-# 순서: [1/6] EXE(dist\붕어빵) → [2/6] 묶음 폴더(build\msix\layout) → [3/6] 로고 배율표(resources.pri)
+# 순서: [1/6] EXE(dist\Daling) → [2/6] 묶음 폴더(build\msix\layout) → [3/6] 로고 배율표(resources.pri)
 #       → [4/6] MakeAppx → [5/6] 서명 → [6/6] 설치·점검
 # 준비물: MakeAppx·MakePri·SignTool. Windows SDK 가 깔려 있으면 그것을, 없으면 Microsoft 의 NuGet 패키지
 #        Microsoft.Windows.SDK.BuildTools 를 build\msix-tools 에 한 번 받아 쓴다(22MB, Microsoft 서명 확인 뒤).
 # 시험 설치 전에 한 번 (사용자가 직접, 관리자 PowerShell): 사설 인증서를 '이 컴퓨터'의 신뢰할 수 있는 사람에 넣는다.
-#   Import-Certificate -FilePath packaging\bungeoppang-codesign.cer -CertStoreLocation Cert:\LocalMachine\TrustedPeople
+#   Import-Certificate -FilePath packaging\daling-codesign.cer -CertStoreLocation Cert:\LocalMachine\TrustedPeople
 #   MSIX 설치는 시스템 서비스(AppXSvc)가 검사해서 '현재 사용자' 저장소의 신뢰로는 안 된다 (0x800B0109).
 # 주의: 이 파일은 UTF-8 BOM 으로 저장한다 (PowerShell 5.1 한글).
 param(
@@ -35,10 +35,11 @@ $ErrorActionPreference = "Stop"
 $msixDir = $PSScriptRoot
 $packaging = Split-Path $msixDir -Parent
 $proj = Split-Path $packaging -Parent
-$dist = Join-Path $proj "dist\붕어빵"
+$dist = Join-Path $proj "dist\Daling"
 $work = Join-Path $proj "build\msix"
 $layout = Join-Path $work "layout"
 $outDir = Join-Path $packaging "out"
+# 인증서 이름(CN=붕어빵 …)은 만들 때 정해져 바꿀 수 없다. Store 제출판은 -Publisher 로 Store 값을 넘긴다
 $certSubject = "CN=붕어빵 (jykim5215), O=jykim5215"
 $buildToolsVersion = "10.0.26100.4654"
 
@@ -101,11 +102,11 @@ $msixVersion = "{0}.{1}.{2}.0" -f $parts[0], $parts[1], $parts[2]
 if ($Store) { "Store 제출판: $IdentityName / $Publisher / $PublisherDisplayName (서명 안 함)" }
 
 "[1/6] EXE"
-if ($Build -or -not (Test-Path (Join-Path $dist "붕어빵.exe"))) {
+if ($Build -or -not (Test-Path (Join-Path $dist "Daling.exe"))) {
   & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $packaging "build_installer.ps1") -Stage exe
   if ($LASTEXITCODE -ne 0) { throw "EXE 만들기 실패" }
 } else {
-  "  dist\붕어빵 을 그대로 씁니다 ($((Get-Item (Join-Path $dist '붕어빵.exe')).LastWriteTime)). 코드를 고쳤으면 -Build"
+  "  dist\Daling 을 그대로 씁니다 ($((Get-Item (Join-Path $dist 'Daling.exe')).LastWriteTime)). 코드를 고쳤으면 -Build"
 }
 
 "[2/6] 묶음 폴더"
@@ -181,10 +182,10 @@ $trusted = @(Get-ChildItem Cert:\LocalMachine\TrustedPeople, Cert:\LocalMachine\
   Where-Object { $_.Thumbprint -eq $cert.Thumbprint })
 if ($trusted.Count -eq 0) {
   "이 컴퓨터가 아직 사설 인증서를 믿지 않아 설치가 거절됩니다 (0x800B0109). 관리자 PowerShell 에서 한 번:"
-  "  Import-Certificate -FilePath `"$(Join-Path $packaging 'bungeoppang-codesign.cer')`" -CertStoreLocation Cert:\LocalMachine\TrustedPeople"
+  "  Import-Certificate -FilePath `"$(Join-Path $packaging 'daling-codesign.cer')`" -CertStoreLocation Cert:\LocalMachine\TrustedPeople"
   throw "인증서 신뢰 필요 (보안 설정이라 사용자가 직접)"
 }
-# 켜 둔 Daling 이 이 패키지면 닫고 바꾼다. 같은 데이터 폴더를 쓰는 Inno 설치판(붕어빵.exe)은 따로 둔다
+# 켜 둔 Daling 이 이 패키지면 닫고 바꾼다. 같은 데이터 폴더를 쓰는 Inno 설치판(Programs\Daling)은 따로 둔다
 Add-AppxPackage -Path $msix -ForceApplicationShutdown -ForceUpdateFromAnyVersion
 $pkg = Get-DalingPackage
 "  설치: $($pkg.PackageFullName)"

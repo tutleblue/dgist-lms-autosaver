@@ -167,12 +167,12 @@
         <div class="ba-col after">
           <p class="ba-label">Daling · 자동</p>
           <h4>켜 두면 이렇게 정리돼 있어요</h4>
-          <figure class="xp" role="img" aria-label="파일 탐색기. 문서 › 붕어빵 파일 정리 아래에 과목 폴더 네 개가 있고, 일반물리학Ⅱ 안은 LMS처럼 공지사항·Assignments·Course Materials, 그 안에 Week 1~3 폴더. Week 3에는 강의 슬라이드·과제 PDF 네 개가 있고 하나는 방금 새로 받은 것">
+          <figure class="xp" role="img" aria-label="파일 탐색기. 문서 › Daling 파일 정리 아래에 과목 폴더 네 개가 있고, 일반물리학Ⅱ 안은 LMS처럼 공지사항·Assignments·Course Materials, 그 안에 Week 1~3 폴더. Week 3에는 강의 슬라이드·과제 PDF 네 개가 있고 하나는 방금 새로 받은 것">
             <div class="xp-top"><span class="xp-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="xp-tab"><i class="fi dir"></i>Week 3</span><span class="xp-ctl" aria-hidden="true"><i>—</i><i>□</i><i>✕</i></span></div>
-            <div class="xp-tools"><span class="xp-btns" aria-hidden="true">←→↑</span><span class="xp-addr">문서 › 붕어빵 파일 정리 › 일반물리학Ⅱ › Course Materials › <b>Week 3</b></span><span class="xp-search">Week 3 검색</span></div>
+            <div class="xp-tools"><span class="xp-btns" aria-hidden="true">←→↑</span><span class="xp-addr">문서 › Daling 파일 정리 › 일반물리학Ⅱ › Course Materials › <b>Week 3</b></span><span class="xp-search">Week 3 검색</span></div>
             <div class="xp-body">
               <ul class="xp-nav">
-                <li class="open"><i class="fi dir"></i>붕어빵 파일 정리</li>
+                <li class="open"><i class="fi dir"></i>Daling 파일 정리</li>
                 <li class="l1 open"><i class="fi dir"></i>일반물리학Ⅱ</li>
                 <li class="l2 has"><i class="fi dir"></i>공지사항</li>
                 <li class="l2 has"><i class="fi dir"></i>Assignments</li>
@@ -461,7 +461,7 @@
             <h3>Windows</h3>
           </div>
           <p class="req">Windows 10·11 (64비트) · 설치 파일(.exe)</p>
-          <a class="btn primary" href="https://github.com/tutleblue/dgist-lms-autosaver/releases/download/v1.12.52/bungeoppang-1.12.52-win-x64-setup.exe" data-dl="win" download>
+          <a class="btn primary" href="https://github.com/tutleblue/dgist-lms-autosaver/releases/download/v1.12.53/daling-1.12.53-win-x64-setup.exe" data-dl="win" download>
             <span class="logo btn-logo"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M1.5 1.5h10v10h-10zM12.5 1.5h10v10h-10zM1.5 12.5h10v10h-10zM12.5 12.5h10v10h-10z"/></svg></span>
             Windows용 내려받기
           </a>
@@ -641,7 +641,8 @@
       const pick = (re, allowPre) => {
         for (const rel of list) {
           if (rel.draft || (!allowPre && rel.prerelease)) continue;
-          const asset = (rel.assets || []).find((a) => re.test(a.name));
+          // 1.12.53 부터 같은 설치 파일이 새 이름(daling-…)과 예전 이름(bungeoppang-…) 두 벌로 올라간다. 새 이름을 먼저
+          const asset = (rel.assets || []).filter((a) => re.test(a.name)).sort((a, b) => /^daling-/i.test(b.name) - /^daling-/i.test(a.name))[0];
           if (asset) return asset;
         }
         return null;
@@ -659,7 +660,7 @@
         // 첫 화면의 '최신 1.12.x' 도 정식(Windows) 릴리스 번호를 따른다
         if (os === "win" && v) document.querySelectorAll("[data-latest]").forEach((el) => { el.textContent = el.dataset.fmt.replace("{v}", v); });
       };
-      set("win", pick(/^(bungeoppang|daling)-[\d.]+-win-x64-setup\.exe$/i, false));
+      set("win", pick(/^(daling|bungeoppang)-[\d.]+-win-x64-setup\.exe$/i, false));
       set("mac", pick(/^daling-[\d.]+-mac-arm64\.dmg$/i, true));
       set("mac-intel", pick(/^daling-[\d.]+-mac-x86_64\.dmg$/i, true));
       set("linux", pick(/^daling-[\d.]+-linux-x86_64\.AppImage$/i, true));

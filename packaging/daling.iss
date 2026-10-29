@@ -1,4 +1,4 @@
-﻿; 붕어빵 - DGIST LMS AutoSaver
+﻿; Daling - DGIST LMS AutoSaver
 ; Inno Setup 설치 스크립트
 ;
 ; 이 설치 프로그램이 해결하는 것:
@@ -6,17 +6,19 @@
 ;  - WebView2 런타임 미설치 환경 → 부트스트래퍼 자동 실행
 ;  - .NET Framework 4.7.2 미만 → 설치 전에 명확한 안내로 중단
 
-; 보이는 이름은 Daling(2026-10-11). 설치 폴더·실행 파일·업데이트 파일 이름은 그대로 두어
-; 이미 설치한 사람도 앱 안 업데이트로 그대로 넘어온다(AppId 도 그대로).
+; 이름은 Daling. 1.12.53 부터 설치 폴더·실행 파일·설치 파일 이름도 Daling 이다(예전 이름은 붕어빵).
+; AppId 는 그대로라 예전 판 위에 설치하면 업데이트로 알아보고, 예전 폴더(Programs\붕어빵)는
+; 앱을 닫은 뒤 지운다(아래 PrepareToInstall·[InstallDelete]). 사용자 데이터는 다른 폴더라 건드리지 않는다.
 #define AppName "Daling"
-#define AppFolder "붕어빵"
+#define AppFolder "Daling"
+#define OldFolder "붕어빵"
 ; 버전은 build_installer.ps1 이 VERSION 파일에서 읽어 /DAppVersion 으로 넘긴다
 #ifndef AppVersion
   #define AppVersion "1.11.0"
 #endif
 #define AppPublisher "Daling"
 #define AppURL "https://github.com/tutleblue/dgist-lms-autosaver"
-#define AppExe "붕어빵.exe"
+#define AppExe "Daling.exe"
 
 [Setup]
 AppId={{8F3A6C21-4D9B-4E77-9C1A-5B2E7F0A9D64}
@@ -41,6 +43,8 @@ SignedUninstaller=yes
 ; 관리자 권한 없이 사용자 폴더에 설치 → 공용/제한 PC에서도 UAC 없이 설치됨
 PrivilegesRequired=lowest
 DefaultDirName={localappdata}\Programs\{#AppFolder}
+; 예전 판이 기억한 폴더(Programs\붕어빵)를 다시 쓰지 않고 새 폴더로 옮긴다
+UsePreviousAppDir=no
 DefaultGroupName={#AppName}
 DisableProgramGroupPage=yes
 ; 이름을 바꾼 뒤 업데이트하면 Inno 가 예전 시작 메뉴 폴더(붕어빵)를 다시 써서 '붕어빵' 폴더 안에 Daling 이 생겼다
@@ -57,7 +61,7 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 
 OutputDir=out
-OutputBaseFilename=bungeoppang-{#AppVersion}-win-x64-setup
+OutputBaseFilename=daling-{#AppVersion}-win-x64-setup
 SetupIconFile=payload\_internal\web\app.ico
 UninstallDisplayIcon={app}\{#AppExe}
 UninstallDisplayName={#AppName} {#AppVersion}
@@ -137,14 +141,17 @@ Type: files; Name: "{userprograms}\붕어빵\붕어빵 제거.lnk"
 Type: files; Name: "{userprograms}\붕어빵\Daling.lnk"
 Type: files; Name: "{userprograms}\붕어빵\Daling 제거.lnk"
 Type: dirifempty; Name: "{userprograms}\붕어빵"
+; 예전 설치 폴더(붕어빵.exe). 그 안의 앱은 PrepareToInstall 에서 먼저 닫는다. 프로그램 파일만 있는 곳이다
+; (데이터는 C:\lms-autosaver, 받은 자료는 문서 폴더)
+Type: filesandordirs; Name: "{localappdata}\Programs\{#OldFolder}"
 
 [UninstallRun]
 ; 삭제할 때는 설치와 달리 켜져 있는 앱을 닫아 주지 않는다. 창을 닫아도 알림 영역에서 돌고 있으면
 ; 쓰이는 파일 48개를 못 지우고 '삭제 완료' 라고 끝나 반쯤 남은 폴더가 된다(2026-09-28 재현).
-; 앱과 뒤에서 도는 작업을 먼저 닫는다. 이름(/IM 붕어빵.exe)으로 닫으면 같은 exe 이름을 쓰는 Store 판(MSIX)까지
+; 앱과 뒤에서 도는 작업을 먼저 닫는다. 이름(/IM Daling.exe)으로 닫으면 같은 exe 이름을 쓰는 Store 판(MSIX)까지
 ; 동기화·삼성 노트 가져오기 도중에 끊겼다. 이 설치 폴더에서 돈 프로세스만(자식 브라우저까지 /T) 닫는다.
 ; unins*.exe 는 빼야 삭제 프로그램이 스스로를 닫지 않는다.
-Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Command ""Get-CimInstance Win32_Process | Where-Object {{ $_.ExecutablePath -and $_.ExecutablePath.StartsWith('{app}\', [StringComparison]::OrdinalIgnoreCase) -and $_.Name -notlike 'unins*' }} | ForEach-Object {{ taskkill.exe /F /T /PID $_.ProcessId }}"""; Flags: runhidden waituntilterminated; RunOnceId: "CloseBungeoppang"
+Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Command ""Get-CimInstance Win32_Process | Where-Object {{ $_.ExecutablePath -and $_.ExecutablePath.StartsWith('{app}\', [StringComparison]::OrdinalIgnoreCase) -and $_.Name -notlike 'unins*' }} | ForEach-Object {{ taskkill.exe /F /T /PID $_.ProcessId }}"""; Flags: runhidden waituntilterminated; RunOnceId: "CloseDaling"
 
 [UninstallDelete]
 ; 앱이 설치 폴더 안에 만든 런타임 파일 정리 (사용자 문서는 건드리지 않음)
@@ -167,6 +174,21 @@ begin
   if not Result then
     if RegQueryStringValue(HKEY_CURRENT_USER, WV2_HKCU, 'pv', V) then
       if (V <> '') and (V <> '0.0.0.0') then Result := True;
+end;
+
+// 예전 설치 폴더(Programs\붕어빵)에서 도는 앱·작업을 닫는다. CloseApplications 는 새 폴더({app}) 파일만 보므로
+// 예전 앱이 켜진 채로 남아 그 폴더를 지우지 못한다. 앱 안 업데이트도 예전 앱이 이 설치 파일을 띄운다(updater.py).
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+var
+  Code: Integer;
+  OldDir: String;
+begin
+  OldDir := ExpandConstant('{localappdata}\Programs\{#OldFolder}\');
+  if DirExists(OldDir) then
+    Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
+      '-NoProfile -ExecutionPolicy Bypass -Command "Get-CimInstance Win32_Process | Where-Object { $_.ExecutablePath -and $_.ExecutablePath.StartsWith(''' + OldDir + ''', [StringComparison]::OrdinalIgnoreCase) } | ForEach-Object { taskkill.exe /F /T /PID $_.ProcessId }"',
+      '', SW_HIDE, ewWaitUntilTerminated, Code);
+  Result := '';
 end;
 
 function ShouldRelaunch: Boolean;
