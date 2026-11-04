@@ -274,7 +274,7 @@ LMS 브라우저를 Edge 로 바꾼 까닭 (2026-10-15): Playwright 가 받는 `
 ### 4.5 Google 연동
 
 - OAuth: 앱에 들어 있는 데스크톱 클라이언트(`google_client.json`), 토큰은 `token.json`. 설치형 클라이언트라 루프백 포트가 바뀌어도 됩니다.
-- Drive (`drive_uploader.py`): 루트 폴더 아래 과목 폴더, 업로드 선택(`upload_selection.json`의 `courses`)을 따름. 권한은 `drive.file`.
+- Drive (`drive_uploader.py`): 내 드라이브 `Daling` 폴더 아래 과목 폴더, 업로드 선택(`upload_selection.json`의 `courses`)을 따름. 권한은 `drive.file`.
 - Calendar (`calendar_sync.py`): 메일에서 뽑은 일정, 학사일정을 지정한 캘린더로. 권한은 `calendar.app.created`(앱이 만든 보조 캘린더와 그 일정) + `calendar.calendarlist.readonly`(이름으로 찾기), 둘 다 민감하지 않은 범위라 데이터 액세스 인증이 필요 없다(1.12.23, 2026-10-13).
   - 예전 토큰(전체 `calendar`)도 그대로 쓴다(`runtime_config.calendar_scope_granted`). 그래서 토큰을 읽을 때 권한 목록을 넘기지 않는다 — 넘기면 갱신 때 없는 좁은 권한을 달라고 해 `invalid_scope` 로 실패한다.
   - 실측(개발자 계정): 전체 `calendar` 로 예전에 만든 'DGIST 메일 일정'도 `app.created` 로 열리고 일정 넣기·고치기·키로 찾기·지우기가 된다 → 다시 연결해도 캘린더가 두 개로 갈라지지 않는다.
@@ -308,7 +308,7 @@ LMS 브라우저를 Edge 로 바꾼 까닭 (2026-10-15): Playwright 가 받는 `
 
 - 30초마다 확인. 켜고 45초는 쉼, 매일 동기화는 켜고 2분 뒤부터.
 - **매일 예약 동기화**: `SCHEDULE_TIME`(기본 08:00)이 지났고 `last_sync.json`의 날짜가 오늘이 아니면 실행. 끝나면 Windows 알림.
-- **주기 실행** (`next_due_job`): `health.json`의 마지막 성공 시각 기준으로 메일 → 마감 → 자료 순서로 하나만. 실패 직후에는 주기의 절반(최소 5분) 쉼.
+- **주기 실행** (`next_due_job`): `health.json`의 마지막 성공 시각 기준으로 메일 → 마감 → 자료 순서로 하나만. 실패 뒤에는 그 작업의 마지막 실패 시각(`failures.<kind>.at`)부터 주기의 절반(최소 5분), 잇달아 실패하면 두 배씩(최대 6시간) 쉼.
 - 결과는 `record_task_result`가 `health.json`에 기록 → 화면의 마지막 동기화 표시와 경고 배너.
 
 ### 4.8 내 컴퓨터에도 자동 저장 (`web_ui.autosave_local`)
@@ -573,12 +573,20 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 - 빠른 동기화(`fast`)는 `last_sync - 2일` 이후 바뀐 파일만 본다. 과목이 하나라도 실패하면(`_course_failures`) `last_sync` 를 앞당기지 않는다.
 - 매일 전체 검사: `app.run_scheduled_sync` 가 `sync_mode="full"` 로 돌고, 오늘 했는지는 `last_full_sync.json`(전체 검사가 성공했을 때만 씀)으로 본다. 자료 화면 새로고침 버튼도 `mode: "full"`.
 - 2026-09-28 실측: 이번 학기 파일 중 Drive 에 옛 판 13개, 없는 파일 3개, 같은 파일 269개.
+- **맨 위 폴더 이름 Daling·실패 알리기** (2026-11-04, 1.12.54). 사용자: 다른 PC 에서 구글로 연결했는데 Drive 에 제대로 안 올라간다, Daling 폴더로 생기는지 봐 달라.
+  - 맨 위 폴더가 `AutoSaver` 였다(`folder_layout.DRIVE_ROOT_FOLDER`) — Daling 폴더를 찾던 사람은 올라간 자료를 못 찾는다. 이제 `Daling`. `drive_uploader.get_root_folder` 가 앱이 만든 `AutoSaver`(`LEGACY_DRIVE_ROOT_FOLDERS`)를 찾으면 새로 만들지 않고 **이름만 바꾼다**(같은 id, 안의 과목 폴더·파일·공유 링크 그대로). 위치는 따지지 않는다(옮겨 둔 폴더도 계속 씀). 실측(개발자 Drive): `AutoSaver`(1k8G…, 과목 21개) → `Daling` 같은 id, 이미 있는 파일은 `'exists'`.
+  - 구글 동의 화면은 권한마다 체크 칸이 있어 Drive 칸을 빼고도 연결된다. 그러면 Drive 요청은 모두 `403 insufficient authentication scopes`(같은 refresh token 을 캘린더 권한만으로 새로 고쳐 실측). 예전엔 화면이 'Drive · 연결됨' 이었고 동기화도 '성공'. 이제 `drive_scope_granted`(token.json `scopes`, 없으면 있다고 봄)·`/api/status googleOAuth.driveGranted` 로 보고, 설정 Drive 카드 '권한 필요' + 다시 연결 안내, 상단 Drive 불빛 빨강.
+  - 올리기 실패를 센다: `upload_to_drive_with_path` 는 실패하면 여전히 `''` 이지만 `drive_uploader.last_error`(사람 말, `explain_error`: 권한·저장 공간·사용량 한도·연결 끊김·서버·인터넷)를 남긴다. `main.run_job` 요약에 '실패 N개 (까닭)', 결과는 `drive_status.json`(데이터 폴더) → `/api/status driveResult` → 상단 Drive 불빛 노랑 '`Drive 실패 N개`'. 폴더 만들기에서 난 오류도 동기화 전체를 실패로 만들지 않고 Drive 만 멈춘다(뒤의 폴더 정리·내 컴퓨터 저장은 그대로).
+  - 자료 화면 'Drive에 올리기'(`/api/files/bulk drive`)는 `''` 를 성공으로 셌다 → 이제 실패로 세고 까닭을 붙인다. 모두 실패면 오류로 돌려준다. 화면 서버에서 부를 때 로그인 창을 띄우지 않는다(`get_drive_service(interactive=False)`).
+  - 구글 요청은 `execute(num_retries=4)` — googleapiclient 가 429·5xx·사용량 한도 403(`rateLimitExceeded`)을 기다렸다 다시 보낸다. 처음 연결한 PC 는 수백 개를 한꺼번에 올린다.
+  - Drive 접속을 새로 만들 때(다시 연결 = 다른 계정일 수 있음) 폴더 id 캐시를 비운다.
+  - 개발자 Drive 의 옛 `붕어빵` 폴더(2026-08-13, 2개)는 손대지 않았다.
 - 큰 파일: `content-length` 가 300MB 를 넘거나 Playwright 가 'string longer than 0x1fffffe8' 로 실패하면 `_stream_to_file`(requests, 로그인 쿠키, 1MB 조각, `.part` → 교체)로 받는다. 예전 코드는 파일을 먼저 열어 실패 시 0바이트 파일을 남겼다.
 
 ## 사이드바 상태판 (2026-09-28)
 - 예전 '설정 필요 / 매일 08:00 실행' 은 `requiredConfig`(lms·gemini·drive·gmail) 가 모두 참이어야 '완료' 였는데, Gemini(선택)·Gmail 알림(안 씀) 때문에 늘 '설정 필요' 였다.
 - 지금은 `app.js renderStatusCard`: 불빛 `statusLights()`(LMS·메일·Drive: ok/warn/bad/off), 제목은 첫 문제(없으면 '모두 정상'), 둘째 줄은 진행 중인 작업 또는 `nextAutoJob()`(마지막 성공 + 주기). 누르면 문제 있으면 설정 계정(`#stAccounts`), 없으면 자동 가져오기(`#stAuto`).
-- `/api/health` 에 `authFailed`, `failStreak`, `lastFullSync` 를 더 싣는다.
+- `/api/health` 에 `authFailed`, `failStreak`, `failures`·`failing`(작업별 실패와 까닭 갈래, '실패 까닭 진단' 절), `lastFullSync` 를 더 싣는다.
 
 ## 테마 (2026-09-28)
 - `THEMES` 맨 앞 `auto`(기본값): `prefers-color-scheme` 이 어두우면 `dark`, 밝으면 `claude`. `resolveTheme` 로 실제 테마를 정한다.
@@ -794,6 +802,30 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 - 원인 ②(맥·리눅스): 키체인을 못 읽는 동안(업데이트 직후 허락 전·거부) 아무 설정이나 저장하면 빈 값으로 읽힌 비밀번호가 키체인에서 지워졌다(`save_config_dict` 의 `forget`). 흉내(Windows 에서 `secret_store` 를 바꿔 끼움): 예약 시각만 바꿔 저장 → 비밀 항목 5개 forget, LMS·메일 비밀번호가 빈 값. 이제 빈 값으로 온 비밀번호는 표시(`keychain:…`)를 그대로 두고, '지우기' 를 누른 것(`cleared`)만 지운다. 백업 불러오기도 같다. 실제 맥 확인은 CI·맥 사용자.
 - 띠에 까닭: `run_process` 가 '작업이 실패했습니다: …' 를 `lastFailure.reason` 에 적고(`_failure_reason`, 소스 위치는 뺌) `get_health` 가 작업별 문장(`FAIL_WARNINGS`)과 그 작업의 연속 횟수로 말한다(예전엔 작업 이름 'emails' 와 모든 작업을 합친 횟수). 영어 화면은 경고와 '(마지막 성공: …)' 을 따로 옮긴다(붙어 있으면 번역표에 안 맞아 한국어로 남았다).
 - 시험할 때: `web_ui` 의 데이터 폴더는 `AUTOSAVER_ROOT` 를 본다. `AUTOSAVER_DATA_ROOT` 만 바꾸면 `web_ui` 는 그대로 `C:\lms-autosaver` 를 쓴다(이번 시험 2번이 실제 폴더에서 메일 새로고침을 했다 — 새 메일 없음). 또 개발 폴더에는 git 에 없는 옛 `config.py` 가 있어 `config.json` 이 없으면 `web_ui.read_config` 가 그걸 읽는다(설치본에는 안 들어감).
+
+## 실패 까닭 진단 (2026-11-03, 1.12.54)
+- 신고: '동기화가 계속 실패하고 있어요 — deadlines이(가) 7번 연속 실패' 만 떠서 비밀번호 탓인지, 학교 서버가 막은 건지, 사이트가 바뀐 건지 알 수 없고, 횟수가 실제보다 커 보였다. 그때 돌던 것은 Store 시험판 1.12.28 이고 작업 로그는 메모리에만 있어 그 7번의 까닭은 남지 않았다(21:49 수동 마감 확인은 62초 만에 성공).
+- 횟수가 불어난 까닭(코드로 재현): `next_due_job` 이 쉬는 시간을 하나뿐인 `lastFailure` 로 쟀다. 메일이 5분마다 성공하면 `record_task_result` 가 `lastFailure` 를 지워, 마감 확인은 몇 시간 전 성공 시각부터 재게 되어 쉬지 않고 곧바로 다시 하고 또 실패했다. 재현: 마감 3번 실패(2분 전) + 메일 성공 → 옛 셈은 곧바로 `deadlines`, 새 셈은 `None`(240분 쉼). 또 `consecutiveFailures` 는 모든 작업을 합친 수였다.
+- 이제 `health.json` 의 `failures.<kind>` = `{since, at, count, code, category, title, hint, reason, tail}`. 작업마다 따로 세고, 그 작업이 성공하면 그것만 지운다(`reset_task_failures` 도). `tail` 은 실패 때 로그 마지막 30줄 — 앱을 다시 켜도 띠의 '실패할 때 남은 기록' 에서 본다.
+- 갈래는 `web_ui.classify_failure` (`FAILURE_KINDS`, 위에서부터 먼저 맞는 것): 계정 없음 · 로그인 거절 · 브라우저 · 학교 서버 거절(HTTP 403/429/5xx) · 인터넷·학교 서버에 닿지 않음(net::ERR_, getaddrinfo, timed out) · 사이트에서 필요한 것을 못 찾음(로그인 칸 기다리다 시간 초과, JSON 못 읽음) · 느림(Timeout) · Drive · 파일 저장 · 알 수 없음. 로그 전체가 아니라 마지막 Traceback·실패 줄부터 본다 — 지난 학기 과목의 '콘텐츠 API 실패 (403)' 는 정상이라 '서버 거절' 로 고르면 안 된다.
+- LMS 로그인(`lms_crawler.login_lms`): 학교 로그인 화면에 머물면 그 화면의 거절하는 말(경고창 포함, `_login_page_message`)을 '(서버: …)' 로 붙인다. `users/me` 가 5xx·429 로만 답하면 '로그인에 실패' 대신 'LMS 서버가 로그인 확인에 답하지 않았어요 (HTTP …)' — 비밀번호 탓이 아니므로 2시간 자동 멈춤(`authFailed`)을 걸지 않는다.
+- 브라우저를 못 띄우면 예전엔 조용히 끝나 '성공' 으로 적혔다(`crawl_deadlines_only`·`crawl_lms`). 이제 실패로 끝낸다.
+- 띠(`renderHealth`): 제목은 갈래, 둘째 줄 '마감 확인이 21:10부터 안 되고 있어요 (3번 시도).', 셋째 줄 할 일·다음 자동 시도(`nextAutoJob(kind)`)·오류 내용. 두 번 넘게 잇달아 실패한 작업만 띄운다(`get_health` 의 `failing`). 옛 기록(`failures` 없음)은 `lastFailure`+`failStreak` 으로 '알 수 없음' 갈래.
+
+## 메일 AI·오류 알림 (2026-11-04, 1.12.54)
+- 신고: 메일의 회색 글씨 자동완성·AI 가 안 된다. 그때 켜진 것은 Store 시험판 1.12.28 이라 회색 글씨(1.12.29)·`/ai` 이어 쓰기(1.12.30)가 아예 없었다. 최신 소스에서는 회색 글씨·Tab 넣기가 정상(교수님 주소 → 영어 인사·자기소개).
+- `/ai` 는 이 PC 의 Claude CLI 로그인이 만료돼 실패했다: CLI 출력 'Failed to authenticate: OAuth session expired and could not be refreshed'(7초). Gemini 도 로그인 필요, Codex 는 정상(13초). `ai_cli._explain_failure` 가 이 말을 몰라 'Claude 가 답하지 못했어요' 만 냈다 → authenticate·oauth·session expired·credentials 도 로그인 만료로 보고 CLI 마다 다시 로그인하는 법(`LOGIN_HOW`)을 말한다. 그 밖의 실패는 CLI 가 한 말 첫 줄을 붙인다('Denying Bash…' 경고 줄은 뺌).
+- 그런데 화면에는 그 말도 안 보였다: `humanError` 가 표에 없는 말을 모두 '문제가 생겼어요. 앱을 다시 켜 보고…' 로 바꿨다(1.9.5 부터, 33곳). 이제 서버가 보낸 한국어 설명(400자 이하, Traceback 없음)은 그대로 보인다. 알림(`showToast`)은 글 길이 × 70ms(2.6~9초) 동안 둔다.
+- 쓰던 메일 '이어서 쓰기' 가 늘 HTML 원문으로 열렸다: `collectDraft` 의 `html: true` 는 '본문이 HTML' 이라는 뜻인데 `restoreDraftIfAny` 가 이걸 'HTML 칸을 켰음' 으로 읽었다. 모드는 `htmlMode` 로 따로 적는다(옛 저장본은 서식 화면으로).
+- 시험 때 주의: 메일 쓰기 창은 15초 뒤 학교 메일 서버 임시 보관함에 자동 저장한다. 시험 초안은 `email_reader.discard_draft(<X-Daling-Draft>)` 로 지운 표시만 한다(EXPUNGE 금지).
+
+## 설정 'AI 연결' (2026-11-04, 1.12.54)
+- 사용자: '터미널로 안내하지 말고 CLI 연결하는 설정을 설정창에'. 설정의 `#stAi` 카드가 세 CLI 의 상태를 보이고(`GET /api/ai/connections` → `ai_cli.auth_status`, 세 개를 스레드로 함께, 이 PC 0.9초), '연결' 은 `POST /api/ai/login` → `ai_cli.open_login`.
+- 상태 명령(실측): Claude `claude auth status --json` 의 `loggedIn`, Codex `codex login status` 의 'Logged in using ChatGPT'/'Not logged in'. 둘 다 네트워크를 안 쓴다.
+- 로그인 창: Windows 는 `cmd.exe /c title … & "<exe>" auth login & pause` 를 보이는 콘솔(CREATE_NEW_CONSOLE)로 — 목록으로 넘기면 파이썬이 안쪽 따옴표를 `\"` 로 바꿔 cmd 가 못 읽으므로 한 줄 문자열로 넘긴다. 맥은 터미널.app 에 `osascript` 인자로, 리눅스는 x-terminal-emulator·gnome-terminal·konsole·xterm. CLI 가 브라우저를 열고 사용자가 직접 로그인한다. 화면은 4초마다 다시 물어(최대 3분) '연결됨' 이 되면 멈추고 메일 쓰기의 모델 단추도 다시 칠한다.
+- Gemini: 0.62 에 로그인 명령이 없고, 구글 개인 계정 로그인은 'This client is no longer supported for Gemini Code Assist for individuals'(IneligibleTierError)로 막혔다 → API 키로만 된다. 하지만 **API 키 칸은 두지 않는다** — 처음엔 카드에 Gemini 키 칸을 넣었다가 사용자가 'API 넣기는 다 빼라'고 해서 뺐다(2026-10-21 에도 같은 말로 Gemini·공공데이터 키 칸을 뺐었다). 카드는 '지금은 못 씀' 만 보이고 단추가 없다. 운영체제 환경 변수에 `GEMINI_API_KEY` 를 둔 사람만 '연결됨'. 창 없이 돌릴 때 폴더 신뢰 질문을 넘기려고 `GEMINI_CLI_TRUST_WORKSPACE=true`.
+- 오류 문구: Gemini 인증 실패·IneligibleTier → '구글이 막아 지금은 못 써요, Claude 나 Codex 를', Claude·Codex 로그인 만료 → '설정 → AI 연결에서 다시 연결'(`LOGIN_HOW`).
+- 체험 모드: `/api/ai/connections` 는 GET 차단, `/api/ai/login` 은 POST 차단. 설치 안내는 `web_ui.AI_HELP_LINKS` 와 똑같은 주소만 `/api/open-url` 로 연다(맥 앱).
 
 ## 메일 분류 규칙 (2026-10-12)
 - `email_reader.rule_based_category` 순서: 답신 → 계정·알림(인증번호·패스키·계정 생성) → 수업·LMS(Blackboard 발신, 제목의 `[2026_2학기]`, 일일 통지·제출물 수신함·강의성찰) → 학생회 → 교수님(발신자 이름에 교수) → 세미나·행사(한·영 낱말: Seminar·Colloquium·Symposium·Lecture Series·Workshop·Forum·투어·마라톤…) → 취업·진로(창업·공모전·해커톤·트랙…) → 행정·학생팀(보낸 부서) → 동아리·문화 → 기타.

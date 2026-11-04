@@ -344,6 +344,11 @@
                 <div class="alert-body">
                   <strong id="healthTitle">동기화가 되지 않고 있어요</strong>
                   <p id="healthDetail"></p>
+                  <p class="alert-note" id="healthCause" hidden></p>
+                  <details class="health-log" id="healthLog" hidden>
+                    <summary>실패할 때 남은 기록</summary>
+                    <pre id="healthLogText"></pre>
+                  </details>
                 </div>
                 <div class="alert-actions">
                   <button class="button compact primary" id="healthRetryButton" type="button">지금 동기화</button>
@@ -1515,7 +1520,7 @@
                     <span class="track"></span>
                   </span>
                 </span>
-                <span class="st-dest-path">내 드라이브 › <b id="driveFolderText">AutoSaver</b> › 과목 폴더</span>
+                <span class="st-dest-path">내 드라이브 › <b id="driveFolderText">Daling</b> › 과목 폴더</span>
                 <span class="st-dest-warn" id="driveWarn" hidden>구글 로그인이 필요해요. 위 연결된 계정에서 로그인하세요.</span>
               </label>
 
@@ -1628,7 +1633,25 @@
             </div>
           </section>
 
-          <!-- AI 도우미 카드(실험실)는 없앴다(2026-10-20). 모델은 메일 쓰기 창의 모델 단추나 '/ai with 모델 [할 말]' 로 고른다 -->
+          <!-- AI 도우미 카드(실험실)는 없앴다(2026-10-20). 모델은 메일 쓰기 창의 모델 단추나 '/ai with 모델 [할 말]' 로 고른다.
+               2026-11-04 사용자: 'CLI 연결하는 설정을 설정창에' → 연결(로그인) 상태와 연결 단추만 있는 카드 (paintAiConnections).
+               칸에 name 을 붙이지 않는다 — 설정 저장 단추가 아니라 카드 안 단추로 바로 저장한다 -->
+          <section class="st-card" id="stAi">
+            <header class="st-head">
+              <span class="st-tile violet"><span class="icon" data-icon="sparkle"></span></span>
+              <div>
+                <h3>AI 연결</h3>
+              </div>
+              <button type="button" class="hint" data-hint="메일의 /ai·자동 완성·번역은 이 컴퓨터에 깔린 Claude·Gemini·Codex 를 씁니다. 연결을 누르면 로그인 창이 뜨고, 브라우저에서 직접 로그인하면 됩니다. 앱은 AI 계정 비밀번호·API 키를 받지 않습니다.">?</button>
+            </header>
+            <div id="aiConnList" class="ai-conn-list">
+              <p class="ai-conn-empty">확인 중…</p>
+            </div>
+            <div class="ai-conn-foot">
+              <button type="button" class="button compact ghost" id="aiConnRefresh"><span class="icon" data-icon="sync"></span>다시 확인</button>
+            </div>
+          </section>
+
           <section class="st-card" id="stAuto">
             <header class="st-head">
               <span class="st-tile green"><span class="icon" data-icon="sync"></span></span>

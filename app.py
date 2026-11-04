@@ -528,6 +528,7 @@ def next_due_job(workspace, minutes: dict[str, int], kinds=("emails", "deadlines
 
     streaks = health.get("failStreak") or {}
     auth = health.get("authFailed") or {}
+    failures = health.get("failures") or {}
     try:
         st = workspace.config_path.stat()
         config_stamp = [st.st_mtime_ns, st.st_size]
@@ -547,11 +548,16 @@ def next_due_job(workspace, minutes: dict[str, int], kinds=("emails", "deadlines
         if locked and locked.get("configStamp") == config_stamp and age_minutes(locked.get("at")) < 120:
             continue
         # 그 밖의 실패는 연속으로 실패할수록 간격을 두 배로 (최대 6시간)
+        # 쉬는 시간은 그 작업이 마지막으로 실패한 때부터 잰다. 예전엔 하나뿐인 lastFailure 만 봐서, 메일이 5분마다
+        # 성공해 그 기록을 지우면 마감 확인은 오래전 성공 시각부터 재게 되어 쉬지 않고 곧바로 다시 했다 →
+        # 실패 횟수만 빠르게 불어 '7번 연속 실패' 가 떴다(2026-11-03). 작업별 기록 failures[kind] 를 먼저 본다.
         streak = int(streaks.get(kind, 0) or 0)
+        mine = failures.get(kind) if isinstance(failures.get(kind), dict) else {}
+        failed_at = mine.get("at") or (failure.get("at") if failure.get("kind") == kind else None)
         wait = min(max(5, every) * (2 ** max(0, streak - 1)), 360) if streak else 0
-        if failure.get("kind") == kind:
+        if failed_at:
             wait = max(wait, max(5, every / 2))
-        if wait and age_minutes((failure.get("at") if failure.get("kind") == kind else None) or success.get(kind)) < wait:
+        if wait and age_minutes(failed_at or success.get(kind)) < wait:
             continue
         return kind
     return None

@@ -4051,6 +4051,33 @@ tbody tr:hover {
   color: var(--text-faint);
 }
 
+#healthCause { white-space: pre-line; }
+/* 동기화 실패 띠: 실패할 때 남은 로그 (앱을 다시 켜도 health.json 의 failures[kind].tail 에 남는다) */
+.health-log {
+  margin-top: 6px;
+  font-size: 11.5px;
+  color: var(--text-faint);
+}
+.health-log summary {
+  cursor: pointer;
+  width: fit-content;
+}
+.health-log pre {
+  margin: 6px 0 0;
+  max-height: 180px;
+  overflow: auto;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+  color: var(--text-soft);
+  font-family: "Cascadia Code", Consolas, "SF Mono", Menlo, monospace;
+  font-size: 11px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-all;
+  user-select: text;
+}
+
 .alert-actions {
   display: flex;
   flex-direction: column;
@@ -8167,6 +8194,15 @@ body.mail-dragging { cursor: grabbing; }
 .st-pill[data-kind="ok"] { background: var(--green-soft); color: var(--green); }
 .st-pill[data-kind="need"] { background: var(--amber-soft); color: var(--amber); }
 #stAccounts .cred-drop { margin-top: 4px; }
+
+/* AI 연결 카드 (paintAiConnections) */
+.ai-conn-logo .ai-logo { width: 22px; height: 22px; vertical-align: 0; }
+.ai-conn-empty { margin: 0; padding: 8px 0; font-size: 12.5px; color: var(--text-faint); }
+.ai-conn-foot { display: flex; justify-content: flex-end; padding-top: 6px; }
+#stAi .st-acct { grid-template-columns: 40px 1fr auto; }
+@media (max-width: 720px) {
+  #stAi .st-acct { grid-template-columns: 40px 1fr; }
+}
 
 /* ② 강의자료 저장: 두 저장 위치를 카드로 나란히 */
 .st-dest-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }

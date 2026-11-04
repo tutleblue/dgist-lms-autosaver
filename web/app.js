@@ -542,7 +542,9 @@ function showToast(message) {
   toast.textContent = message;
   toast.classList.add("visible");
   window.clearTimeout(showToast.timer);
-  showToast.timer = window.setTimeout(() => toast.classList.remove("visible"), 2600);
+  // 긴 안내(예: 'Claude 로그인이 만료됐어요. 터미널에서 …')는 2.6초면 다 읽기 전에 사라졌다. 글 길이만큼 늘린다(최대 9초)
+  const ms = Math.min(9000, Math.max(2600, String(message || "").length * 70));
+  showToast.timer = window.setTimeout(() => toast.classList.remove("visible"), ms);
 }
 
 /* ===== 오류를 사람 말로 =====
@@ -555,14 +557,22 @@ function humanError(err) {
   const table = [
     [/Failed to fetch|NetworkError|ERR_CONNECTION/i, "앱과 연결이 끊겼어요. 앱을 다시 켜 주세요."],
     [/이미 실행 중/, "앞 작업이 아직 돌고 있어요. 끝나면 다시 눌러 주세요."],
-    [/401|인증|Unauthorized/i, "로그인 정보가 맞지 않아요. 설정에서 다시 확인해 주세요."],
+  ];
+  for (const [re, msg] of table) {
+    if (re.test(raw)) return msg;
+  }
+  // 서버가 한국어로 적어 보낸 설명은 사람이 읽으라고 쓴 말이라 그대로 보인다. 예전엔 아래 표에 없으면 모두
+  // '문제가 생겼어요…' 로 바뀌어, 'Claude 로그인이 만료됐어요' 같은 까닭이 사라졌다(2026-11-04 메일 /ai 신고).
+  if (/[가-힣]/.test(raw) && raw.length <= 400 && !/Traceback|\bat \S+ \(/.test(raw)) return raw;
+  const technical = [
+    [/401|Unauthorized/i, "로그인 정보가 맞지 않아요. 설정에서 다시 확인해 주세요."],
     [/timed? ?out|시간 초과/i, "시간이 너무 오래 걸려 멈췄어요. 잠시 뒤 다시 해 주세요."],
     [/JSON|Unexpected token/i, "받아 온 내용을 읽지 못했어요. 다시 시도해 주세요."],
     // 화면 요소를 못 찾은 경우 (대개 앱을 새로 받은 뒤 옛 화면이 남아 있을 때)
     [/Cannot (read|set) propert(y|ies)/i, "화면을 그리다 문제가 생겼어요. 앱을 다시 켜면 대개 해결됩니다."],
     [/is not a function/i, "앱 파일이 서로 안 맞아요. 앱을 다시 켜 주세요."],
   ];
-  for (const [re, msg] of table) {
+  for (const [re, msg] of technical) {
     if (re.test(raw)) return msg;
   }
   return "문제가 생겼어요. 앱을 다시 켜 보고, 계속되면 설정 → 실행 로그를 확인해 주세요.";
@@ -2626,6 +2636,9 @@ function collectDraft() {
     // 서식 모드는 innerHTML, HTML 모드는 직접 쓴 HTML.
     // 어느 쪽이든 본문은 HTML이다. (예전에 여기가 뒤집혀 미리보기에 태그가 그대로 보였다)
     html: true,
+    // 'HTML' 칸을 켜고 쓰던 것인지는 따로 적는다. html 은 '본문이 HTML' 이라 늘 참인데, 되살릴 때 이걸 모드로 읽어
+    // 이어서 쓰면 늘 HTML 원문(<div><br></div>…)으로 열렸다(2026-11-04 실측)
+    htmlMode: Boolean($("#htmlModeToggle")?.checked),
     savedAt: new Date().toISOString(),
   };
 }
@@ -2847,7 +2860,7 @@ async function restoreDraftIfAny() {
   if (form.elements.subject) form.elements.subject.value = draft.subject;
   const toggle = $("#htmlModeToggle");
   if (toggle) {
-    toggle.checked = Boolean(draft.html);
+    toggle.checked = Boolean(draft.htmlMode);
     toggle.dispatchEvent(new Event("change"));
   }
   setComposeBody(draft.body);
@@ -4937,7 +4950,8 @@ const listSig = (arr) => (Array.isArray(arr) ? `${arr.length}:${arr[arr.length -
 
 const RENDER_PARTS = [
   { key: "status", render: renderStatus,
-    of: (s) => sig(s.status?.lastRun, s.status?.running, listSig(s.status?.courses)) },
+    of: (s) => sig(s.status?.lastRun, s.status?.running, listSig(s.status?.courses), s.status?.driveResult?.at,
+      s.status?.googleOAuth?.driveGranted) },
   { key: "upcoming", views: ["dashboard"], render: renderUpcoming,
     of: (s) => sig(s.deadlines?.updatedAt, (s.deadlines?.items || []).length, (s.selection?.hiddenDeadlines || []).length) },
   { key: "events", views: ["dashboard"], render: renderEvents,
@@ -4962,7 +4976,8 @@ const RENDER_PARTS = [
   { key: "files", views: ["files"], render: renderFiles,
     of: (s) => sig((s.files || []).length, s.search, s.fileView, s.fileCourse, s.fileStatus) },
   { key: "health", render: renderHealth,
-    of: (s) => sig(s.health?.warning, s.health?.consecutiveFailures, JSON.stringify(s.health?.lastSuccess || {})) },
+    of: (s) => sig(s.health?.warning, s.health?.consecutiveFailures, JSON.stringify(s.health?.lastSuccess || {}),
+      JSON.stringify((s.health?.failing || []).map((f) => [f.kind, f.at, f.category]))) },
   { key: "quicklinks", views: ["dashboard"], render: renderQuicklinks, of: (s) => sig(s.quicklinksAll) },
   { key: "shuttle", views: ["storage"], render: renderShuttle,
     of: (s) => sig((s.shuttle || []).length, s.shuttleGroup) },
@@ -6099,6 +6114,7 @@ async function populateSettings() {
   if (form.elements.notifyDeadlines) form.elements.notifyDeadlines.checked = state.config?.notifyDeadlines !== false;
   if (form.elements.notifyNewFiles) form.elements.notifyNewFiles.checked = state.config?.notifyNewFiles !== false;
   loadAutostart();
+  loadAiConnections();
   // 구글 캘린더 동기화 (체크박스라 value 대입으로는 반영되지 않음)
   form.elements.gcalSyncEnabled.checked = Boolean(state.config?.gcalSyncEnabled);
   form.elements.gcalCalendarName.value = state.config?.gcalCalendarName || "DGIST 메일 일정";
@@ -6135,7 +6151,7 @@ async function populateSettings() {
     folderText.parentElement.title = state.config.localSaveFolder;
   }
   form.elements.driveUpload.checked = state.config?.driveUpload !== false;
-  $("#driveFolderText").textContent = state.config?.driveFolderName || "AutoSaver";
+  $("#driveFolderText").textContent = state.config?.driveFolderName || "Daling";
   // 클라우드 카드는 저장을 누르기 전까지 초안으로만 바꾼다
   state.cloudDraft = Object.fromEntries(
     (state.config?.clouds || []).map((c) => [c.key, { on: Boolean(c.on), path: c.picked ? c.root : "" }]),
@@ -7107,7 +7123,11 @@ function bindEvents() {
     // 실패한 작업을 다시 한다. 예전엔 늘 자료 동기화만 돌려서, 메일 로그인이 막혔다는 경고는 눌러도 그대로였다
     // (메일은 다시 해 보지도 않았다 — 2026-10-21 맥 사용자 신고). 서버가 거절해 쉬는 중이어도 직접 누르면 다시 해 본다.
     const h = state.health || {};
-    const kinds = new Set([...Object.keys(h.authFailed || {}), h.lastFailure?.kind].filter(Boolean));
+    const kinds = new Set([
+      ...Object.keys(h.authFailed || {}),
+      ...(h.failing || []).map((f) => f.kind),
+      h.lastFailure?.kind,
+    ].filter(Boolean));
     if (!kinds.size) kinds.add("sync");
     if (kinds.has("emails")) await startRun("/api/refresh-emails", "메일 다시 가져오기");
     if (kinds.has("deadlines")) await startRun("/api/refresh-deadlines", "마감 다시 가져오기");
@@ -7960,17 +7980,38 @@ async function renderHealth() {
     }
     // 실패한 작업의 마지막 성공을 보여 준다. 예전엔 모든 작업 중 가장 최근 것이라, 메일이 막혔는데
     // 마감 확인 시각(15:32)이 '마지막 성공' 으로 나와 메일은 멀쩡한 것처럼 보였다.
-    const failKind = Object.keys(h.authFailed || {})[0] || h.lastFailure?.kind;
+    const auth = Object.keys(h.authFailed || {})[0];
+    const fail = !auth && !h.keychain ? (h.failing || [])[0] : null;
+    const failKind = auth || fail?.kind || h.lastFailure?.kind;
     const last = failKind && h.lastSuccess?.[failKind]
       ? h.lastSuccess[failKind]
       : Object.values(h.lastSuccess || {}).sort().pop();
     // 맥 키체인에서 비밀번호를 못 꺼내면(업데이트 뒤 허락 전·거부) LMS·메일이 함께 실패한다. 그때는 그것부터 말한다
+    // 제목은 '왜' 를 말한다 (2026-11-03 사용자: '계속 실패' 만 떠서 비밀번호인지 서버인지 사이트가 바뀐 건지 모르겠다)
     $("#healthTitle").textContent = h.keychain
       ? h.keychain.waiting ? "키체인 허락을 기다리고 있어요" : "키체인에서 비밀번호를 못 꺼냈어요"
-      : h.consecutiveFailures >= 2 ? "동기화가 계속 실패하고 있어요" : "한동안 동기화가 되지 않았어요";
+      : auth ? "로그인이 거절됐어요"
+      : fail ? tr(fail.title || "동기화가 계속 실패하고 있어요") : "한동안 동기화가 되지 않았어요";
     // 경고와 '(마지막 성공: …)' 을 따로 옮긴다. 한 줄로 붙이면 영어 화면 번역표의 어느 틀에도 안 맞아 한국어로 남았다
     $("#healthDetail").textContent =
       tr(h.warning) + (last && !h.keychain ? tr(` (마지막 성공: ${String(last).replace("T", " ")})`) : "");
+    // 할 일 · 다음 자동 시도 · 서버나 오류가 한 말 (서버의 말은 옮기지 않는다)
+    const cause = $("#healthCause");
+    if (cause) {
+      const parts = [];
+      if (fail?.hint) parts.push(tr(fail.hint));
+      const next = fail ? nextAutoJob(fail.kind) : null;
+      if (next) parts.push(tr(`다음 자동 시도 ${hhmm(new Date(next.at))}`));
+      const reason = fail?.reason ? `${tr("오류 내용")}: ${fail.reason}` : "";
+      cause.textContent = [parts.join(" "), reason].filter(Boolean).join("\n");
+      cause.hidden = !cause.textContent;
+    }
+    const log = $("#healthLog");
+    if (log) {
+      const tail = (fail?.tail || []).filter(Boolean);
+      log.hidden = !tail.length;
+      $("#healthLogText").textContent = tail.join("\n");
+    }
     banner.hidden = false;
   } catch (error) {
     banner.hidden = true;
@@ -11618,7 +11659,9 @@ function renderSaveDestinations() {
   const local = $("#localSaveToggle");
   if (!drive || !local) return;
   const oauth = state.status?.googleOAuth || {};
-  const googleOk = Boolean(oauth.tokenUsable);
+  // 동의 화면에서 Drive 칸을 체크하지 않은 연결은 '로그인됨' 이어도 올릴 수 없다 → 같은 경고 자리에 알린다
+  const driveScopeMissing = Boolean(oauth.tokenUsable) && oauth.driveGranted === false;
+  const googleOk = Boolean(oauth.tokenUsable) && !driveScopeMissing;
   // 구글 로그인 준비물이 없는 판(맥·리눅스): 켤 수 없게 두고 '준비 중' 으로만 (로그인하라고 조르지 않는다)
   // 상태를 아직 못 받았으면(켜는 중) 판단하지 않는다. 안 그러면 Windows 에서도 잠깐 꺼진 것으로 바꿔 버린다
   const unavailable = Boolean(state.status?.googleOAuth) && !googleOk && !oauth.credentialsExists;
@@ -11627,7 +11670,10 @@ function renderSaveDestinations() {
   const driveOn = drive.checked && !unavailable;
   $("#driveDest").classList.toggle("on", driveOn && googleOk);
   $("#driveDest").classList.toggle("blocked", driveOn && !googleOk);
-  $("#driveState").textContent = unavailable ? "준비 중" : !driveOn ? "꺼짐" : googleOk ? "자동 저장 중" : "로그인 필요";
+  $("#driveState").textContent = unavailable ? "준비 중" : !driveOn ? "꺼짐" : googleOk ? "자동 저장 중" : driveScopeMissing ? "권한 필요" : "로그인 필요";
+  $("#driveWarn").textContent = driveScopeMissing
+    ? "구글을 연결할 때 Drive 칸을 체크하지 않아 올릴 수 없어요. 위 연결된 계정에서 다시 연결하고 Drive 칸을 체크해 주세요."
+    : "구글 로그인이 필요해요. 위 연결된 계정에서 로그인하세요.";
   $("#driveWarn").hidden = !(driveOn && !googleOk);
 
   const mode = localSaveMode();
@@ -12507,6 +12553,16 @@ const TOUR_STEPS = [
       "OneDrive·Dropbox·iCloud·네이버 MYBOX 폴더에도",
       "자료가 차지하는 공간을 보고 학기별로 정리",
     ],
+  },
+  {
+    chapter: "설정",
+    view: "settings",
+    targets: ["#stAi .st-head"],
+    fallback: ['.nav-item[data-view="settings"]'],
+    pose: "bow",
+    area: "settings",
+    title: "AI 연결",
+    text: "메일의 /ai·자동 완성은 이 컴퓨터의 Claude·Codex·Gemini 를 써. '연결'을 누르고 브라우저에서 로그인만 하면 돼.",
   },
   {
     chapter: "설정",
@@ -13439,6 +13495,9 @@ function statusLights() {
         ? { tone: "warn", why: "LMS 연결 오류" }
         : { tone: "ok", why: "" };
   lms.tip = `LMS · 자료 ${since("sync")} · 마감 ${since("deadlines")}`;
+  // 무엇 때문에 안 되는지 (web_ui.classify_failure 의 갈래)
+  const why = (kinds) => (h.failing || []).find((f) => kinds.includes(f.kind))?.title;
+  if (lms.tone === "warn" && why(["sync", "deadlines"])) lms.tip += ` · ${why(["sync", "deadlines"])}`;
 
   const mail = !cfg.schoolEmail || !cfg.hasSchoolEmailPassword
     ? { tone: "off", why: "메일 계정 필요" }
@@ -13448,6 +13507,7 @@ function statusLights() {
         ? { tone: "warn", why: "메일 연결 오류" }
         : { tone: "ok", why: "" };
   mail.tip = `학교 메일 · ${since("emails")}`;
+  if (mail.tone === "warn" && why(["emails"])) mail.tip += ` · ${why(["emails"])}`;
 
   const drive = cfg.driveUpload === false
     ? { tone: "off", why: "", tip: "Drive · 꺼 둠" }
@@ -13455,13 +13515,30 @@ function statusLights() {
       ? { tone: "off", why: "", tip: "Drive · 이 판에서는 준비 중" }
     : !oauth.tokenUsable
       ? { tone: "bad", why: "구글 로그인 필요", tip: "Drive · 로그인 필요" }
-      : { tone: "ok", why: "", tip: "Drive · 연결됨" };
+    : oauth.driveGranted === false
+      ? { tone: "bad", why: "Drive 권한 필요", tip: "Drive · 연결할 때 Drive 칸을 체크하지 않았어요. 다시 연결해 주세요" }
+      : driveResultLight();
 
   return { lms, mail, drive };
 }
 
+/** 마지막 동기화에서 Drive 에 올린 결과(main._save_drive_status → /api/status driveResult).
+    예전엔 연결만 되어 있으면 '연결됨' 이라, 올리기가 모두 실패해도 화면에서 알 수 없었다. */
+function driveResultLight() {
+  const r = state.status?.driveResult;
+  const folder = state.config?.driveFolderName || "Daling";
+  if (!r || !r.state || r.state === "ok") {
+    const sent = r ? (r.uploaded || 0) + (r.updated || 0) : 0;
+    return { tone: "ok", why: "", tip: `Drive · 내 드라이브 › ${folder}${sent ? ` · 지난번 ${sent}개 올림` : ""}` };
+  }
+  if (r.state === "error" && r.failed) {
+    return { tone: "warn", why: `Drive 실패 ${r.failed}개`, tip: `Drive · ${r.failed}개 못 올림 · ${r.error || ""}` };
+  }
+  return { tone: "warn", why: "Drive 올리기 실패", tip: `Drive · ${r.error || "올리지 못했어요"}` };
+}
+
 /** 다음 자동 확인: 메일 5분·마감 1시간·자료 3시간 주기와 마지막 성공 시각으로 계산 */
-function nextAutoJob() {
+function nextAutoJob(only = null) {
   const cfg = state.config || {};
   const h = state.health || {};
   const every = { emails: cfg.autoEmailMinutes, deadlines: cfg.autoDeadlineMinutes, sync: cfg.autoSyncMinutes };
@@ -13471,15 +13548,17 @@ function nextAutoJob() {
   let best = null;
   Object.entries(every).forEach(([kind, minutes]) => {
     const m = Number(minutes) || 0;
-    if (m <= 0 || !ready[kind] || (h.authFailed || {})[kind]) return;
+    if ((only && kind !== only) || m <= 0 || !ready[kind] || (h.authFailed || {})[kind]) return;
     const last = h.lastSuccess?.[kind] ? new Date(h.lastSuccess[kind]).getTime() : 0;
     let at = last + m * 60000;
-    // 실패한 뒤에는 앱이 쉬었다가 다시 한다 (app.next_due_job 과 같은 셈: 연속 실패마다 두 배, 최대 6시간)
-    const fail = h.lastFailure || {};
+    // 실패한 뒤에는 앱이 쉬었다가 다시 한다 (app.next_due_job 과 같은 셈: 연속 실패마다 두 배, 최대 6시간).
+    // 실패 시각은 작업별 기록(failures)을 먼저 본다. lastFailure 는 다른 작업이 성공하면 지워진다
+    const lastFail = h.lastFailure || {};
+    const failedAt = (h.failures || {})[kind]?.at || (lastFail.kind === kind ? lastFail.at : null);
     const streak = Number((h.failStreak || {})[kind]) || 0;
-    if (fail.kind === kind && fail.at) {
+    if (failedAt) {
       const wait = Math.max(streak ? Math.min(Math.max(5, m) * 2 ** (streak - 1), 360) : 0, Math.max(5, m / 2));
-      at = Math.max(at, new Date(fail.at).getTime() + wait * 60000);
+      at = Math.max(at, new Date(failedAt).getTime() + wait * 60000);
     }
     at = Math.max(Date.now(), at);
     if (!best || at < best.at) best = { kind, at };
@@ -15533,6 +15612,116 @@ $("#aiProviders")?.addEventListener("click", async (event) => {
     showToast(humanError(error));
   }
 });
+
+/* --- 설정 'AI 연결' 카드 ---
+   2026-11-04 사용자: '터미널로 안내하지 말고 CLI 연결하는 설정을 설정창에'. 각 CLI 의 로그인 상태를 보이고,
+   '연결' 은 그 CLI 의 로그인 창(터미널)을 띄운다. 브라우저에서 로그인이 끝나면 몇 초마다 다시 물어 '연결됨' 으로 바꾼다.
+   Gemini 는 구글 개인 로그인이 막혀(IneligibleTierError) 상태만 보인다. API 키 칸은 두지 않는다
+   (2026-10-21·11-04 사용자: 'API 키 넣기는 다 빼라'). */
+const aiConn = { items: null, loading: false, polling: 0, pollUntil: 0 };
+
+async function loadAiConnections() {
+  if (!$("#aiConnList") || aiConn.loading) return;
+  aiConn.loading = true;
+  try {
+    const res = await api("/api/ai/connections");
+    aiConn.items = res.items || [];
+    aiConn.error = "";
+  } catch (error) {
+    aiConn.error = humanError(error);
+  } finally {
+    aiConn.loading = false;
+  }
+  paintAiConnections();
+  return aiConn.items;
+}
+
+function aiConnRow(item) {
+  const p = item.provider;
+  const waiting = aiConn.polling && aiConn.waitFor === p && !item.connected;
+  let kind = "need";
+  let pill = tr("연결 안 됨");
+  if (!item.installed) pill = tr("설치 안 됨");
+  else if (item.connected) { kind = "ok"; pill = tr("연결됨"); }
+  else if (item.blocked) pill = tr("지금은 못 씀");
+  else if (item.connected == null) pill = tr("확인 못 함");
+  if (waiting) pill = tr("로그인 기다리는 중");
+  let actions = "";
+  if (!item.installed) {
+    actions = `<button type="button" class="button compact ghost" data-ai-install="${p}">${tr("설치 방법")}</button>`;
+  } else if (p === "gemini") {
+    actions = ""; // 로그인 창이 없다(구글이 막음)
+  } else {
+    actions = `<button type="button" class="button compact${item.connected ? " ghost" : ""}" data-ai-login="${p}">${
+      item.connected ? tr("다시 연결") : tr("연결")}</button>`;
+  }
+  return `<div class="st-acct ai-conn" data-provider="${p}">
+      <span class="st-logo ai-conn-logo" aria-hidden="true">${aiLogo(p, waiting ? "busy" : "")}</span>
+      <div class="st-acct-name">
+        <strong>${escapeHtml(item.label || p)}</strong>
+        <span class="st-pill" data-kind="${kind}">${escapeHtml(pill)}</span>
+        <small>${escapeHtml(tr(item.note || ""))}</small>
+      </div>
+      <div class="st-acct-actions">${actions}</div>
+    </div>`;
+}
+
+function paintAiConnections() {
+  const box = $("#aiConnList");
+  if (!box) return;
+  if (aiConn.error && !aiConn.items) {
+    box.innerHTML = `<p class="ai-conn-empty">${escapeHtml(aiConn.error)}</p>`;
+    return;
+  }
+  if (!aiConn.items) return;
+  box.innerHTML = aiConn.items.map(aiConnRow).join("");
+}
+
+// 로그인 창을 띄운 뒤 4초마다 상태를 다시 본다(최대 3분). 연결되면 멈추고 메일 쓰기의 모델 단추도 새로 칠한다.
+function pollAiLogin(provider) {
+  clearInterval(aiConn.polling);
+  aiConn.waitFor = provider;
+  aiConn.pollUntil = Date.now() + 180000;
+  aiConn.polling = setInterval(async () => {
+    const items = await loadAiConnections();
+    const hit = (items || []).find((i) => i.provider === provider);
+    const viewGone = !$("#aiConnList")?.offsetParent;
+    if (hit?.connected || Date.now() > aiConn.pollUntil || viewGone) {
+      clearInterval(aiConn.polling);
+      aiConn.polling = 0;
+      paintAiConnections();
+      if (hit?.connected) {
+        showToast(tr("{name} 연결됐어요. 메일에서 /ai 를 쓸 수 있어요.").replace("{name}", hit.label));
+        loadAiStatus(true);
+      }
+    }
+  }, 4000);
+  paintAiConnections();
+}
+
+const AI_INSTALL_URL = {
+  claude: "https://docs.claude.com/en/docs/claude-code/setup",
+  gemini: "https://github.com/google-gemini/gemini-cli",
+  codex: "https://github.com/openai/codex",
+};
+
+$("#aiConnList")?.addEventListener("click", async (event) => {
+  const login = event.target.closest("[data-ai-login]");
+  const install = event.target.closest("[data-ai-install]");
+  try {
+    if (login) {
+      const p = login.dataset.aiLogin;
+      await api("/api/ai/login", { method: "POST", body: JSON.stringify({ provider: p }) });
+      showToast(tr("로그인 창을 열었어요. 브라우저에서 로그인하면 여기 '연결됨' 으로 바뀌어요."));
+      pollAiLogin(p);
+    } else if (install) {
+      openOutside(AI_INSTALL_URL[install.dataset.aiInstall]);
+    }
+  } catch (error) {
+    showToast(humanError(error));
+  }
+});
+$("#aiConnRefresh")?.addEventListener("click", () => loadAiConnections());
 
 /* --- 메일 초안 --- */
 // 받는 사람 칸의 첫 주소 → 이름·주소, 그 사람이 맡은 과목·분반(내 수업 먼저)

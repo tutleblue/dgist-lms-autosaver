@@ -165,13 +165,146 @@ def _command(provider: str, exe: str, out_file: Path, model: str = "") -> list[s
             "--color", "never", *extra, "-o", str(out_file), "-"]
 
 
+# 로그인을 다시 하는 법 (CLI 마다 다르다). 2026-11-04 사용자: '터미널로 안내하지 말고 설정창에서 연결하게'
+LOGIN_HOW = {
+    "claude": "설정 → AI 연결에서 Claude 를 다시 연결",
+    "gemini": "Claude 나 Codex 로 바꾸어 사용",
+    "codex": "설정 → AI 연결에서 Codex 를 다시 연결",
+}
+
+
+# ===== 연결(로그인) =====
+# 앱은 키·비밀번호를 받지 않고 각 CLI 의 로그인을 그대로 쓴다. 설정 화면이 상태를 보이고, '연결' 을 누르면
+# 그 CLI 의 로그인 명령을 보이는 터미널 창에서 띄운다(브라우저가 열리고 사용자가 직접 로그인한다).
+# 실측(2026-11-04, 이 PC):
+# - claude 2.x: 'claude auth status --json' → {"loggedIn": false, "authMethod": "none", …}, 로그인은 'claude auth login'
+# - codex: 'codex login status' → 'Logged in using ChatGPT' / 'Not logged in', 로그인은 'codex login'
+# - gemini 0.62: 로그인 명령이 없고, 구글 개인 계정 로그인은 'This client is no longer supported for Gemini Code
+#   Assist for individuals'(IneligibleTierError)로 막혔다 → API 키로만 된다. 앱은 API 키 칸을 두지 않는다
+#   (2026-10-21·11-04 사용자: 'API 키 넣기는 다 빼라'). 사용자가 운영체제 환경 변수에 GEMINI_API_KEY 를 둔 경우만 쓸 수 있다.
+#   창 없이 돌릴 때는 폴더 신뢰 질문이 막으므로 GEMINI_CLI_TRUST_WORKSPACE.
+
+
+def _quiet_kwargs() -> dict:
+    return {"creationflags": 0x08000000} if os.name == "nt" else {}  # CREATE_NO_WINDOW
+
+
+def _cli_env(provider: str, exe: str) -> dict:
+    env = dict(os.environ)
+    if sys.platform.startswith("linux") and getattr(sys, "frozen", False):
+        # 리눅스 묶음 앱은 LD_LIBRARY_PATH 가 묶음 안을 가리킨다 — node(claude·gemini·codex)가 묶음의 옛 libstdc++ 를
+        # 집어 죽을 수 있어, 브라우저·xdg-open 처럼 원래 환경으로 띄운다(2026-10-21 맥·리눅스 점검)
+        try:
+            import linux_support
+
+            env = linux_support.system_env()
+        except Exception:
+            pass
+    if os.name != "nt":
+        env["PATH"] = _child_path(exe)
+    env.setdefault("NO_COLOR", "1")
+    if provider == "gemini":
+        env["GEMINI_CLI_TRUST_WORKSPACE"] = "true"
+    return env
+
+
+def auth_status(provider: str) -> dict:
+    """{provider, label, installed, connected(True/False/None=모름), note}. 네트워크를 쓰지 않는 상태 명령만 부른다."""
+    out = {"provider": provider, "label": LABELS[provider], "installed": False, "connected": None, "note": ""}
+    exe = _which(provider)
+    if not exe:
+        out["note"] = "이 컴퓨터에 설치되어 있지 않아요"
+        return out
+    out["installed"] = True
+    if provider == "gemini":
+        has_key = bool(os.environ.get("GEMINI_API_KEY"))
+        out["connected"] = has_key
+        out["blocked"] = not has_key
+        out["note"] = "연결됨" if has_key else "구글이 개인 계정 로그인을 막아 지금은 쓸 수 없어요"
+        return out
+    cmd = [exe, "auth", "status", "--json"] if provider == "claude" else [exe, "login", "status"]
+    try:
+        proc = subprocess.run(cmd, capture_output=True, stdin=subprocess.DEVNULL, timeout=25,
+                              env=_cli_env(provider, exe), **_quiet_kwargs())
+    except (subprocess.TimeoutExpired, OSError) as exc:
+        out["note"] = f"상태를 확인하지 못했어요 ({type(exc).__name__})"
+        return out
+    text = (proc.stdout + proc.stderr).decode("utf-8", errors="replace")
+    if provider == "claude":
+        import json
+
+        try:
+            data = json.loads(proc.stdout.decode("utf-8", errors="replace"))
+        except ValueError:
+            data = {}
+        if isinstance(data, dict) and "loggedIn" in data:
+            out["connected"] = bool(data.get("loggedIn"))
+            who = data.get("email") or data.get("account") or ""
+            out["note"] = (f"{who} 로 로그인됨" if who else "로그인됨") if out["connected"] else "로그인이 필요해요"
+        else:
+            out["note"] = "상태를 확인하지 못했어요"
+        return out
+    low = text.lower()
+    if "not logged in" in low:
+        out["connected"], out["note"] = False, "로그인이 필요해요"
+    elif "logged in" in low:
+        out["connected"] = True
+        out["note"] = "ChatGPT 계정으로 로그인됨" if "chatgpt" in low else "로그인됨"
+    else:
+        out["note"] = "상태를 확인하지 못했어요"
+    return out
+
+
+def open_login(provider: str) -> dict:
+    """그 CLI 의 로그인 명령을 보이는 터미널 창에서 띄운다. 로그인은 사용자가 브라우저에서 직접 한다."""
+    if provider not in ("claude", "codex"):
+        raise AIError("이 AI 는 로그인 창이 없어요.")
+    exe = _which(provider)
+    if not exe:
+        raise AIError(f"{LABELS[provider]} CLI 가 이 컴퓨터에 없어요.")
+    args = ["auth", "login"] if provider == "claude" else ["login"]
+    title = f"{LABELS[provider]} 로그인 - 브라우저에서 로그인한 뒤 이 창을 닫으세요"
+    if os.name == "nt":
+        # 보이는 콘솔 창(CREATE_NEW_CONSOLE). exe 는 _which 가 찾은 경로, 나머지는 고정 문자열이라 인자 해석 걱정이 없다
+        line = f'title {title} & "{exe}" {" ".join(args)} & echo. & pause'
+        # 목록으로 넘기면 파이썬이 안쪽 따옴표를 \" 로 바꾸는데 cmd 는 그걸 모른다 → 한 줄 그대로 넘긴다
+        subprocess.Popen(f"cmd.exe /c {line}", creationflags=0x00000010, cwd=str(Path.home()))
+        return {"ok": True}
+    import shlex
+
+    command = f"cd ~ && {shlex.join([exe, *args])}"
+    if sys.platform == "darwin":
+        # 터미널.app 에 명령을 넘긴다. 글은 osascript 인자로만(문자열을 스크립트에 끼우지 않는다)
+        script = ('on run argv\ntell application "Terminal"\nactivate\ndo script (item 1 of argv)\n'
+                  'end tell\nend run')
+        subprocess.Popen(["osascript", "-e", script, command])
+        return {"ok": True}
+    env = _cli_env(provider, exe)
+    for term, flag in (("x-terminal-emulator", "-e"), ("gnome-terminal", "--"), ("konsole", "-e"), ("xterm", "-e")):
+        found = shutil.which(term)
+        if found:
+            subprocess.Popen([found, flag, "sh", "-c", command + "; echo; read -r _"], env=env)
+            return {"ok": True}
+    raise AIError(f"터미널을 찾지 못했어요. 터미널에서 {shlex.join([Path(exe).name, *args])} 를 실행해 주세요.")
+
+
 def _explain_failure(provider: str, text: str) -> str:
     low = text.lower()
-    if "auth method" in low or "login" in low or "log in" in low or "not logged" in low or "unauthorized" in low:
-        return f"{LABELS[provider]} 로그인이 필요해요. 터미널에서 {provider} 를 한 번 실행해 로그인해 주세요."
+    if provider == "gemini" and ("ineligibletier" in low or "no longer supported" in low or "gemini_api_key" in low
+                                 or "auth method" in low or "api key" in low):
+        return "Gemini 는 구글이 개인 계정 로그인을 막아 지금은 쓸 수 없어요. 메일 쓰기 창의 모델 단추에서 Claude 나 Codex 를 골라 주세요."
+    # 2026-11-04: Claude CLI 가 'Failed to authenticate: OAuth session expired and could not be refreshed' 로 끝났는데
+    # 아래 낱말 어디에도 안 걸려 'Claude 가 답하지 못했어요' 만 떴다 — 메일의 /ai 가 그냥 안 되는 것처럼 보였다
+    if any(word in low for word in ("auth method", "login", "log in", "not logged", "unauthorized", "authenticate",
+                                    "oauth", "session expired", "token expired", "credentials")):
+        return (f"{LABELS[provider]} 로그인이 만료됐어요. {LOGIN_HOW[provider]}하거나, "
+                "메일 쓰기 창의 모델 단추에서 다른 AI 를 골라 주세요.")
     if "rate limit" in low or "quota" in low or "usage limit" in low:
         return f"{LABELS[provider]} 사용 한도에 걸렸어요. 잠시 뒤 다시 해 보거나 다른 AI 를 골라 주세요."
-    return f"{LABELS[provider]} 가 답하지 못했어요."
+    # 그 밖의 실패는 CLI 가 한 말 첫 줄을 붙인다 (무엇 때문인지 알 수 있게). 'Denying Bash …' 같은 경고 줄은 뺀다
+    said = next((line.strip() for line in text.splitlines()
+                 if line.strip() and not re.search(r"^(Denying|Permission deny rule|Warning)", line.strip())), "")
+    return f"{LABELS[provider]} 가 답하지 못했어요" + (f" ({said[:140]})." if said else ".")
 
 
 def run(prompt: str, provider: str | None = None, timeout: int = TIMEOUT, model: str = "") -> dict:
@@ -191,22 +324,8 @@ def run(prompt: str, provider: str | None = None, timeout: int = TIMEOUT, model:
             model = (models().get(chosen) or {}).get("default", "")
             provider = chosen
         cmd = _command(chosen, exe, out_file, model)
-        kwargs = {}
-        if os.name == "nt":
-            kwargs["creationflags"] = 0x08000000  # CREATE_NO_WINDOW
-        env = dict(os.environ)
-        if sys.platform.startswith("linux") and getattr(sys, "frozen", False):
-            # 리눅스 묶음 앱은 LD_LIBRARY_PATH 가 묶음 안을 가리킨다 — node(claude·gemini·codex)가 묶음의 옛 libstdc++ 를
-            # 집어 죽을 수 있어, 브라우저·xdg-open 처럼 원래 환경으로 띄운다(2026-10-21 맥·리눅스 점검)
-            try:
-                import linux_support
-
-                env = linux_support.system_env()
-            except Exception:
-                pass
-        if os.name != "nt":
-            env["PATH"] = _child_path(exe)
-        env.setdefault("NO_COLOR", "1")
+        kwargs = _quiet_kwargs()
+        env = _cli_env(chosen, exe)
         try:
             proc = subprocess.run(
                 cmd,

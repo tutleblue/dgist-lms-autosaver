@@ -381,6 +381,19 @@ async def login_lms(page, max_attempts=2):
         except Exception:
             pass
         raise RuntimeError("설정에서 LMS ID와 비밀번호를 먼저 입력해 주세요.")
+    last_status = 0
+    last_said = ""
+    # 학교 로그인 화면은 틀린 비밀번호를 경고창(alert)으로 알릴 수 있다. 그 말을 받아 두고 창은 닫는다
+    alerts: list[str] = []
+
+    async def on_dialog(dialog):
+        alerts.append(str(dialog.message or "").strip()[:160])
+        try:
+            await dialog.dismiss()
+        except Exception:
+            pass
+
+    page.on("dialog", on_dialog)
     for attempt in range(1, max_attempts + 1):
         print(f"LMS 로그인 중... (시도 {attempt}/{max_attempts})")
         await page.goto(LOGIN_URL, wait_until="domcontentloaded")
@@ -392,11 +405,14 @@ async def login_lms(page, max_attempts=2):
         await page.click('button:has-text("Login")')
 
         # SAML 이 몇 번 되튕긴 뒤 LMS 도메인으로 넘어온다
+        said: list[str] = []
         try:
             await page.wait_for_url(f"{LMS_URL}/**", timeout=45000)
         except Exception:
-            # 주소가 안 바뀌어도 쿠키가 이미 섰을 수 있으니 아래 검증으로 판단한다
-            pass
+            # 주소가 안 바뀌어도 쿠키가 이미 섰을 수 있으니 아래 검증으로 판단한다.
+            # 다만 아직 학교 로그인 화면이면 그 화면이 띄운 말을 남겨 둔다. 비밀번호가 틀렸는지, 학교 서버가 막았는지
+            # 알려면 이 말이 필요하다 (2026-11-03: '7번 연속 실패' 만 떠서 무엇 때문인지 알 수 없었다)
+            said = await _login_page_message(page, alerts)
 
         await page.goto(f"{LMS_URL}/ultra/institution-page", wait_until="domcontentloaded")
 
@@ -411,10 +427,38 @@ async def login_lms(page, max_attempts=2):
                 return
             await asyncio.sleep(2)
         print(f"로그인 검증 실패 (HTTP {status})")
+        if said:
+            print(f"로그인 화면 메시지: {' / '.join(said)}")
+            last_said = " / ".join(said)
+        last_status = status if status >= 500 or status == 429 else 0
 
+    # 학교 서버가 5xx·429 로만 답했으면 비밀번호 탓이 아니다. '로그인에 실패' 라고 쓰면 앱이 2시간 자동 시도를 멈추고
+    # 사용자는 멀쩡한 비밀번호를 의심한다
+    if last_status and not last_said:
+        raise RuntimeError(f"LMS 서버가 로그인 확인에 답하지 않았어요 (HTTP {last_status}).")
     raise RuntimeError(
-        "LMS 로그인에 실패했습니다. 설정에서 LMS ID/비밀번호를 확인해 주세요."
+        "LMS 로그인에 실패했습니다"
+        + (f" (서버: {last_said})" if last_said else "")
+        + ". 설정에서 LMS ID/비밀번호를 확인해 주세요."
     )
+
+
+async def _login_page_message(page, alerts: list[str]) -> list[str]:
+    """학교 로그인 화면이 거절하며 띄운 말 (경고창 + 화면 글 가운데 거절하는 줄, 많아야 둘).
+
+    '비밀번호 찾기' 같은 칸 이름에 걸리지 않게 '아이디·비밀번호' 낱말만으로는 고르지 않는다.
+    """
+    said = [a for a in alerts if a]
+    try:
+        said += await page.evaluate(
+            r"""() => (document.body?.innerText || '').split(/\n+/).map((s) => s.trim())
+                .filter((s) => s && s.length < 160 && /일치|잘못|틀렸|맞지 않|incorrect|invalid|wrong|locked|잠금|잠겼|실패|fail|만료|expired/i.test(s))
+                .slice(0, 2)"""
+        )
+    except Exception:
+        pass
+    alerts.clear()
+    return list(dict.fromkeys(said))[:2]
 
 
 async def fetch_course_list(page):
@@ -728,14 +772,15 @@ async def crawl_deadlines_only():
     """파일 다운로드 없이 마감일/캘린더만 갱신."""
     from browser_setup import ensure_browser, launch_lms_browser
 
+    # 예전엔 브라우저가 없으면 조용히 끝나 '성공' 으로 적혔다(마감이 안 바뀌는데 실패도 아님). 까닭을 남기고 실패로 끝낸다
     if not ensure_browser():
-        return
+        raise RuntimeError("LMS 에 접속할 브라우저를 준비하지 못했어요.")
 
     async with async_playwright() as p:
         # Windows 는 Edge, 안 되면 헤드리스 셸 (browser_setup.launch_lms_browser)
         browser = await launch_lms_browser(p, PLAYWRIGHT_HEADLESS)
         if browser is None:
-            return
+            raise RuntimeError("LMS 에 접속할 브라우저를 준비하지 못했어요.")
         context = await browser.new_context()
         page = await context.new_page()
         await login_lms(page)
@@ -837,14 +882,14 @@ async def crawl_lms(fast=None):
 
     from browser_setup import ensure_browser, launch_lms_browser
 
-    # 부르는 쪽(main.run_job)이 목록을 그대로 훑으므로 빈 목록으로 돌려줘야 한다
+    # 브라우저가 없으면 실패로 끝낸다. 예전엔 빈 목록을 돌려줘 '새 자료 없음' 성공으로 보였다
     if not ensure_browser():
-        return new_files
+        raise RuntimeError("LMS 에 접속할 브라우저를 준비하지 못했어요.")
 
     async with async_playwright() as p:
         browser = await launch_lms_browser(p, PLAYWRIGHT_HEADLESS)
         if browser is None:
-            return new_files
+            raise RuntimeError("LMS 에 접속할 브라우저를 준비하지 못했어요.")
         context = await browser.new_context(accept_downloads=True)
         page = await context.new_page()
         _page = page

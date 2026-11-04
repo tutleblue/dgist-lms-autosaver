@@ -728,6 +728,9 @@ def get_google_oauth_status(workspace: UserWorkspace, base_url: str | None = Non
         granted = set(token_data.get("scopes") or []) if isinstance(token_data, dict) else set()
         status["calendarGranted"] = calendar_scope_granted(granted)
         status["driveFullGranted"] = GOOGLE_DRIVE_READ_SCOPE in granted
+        # 동의 화면에서 Drive 칸을 체크하지 않아도 연결은 된다. 그러면 올리기가 모두 403 으로 거절되는데 화면은
+        # 'Drive · 연결됨' 이었다. 'scopes' 가 없는 아주 예전 토큰은 있다고 본다(drive_uploader.drive_scope_granted 와 같은 규칙)
+        status["driveGranted"] = (not granted) or bool(granted & {GOOGLE_DRIVE_SCOPE, GOOGLE_DRIVE_READ_SCOPE, "https://www.googleapis.com/auth/drive"})
     except Exception as exc:
         status["error"] = str(exc)
     return status
@@ -2631,6 +2634,24 @@ def get_health(workspace: UserWorkspace) -> dict[str, Any]:
         days = (datetime.now() - max(stamps)).days
         out["staleDays"] = days
         out["stale"] = days >= 3
+    # 두 번 넘게 잇달아 실패한 작업들 (한 번은 학교 서버가 잠깐 느린 것일 때가 많아 띄우지 않는다)
+    raw_failures = data.get("failures") if isinstance(data.get("failures"), dict) else {}
+    failing = [
+        {"kind": kind, **info}
+        for kind, info in raw_failures.items()
+        if isinstance(info, dict) and int(info.get("count", 0) or 0) >= 2
+    ]
+    last = out["lastFailure"] if isinstance(out["lastFailure"], dict) else {}
+    old_kind = str(last.get("kind") or "")
+    old_streak = int(out["failStreak"].get(old_kind, 0) or 0) if isinstance(out["failStreak"], dict) else 0
+    if old_kind and old_kind not in raw_failures and old_streak >= 2:
+        # 1.12.53 까지의 기록(작업별 실패가 없음)
+        category, title, hint = FAILURE_UNKNOWN
+        failing.append({"kind": old_kind, "since": last.get("at"), "at": last.get("at"), "count": old_streak,
+                        "category": category, "title": title, "hint": hint, "reason": last.get("reason", ""), "tail": []})
+    failing.sort(key=lambda f: -int(f.get("count", 0) or 0))
+    out["failures"] = raw_failures
+    out["failing"] = failing
     auth = data.get("authFailed") or {}
     if auth:
         names = {"emails": "학교 메일", "sync": "LMS", "deadlines": "LMS"}
@@ -2644,15 +2665,12 @@ def get_health(workspace: UserWorkspace) -> dict[str, Any]:
             f"{who} 서버가 로그인을 거절했어요{said}. 2시간 뒤 자동으로 다시 해 볼게요. "
             "비밀번호를 바꿨다면 설정에서 새 비밀번호를 넣어 주세요."
         )
-    elif out["consecutiveFailures"] >= 2:
-        # 예전엔 'emails이(가) 2번 연속 실패했습니다' 처럼 작업 이름이 그대로 나왔고 왜 실패했는지는 없었다.
-        # 다른 기기에서 '계속 실패' 를 들었을 때 화면만 보고도 까닭을 알 수 있게 마지막 실패의 말을 붙인다
-        kind = str(out["lastFailure"].get("kind", ""))
-        # 횟수는 그 작업 것으로 (consecutiveFailures 는 작업을 가리지 않고 센다)
-        count = int(out["failStreak"].get(kind) or 0) or out["consecutiveFailures"]
-        reason = str(out["lastFailure"].get("reason") or "").rstrip(". ")
-        out["warning"] = FAIL_WARNINGS.get(kind, FAIL_WARNINGS[""]).format(
-            count=count, said=f" ({reason})" if reason else ""
+    elif failing:
+        # 예전엔 'deadlines이(가) 7번 연속 실패했습니다' 처럼 횟수만 컸고 왜 실패했는지는 없었다. 횟수는 모든 작업을
+        # 합친 수라 실제보다 커 보였다. 이제 작업마다 언제부터 안 되는지와 까닭 갈래(failures[kind])를 말한다
+        top = failing[0]
+        out["warning"] = FAIL_WARNINGS.get(top["kind"], FAIL_WARNINGS[""]).format(
+            since=_short_when(top.get("since")), count=top.get("count", 0)
         )
     elif out["stale"]:
         out["warning"] = f"{out['staleDays']}일째 동기화가 되지 않았습니다."
@@ -2677,13 +2695,25 @@ TASK_ACCOUNT_KEYS = {
     "deadlines": ("LMS_ID", "LMS_PASSWORD"),
     "sync": ("LMS_ID", "LMS_PASSWORD"),
 }
-# 작업마다 문장을 통째로 둔다. '{이름} {횟수}번' 처럼 빈자리 둘을 띄어 쓰면 영어 화면 번역표가 이름을 잘못 끊었다
+# 작업마다 문장을 통째로 둔다. '{이름} {횟수}번' 처럼 빈자리 둘을 띄어 쓰면 영어 화면 번역표가 이름을 잘못 끊었다.
+# 까닭(갈래·할 일·서버의 말)은 화면이 failing 으로 따로 그린다
 FAIL_WARNINGS = {
-    "emails": "메일 가져오기가 {count}번 연속 실패했어요{said}. 인터넷 연결과 설정의 계정을 확인해 주세요.",
-    "deadlines": "마감 확인이 {count}번 연속 실패했어요{said}. 인터넷 연결과 설정의 계정을 확인해 주세요.",
-    "sync": "자료 동기화가 {count}번 연속 실패했어요{said}. 인터넷 연결과 설정의 계정을 확인해 주세요.",
-    "": "동기화가 {count}번 연속 실패했어요{said}. 인터넷 연결과 설정의 계정을 확인해 주세요.",
+    "emails": "메일 가져오기가 {since}부터 안 되고 있어요 ({count}번 시도).",
+    "deadlines": "마감 확인이 {since}부터 안 되고 있어요 ({count}번 시도).",
+    "sync": "자료 동기화가 {since}부터 안 되고 있어요 ({count}번 시도).",
+    "": "동기화가 {since}부터 안 되고 있어요 ({count}번 시도).",
 }
+
+
+def _short_when(stamp: Any) -> str:
+    """'21:10' (오늘) · '11월 3일 21:10' (다른 날)."""
+    try:
+        when = datetime.fromisoformat(str(stamp))
+    except (TypeError, ValueError):
+        return "얼마 전"
+    if when.date() == datetime.now().date():
+        return when.strftime("%H:%M")
+    return f"{when.month}월 {when.day}일 {when.strftime('%H:%M')}"
 
 
 def account_ready(config: dict[str, Any], kind: str) -> bool:
@@ -2697,7 +2727,7 @@ def reset_task_failures(workspace: UserWorkspace, kinds: list[str]) -> None:
     if not isinstance(data, dict):
         return
     changed = False
-    for name in ("failStreak", "authFailed"):
+    for name in ("failStreak", "authFailed", "failures"):
         bucket = data.get(name)
         if isinstance(bucket, dict):
             for kind in kinds:
@@ -2726,9 +2756,64 @@ def _failure_reason(logs: list[Any]) -> str:
     return ""
 
 
+# 실패 까닭 갈래. 위에서부터 먼저 맞는 것을 쓴다.
+# 예전엔 'deadlines이(가) 7번 연속 실패' 만 떠서 비밀번호 탓인지, 학교 서버가 막은 것인지, 사이트가 바뀐 것인지
+# 알 수 없었고, 로그는 메모리에만 있어 앱을 다시 켜면 까닭도 사라졌다(2026-11-03 사용자 신고).
+FAILURE_KINDS: list[tuple[str, str, str, tuple[str, ...]]] = [
+    ("account", "계정 정보가 없어요", "설정에서 계정을 넣어 주세요.",
+     (r"먼저 입력해 주세요", r"키체인", r"비밀번호를 꺼내지")),
+    ("login", "로그인이 거절됐어요", "비밀번호가 바뀌었거나 학교 로그인 서버가 잠시 막은 것일 수 있어요.",
+     (r"로그인에 실패",)),
+    ("browser", "브라우저를 띄우지 못했어요", "Edge 를 업데이트하거나 컴퓨터를 다시 켠 뒤 해 보세요.",
+     (r"브라우저를 준비하지 못", r"Executable doesn't exist", r"BrowserType\.launch", r"playwright install")),
+    ("server", "학교 서버가 요청을 거절했어요", "학교 서버가 바쁘거나 점검 중이에요. 잠시 뒤 다시 해 볼게요.",
+     (r"HTTP (?:403|429|5\d\d)\b", r"\b(?:429|50[0234]) (?:Too Many|Internal|Bad Gateway|Service|Gateway)",
+      r"Too Many Requests", r"Service Unavailable")),
+    ("network", "인터넷이나 학교 서버에 닿지 않아요", "인터넷 연결을 확인해 주세요. 학교 서버 점검 중일 수도 있어요.",
+     (r"net::ERR_(?:NAME_NOT_RESOLVED|INTERNET_DISCONNECTED|NETWORK_CHANGED|ADDRESS_UNREACHABLE|CONNECTION_\w+|TIMED_OUT|PROXY\w*)",
+      r"getaddrinfo", r"WinError 100(?:51|53|54|60|61|65)", r"Errno 1100[14]", r"Connection(?:Refused|Reset|Aborted)?Error",
+      r"Connection (?:refused|reset|aborted)", r"Name or service not known", r"No route to host",
+      r"Network is unreachable", r"\btimed out\b")),
+    ("site", "학교 사이트에서 필요한 것을 못 찾았어요", "사이트가 느리거나 모양이 바뀐 것일 수 있어요. 계속되면 앱 업데이트가 필요하니 알려 주세요.",
+     (r"waiting for (?:locator|selector)", r"JSONDecodeError", r"Expecting value", r"KeyError",
+      r"'NoneType' object", r"로그인 화면이 예상과 달라")),
+    ("timeout", "학교 사이트가 너무 느려요", "학교 서버가 느린 때예요. 잠시 뒤 다시 해 볼게요.",
+     (r"Timeout \d+ms exceeded", r"TimeoutError")),
+    ("drive", "Google Drive 연결에 문제가 있어요", "설정에서 구글을 다시 연결해 주세요.",
+     (r"invalid_grant", r"googleapiclient", r"HttpError", r"RefreshError")),
+    ("disk", "파일을 저장하지 못했어요", "저장 공간이 넉넉한지, 파일이 다른 프로그램에 열려 있지 않은지 확인해 주세요.",
+     (r"No space left", r"Errno 28", r"WinError 32", r"Permission denied", r"PermissionError")),
+]
+FAILURE_UNKNOWN = ("unknown", "알 수 없는 오류가 났어요", "계속되면 설정의 실행 로그를 보내 주세요.")
+
+
+def classify_failure(logs: list[Any]) -> dict[str, str]:
+    """실패한 작업의 로그로 까닭 갈래를 고른다 {category, title, hint, reason}.
+
+    로그 전체를 훑지 않고 마지막 오류 추적(Traceback)·실패 줄부터 끝까지만 본다. 과목 하나가 지난 학기라
+    '콘텐츠 API 실패 (403)' 로 건너뛰는 것은 정상이라(CLAUDE.md 5절) 그런 줄로 '서버 거절' 을 고르면 안 된다.
+    """
+    lines = [str(line) for line in logs[-200:]]
+    start = None
+    for at in range(len(lines) - 1, -1, -1):
+        text = lines[at]
+        if text.startswith("Traceback (most recent call last)") or "작업이 실패했습니다:" in text or text.startswith("[오류]"):
+            start = at
+            if text.startswith("Traceback"):
+                break
+    # 실패 줄 바로 앞의 '로그인 검증 실패 (HTTP 503)' 같은 진단도 함께 본다
+    window = "\n".join(lines[max(0, (start if start is not None else len(lines)) - 6):])
+    reason = _failure_reason(lines)
+    for category, title, hint, patterns in FAILURE_KINDS:
+        if any(re.search(p, window) for p in patterns):
+            return {"category": category, "title": title, "hint": hint, "reason": reason}
+    category, title, hint = FAILURE_UNKNOWN
+    return {"category": category, "title": title, "hint": hint, "reason": reason}
+
+
 def record_task_result(
     workspace: UserWorkspace, kind: str, return_code: int, auth_failed: bool = False, auth_reason: str = "",
-    reason: str = "",
+    reason: str = "", logs: list[Any] | None = None,
 ) -> dict[str, Any]:
     """작업 성공/실패를 기록한다. 실패가 쌓이면 사용자에게 알리기 위함.
 
@@ -2743,19 +2828,37 @@ def record_task_result(
     data.setdefault("lastSuccess", {})
     streaks = data.setdefault("failStreak", {})
     auth = data.setdefault("authFailed", {})
+    # 작업마다 따로 둔 실패 기록. lastFailure 는 하나뿐이라 메일이 5분마다 성공할 때마다 지워졌고,
+    # 그러면 마감 확인은 '실패 뒤 쉬는 간격' 을 잴 시각을 잃어 곧바로 다시 하고 또 실패해 횟수만 불었다(app.next_due_job).
+    failures = data.setdefault("failures", {})
     stamp = now_iso()
     if return_code == 0:
         data["lastSuccess"][kind] = stamp
-        data["consecutiveFailures"] = 0
-        data.pop("lastFailure", None)
         streaks.pop(kind, None)
         auth.pop(kind, None)
+        failures.pop(kind, None)
+        if (data.get("lastFailure") or {}).get("kind") == kind:
+            data.pop("lastFailure", None)
+        data["consecutiveFailures"] = sum(int(v.get("count", 0) or 0) for v in failures.values() if isinstance(v, dict))
     else:
         data["consecutiveFailures"] = int(data.get("consecutiveFailures", 0) or 0) + 1
         data["lastFailure"] = {"kind": kind, "at": stamp, "code": return_code}
         if reason:
             data["lastFailure"]["reason"] = reason
         streaks[kind] = int(streaks.get(kind, 0) or 0) + 1
+        prev = failures.get(kind) if isinstance(failures.get(kind), dict) else {}
+        info = classify_failure(logs or [])
+        if reason and not info.get("reason"):
+            info["reason"] = reason
+        failures[kind] = {
+            "since": prev.get("since") or stamp,
+            "at": stamp,
+            "count": int(prev.get("count", 0) or 0) + 1,
+            "code": return_code,
+            **info,
+            # 앱을 다시 켜도 까닭을 볼 수 있게 마지막 로그 몇 줄을 남긴다 (작업 로그는 메모리에만 있다)
+            "tail": [str(line).rstrip()[:300] for line in (logs or [])[-30:]],
+        }
         if auth_failed:
             auth[kind] = {"at": stamp, "configStamp": list(_file_stamp(workspace.config_path))}
             if auth_reason:
@@ -3201,6 +3304,12 @@ def save_shelves(workspace: UserWorkspace, payload: dict[str, Any]) -> dict[str,
 
 
 ALLOWED_LINK_HOSTS = (".dgist.ac.kr",)
+# 설정 'AI 연결' 카드의 설치 안내 (app.js AI_INSTALL_URL 과 같게). 이 주소와 똑같을 때만 연다
+AI_HELP_LINKS = {
+    "https://docs.claude.com/en/docs/claude-code/setup",
+    "https://github.com/google-gemini/gemini-cli",
+    "https://github.com/openai/codex",
+}
 
 
 def open_mail_link(payload: dict[str, Any]) -> dict[str, Any]:
@@ -3248,7 +3357,7 @@ def open_external_url(payload: dict[str, Any]) -> dict[str, Any]:
         # FGLP 파견 대학의 홈페이지·여름학기 안내·위키백과·지도·사진 출처는 앱에 넣어 둔 주소와 똑같을 때만
         import fglp
 
-        if url not in fglp.known_links():
+        if url not in fglp.known_links() and url not in AI_HELP_LINKS:
             raise ValueError("학교(dgist.ac.kr) 사이트만 열 수 있습니다.")
 
     opened = False
@@ -4307,6 +4416,18 @@ def save_mail_me(workspace: UserWorkspace, payload: dict[str, Any]) -> dict[str,
     return mail_me(workspace)
 
 
+def ai_connections(workspace: UserWorkspace) -> dict[str, Any]:
+    """설정 'AI 연결' 카드. 세 CLI 의 상태 명령을 한꺼번에 돌린다(하나가 1초쯤, 따로 돌리면 3초)."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    import ai_cli
+
+    ai_cli.available()  # 새로 깐 CLI 도 바로 보이게 찾은 길을 비운다
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        items = list(pool.map(ai_cli.auth_status, ai_cli.PROVIDERS))
+    return {"ok": True, "items": items, "profile": ai_cli.load_profile(workspace.root / "ai_profile.json")}
+
+
 def mail_flow_for(workspace: UserWorkspace, payload: dict[str, Any]) -> dict[str, Any]:
     """메일 쓰기 흐름: 받는 사람 칸(첫 주소) → 인사·자기소개·마무리·서명 조각(한국어·영어)."""
     import mail_flow
@@ -4650,6 +4771,8 @@ def get_status(workspace: UserWorkspace, base_url: str | None = None) -> dict[st
         "credentialsExists": google_credentials_available(),
         "tokenExists": workspace.token_path.exists(),
         "googleOAuth": google_oauth,
+        # 마지막 동기화의 Drive 올리기 결과(main._save_drive_status): 실패 수와 까닭을 상단 Drive 불빛에 보인다
+        "driveResult": read_json(workspace.root / "drive_status.json", None),
         "scheduleTime": config.get("SCHEDULE_TIME", "08:00"),
         "counts": {
             "files": len(files),
@@ -4770,7 +4893,7 @@ def _run_emails_here(key: str) -> int:
         # 소스 줄 '(서버: {reply})' 이 먼저 걸려 이유가 '{reply}' 로 적혔다(2026-10-21 실측). 실제 말과 위치만.
         frame = traceback.extract_tb(exc.__traceback__)[-1:] or [None]
         where = f" ({Path(frame[0].filename).name}:{frame[0].lineno})" if frame[0] else ""
-        append_log(key, f"작업이 실패했습니다: {exc}{where}")
+        append_log(key, f"작업이 실패했습니다: {str(exc) or type(exc).__name__}{where}")
         return 1
     finally:
         email_reader.close_active()
@@ -4938,15 +5061,17 @@ def run_process(workspace: UserWorkspace, kind: str, command: list[str] | None, 
         recent = " ".join(str(line) for line in (task_state.get("logs") or [])[-40:])
         auth_failed = return_code != 0 and "로그인에 실패" in recent
         reason = re.search(r"\(서버: ([^)]{1,160})\)", recent) if auth_failed else None
+        logs = list(task_state.get("logs") or [])
         health = record_task_result(
             workspace, kind, return_code, auth_failed=auth_failed, auth_reason=reason.group(1) if reason else "",
-            reason=_failure_reason(task_state.get("logs") or []) if return_code != 0 else "",
+            reason=_failure_reason(logs) if return_code != 0 else "",
+            logs=logs if return_code != 0 else None,
         )
         if return_code != 0:
-            fails = health.get("consecutiveFailures", 0)
+            info = (health.get("failures") or {}).get(kind) or {}
             append_log(
                 key,  # 메일 작업이면 메일 칸에 (예전엔 자료 칸에 적혀 메일 실패가 엉뚱한 곳에 보였다)
-                f"[알림] {kind} 작업이 실패했습니다 (연속 {fails}회). 계정 정보나 네트워크를 확인해 주세요.",
+                f"[알림] 실패 까닭: {info.get('title', '알 수 없음')} (이 작업 연속 {info.get('count', 1)}회). {info.get('hint', '')}",
             )
 
     # 메일을 새로 읽어온 뒤 구글 캘린더 자동 동기화 (설정에서 켠 경우에만)
@@ -5537,6 +5662,9 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         if route == "/api/window":
             self.send_json(_window_chrome_call(None))
             return
+        if route == "/api/ai/connections":
+            self.send_json(ai_connections(workspace))
+            return
         if route == "/api/ai/status":
             import ai_cli
 
@@ -5900,7 +6028,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
     # 화면 서버가 바깥 서버에 묻는 라우트를 체험 중에는 여기서 먼저 받는다. 소켓 차단(demo_mode)은 빠뜨린 곳을 위한 안전망.
     DEMO_BLOCKED_GET = {
         "/api/mail/eml", "/api/mail/attachment", "/api/mail/draft", "/api/mail/big-upload", "/api/mail-image", "/api/drive/list", "/api/drive/get", "/api/drive/picked",
-        "/api/place-search", "/api/fglp", "/api/seminars",
+        "/api/place-search", "/api/fglp", "/api/seminars", "/api/ai/connections",
     }
     DEMO_BLOCKED_POST = {
         "/api/config", "/api/config/import", "/api/run", "/api/verify", "/api/refresh-deadlines", "/api/refresh-emails",
@@ -5913,7 +6041,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         # 내 컴퓨터(문서·다운로드 폴더)에 가짜 자료를 쓰지 않는다
         "/api/save-local", "/api/export-ics",
         # AI CLI 는 바깥 서비스에 묻는다
-        "/api/ai/search", "/api/ai/draft", "/api/ai/polish", "/api/ai/continue",
+        "/api/ai/search", "/api/ai/draft", "/api/ai/polish", "/api/ai/continue", "/api/ai/login",
         # 로그인 항목(LaunchAgents·~/.config/autostart)에 쓰지 않는다
         "/api/autostart",
     }
@@ -6581,9 +6709,13 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                     return safe, meta, path
 
                 done, failed, skipped = [], [], []
+                fail_reason = ""  # 실패 까닭(사람 말). Drive 는 drive_uploader.last_error
 
                 if action == "drive":
+                    import drive_uploader
                     from drive_uploader import upload_to_drive_with_path
+
+                    drive_uploader.last_error = ""
 
                     # 설정은 한 번만 읽는다 (파일마다 읽으면 수백 개를 고를 때 디스크·복호화가 그만큼 반복된다)
                     drive_layout = read_config(workspace).get("FOLDER_LAYOUT")
@@ -6600,12 +6732,19 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                                 meta.get("folder_path") if isinstance(meta, dict) else None,
                                 drive_layout,
                             )
-                            (skipped if result == "exists" else done).append(display)
+                            # 올리기는 실패하면 예외 대신 '' 를 돌려준다. 예전엔 그것까지 '올렸습니다' 로 셌다
+                            if not result:
+                                failed.append(display)
+                            else:
+                                (skipped if result == "exists" else done).append(display)
                         except Exception:
                             failed.append(display)
+                    if failed and not done and not skipped:
+                        raise ValueError(f"Drive에 올리지 못했습니다. {drive_uploader.last_error or ''}".strip())
                     message = f"Drive에 {len(done)}개 올렸습니다."
                     if skipped:
                         message += f" 이미 있던 {len(skipped)}개는 건너뛰었습니다."
+                    fail_reason = drive_uploader.last_error
 
                 elif action == "notes":
                     import samsung_notes
@@ -6652,7 +6791,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                         "done": len(done),
                         "skipped": len(skipped),
                         "failed": len(failed),
-                        "message": message + (f" 실패 {len(failed)}개." if failed else ""),
+                        "message": message + (f" 실패 {len(failed)}개." if failed else "") + (f" {fail_reason}" if failed and fail_reason else ""),
                     }
                 )
             except Exception as exc:
@@ -6976,6 +7115,19 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 payload = self.read_body_json() or {}
                 self.send_json(save_mail_me(workspace, payload) if route == "/api/mail/me" else mail_flow_for(workspace, payload))
             except Exception as exc:
+                self.send_json({"ok": False, "message": str(exc)}, HTTPStatus.BAD_REQUEST)
+            return
+        if route == "/api/ai/login":
+            # 설정 'AI 연결' 카드: 그 CLI 의 로그인 창 띄우기
+            import ai_cli
+
+            try:
+                payload = self.read_body_json() or {}
+                provider = str(payload.get("provider") or "")
+                if provider not in ai_cli.PROVIDERS:
+                    raise ValueError("모르는 AI 예요.")
+                self.send_json(ai_cli.open_login(provider))
+            except (ai_cli.AIError, ValueError) as exc:
                 self.send_json({"ok": False, "message": str(exc)}, HTTPStatus.BAD_REQUEST)
             return
         if route in ("/api/ai/profile", "/api/ai/search", "/api/ai/draft", "/api/ai/polish", "/api/ai/continue"):

@@ -15,7 +15,10 @@ from typing import Any
 
 # Drive 맨 위 폴더 이름. 화면 설정(/api/config)이 이 이름 하나 읽으려고 drive_uploader 를 불러오면
 # google.auth·googleapiclient 까지 따라 올라와 앱을 켠 뒤 첫 화면이 1초 늦었다(2026-10-15 실측 1.0s). 그래서 여기 둔다.
-DRIVE_ROOT_FOLDER = "AutoSaver"
+DRIVE_ROOT_FOLDER = "Daling"
+# 1.12.54 까지의 맨 위 폴더 이름. 앱이 만든 이 폴더가 있으면 이름만 Daling 으로 바꿔 그대로 쓴다(drive_uploader.get_root_folder).
+# 사용자: "daling 폴더로 제대로 생성되는지" — 이름이 AutoSaver 라 다른 PC 사용자가 올라간 자료를 못 찾았다.
+LEGACY_DRIVE_ROOT_FOLDERS = ("AutoSaver",)
 
 LAYOUTS = ("lms", "flat")
 DEFAULT_LAYOUT = "lms"
