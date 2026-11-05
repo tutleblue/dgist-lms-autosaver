@@ -1,0 +1,60 @@
+{
+  // Daling 원격 MCP 서버 — Claude(웹·모바일·데스크톱)가 학생 PC 의 Daling 데이터를 읽고 쓰게 하는 중계.
+  // 자료는 여기 저장하지 않는다. 학생 PC 의 Daling 이 밖으로 WebSocket 을 걸어 두고, 도구 호출을 그 연결로 넘긴다.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "daling-mcp",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-11-03",
+  // nodejs_compat: agents SDK 가 AsyncLocalStorage 를 쓴다.
+  // global_fetch_strictly_public: Client ID Metadata Document(CIMD) 를 받을 때 내부망 주소로 못 가게 (라이브러리 요구 사항).
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "workers_dev": false,
+  "routes": [{ "pattern": "mcp.gudaling.dev", "custom_domain": true }],
+  "vars": {
+    // 커넥터 주소의 바깥 출처. 토큰의 audience·발급자(issuer)가 이 값으로 정해지므로 배포 뒤에 바꾸면 기존 연결이 모두 끊긴다.
+    "PUBLIC_ORIGIN": "https://mcp.gudaling.dev",
+    // Claude Code·MCP Inspector 는 localhost 콜백을 쓴다. 동의 화면이 '이 컴퓨터의 프로그램' 이라고 경고한다.
+    "ALLOW_LOOPBACK_REDIRECTS": "true"
+  },
+  // OAuth 클라이언트·권한·토큰(해시)을 둔다. id 를 비워 두면 첫 `wrangler deploy` 가 만들어 붙인다.
+  "kv_namespaces": [{ "binding": "OAUTH_KV" }],
+  "durable_objects": {
+    "bindings": [
+      // PC 한 대에 하나. PC 의 WebSocket 을 붙잡고 도구 호출을 넘긴다.
+      { "name": "DEVICE_RELAY", "class_name": "DeviceRelay" },
+      // 연결 코드 → PC. KV 는 쓴 뒤 다른 지역에서 읽히기까지 최대 60초라, 바로 써야 하는 코드는 DO 에 둔다.
+      { "name": "PAIRING", "class_name": "PairingDirectory" }
+    ]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["DeviceRelay", "PairingDirectory"] }],
+  "ratelimits": [
+    // 도구 호출: PC 하나당 분당 60번
+    { "name": "TOOL_LIMITER", "namespace_id": "52010", "simple": { "limit": 60, "period": 60 } },
+    // 동의 화면에서 연결 코드 넣기: IP 하나당 분당 20번 (학교 망은 여러 학생이 IP 하나를 나눠 쓸 수 있어 넉넉히)
+    { "name": "CODE_LIMITER", "namespace_id": "52011", "simple": { "limit": 20, "period": 60 } },
+    // PC 쪽(연결·코드 받기·상태): PC 하나당 분당 30번
+    { "name": "DEVICE_LIMITER", "namespace_id": "52012", "simple": { "limit": 30, "period": 60 } }
+  ],
+  // 요청마다 남는 기록(invocation logs)은 머리글(토큰)까지 담아 끈다. 남는 것은 index.ts 의 console.error 한 줄
+  // (경로·오류 이름, 사용자 자료 없음)뿐이고 Cloudflare 가 3일(무료)·7일(유료) 뒤 지운다. 개인정보처리방침이 이 설정을 전제로 한다.
+  "observability": { "enabled": true, "logs": { "invocation_logs": false } },
+  "env": {
+    // `wrangler dev --env local`: http://localhost:8787 로 띄워 MCP Inspector·개발 서버와 맞춘다.
+    "local": {
+      "routes": [],
+      "vars": { "PUBLIC_ORIGIN": "http://localhost:8787", "ALLOW_LOOPBACK_REDIRECTS": "true" },
+      "kv_namespaces": [{ "binding": "OAUTH_KV" }],
+      "durable_objects": {
+        "bindings": [
+          { "name": "DEVICE_RELAY", "class_name": "DeviceRelay" },
+          { "name": "PAIRING", "class_name": "PairingDirectory" }
+        ]
+      },
+      "ratelimits": [
+        { "name": "TOOL_LIMITER", "namespace_id": "52010", "simple": { "limit": 60, "period": 60 } },
+        { "name": "CODE_LIMITER", "namespace_id": "52011", "simple": { "limit": 20, "period": 60 } },
+        { "name": "DEVICE_LIMITER", "namespace_id": "52012", "simple": { "limit": 30, "period": 60 } }
+      ]
+    }
+  }
+}

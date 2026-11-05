@@ -874,8 +874,9 @@ function parseDue(item) {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
+// 다 한 과제: LMS 에 냈거나, Claude 에서 넣은 '내 마감'을 완료로 한 것(myStatus "Done", web_ui.DONE_STATUSES)
 function isSubmitted(item) {
-  return item.myStatus === "Graded" || item.myStatus === "NeedsGrading";
+  return item.myStatus === "Graded" || item.myStatus === "NeedsGrading" || item.myStatus === "Done";
 }
 
 function dayDiff(date) {
@@ -902,6 +903,12 @@ function ddayInfo(item) {
 }
 
 function submitBadge(item) {
+  // 내 마감(Claude 에서 넣은 것)은 LMS 에 낼 것이 아니라 '제출' 대신 완료 여부만 보인다
+  if (item.source === "manual") {
+    return item.myStatus === "Done"
+      ? `<span class="submit-badge submitted">${tr("내 마감 · 완료")}</span>`
+      : `<span class="submit-badge unknown">${tr("내 마감")}</span>`;
+  }
   if (item.myStatus === "Graded") {
     const score = item.myScore != null ? ` · ${item.myScore}점` : "";
     return `<span class="submit-badge graded">채점 완료${escapeHtml(score)}</span>`;
@@ -931,15 +938,18 @@ function deadlineKey(item) {
   return [item.courseLabel || item.course || "", item.name || "", item.due || ""].join("|");
 }
 
-function deadlineRow(item, removable = false) {
+/* 과제 한 줄. 제출했든 안 했든 지울 수 있다(2026-11-05 사용자). 지운 과제는 '숨긴 과제'에 모여 되돌릴 수 있다.
+   hidden 이면 휴지통 대신 '다시 보이기'. */
+function deadlineRow(item, hidden = false) {
   const due = parseDue(item);
   const dday = ddayInfo(item);
-  const remove = removable
-    ? `<button type="button" class="deadline-remove" data-remove-deadline="${escapeHtml(deadlineKey(item))}" title="목록에서 지우기" aria-label="목록에서 지우기"><span class="icon" data-icon="trash"></span></button>`
-    : "";
+  const key = escapeHtml(deadlineKey(item));
+  const remove = hidden
+    ? `<button type="button" class="text-button deadline-restore" data-restore-deadline="${key}">다시 보이기</button>`
+    : `<button type="button" class="deadline-remove" data-remove-deadline="${key}" title="목록에서 지우기" aria-label="목록에서 지우기"><span class="icon" data-icon="trash"></span></button>`;
   // 미제출 과제는 LMS 제출 페이지로 바로 이동
   const submit =
-    !removable && item.courseId
+    !hidden && !isSubmitted(item) && item.courseId
       ? `<button type="button" class="deadline-submit" data-submit='${escapeHtml(
           JSON.stringify({ courseId: item.courseId, columnId: item.columnId || "", name: item.name || "" }),
         )}' title="LMS 제출 페이지 열기">제출하러 가기</button>`
@@ -1100,6 +1110,30 @@ function renderDeadlineFilters() {
   select.value = labels.includes(current) ? current : "";
 }
 
+/* 과제를 숨기거나(지우기) 되돌린다. 서버(get_deadlines)도 숨긴 과제를 빼고 주므로 대시보드·달력·마감 알림에서도
+   함께 빠진다. 화면은 다시 받지 않고 그 자리에서 목록을 옮겨 바로 다시 그린다. */
+async function setDeadlinesHidden(keys, hide) {
+  const set = new Set(state.selection.hiddenDeadlines || []);
+  keys.forEach((k) => (hide ? set.add(k) : set.delete(k)));
+  const before = { selection: state.selection.hiddenDeadlines, items: state.deadlines.items, hiddenItems: state.deadlines.hiddenItems };
+  const all = [...(state.deadlines.items || []), ...(state.deadlines.hiddenItems || [])];
+  state.selection.hiddenDeadlines = [...set];
+  state.deadlines.items = all.filter((d) => !set.has(deadlineKey(d)));
+  state.deadlines.hiddenItems = all.filter((d) => set.has(deadlineKey(d)));
+  renderAll();
+  try {
+    await api("/api/selection", { method: "POST", body: JSON.stringify(state.selection) });
+    return true;
+  } catch (error) {
+    state.selection.hiddenDeadlines = before.selection;
+    state.deadlines.items = before.items;
+    state.deadlines.hiddenItems = before.hiddenItems;
+    renderAll();
+    showToast(humanError(error));
+    return false;
+  }
+}
+
 function renderDeadlines() {
   const list = $("#deadlineList");
   const empty = $("#deadlineEmpty");
@@ -1141,31 +1175,54 @@ function renderDeadlines() {
   // 완료(제출)한 과제와 남은 과제를 나눠서 보여 준다
   const done = rows.filter(isSubmitted);
   const active = rows.filter((item) => !isSubmitted(item));
-  const section = (title, items, removable) =>
+  // 지운 과제. 검색·과목 거르기는 똑같이 따른다
+  const hiddenRows = (state.deadlines.hiddenItems || []).filter(
+    (item) => matchesQuery(item) && (!state.deadlineCourse || item.courseLabel === state.deadlineCourse),
+  );
+  const section = (title, items, cls, action = "") =>
     items.length
-      ? `<div class="deadline-section">
+      ? `<div class="deadline-section ${cls}">
            <div class="deadline-section-head">
              <h3>${title}</h3>
              <span>${items.length}건</span>
-             ${removable ? `<button type="button" class="text-button" id="clearDoneDeadlines">완료 항목 모두 지우기</button>` : ""}
+             ${action}
            </div>
-           ${items.map((it) => deadlineRow(it, removable)).join("")}
+           ${items.map((it) => deadlineRow(it)).join("")}
          </div>`
       : "";
+  // 숨긴 과제는 접어 두고, 펼칠 때만 줄을 그린다
+  const hiddenSection = hiddenRows.length
+    ? `<details class="deadline-section deadline-hidden" ${state.deadlineHiddenOpen ? "open" : ""}>
+         <summary class="deadline-section-head">
+           <h3>${tr("숨긴 과제")}</h3>
+           <span>${hiddenRows.length}건</span>
+           <button type="button" class="text-button" id="restoreAllDeadlines">${tr("모두 다시 보이기")}</button>
+         </summary>
+         <div class="deadline-hidden-body">${state.deadlineHiddenOpen ? hiddenRows.map((it) => deadlineRow(it, true)).join("") : ""}</div>
+       </details>`
+    : "";
 
-  list.innerHTML = section("진행 중 · 예정", active, false) + section("완료", done, true);
+  list.innerHTML =
+    section("진행 중 · 예정", active, "active") +
+    section(
+      "완료",
+      done,
+      "done",
+      `<button type="button" class="text-button" id="clearDoneDeadlines">완료 항목 모두 지우기</button>`,
+    ) +
+    hiddenSection;
   installIcons(list);
-  empty.hidden = rows.length > 0;
+  empty.hidden = rows.length > 0 || hiddenRows.length > 0;
 
-  const save = async (msg) => {
-    try {
-      await api("/api/selection", { method: "POST", body: JSON.stringify(state.selection) });
-      showToast(msg);
-      renderDeadlines();
-    } catch (error) {
-      showToast(error.message);
+  const hiddenBox = list.querySelector(".deadline-hidden");
+  hiddenBox?.addEventListener("toggle", () => {
+    state.deadlineHiddenOpen = hiddenBox.open;
+    const body = hiddenBox.querySelector(".deadline-hidden-body");
+    if (hiddenBox.open && !body.childElementCount) {
+      body.innerHTML = hiddenRows.map((it) => deadlineRow(it, true)).join("");
+      installIcons(body);
     }
-  };
+  });
 
   // 제출 페이지 열기 (앱이 대신 제출하지는 않음)
   list.querySelectorAll("[data-submit]").forEach((btn) => {
@@ -1191,22 +1248,38 @@ function renderDeadlines() {
     });
   });
 
-  list.querySelectorAll("[data-remove-deadline]").forEach((btn) => {
-    btn.addEventListener("click", (event) => {
+  // 지우기·되돌리기는 줄마다 리스너를 달지 않고 목록에 하나만 (숨긴 과제는 펼칠 때 새로 그려진다)
+  if (!list.dataset.hideBound) {
+    list.dataset.hideBound = "1";
+    list.addEventListener("click", async (event) => {
+      const remove = event.target.closest("[data-remove-deadline]");
+      const restore = event.target.closest("[data-restore-deadline]");
+      if (!remove && !restore) return;
       event.stopPropagation();
-      const key = btn.dataset.removeDeadline;
-      state.selection.hiddenDeadlines = [...new Set([...(state.selection.hiddenDeadlines || []), key])];
-      save("완료한 과제를 목록에서 지웠습니다.");
+      if (remove) {
+        if (await setDeadlinesHidden([remove.dataset.removeDeadline], true)) {
+          showToast(tr("과제를 지웠어요. 아래 '숨긴 과제'에서 되돌릴 수 있어요."));
+        }
+      } else if (await setDeadlinesHidden([restore.dataset.restoreDeadline], false)) {
+        showToast(tr("과제를 다시 보이게 했어요."));
+      }
     });
+  }
+
+  $("#restoreAllDeadlines")?.addEventListener("click", async (event) => {
+    // 펼치기·접기로 넘어가지 않게
+    event.preventDefault();
+    event.stopPropagation();
+    const keys = hiddenRows.map(deadlineKey);
+    if (keys.length && (await setDeadlinesHidden(keys, false))) {
+      showToast(tr(`숨긴 과제 ${keys.length}건을 다시 보이게 했어요.`));
+    }
   });
 
   $("#clearDoneDeadlines")?.addEventListener("click", async () => {
     if (!done.length) return;
-    if (!(await uiConfirm(`완료한 과제 ${done.length}건을 목록에서 뺄까요?\n새로고침하면 다시 나타납니다.`, { title: "완료한 과제 정리", ok: "빼기" }))) return;
-    state.selection.hiddenDeadlines = [
-      ...new Set([...(state.selection.hiddenDeadlines || []), ...done.map(deadlineKey)]),
-    ];
-    save(`완료한 과제 ${done.length}건을 지웠습니다.`);
+    if (!(await uiConfirm(`완료한 과제 ${done.length}건을 목록에서 뺄까요?\n'숨긴 과제'에서 언제든 되돌릴 수 있어요.`, { title: "완료한 과제 정리", ok: "빼기" }))) return;
+    if (await setDeadlinesHidden(done.map(deadlineKey), true)) showToast(`완료한 과제 ${done.length}건을 지웠습니다.`);
   });
 }
 
@@ -4961,11 +5034,12 @@ const RENDER_PARTS = [
     of: (s) => sig(s.deadlines?.updatedAt, (s.deadlines?.items || []).length) },
   { key: "deadlines", views: ["deadlines"], render: renderDeadlines,
     of: (s) => sig(s.deadlines?.updatedAt, (s.deadlines?.items || []).length,
-      (s.selection?.hiddenDeadlines || []).length, s.search, s.deadlineCourse, s.deadlineStatus) },
+      (s.selection?.hiddenDeadlines || []).length, (s.deadlines?.hiddenItems || []).length, s.search, s.deadlineCourse,
+      s.deadlineStatus) },
   { key: "emails", views: ["emails", "compose"], render: renderEmails,
     of: (s) => sig(s.emails?.updatedAt, (s.emails?.emails || []).length, s.emailView, s.emailFolder, s.emailSort, s.search) },
   { key: "calendar", views: ["calendar"], render: renderCalendar,
-    of: (s) => sig(s.deadlines?.updatedAt, (s.myEvents || []).length, (s.academic || []).length, (s.schoolEvents || []).length,
+    of: (s) => sig(s.deadlines?.updatedAt, (s.deadlines?.items || []).length, (s.myEvents || []).length, (s.academic || []).length, (s.schoolEvents || []).length,
       s.academicUnderOnly, s.calMonth, s.showHolidays, s.emails?.updatedAt,
       (s.emails?.emails || []).filter((m) => m.calendar).length) },
   { key: "courses", views: ["courses"], render: renderCourses,
@@ -5936,7 +6010,7 @@ async function refreshAll() {
     ]);
     if (health) {
       state.health = health;
-      state._healthSig = JSON.stringify(health.lastSuccess || {});
+      state._healthSig = JSON.stringify(health.lastSuccess || {}) + (health.outsideChanges || 0);
     }
     state.offline = false;
     renderLastSync();
@@ -6002,7 +6076,8 @@ async function pollLight() {
     renderTask(task);
     renderLastSync();
     renderStatusCard(task);
-    const sig = JSON.stringify(health?.lastSuccess || {});
+    // outsideChanges: Claude 연결이 숨김·폴더·마감을 바꾼 횟수. 바로 다시 받아야 화면이 옛 목록으로 덮어쓰지 않는다
+    const sig = JSON.stringify(health?.lastSuccess || {}) + (health?.outsideChanges || 0);
     const since = Date.now() - (refreshAll.full || 0);
     const changed = health && sig !== state._healthSig;
     const finished = wasRunning && !state._taskRunning;
@@ -6115,6 +6190,7 @@ async function populateSettings() {
   if (form.elements.notifyNewFiles) form.elements.notifyNewFiles.checked = state.config?.notifyNewFiles !== false;
   loadAutostart();
   loadAiConnections();
+  loadClaudeLink();
   // 구글 캘린더 동기화 (체크박스라 value 대입으로는 반영되지 않음)
   form.elements.gcalSyncEnabled.checked = Boolean(state.config?.gcalSyncEnabled);
   form.elements.gcalCalendarName.value = state.config?.gcalCalendarName || "DGIST 메일 일정";
@@ -12567,6 +12643,16 @@ const TOUR_STEPS = [
   {
     chapter: "설정",
     view: "settings",
+    targets: ["#stClaude .st-head"],
+    fallback: ['.nav-item[data-view="settings"]'],
+    pose: "offer",
+    area: "settings",
+    title: "Claude 에서 보기",
+    text: "켜면 Claude 앱·웹에서 '이번 주 마감 뭐 있어?' 하고 물어볼 수 있어. 커넥터 주소를 넣고 연결 코드만 입력하면 돼.",
+  },
+  {
+    chapter: "설정",
+    view: "settings",
     targets: ["#stAuto .st-head"],
     fallback: ['.nav-item[data-view="settings"]'],
     pose: "lounge",
@@ -15722,6 +15808,171 @@ $("#aiConnList")?.addEventListener("click", async (event) => {
   }
 });
 $("#aiConnRefresh")?.addEventListener("click", () => loadAiConnections());
+
+/* --- 설정 'Claude 에서 보기' 카드 (claude_link.py · cloud/daling-mcp) ---
+   켜면 Daling 이 중계 서버(mcp.gudaling.dev)에 잇고, Claude 의 커스텀 커넥터가 이 컴퓨터의 자료·마감을 묻는다.
+   연결 코드는 10분 동안 한 번만 쓴다. 코드를 받은 뒤 4초마다 연결 목록을 다시 물어, 새 연결이 생기면 코드를 지운다.
+   꺼 두면 바깥에 아무것도 묻지 않는다(목록도 안 묻는다). */
+const claudeLink = { data: null, loading: false, poll: 0, code: null, grantsBefore: 0 };
+
+async function loadClaudeLink() {
+  if (!$("#stClaude") || claudeLink.loading) return claudeLink.data;
+  claudeLink.loading = true;
+  try {
+    claudeLink.data = await api("/api/claude-link");
+  } catch (error) {
+    showToast(humanError(error));
+  } finally {
+    claudeLink.loading = false;
+  }
+  paintClaudeLink();
+  return claudeLink.data;
+}
+
+function claudeLinkStateText(d) {
+  if (d.demo) return tr("체험 중에는 Claude 와 잇지 않아요.");
+  if (d.connected) return tr("이어져 있어요. Daling 이 켜져 있는 동안 Claude 에서 볼 수 있어요.");
+  if (d.error === "other_app") return tr("다른 Daling 이 이미 Claude 와 잇고 있어요.");
+  if (d.error === "offline") return tr("연결 서버에 닿지 않아요. 인터넷이 되면 저절로 다시 이어요.");
+  if (d.error === "secret_locked") return tr("기기 열쇠를 읽는 중이에요. 잠시 뒤에 다시 이어요.");
+  if (d.error === "rate_limited") return tr("잠깐 쉬었다가 다시 이어요.");
+  return tr("잇는 중…");
+}
+
+function claudeGrantRow(g) {
+  const when = g.createdAt ? new Date(g.createdAt) : null;
+  const date = when && !Number.isNaN(when.getTime()) ? `${when.getMonth() + 1}/${when.getDate()}` : "";
+  return `<div class="st-acct ai-conn">
+      <span class="st-logo ai-conn-logo" aria-hidden="true">${aiLogo("claude", "")}</span>
+      <div class="st-acct-name">
+        <strong>${escapeHtml(g.clientName || "Claude")}</strong>
+        <span class="st-pill" data-kind="ok">${g.canWrite ? tr("보기·정리") : tr("보기만")}</span>
+        <small>${date ? escapeHtml(tr("{date} 연결").replace("{date}", date)) : ""}</small>
+      </div>
+      <div class="st-acct-actions">
+        <button type="button" class="button compact ghost" data-claude-revoke="${escapeHtml(g.id)}">${tr("끊기")}</button>
+      </div>
+    </div>`;
+}
+
+function paintClaudeLink() {
+  const d = claudeLink.data;
+  const on = $("#claudeLinkOn");
+  const body = $("#claudeLinkBody");
+  if (!on || !body || !d) return;
+  on.checked = Boolean(d.enabled);
+  on.disabled = Boolean(d.demo);
+  body.hidden = !d.enabled;
+  const stateLine = $("#claudeLinkState");
+  stateLine.textContent = claudeLinkStateText(d);
+  stateLine.dataset.kind = d.connected ? "ok" : "wait";
+  $("#claudeLinkUrl").textContent = d.connectorUrl || "";
+  const code = claudeLink.code && claudeLink.code.until > Date.now() ? claudeLink.code : null;
+  const codeBox = $("#claudeLinkCode");
+  codeBox.hidden = !code;
+  codeBox.textContent = code?.code || "";
+  const until = code ? new Date(code.until) : null;
+  $("#claudeLinkExpiry").textContent = until
+    ? tr("{time}까지 한 번 쓸 수 있어요").replace(
+        "{time}",
+        `${String(until.getHours()).padStart(2, "0")}:${String(until.getMinutes()).padStart(2, "0")}`,
+      )
+    : "";
+  const grants = d.grants || [];
+  $("#claudeLinkGrants").innerHTML = d.grantsError
+    ? `<p class="ai-conn-empty">${escapeHtml(d.grantsError)}</p>`
+    : grants.length
+      ? grants.map(claudeGrantRow).join("")
+      : `<p class="ai-conn-empty">${tr("아직 연결한 Claude 가 없어요.")}</p>`;
+}
+
+function stopClaudeLinkPoll() {
+  clearInterval(claudeLink.poll);
+  claudeLink.poll = 0;
+}
+
+// 코드를 넣고 Claude 에서 '연결'이 끝나면 목록에 하나 늘어난다. 코드 수명(10분) 동안, 설정 화면을 보고 있을 때만 묻는다.
+function pollClaudeLink() {
+  stopClaudeLinkPoll();
+  claudeLink.poll = setInterval(async () => {
+    const gone = !$("#stClaude")?.offsetParent;
+    const expired = !claudeLink.code || claudeLink.code.until < Date.now();
+    if (gone || expired) {
+      stopClaudeLinkPoll();
+      paintClaudeLink();
+      return;
+    }
+    const d = await loadClaudeLink();
+    if ((d?.grants || []).length > claudeLink.grantsBefore) {
+      claudeLink.code = null;
+      stopClaudeLinkPoll();
+      paintClaudeLink();
+      showToast(tr("Claude 와 연결됐어요. 이제 Claude 에서 물어보세요."));
+    }
+  }, 4000);
+}
+
+$("#claudeLinkOn")?.addEventListener("change", async (event) => {
+  const on = event.target.checked;
+  try {
+    const res = await api("/api/claude-link/enable", { method: "POST", body: JSON.stringify({ on }) });
+    claudeLink.data = { ...(claudeLink.data || {}), ...res };
+    if (!on) {
+      claudeLink.code = null;
+      stopClaudeLinkPoll();
+    }
+    paintClaudeLink();
+    // 잇는 데 1~2초 걸린다
+    setTimeout(loadClaudeLink, 2500);
+  } catch (error) {
+    event.target.checked = !on;
+    showToast(humanError(error));
+  }
+});
+
+$("#claudeLinkCopy")?.addEventListener("click", async () => {
+  const url = claudeLink.data?.connectorUrl || "";
+  try {
+    await navigator.clipboard.writeText(url);
+    showToast(tr("주소를 복사했어요."));
+  } catch {
+    showToast(url);
+  }
+});
+
+$("#claudeLinkPair")?.addEventListener("click", async (event) => {
+  const button = event.currentTarget;
+  button.disabled = true;
+  try {
+    const res = await api("/api/claude-link/pair", { method: "POST", body: "{}" });
+    claudeLink.code = { code: res.code, until: Date.parse(res.expiresAt) || Date.now() + 600000 };
+    claudeLink.grantsBefore = (claudeLink.data?.grants || []).length;
+    paintClaudeLink();
+    pollClaudeLink();
+  } catch (error) {
+    showToast(humanError(error));
+  } finally {
+    button.disabled = false;
+  }
+});
+
+$("#claudeLinkGrants")?.addEventListener("click", async (event) => {
+  const revoke = event.target.closest("[data-claude-revoke]");
+  if (!revoke) return;
+  const ok = await uiConfirm(tr("이 Claude 연결을 끊을까요?\n다시 쓰려면 Claude 에서 다시 연결하고 새 코드를 넣으면 돼요."), {
+    title: tr("연결 끊기"),
+    danger: true,
+    ok: tr("끊기"),
+  });
+  if (!ok) return;
+  try {
+    await api("/api/claude-link/revoke", { method: "POST", body: JSON.stringify({ grantId: revoke.dataset.claudeRevoke }) });
+    await loadClaudeLink();
+    showToast(tr("연결을 끊었어요."));
+  } catch (error) {
+    showToast(humanError(error));
+  }
+});
 
 /* --- 메일 초안 --- */
 // 받는 사람 칸의 첫 주소 → 이름·주소, 그 사람이 맡은 과목·분반(내 수업 먼저)

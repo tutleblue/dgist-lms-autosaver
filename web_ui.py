@@ -114,6 +114,8 @@ class UserWorkspace:
     upload_selection_path: Path
     emails_log: Path
     my_events_path: Path
+    # Claude 에서 넣은 '내 마감' (claude_link). LMS 과제와 같은 꼴로 get_deadlines 에 섞인다.
+    my_deadlines_path: Path
     health_path: Path
     timetable_path: Path
     shelves_path: Path
@@ -155,6 +157,7 @@ def workspace_for_user(user_id: str) -> UserWorkspace:
         upload_selection_path=root / "upload_selection.json",
         emails_log=root / "emails.json",
         my_events_path=root / "my_events.json",
+        my_deadlines_path=root / "my_deadlines.json",
         health_path=root / "health.json",
         timetable_path=root / "timetable.json",
         shelves_path=root / "shelves.json",
@@ -1403,14 +1406,68 @@ def natural_key(text: str) -> list:
     ]
 
 
-def get_deadlines(workspace: UserWorkspace) -> dict[str, Any]:
+def deadline_key(item: dict[str, Any]) -> str:
+    """과제 하나를 가리키는 열쇠. 화면의 deadlineKey(app.js)와 같아야 한다 — 숨긴 과제 목록이 이것으로 적힌다."""
+    course = item.get("courseLabel") or item.get("course") or ""
+    return "|".join([str(course), str(item.get("name") or ""), str(item.get("due") or "")])
+
+
+def get_deadlines(workspace: UserWorkspace, with_hidden: bool = False) -> dict[str, Any]:
+    """과제 마감 목록. 사용자가 지운(숨긴) 과제는 뺀다 — 대시보드·달력·마감 알림·.ics 가 모두 이 함수를 보므로
+    한 번 지우면 어디서도 다시 나오지 않는다(2026-11-05 사용자: '제출했든 안 했든 지울 수 있게').
+    with_hidden 이면 숨긴 것을 hiddenItems 로 따로 준다(화면의 '숨긴 과제'에서 되돌리기용)."""
     data = read_json(workspace.deadlines_log, {})
     if not isinstance(data, dict):
         data = {}
-    return {
+    items = data.get("items", []) if isinstance(data.get("items"), list) else []
+    items = [*items, *(manual_deadline_item(e) for e in get_my_deadlines(workspace))]
+    hidden_keys = set(get_upload_selection(workspace).get("hiddenDeadlines") or [])
+    shown = [i for i in items if isinstance(i, dict) and deadline_key(i) not in hidden_keys]
+    result = {
         "updatedAt": data.get("updatedAt"),
-        "items": data.get("items", []) if isinstance(data.get("items"), list) else [],
+        "items": shown,
         "events": data.get("events", []) if isinstance(data.get("events"), list) else [],
+    }
+    if with_hidden:
+        result["hiddenItems"] = [i for i in items if isinstance(i, dict) and deadline_key(i) in hidden_keys]
+    return result
+
+
+# 다 한 과제: LMS 에 냈거나(채점 대기·채점 완료) 내 마감을 '완료'로 한 것
+DONE_STATUSES = ("Graded", "NeedsGrading", "Done")
+
+
+def is_deadline_done(item: dict[str, Any]) -> bool:
+    return item.get("myStatus") in DONE_STATUSES
+
+
+def get_my_deadlines(workspace: UserWorkspace) -> list[dict[str, Any]]:
+    """내 마감 원본 (claude_link 가 쓴다). id 가 'my:' 로 시작하는 것만."""
+    data = read_json(workspace.my_deadlines_path, {})
+    items = data.get("items") if isinstance(data, dict) else None
+    if not isinstance(items, list):
+        return []
+    return [e for e in items if isinstance(e, dict) and str(e.get("id") or "").startswith("my:") and e.get("title")]
+
+
+def save_my_deadlines(workspace: UserWorkspace, items: list[dict[str, Any]]) -> None:
+    workspace.root.mkdir(parents=True, exist_ok=True)
+    atomic_write_text(workspace.my_deadlines_path,
+        json.dumps({"items": items}, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def manual_deadline_item(entry: dict[str, Any]) -> dict[str, Any]:
+    """내 마감을 LMS 과제와 같은 꼴로. 대시보드·달력·알림·.ics 가 고치지 않고 그대로 보여 준다(courseId 가 없어 '제출하러 가기'는 안 나온다)."""
+    course = str(entry.get("course") or "")
+    return {
+        "source": "manual",
+        "id": str(entry.get("id")),
+        "course": course,
+        "courseLabel": course,
+        "name": str(entry.get("title") or ""),
+        "due": entry.get("due"),
+        "myStatus": "Done" if entry.get("done") else None,
+        "note": str(entry.get("note") or ""),
     }
 
 
@@ -1426,7 +1483,7 @@ def deadline_counts(deadlines: dict[str, Any]) -> dict[str, int]:
             due = datetime.fromisoformat(str(due_raw).replace("Z", "+00:00")).astimezone()
         except ValueError:
             continue
-        submitted = item.get("myStatus") in ("Graded", "NeedsGrading")
+        submitted = is_deadline_done(item)
         if due >= now and (due - now).days < 7 and not submitted:
             upcoming += 1
         if due < now and not submitted:
@@ -1463,9 +1520,9 @@ def build_deadlines_ics(workspace: UserWorkspace) -> str:
             due = datetime.fromisoformat(str(due_raw).replace("Z", "+00:00"))
         except ValueError:
             continue
-        uid = f"{item.get('columnId', '')}@dgist-lms-autosaver"
+        uid = f"{item.get('columnId') or item.get('id') or ''}@dgist-lms-autosaver"
         summary = f"[{item.get('courseLabel', '')}] {item.get('name', '과제')}"
-        submitted = item.get("myStatus") in ("Graded", "NeedsGrading")
+        submitted = is_deadline_done(item)
         description = "제출 완료" if submitted else "미제출"
         lines += [
             "BEGIN:VEVENT",
@@ -2601,6 +2658,15 @@ def record_boot_done(workspace: UserWorkspace) -> dict[str, Any]:
     return {"ok": True, "recorded": True, **entry}
 
 
+# 화면 밖(Claude 연결)에서 자료 숨김·폴더·마감을 바꾼 횟수. 화면은 /api/health 의 이 값이 바뀌면 전부 다시 받는다 —
+# 화면은 숨김·폴더 목록을 통째로 저장하므로, 오래 들고 있으면 Claude 가 바꾼 것을 덮어쓴다.
+OUTSIDE_CHANGES = {"n": 0}
+
+
+def note_outside_change() -> None:
+    OUTSIDE_CHANGES["n"] += 1
+
+
 def get_health(workspace: UserWorkspace) -> dict[str, Any]:
     """마지막 성공 시각과 최근 실패를 알려 준다 (조용한 실패 방지)."""
     data = read_json(workspace.health_path, {})
@@ -2610,6 +2676,7 @@ def get_health(workspace: UserWorkspace) -> dict[str, Any]:
         "lastSuccess": data.get("lastSuccess", {}),
         "lastFailure": data.get("lastFailure", {}),
         "consecutiveFailures": int(data.get("consecutiveFailures", 0) or 0),
+        "outsideChanges": OUTSIDE_CHANGES["n"],
         "staleDays": None,
         "stale": False,
         "warning": "",
@@ -5539,7 +5606,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             self.send_json(safe_public_config(workspace))
             return
         if route == "/api/deadlines":
-            self.send_json(get_deadlines(workspace))
+            self.send_json(get_deadlines(workspace, with_hidden=True))
             return
         if route == "/api/selection":
             self.send_json(get_upload_selection(workspace))
@@ -5801,6 +5868,12 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         if route == "/api/shelves":
             self.send_json(get_shelves(workspace))
             return
+        if route == "/api/claude-link":
+            import claude_link
+
+            # 켜 두었을 때만 중계 서버에 연결 목록을 묻는다. 체험 중에는 묻지 않는다.
+            self.send_json(claude_link.status())
+            return
         if route == "/api/health":
             self.send_json(get_health(workspace))
             return
@@ -6044,6 +6117,8 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         "/api/ai/search", "/api/ai/draft", "/api/ai/polish", "/api/ai/continue", "/api/ai/login",
         # 로그인 항목(LaunchAgents·~/.config/autostart)에 쓰지 않는다
         "/api/autostart",
+        # Claude 연결(중계 서버 mcp.gudaling.dev)
+        "/api/claude-link/enable", "/api/claude-link/pair", "/api/claude-link/revoke",
     }
     DEMO_MAIL_POST = {
         "/api/mark-read": "mark-read", "/api/mark-all-read": "mark-all-read", "/api/delete-email": "delete",
@@ -6110,6 +6185,10 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             demo_mode.enable(AUTOSAVER_ROOT, lang, read_seed("seed_academic_calendar.json").get("years") or {})
         elif not turn_on and demo_mode.active():
             demo_mode.disable(AUTOSAVER_ROOT)
+        # Claude 연결은 체험 중에 끊고, 끝나면 다시 잇는다 (체험 자료를 Claude 에 보이지 않는다)
+        import claude_link
+
+        claude_link.wake()
         # 경로가 바뀌었으니 화면 서버가 들고 있던 목록을 버린다
         for cache in (_files_cache, _emails_cache, _directory_cache, _people_cache):
             cache.clear()
@@ -6863,6 +6942,21 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 self.send_json(save_shelves(workspace, self.read_body_json()))
             except Exception as exc:
                 self.send_json({"ok": False, "message": str(exc)}, HTTPStatus.BAD_REQUEST)
+            return
+        if route in ("/api/claude-link/enable", "/api/claude-link/pair", "/api/claude-link/revoke"):
+            import claude_link
+
+            payload = self.read_body_json()
+            try:
+                if route.endswith("/enable"):
+                    result = claude_link.set_enabled(payload.get("on") is True)
+                elif route.endswith("/pair"):
+                    result = claude_link.pair()
+                else:
+                    result = claude_link.revoke(payload.get("grantId"), payload.get("all") is True)
+                self.send_json({"ok": True, **result})
+            except claude_link.LinkError as exc:
+                self.send_json({"ok": False, "message": exc.message or "Claude 연결을 바꾸지 못했어요."}, HTTPStatus.BAD_REQUEST)
             return
         if route == "/api/mail/open-link":
             try:

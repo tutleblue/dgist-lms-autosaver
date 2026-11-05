@@ -248,7 +248,7 @@ def check_deadline_alerts(workspace, config: dict) -> None:
     sent = data.setdefault("sent", {})
     hits = []
     for item in web_ui.get_deadlines(workspace).get("items", []):
-        if item.get("myStatus") in ("Graded", "NeedsGrading"):
+        if web_ui.is_deadline_done(item):
             continue
         try:
             due = datetime.fromisoformat(str(item.get("due") or "").replace("Z", "+00:00")).astimezone()
@@ -379,7 +379,7 @@ def upcoming_deadline_summary(workspace, hours: int = 48) -> str:
     now = datetime.now().astimezone()
     soon = []
     for item in deadlines.get("items", []):
-        if item.get("myStatus") in ("Graded", "NeedsGrading"):
+        if web_ui.is_deadline_done(item):
             continue
         due_raw = item.get("due")
         if not due_raw:
@@ -1067,6 +1067,10 @@ def main() -> None:
         web_ui.BOOT.update(start=_process_started_at(), server=time.time(), **_marks)
         threading.Thread(target=_prewarm_first_screen, daemon=True).start()
         threading.Thread(target=scheduler_loop, daemon=True).start()
+        # Claude 연결: 설정에서 켠 사람만 중계 서버에 잇는다. 꺼 두면 스레드는 기다리기만 한다 (claude_link)
+        import claude_link
+
+        claude_link.start()
         if os.name != "nt":
             # 맥·리눅스 '컴퓨터를 켤 때 Daling 켜기' 를 켜 둔 사람만: AppImage 를 옮겼으면 자동 시작 파일을 새 자리로
             import autostart

@@ -23,6 +23,11 @@ import web_ui  # noqa: E402  (경로를 잡은 뒤에 불러야 한다)
 workspace = web_ui.workspace_for_user("local")
 web_ui.ensure_data_files(workspace)
 print("web root:", web_ui.WEB_ROOT, flush=True)
+# Claude 연결 시험: DALING_MCP_URL=http://localhost:8787 (cloud/daling-mcp 의 wrangler dev --env local).
+# 설치된 앱이 같은 데이터 폴더로 이미 잇고 있으면 잠금 파일 때문에 여기서는 잇지 않는다 (claude_link)
+import claude_link  # noqa: E402
+
+claude_link.start()
 server = ThreadingHTTPServer(("127.0.0.1", PORT), web_ui.DashboardHandler)
 print(f"listening on {PORT}", flush=True)
 server.serve_forever()

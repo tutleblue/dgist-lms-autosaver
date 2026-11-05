@@ -89,6 +89,8 @@ Daling.exe (PyInstaller onedir, Python 3.14)
 ### 3.3 과제 마감 (`deadlines`)
 
 - LMS 과제 전체 목록, 과목·상태 필터, 목록에서 숨기기 (`upload_selection.json`의 `hiddenDeadlines`)
+  - 1.12.55 부터 **제출했든 안 했든 모든 과제**에 휴지통 단추(2026-11-05 사용자 요청). 열쇠는 `과목|이름|마감`(`app.js deadlineKey` = `web_ui.deadline_key`) — LMS 에서 마감이 바뀌면 새 과제로 보고 다시 나타난다.
+  - 숨긴 과제는 서버 `get_deadlines` 가 빼고 준다. 그래서 대시보드·달력·마감 알림(`app.check_deadline_alerts`)·.ics·상태 개수에서 모두 빠진다. `/api/deadlines` 만 `hiddenItems` 를 함께 주고, 목록 맨 아래 접힌 '숨긴 과제'에서 하나씩·모두 되돌린다(`setDeadlinesHidden`).
 - 미제출 과제는 LMS 제출 페이지 열기 (`/api/assignment/open`)
 - 캘린더 파일(.ics) 내보내기 (`/api/deadlines.ics`, `/api/export-ics`)
 
@@ -362,6 +364,8 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 | `fglp.py` | FGLP 파견 대학 데이터 |
 | `ai_summarizer.py` | Gemini 호출 공통 (모델 대체 순서) |
 | `updater.py` | GitHub 자가 업데이트 (소스 실행에서만) |
+| `claude_link.py` | 설정 'Claude 에서 보기': 중계 서버에 WebSocket 을 걸어 두고 Claude 커넥터의 도구 호출(`OPS`)에 이 PC 자료로 답함 |
+| `cloud/daling-mcp/` | 중계·OAuth 를 맡는 Cloudflare Worker (`mcp.gudaling.dev`). 설치 파일에는 안 들어감, 따로 배포 |
 | `verify.py` | LMS 목록과 받은 파일 대조 (`verify` 작업) |
 | `setup.py`, `check_courses.py` | 옛 CLI 도구 |
 | `scripts/dev_server.py` | 소스 그대로 8794 포트에 대시보드 |
@@ -414,6 +418,7 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 | `/api/update/check` | 업데이트 확인 |
 | `/api/lock` | 앱 잠금 상태 `{available, enabled, locked, idleMinutes, waitSeconds, canReset}` (잠긴 동안에도 열림) |
 | `/api/mail/me` | 메일에 쓰는 내 정보: `manual`(직접 적은 값)·`auto`(LMS·조직도)·`me`(합친 값, 학년·영문 소속 포함) |
+| `/api/claude-link` | Claude 에서 보기: `enabled`·`connected`·`error`·`connectorUrl`·`grants`(켜져 있을 때만 중계 서버에 물음) |
 
 ### POST
 
@@ -448,6 +453,7 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 | `/api/assignment/open`, `/api/open-url` | 외부 페이지 열기 |
 | `/api/update/apply`, `/api/restart` | 업데이트, 재시작 |
 | `/api/update/open-download` | (맥·리눅스) 새 DMG·AppImage 받을 곳을 브라우저로 |
+| `/api/claude-link/enable` `{on}`, `/api/claude-link/pair`, `/api/claude-link/revoke` `{grantId}` | Claude 에서 보기 켜기·끄기, 연결 코드(8자리·10분) 받기, Claude 연결 끊기 (체험 중엔 막음) |
 
 ---
 
@@ -476,6 +482,8 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 | `lms_profile.json` | 내 이름·학번·학교 메일·LMS 소속 (LMS `/users/me`, 전화번호 등은 받지 않음) |
 | `app_lock.json` | 앱 잠금: 비밀번호 PBKDF2 해시·소금, 자동 잠금 시간, 틀린 횟수·막힌 시각. 없으면 잠금 꺼짐 |
 | `ai_profile.json` | 직접 적은 내 정보(이름·영문 이름·학번·소속), 흐름 끄기, AI 고르기·실험실 스위치 |
+| `my_deadlines.json` | 내 마감(Claude 에서 넣은 것) `{items:[{id:"my:…", title, course, due(UTC), note, done, by, createdAt, updatedAt}]}`. 숨김은 LMS 마감처럼 `upload_selection.json` |
+| `claude_link.json`, `claude_link.lock` | Claude 에서 보기: 켬 여부와 기기 비밀값(DPAPI·키체인 암호문), 한 프로세스만 잇게 잡는 잠금 파일 |
 
 그 밖의 위치:
 - 설치 폴더: `%LOCALAPPDATA%\Programs\Daling` (1.12.52 까지 `Programs\붕어빵`)
@@ -826,6 +834,20 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 - Gemini: 0.62 에 로그인 명령이 없고, 구글 개인 계정 로그인은 'This client is no longer supported for Gemini Code Assist for individuals'(IneligibleTierError)로 막혔다 → API 키로만 된다. 하지만 **API 키 칸은 두지 않는다** — 처음엔 카드에 Gemini 키 칸을 넣었다가 사용자가 'API 넣기는 다 빼라'고 해서 뺐다(2026-10-21 에도 같은 말로 Gemini·공공데이터 키 칸을 뺐었다). 카드는 '지금은 못 씀' 만 보이고 단추가 없다. 운영체제 환경 변수에 `GEMINI_API_KEY` 를 둔 사람만 '연결됨'. 창 없이 돌릴 때 폴더 신뢰 질문을 넘기려고 `GEMINI_CLI_TRUST_WORKSPACE=true`.
 - 오류 문구: Gemini 인증 실패·IneligibleTier → '구글이 막아 지금은 못 써요, Claude 나 Codex 를', Claude·Codex 로그인 만료 → '설정 → AI 연결에서 다시 연결'(`LOGIN_HOW`).
 - 체험 모드: `/api/ai/connections` 는 GET 차단, `/api/ai/login` 은 POST 차단. 설치 안내는 `web_ui.AI_HELP_LINKS` 와 똑같은 주소만 `/api/open-url` 로 연다(맥 앱).
+
+## Claude 에서 보기 (원격 MCP 커넥터, 2026-11-05)
+- 사용자 요청: Claude(웹·모바일·데스크톱)의 커스텀 커넥터에 주소 하나만 넣으면 Daling 의 자료·마감을 읽고 만들고 고치게. 커넥터 주소 `https://mcp.gudaling.dev/mcp`.
+- 구조: 자료를 클라우드에 올리지 않는다. 설정 `#stClaude` 를 켜면 `claude_link.start` 의 스레드가 중계 Worker(`cloud/daling-mcp`)의 `/device/connect` 에 WebSocket 을 걸어 두고(25초 ping, 75초 조용하면 다시 이음, 5초→300초 물러섬), Claude 의 도구 호출을 받아 `claude_link.OPS` 로 답한다. PC 가 꺼져 있으면 Claude 에 'Daling is not running' 이 간다. 자세한 것은 `cloud/daling-mcp/README.md`.
+- 로그인 = 연결 코드: Daling 에는 계정이 없어 PC 가 만든 기기 비밀값(32바이트)의 해시가 '사용자' 다. '연결 코드 받기' 로 10분짜리 일회용 8자리 코드를 받아 Claude 가 연 동의 화면(`/authorize`)에 넣는다. 학교 계정은 오가지 않는다. 비밀값은 `config.json` 이 아니라 `claude_link.json` — 설정 저장(`write_config`)이 모르는 키를 지우고, 맥은 `SECRET_KEYS` 에 넣으면 키체인에서 지워질 수 있어서.
+- 한 PC 에서 설치 앱과 개발 서버가 같은 데이터 폴더를 쓰므로 `claude_link.lock`(Windows `msvcrt.locking`, 맥·리눅스 `fcntl.flock`)을 잡은 프로세스만 잇는다. 나머지는 '다른 Daling 이 이미 잇고 있어요'.
+- 도구 13개: 자료 `list_materials`·`search_materials`·`get_material`·`list_folders`·`create_material_folder`·`update_material`(숨김, 내 폴더 넣기·빼기), 마감 `list_deadlines`·`get_deadline`·`create_deadline`·`update_deadline`·`complete_deadline`·`delete_deadline`·`restore_deadline`. 자료 id 는 `m_` + 저장 이름 sha1 앞 16자, LMS 마감 id 는 `lms:<과목>:<항목>`, 내 마감은 `my:<16자>`.
+- 지우기는 숨기기다(`upload_selection.json` 의 숨긴 마감). 자료 파일을 지우는 도구는 없다. LMS 과제는 고치기·완료를 거절한다(LMS 에서 내야 함).
+- 내 마감(`my_deadlines.json`)은 `web_ui.get_deadlines` 가 LMS 마감과 합쳐(`manual_deadline_item`, `source:"manual"`) 대시보드·마감·캘린더·알림·.ics 에 그대로 나온다. 완료는 `myStatus:"Done"` — `web_ui.DONE_STATUSES`·`is_deadline_done` 이 Graded·NeedsGrading 과 같이 다룬다. 화면 배지는 '내 마감'·'내 마감 · 완료'.
+- 화면이 옛 목록으로 덮어쓰지 않게: 숨김·폴더는 화면이 목록 전체를 POST 하므로, Claude 가 바꾸면 `web_ui.note_outside_change` 가 `/api/health` 의 `outsideChanges` 를 올리고 `pollLight` 가 이 값이 바뀌면 곧바로 다시 받는다.
+- 체험 모드: 잇지 않는다(`toggle_demo` → `claude_link.wake`, `dispatch` 는 `device_offline`). `/api/claude-link/*` POST 는 `DEMO_BLOCKED_POST`.
+- 시험(2026-11-05): Worker 쪽 `npm test` 40개(OAuth·PKCE·DCR 거절·코드 1회용·읽기 전용·다른 사용자 차단 등). 로컬 `wrangler dev --env local` + 개발 서버(시험용 데이터 폴더) + MCP Inspector 2.13.0 으로 등록(201)→동의 화면→코드→토큰(200)→13개 도구를 모두 불러 `my_deadlines.json`·`shelves.json` 과 마감 화면('11/13 (금) 09:00 · 내 마감 · 완료')에 반영된 것을 확인.
+- 배포는 `cloud/daling-mcp` 에서 `npm run deploy`(= `wrangler deploy --env=`, 사용자 계정). 비밀값은 지금 필요 없다 — 생기면 `wrangler secret put` 으로만.
+- `smoke_test.SWEEP_GET`·`SWEEP_POST` 에 `/api/claude-link…` 4개를 넣었다(체험 중 POST 는 409). 이때 1.12.54 의 `/api/ai/connections`(GET)·`/api/ai/login`(로그인 터미널을 여니 `SWEEP_POST_SKIP`)이 빠져 소스 점검이 처음부터 멈춰 있던 것도 고쳤다. 소스·설치본 점검 모두 18개 통과(GET 59·POST 67).
 
 ## 메일 분류 규칙 (2026-10-12)
 - `email_reader.rule_based_category` 순서: 답신 → 계정·알림(인증번호·패스키·계정 생성) → 수업·LMS(Blackboard 발신, 제목의 `[2026_2학기]`, 일일 통지·제출물 수신함·강의성찰) → 학생회 → 교수님(발신자 이름에 교수) → 세미나·행사(한·영 낱말: Seminar·Colloquium·Symposium·Lecture Series·Workshop·Forum·투어·마라톤…) → 취업·진로(창업·공모전·해커톤·트랙…) → 행정·학생팀(보낸 부서) → 동아리·문화 → 기타.

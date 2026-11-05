@@ -429,7 +429,7 @@
     <div class="reveal">
       <p class="kicker"><span>03</span>개인정보</p>
       <h2><em>내 컴퓨터</em>에서만 돌아갑니다</h2>
-      <p class="sub">Daling에는 개발자가 운영하는 서버가 없습니다. 자료와 계정 정보는 <b>내 컴퓨터</b>에 저장되고 개발자에게 보내지 않습니다. 내가 연결한 Google과, 내가 직접 부른 AI 프로그램에만 필요한 것을 보냅니다.</p>
+      <p class="sub">Daling은 개발자 서버에 자료를 두지 않습니다. 자료와 계정 정보는 <b>내 컴퓨터</b>에 저장되고 개발자에게 보내지 않습니다. 내가 연결한 Google, 내가 직접 부른 AI 프로그램, 내가 켠 'Claude 에서 보기'에만 필요한 것을 보냅니다.</p>
       <ul class="checks">
         <li>비밀번호·API 키는 내 컴퓨터 안에서 암호화 (Windows DPAPI, macOS 키체인, Linux 키링)</li>
         <li>분석·광고·사용 통계 수집 없음, 어떤 정보도 판매하지 않음</li>
@@ -561,7 +561,7 @@
   <div class="narrow">
     <h2>About Daling</h2>
     <p><strong>Daling</strong> is a free, open-source desktop app for Windows, macOS and Linux made for DGIST students. It collects course materials and assignment deadlines from the DGIST LMS, school e-mail, the academic calendar and campus notices into one dashboard, and organizes them into the user's own <strong>Google Drive</strong> and <strong>Google Calendar</strong>.</p>
-    <p>The app runs entirely on the user's computer. There is no developer-operated server, and no user data or credentials are ever sent to the developer.</p>
+    <p>The app runs on the user's computer. The developer stores no user data on any server: the optional "Use in Claude" relay only passes answers to the user's own Claude account, and no user data or credentials are ever collected by the developer.</p>
     <ul>
       <li><strong>Google Drive (<code>drive.file</code>)</strong> — uploads course materials into course/week folders the app creates, and checks whether a file was already uploaded. When the user attaches a Drive file to a school e-mail, the user picks it in Google's file picker, and the app downloads only the files picked there.</li>
       <li><strong>Google Calendar (<code>calendar.app.created</code>, <code>calendar.calendarlist.readonly</code>)</strong> — creates one dedicated calendar and adds or updates assignment deadlines, academic-calendar events and dates found in school e-mail there. It can only open calendars the app created; the calendar list is read only to find that calendar by name.</li>
