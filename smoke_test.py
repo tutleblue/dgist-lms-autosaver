@@ -39,7 +39,7 @@ from pathlib import Path
 
 # 화면 서버의 GET 길 전부 ('화면 API 전부' 점검). 쿼리가 필요한 길은 빈 값으로 — 400 이 와도 500 이 아니면 된다.
 SWEEP_GET = (
-    "/api/academic-calendar", "/api/ai/status", "/api/autostart", "/api/config", "/api/config/export", "/api/course-announcements",
+    "/api/academic-calendar", "/api/ai/connections", "/api/ai/status", "/api/autostart", "/api/claude-link", "/api/config", "/api/config/export", "/api/course-announcements",
     "/api/course-catalog?q=", "/api/course-staff", "/api/course-state", "/api/course-terms", "/api/deadlines",
     "/api/deadlines.ics", "/api/demo", "/api/dgist-api/status", "/api/diagnostics", "/api/directory?q=",
     "/api/drive/get", "/api/drive/list", "/api/drive/picked?state=", "/api/email-body?id=1", "/api/emails", "/api/fglp", "/api/file?path=x",
@@ -57,7 +57,8 @@ _SWEEP_PATHS = {r.split("?")[0] for r in SWEEP_GET}
 # 나머지는 임시 데이터 폴더에만 쓴다. 맥·리눅스에서만 도는 분기(폴더 열기·저장·키체인)가 500 을 내는지 본다.
 SWEEP_POST = (
     "/api/acknowledge-courses", "/api/ai/continue", "/api/ai/draft", "/api/ai/polish", "/api/ai/profile",
-    "/api/ai/search", "/api/assignment/open", "/api/autostart", "/api/boot-done", "/api/config", "/api/config/import",
+    "/api/ai/search", "/api/assignment/open", "/api/autostart", "/api/boot-done",
+    "/api/claude-link/enable", "/api/claude-link/pair", "/api/claude-link/revoke", "/api/config", "/api/config/import",
     "/api/delete-email", "/api/directory/import", "/api/drive/pick", "/api/drive/share", "/api/export-ics", "/api/files/bulk", "/api/gcal/sync",
     "/api/gcal/sync-academic", "/api/google/connect", "/api/google/credentials", "/api/google/disconnect",
     "/api/local-autosave/run", "/api/mail/big-cancel", "/api/mail/discard-draft", "/api/mail/flow", "/api/mail/folder-create", "/api/mail/me",
@@ -72,10 +73,10 @@ SWEEP_POST = (
     "/api/whats-new/seen",
 )
 # 부르면 안 되는 길: 점검이 켜고 끄는 체험 모드, 앱을 다시 켜기·창 조작, 폴더 고르기 창(사람이 닫을 때까지 멈춤),
-# 파일 관리자·브라우저를 실제로 여는 길
+# 파일 관리자·브라우저·AI 로그인 터미널을 실제로 여는 길
 SWEEP_POST_SKIP = (
     "/api/demo", "/api/restart", "/api/window", "/api/pick-folder", "/api/open-downloads", "/api/open-url",
-    "/api/open-app-url", "/api/mail/open-link", "/api/open-file",
+    "/api/open-app-url", "/api/mail/open-link", "/api/open-file", "/api/ai/login",
 )
 
 

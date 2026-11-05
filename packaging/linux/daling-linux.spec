@@ -61,6 +61,9 @@ hiddenimports = [
     "course_meta",
     # 메일 쓰기 흐름·AI 도우미 (web_ui 함수 안에서 늦게 불러온다)
     "mail_flow",
+    # Claude 연결 (app.main 이 함수 안에서 불러온다). websockets 는 google-genai 도 쓰지만 sync 쪽은 이것만 쓴다
+    "claude_link",
+    "websockets.sync.client",
     "ai_cli",
     # 구글 라이브러리는 늦게 불러오는 곳이 있어 PyInstaller 가 놓친다
     "googleapiclient.discovery",

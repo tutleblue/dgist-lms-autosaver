@@ -1,6 +1,7 @@
 # 개인정보 처리 안내 (Privacy Policy)
 
 Daling은 **개발자에게 아무 정보도 보내지 않습니다.** 분석·광고·사용 통계 수집이 없습니다.
+('Claude 에서 보기'를 켠 경우만 개발자의 중계 서버를 거치며, 이 서버는 전달만 하고 자료를 저장하지 않습니다.)
 모든 데이터는 사용자 PC(`C:\lms-autosaver\`)에 저장되고, 아래처럼 사용자가 켠 기능에 필요한 곳에만 직접 연결합니다.
 
 | 연결하는 곳 | 언제 | 보내는 것 |
@@ -11,6 +12,7 @@ Daling은 **개발자에게 아무 정보도 보내지 않습니다.** 분석·�
 | 공공데이터포털 (`apis.data.go.kr`), DGIST 홈페이지 | 학사일정·셔틀·공지 | 없음 (공개 정보 조회) |
 | OpenStreetMap Nominatim | 일정 장소 검색 | 검색한 장소 이름 |
 | GitHub (`api.github.com`) | 새 버전 확인 | 없음 |
+| Daling 중계 서버 (`mcp.gudaling.dev`) → Claude | 사용자가 'Claude 에서 보기'를 켜고 Claude 에서 물을 때 | 자료 목록(파일 이름·과목·폴더 등)과 과제 마감. 학교 계정·메일·파일 내용·Google 정보는 보내지 않음 |
 
 - 비밀번호와 API 키는 Windows DPAPI로 암호화해 이용자 본인 PC에 저장하며, 그 PC의 현재 사용자 계정만 풀 수 있습니다.
 - 앱을 지워도 `C:\lms-autosaver\`의 자료는 남습니다. 필요 없으면 그 폴더를 지우면 됩니다.
@@ -20,6 +22,8 @@ Daling은 **개발자에게 아무 정보도 보내지 않습니다.** 분석·�
 **English summary.** Daling sends nothing to the developer — no analytics, ads or telemetry.
 Data stays on your PC (`C:\lms-autosaver\`). The app only talks to services you turn on: DGIST LMS/mail
 (with your school account), Google Drive/Calendar (when you connect Google), Google Gemini (when you add a key),
-public data portals, OpenStreetMap place search, and GitHub for update checks. Secrets are encrypted with Windows DPAPI.
+public data portals, OpenStreetMap place search, GitHub for update checks, and — only if you turn on "Use in Claude" —
+the Daling relay (`mcp.gudaling.dev`), which passes your material list and deadlines to your Claude account without storing them.
+Secrets are encrypted with Windows DPAPI.
 
 전체 방침(Google 사용자 데이터 포함): https://gudaling.dev/privacy

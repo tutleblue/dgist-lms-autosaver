@@ -1646,6 +1646,37 @@
             </div>
           </section>
 
+          <!-- Claude 에서 보기 (claude_link.py · cloud/daling-mcp): Claude 앱·웹의 커스텀 커넥터가 이 컴퓨터의 자료·마감을 묻고 정리한다.
+               AI 연결 카드처럼 칸에 name 을 붙이지 않는다 — 설정 저장이 아니라 누르는 즉시 저장한다 (paintClaudeLink) -->
+          <section class="st-card" id="stClaude">
+            <header class="st-head">
+              <span class="st-tile coral"><span class="icon" data-icon="globe"></span></span>
+              <div>
+                <h3>Claude 에서 보기</h3>
+                <p>Claude 앱·웹에서 내 강의자료와 과제 마감을 묻고 정리해요.</p>
+              </div>
+              <button type="button" class="hint" data-hint="Claude 가 물으면 이 컴퓨터의 Daling 이 답합니다. 중간 서버(mcp.gudaling.dev)는 전달만 하고 저장하지 않아요. 학교 계정·메일·파일 내용은 넘기지 않아요. Daling 이 켜져 있을 때만 이어집니다.">?</button>
+              <label class="toggle st-head-toggle" title="Claude 에서 보기">
+                <input type="checkbox" id="claudeLinkOn" />
+                <span class="track"></span>
+              </label>
+            </header>
+            <div class="claude-link" id="claudeLinkBody" hidden>
+              <p class="claude-link-state" id="claudeLinkState"></p>
+              <ol class="claude-link-steps">
+                <li>Claude → 설정 → 커넥터 → <b>커스텀 커넥터 추가</b></li>
+                <li>주소 <code id="claudeLinkUrl"></code> <button type="button" class="text-button" id="claudeLinkCopy">복사</button></li>
+                <li><b>연결</b>을 누르고, 나오는 화면에 아래 코드를 넣기</li>
+              </ol>
+              <div class="claude-link-code">
+                <button type="button" class="button compact" id="claudeLinkPair">연결 코드 받기</button>
+                <strong id="claudeLinkCode" hidden></strong>
+                <small id="claudeLinkExpiry"></small>
+              </div>
+              <div class="ai-conn-list" id="claudeLinkGrants"></div>
+            </div>
+          </section>
+
           <section class="st-card" id="stAuto">
             <header class="st-head">
               <span class="st-tile green"><span class="icon" data-icon="sync"></span></span>
