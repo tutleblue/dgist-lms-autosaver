@@ -42,8 +42,9 @@ artifacts/ui-settings.png
 # 프로브/디버그 스크립트
 artifacts/
 
-# Claude Code 로컬 설정
+# Claude Code 로컬 설정 (스킬은 함께 쓰도록 올린다)
 .claude/*
+!.claude/skills/
 !.claude/design-studio/
 
 # 별도 하위 프로젝트 (자체 저장소)
