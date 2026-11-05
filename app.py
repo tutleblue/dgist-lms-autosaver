@@ -64,15 +64,24 @@ if sys.platform.startswith("linux"):
 
 from http.server import ThreadingHTTPServer
 
+if sys.platform == "darwin" and not (len(sys.argv) >= 2 and sys.argv[1] == SMOKE_FLAG):
+    # 켤 때 키체인 암호 창에서 멈추지 않게. 2026-10-22 맥 신고(LMS·메일이 안 됨) → CI 실측(mac-diagnose.yml): 업데이트한
+    # 새 판은 창도 서버도 뜨기 전에 'Daling 이 키체인에 접근하려고 함' 창에서 멈췄다. 아래 `import web_ui` 가
+    # runtime_config 를 불러오고, runtime_config 는 모듈 맨 위에서 비밀값을 풀며 키체인을 연다.
+    # 켤 때는 묻는 창 없이만 읽고, 허락이 필요하면 창이 뜬 뒤 묻는다(_unlock_keychain_after_window).
+    import mac_keychain
+
+    mac_keychain.quiet_startup(True)
+
 import web_ui
 
 HOST = "127.0.0.1"
 PORT = int(os.environ.get("AUTOSAVER_UI_PORT", "8765"))
-# 보이는 앱 이름(2026-10-11 붕어빵 → Daling). 실행 파일은 그대로 붕어빵.exe
+# 앱 이름. 실행 파일도 Daling.exe (1.12.53 부터)
 WINDOW_TITLE = "Daling"
 # 작업표시줄이 pythonw.exe나 옛 캐시가 아니라 이 앱을 별도 앱으로 인식하게 하는 식별자.
 # 바로가기(install.ps1)에도 같은 값을 넣어야 아이콘이 완전히 일치한다.
-APP_USER_MODEL_ID = "DGIST.Bungeoppang.App"
+APP_USER_MODEL_ID = "DGIST.Daling.App"
 # EXE 로 묶이면 화면 파일이 exe 옆 _internal 로 들어간다. 그때는 __file__ 이
 # 아니라 sys._MEIPASS 를 봐야 아이콘을 찾는다.
 _APP_ROOT = Path(getattr(sys, "_MEIPASS", "") or Path(__file__).resolve().parent)
@@ -160,8 +169,14 @@ def _osascript(lines: list[str], args: list[str], timeout: float) -> None:
     subprocess.run(command, capture_output=True, timeout=timeout)
 
 
-def notify(title: str, message: str) -> None:
-    """Windows 토스트 알림 (winotify 미설치/실패 시 조용히 무시). 맥은 알림 센터."""
+def notify(title: str, message: str, private: bool = False) -> None:
+    """Windows 토스트 알림 (winotify 미설치/실패 시 조용히 무시). 맥은 알림 센터.
+
+    private=True(과제·자료·공지 이름이 든 알림)는 앱이 잠겨 있으면 내용을 숨긴다. 제목은 '새 공지 2건' 처럼 개수뿐이라 둔다.
+    잠금을 켠 사람은 자리를 비운 사이 화면에 뜨는 알림으로도 내용이 보이지 않기를 바란다(web_ui 앱 잠금).
+    """
+    if private and web_ui.app_locked():
+        message = "Daling 잠금을 풀면 볼 수 있어요."
     if sys.platform == "darwin":
         # ad-hoc 서명 앱은 알림 권한(UNUserNotificationCenter)을 제대로 받을 수 없어 osascript 로 띄운다.
         # 알림 센터에는 '스크립트 편집기' 이름으로 보이므로 제목 줄에 앱 이름을 넣고 원래 제목은 부제로.
@@ -271,12 +286,12 @@ def check_deadline_alerts(workspace, config: dict) -> None:
 
     if len(hits) == 1:
         due, label, item = hits[0]
-        notify(f"과제 마감 {label} 전", line(due, item))
+        notify(f"과제 마감 {label} 전", line(due, item), private=True)
     else:
         text = "\n".join(line(d, i) for d, _, i in hits[:4])
         if len(hits) > 4:
             text += f"\n… 외 {len(hits) - 4}건"
-        notify(f"과제 마감 {len(hits)}건 임박", text)
+        notify(f"과제 마감 {len(hits)}건 임박", text, private=True)
 
 
 def _current_files(workspace) -> dict:
@@ -329,7 +344,7 @@ def check_new_file_alerts(workspace, config: dict) -> None:
         part for part in (f"새 강의자료 {len(new)}개" if new else "", f"새 판 {len(changed)}개" if changed else "") if part
     )
     text = "\n".join(lines[:4]) + (f"\n… 외 {len(lines) - 4}개" if len(lines) > 4 else "")
-    notify(title, text)
+    notify(title, text, private=True)
 
 
 def check_announcement_alerts(workspace, config: dict) -> None:
@@ -355,7 +370,7 @@ def check_announcement_alerts(workspace, config: dict) -> None:
     lines = [f"{label} · {i.get('title', '공지')}" for label, i in fresh[:4]]
     if len(fresh) > 4:
         lines.append(f"… 외 {len(fresh) - 4}건")
-    notify(f"새 공지 {len(fresh)}건", "\n".join(lines))
+    notify(f"새 공지 {len(fresh)}건", "\n".join(lines), private=True)
 
 
 def upcoming_deadline_summary(workspace, hours: int = 48) -> str:
@@ -450,7 +465,10 @@ def scheduler_loop() -> None:
             now = datetime.now()
             today = now.strftime("%Y-%m-%d")
             due_today = now.strftime("%H:%M") >= schedule_time and last_run_day != today
-            if due_today and time.monotonic() - started_at > 120:
+            # 계정이 비었으면 자동으로는 돌리지 않는다. 새 기기에서 계정을 넣기 전부터 '실패' 가 쌓여
+            # 쉬는 간격이 늘고 '계속 실패' 띠가 떴다(web_ui.TASK_ACCOUNT_KEYS). 넣으면 다음 차례(30초 안)에 돈다
+            ready = {kind: web_ui.account_ready(config, kind) for kind in ("emails", "deadlines", "sync")}
+            if due_today and ready["sync"] and time.monotonic() - started_at > 120:
                 with web_ui.task_lock:
                     running = web_ui.task_states.get(workspace.user_id, {}).get("running", False)
                 if not running:
@@ -471,14 +489,15 @@ def scheduler_loop() -> None:
             # LMS 작업(마감·자료)은 한 번에 하나만 돌린다 (LMS 로그인이 겹치지 않게).
             # 메일은 IMAP 만 써서 따로 돈다 (web_ui.task_key).
             if time.monotonic() - started_at > 45:
-                minutes = web_ui.auto_minutes(config)
+                # 앱을 안 볼 때는 메일을 15분마다로 늦춘다 (web_ui.effective_minutes — 학교 메일 서버 로그인 줄이기)
+                minutes = web_ui.effective_minutes(config)
                 with web_ui.task_lock:
                     running = web_ui.task_states.get(workspace.user_id, {}).get("running", False)
                     mail_running = web_ui.task_states.get(web_ui.task_key(workspace.user_id, "emails"), {}).get("running", False)
-                if not mail_running and next_due_job(workspace, minutes, ("emails",)):
+                if not mail_running and ready["emails"] and next_due_job(workspace, minutes, ("emails",)):
                     web_ui.start_task(workspace, "emails", auto=True)
                 if not running:
-                    kind = next_due_job(workspace, minutes, ("deadlines", "sync"))
+                    kind = next_due_job(workspace, minutes, tuple(k for k in ("deadlines", "sync") if ready[k]))
                     if kind:
                         web_ui.start_task(workspace, kind, auto=True)
         except Exception:
@@ -509,6 +528,7 @@ def next_due_job(workspace, minutes: dict[str, int], kinds=("emails", "deadlines
 
     streaks = health.get("failStreak") or {}
     auth = health.get("authFailed") or {}
+    failures = health.get("failures") or {}
     try:
         st = workspace.config_path.stat()
         config_stamp = [st.st_mtime_ns, st.st_size]
@@ -528,11 +548,16 @@ def next_due_job(workspace, minutes: dict[str, int], kinds=("emails", "deadlines
         if locked and locked.get("configStamp") == config_stamp and age_minutes(locked.get("at")) < 120:
             continue
         # 그 밖의 실패는 연속으로 실패할수록 간격을 두 배로 (최대 6시간)
+        # 쉬는 시간은 그 작업이 마지막으로 실패한 때부터 잰다. 예전엔 하나뿐인 lastFailure 만 봐서, 메일이 5분마다
+        # 성공해 그 기록을 지우면 마감 확인은 오래전 성공 시각부터 재게 되어 쉬지 않고 곧바로 다시 했다 →
+        # 실패 횟수만 빠르게 불어 '7번 연속 실패' 가 떴다(2026-11-03). 작업별 기록 failures[kind] 를 먼저 본다.
         streak = int(streaks.get(kind, 0) or 0)
+        mine = failures.get(kind) if isinstance(failures.get(kind), dict) else {}
+        failed_at = mine.get("at") or (failure.get("at") if failure.get("kind") == kind else None)
         wait = min(max(5, every) * (2 ** max(0, streak - 1)), 360) if streak else 0
-        if failure.get("kind") == kind:
+        if failed_at:
             wait = max(wait, max(5, every / 2))
-        if wait and age_minutes((failure.get("at") if failure.get("kind") == kind else None) or success.get(kind)) < wait:
+        if wait and age_minutes(failed_at or success.get(kind)) < wait:
             continue
         return kind
     return None
@@ -557,7 +582,7 @@ def port_in_use(host: str, port: int) -> bool:
 
 
 def existing_dashboard(host: str, port: int) -> bool:
-    """포트를 점유한 프로세스가 이 앱(붕어빵)의 대시보드인지 확인.
+    """포트를 점유한 프로세스가 이 앱(Daling)의 대시보드인지 확인.
 
     200 만 보면 안 된다. 다른 웹 서버도 /healthz 에 200 을 줄 수 있다.
     우리 서버만 돌려주는 모양(ok·mode)까지 본다.
@@ -573,7 +598,7 @@ def existing_dashboard(host: str, port: int) -> bool:
 
 
 # 8765 가 막혀 있으면 이 범위에서 빈 곳을 찾는다.
-# (실제로 다른 개발 도구가 8765 에 웹 서버를 띄워 붕어빵이 "포트 사용 중" 으로 멈췄다)
+# (실제로 다른 개발 도구가 8765 에 웹 서버를 띄워 Daling이 "포트 사용 중" 으로 멈췄다)
 PORT_CANDIDATES = [PORT] + [p for p in range(8766, 8786) if p != PORT]
 
 
@@ -658,11 +683,35 @@ class _startup_lock:
     '떠 있는 대시보드 없음' 을 본 뒤 하나는 8765, 하나는 8766 에 서버를 띄워 스케줄러가 둘이 됐다
     (같은 C:\\lms-autosaver 에 메일 두 번 받기·로그인 두 번·삼성 노트 중복). 차례로 들어가면 뒤에 온 쪽은
     앞의 대시보드를 찾아 그 창만 앞으로 가져온다. 뮤텍스는 프로세스가 죽으면 저절로 풀린다.
+    맥·리눅스는 데이터 폴더의 잠금 파일(flock)로 같은 일을 한다 — 예전엔 아무것도 안 해 Dock·로그인 항목에서
+    두 번 켜면 서버·스케줄러가 둘이 될 수 있었다(2026-10-21 맥·리눅스 점검). flock 도 프로세스가 죽으면 풀린다.
     """
 
     def __enter__(self):
         self.handle = None
+        self.lock_file = None
         if os.name != "nt":
+            try:
+                import fcntl
+
+                import runtime_config
+
+                path = Path(runtime_config.AUTOSAVER_DATA_ROOT) / ".start.lock"
+                path.parent.mkdir(parents=True, exist_ok=True)
+                fh = open(path, "a+")
+                deadline = time.time() + 20
+                while True:
+                    try:
+                        fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                        self.lock_file = fh
+                        break
+                    except OSError:
+                        if time.time() > deadline:  # 20초 넘게 못 받으면 예전처럼 그냥 간다
+                            fh.close()
+                            break
+                        time.sleep(0.1)
+            except Exception:
+                self.lock_file = None
             return self
         try:
             import ctypes
@@ -681,6 +730,13 @@ class _startup_lock:
         return self
 
     def __exit__(self, *exc):
+        if self.lock_file:
+            try:
+                import fcntl
+
+                fcntl.flock(self.lock_file, fcntl.LOCK_UN)
+            finally:
+                self.lock_file.close()
         if self.handle:
             import ctypes
 
@@ -690,14 +746,14 @@ class _startup_lock:
 
 
 def start_server() -> ThreadingHTTPServer | None:
-    """서버를 띄우고 반환. 이미 붕어빵 대시보드가 떠 있으면 None.
+    """서버를 띄우고 반환. 이미 Daling 대시보드가 떠 있으면 None.
 
     쓰기로 한 포트는 전역 PORT 와 환경 변수에 적어 둔다
     (창 주소와 작업 프로세스가 같은 포트를 보게).
     """
     global PORT
 
-    # 1) 이미 켜진 붕어빵이 있으면 서버를 또 띄우지 않고 그 창만 연다
+    # 1) 이미 켜진 Daling이 있으면 서버를 또 띄우지 않고 그 창만 연다
     for port in PORT_CANDIDATES:
         if port_in_use(HOST, port) and existing_dashboard(HOST, port):
             PORT = port
@@ -757,7 +813,7 @@ def _bind_worker_output() -> None:
 def run_worker(job: str) -> int:
     """새로고침·동기화 같은 하위 작업을 창 없이 실행한다.
 
-    EXE 로 묶이면 sys.executable 이 '붕어빵.exe' 라서 `-c "..."` 방식이 통하지 않는다.
+    EXE 로 묶이면 sys.executable 이 'Daling.exe' 라서 `-c "..."` 방식이 통하지 않는다.
     그대로 두면 새로고침할 때마다 앱이 통째로 한 번 더 켜지고(창이 계속 늘어남),
     정작 크롤링은 시작도 못 한다. 그래서 EXE 는 이 함수로 들어온다.
 
@@ -787,7 +843,10 @@ def run_worker(job: str) -> int:
         elif job == "emails":
             import email_reader
 
-            email_reader.refresh_emails()
+            try:
+                email_reader.refresh_emails()
+            finally:
+                email_reader.close_session()  # 같이 쓰던 연결을 정중히 닫고 끝낸다 (이 프로세스는 곧 끝난다)
         elif job == "verify":
             import verify
 
@@ -802,7 +861,9 @@ def run_worker(job: str) -> int:
             import runtime_config
 
             # package: Store 판(MSIX)이면 작업 프로세스도 같은 패키지 안에서 도는지 (AppData 가상화를 같이 봐야 한다)
-            print(f"smoke-worker ok data={runtime_config.AUTOSAVER_DATA_ROOT} package={runtime_config.msix_package_full_name() or '-'}")
+            # handed: 앱 본체가 표준 입력으로 넘긴 비밀 값 수 (맥·리눅스, runtime_config._HANDED_SECRETS)
+            handed = "-" if runtime_config._HANDED_SECRETS is None else len(runtime_config._HANDED_SECRETS)
+            print(f"smoke-worker ok data={runtime_config.AUTOSAVER_DATA_ROOT} package={runtime_config.msix_package_full_name() or '-'} handed={handed}")
         else:
             print(f"알 수 없는 작업입니다: {job}")
             return 1
@@ -936,6 +997,27 @@ def run_linux_window(webview, server, url: str) -> None:
             server.server_close()
 
 
+def _unlock_keychain_after_window() -> None:
+    """맥: 켤 때 키체인을 조용히 못 읽었으면(업데이트 뒤 등) 창이 뜬 뒤 묻는다. 허락하면 비밀 상수를 다시 채운다.
+
+    묻는 동안 화면은 그대로 쓸 수 있고, LMS·메일 자동 실행은 허락을 기다린다(web_ui.start_task). 거부하면 이번 실행에서는
+    다시 묻지 않고, 건강 알림이 까닭과 할 일(다시 켜기·비밀번호 다시 저장)을 보여 준다.
+    """
+    try:
+        import mac_keychain
+
+        asked = mac_keychain.needs_prompt()
+        if asked:
+            time.sleep(1.5)  # 창이 먼저 그려지게
+        if mac_keychain.unlock_interactive() and asked:
+            import runtime_config
+
+            runtime_config.refresh_secrets()
+            print("키체인 허락을 받아 비밀 설정을 다시 읽음")
+    except Exception as exc:  # 키체인이 어떻게 틀려도 창은 그대로 둔다
+        print(f"키체인 허락 받기 실패: {exc}")
+
+
 def main() -> None:
     _marks = {"appStart": _APP_T0, "webUiImported": _MODULE_T0, "main": time.time()}
     set_app_user_model_id()  # 창을 만들기 전에 (작업표시줄 아이콘 반영의 핵심)
@@ -985,6 +1067,11 @@ def main() -> None:
         web_ui.BOOT.update(start=_process_started_at(), server=time.time(), **_marks)
         threading.Thread(target=_prewarm_first_screen, daemon=True).start()
         threading.Thread(target=scheduler_loop, daemon=True).start()
+        if os.name != "nt":
+            # 맥·리눅스 '컴퓨터를 켤 때 Daling 켜기' 를 켜 둔 사람만: AppImage 를 옮겼으면 자동 시작 파일을 새 자리로
+            import autostart
+
+            autostart.refresh()
 
         # 켤 때마다 띄우던 '48시간 마감 요약' 은 없앴다. 마감 알림(하루·3시간·1시간 전)이 대신한다.
 
@@ -1015,7 +1102,7 @@ def main() -> None:
     if window_chrome:
         window_chrome.enable_webview_drag_regions()
         window_chrome.install_async(WINDOW_TITLE)
-    webview.create_window(
+    window = webview.create_window(
         WINDOW_TITLE,
         url,
         width=width,
@@ -1025,8 +1112,19 @@ def main() -> None:
         # 휴대폰 비율로 줄여도 쓸 수 있게 화면을 다시 짰다(좁으면 아래 탭 막대). 예전 900×640 은 정사각형·세로 창을 막았다.
         min_size=(360, 560),
     )
+    if sys.platform == "darwin":
+        # 맥도 기본 제목 줄을 투명하게 하고 상단 바를 제목 줄로 쓴다 (mac_window 설명 참고).
+        # 창을 보이기 직전(before_show, 메인 스레드)에 바꿔야 회색 줄이 한 번 번쩍이지 않는다. 못 바꾸면 기본 제목 줄 그대로
+        try:
+            import mac_window
+
+            window.events.before_show += mac_window.install
+        except Exception:
+            pass
     # 창이 뜬 뒤 아이콘을 입힌다 (pywebview는 Windows에서 아이콘 인자를 지원하지 않음)
     threading.Thread(target=apply_window_icon, daemon=True).start()
+    if server is not None and sys.platform == "darwin":
+        threading.Thread(target=_unlock_keychain_after_window, daemon=True).start()
     try:
         webview.start()
     finally:

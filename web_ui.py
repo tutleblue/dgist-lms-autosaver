@@ -18,6 +18,7 @@ import subprocess
 import sys
 import threading
 import time
+import unicodedata
 import webbrowser
 from dataclasses import dataclass
 from http.cookies import SimpleCookie
@@ -30,6 +31,7 @@ import urllib.request
 from urllib.parse import parse_qs, quote, urlencode, urlparse
 
 import demo_mode
+import autostart
 import secret_store
 
 
@@ -47,7 +49,10 @@ def _bundle_root() -> Path:
 
 PROJECT_ROOT = _bundle_root()
 WEB_ROOT = PROJECT_ROOT / "web"
-DEFAULT_AUTOSAVER_ROOT = Path(r"C:\lms-autosaver") if os.name == "nt" else Path.home() / ".lms-autosaver"
+# 작업 프로세스(runtime_config)와 같은 규칙이어야 한다. 예전엔 여기에 따로 적혀 있었다
+from runtime_config import default_data_root  # noqa: E402
+
+DEFAULT_AUTOSAVER_ROOT = default_data_root()
 AUTOSAVER_ROOT = Path(os.environ.get("AUTOSAVER_ROOT", str(DEFAULT_AUTOSAVER_ROOT)))
 USERS_ROOT = Path(os.environ.get("AUTOSAVER_USERS_ROOT", str(AUTOSAVER_ROOT / "users")))
 MULTI_USER_MODE = os.environ.get("AUTOSAVER_MULTI_USER", "0").lower() in {"1", "true", "yes", "on"}
@@ -59,7 +64,7 @@ DRIVE_CREDENTIALS_PATH = Path(
 GOOGLE_OAUTH_PENDING_PATH = AUTOSAVER_ROOT / "oauth_pending.json"
 FALLBACK_COURSE_MAP = PROJECT_ROOT / "file_course_map.json"
 from runtime_config import GOOGLE_SCOPES as _GOOGLE_SCOPES
-from runtime_config import calendar_scope_granted
+from runtime_config import GOOGLE_DRIVE_READ_SCOPE, GOOGLE_DRIVE_SCOPE, calendar_scope_granted
 from runtime_config import atomic_write_text
 
 GOOGLE_OAUTH_SCOPE = _GOOGLE_SCOPES[0]
@@ -208,6 +213,7 @@ def remember_oauth_state(
     redirect_uri: str,
     code_verifier: str | None,
     session_token: str | None = None,
+    purpose: str = "",
 ) -> None:
     oauth_states[state] = {
         "user_id": workspace.user_id,
@@ -215,6 +221,7 @@ def remember_oauth_state(
         "code_verifier": code_verifier,
         "session_token": session_token,
         "created_at": now_iso(),
+        "purpose": purpose,  # "" = 구글 연결(token.json), "drive-pick" = Drive 고르기 창 (finish_drive_pick)
     }
     pending = load_oauth_pending()
     pending[state] = oauth_states[state]
@@ -297,6 +304,28 @@ def auto_minutes(config: dict[str, Any]) -> dict[str, int]:
         "deadlines": _minutes_field({}, config, "", "AUTO_DEADLINE_MINUTES", 60),
         "sync": _minutes_field({}, config, "", "AUTO_SYNC_MINUTES", 180),
     }
+
+
+# 앱 창을 보고 있는지 (화면 app.js reportPresence 가 바뀔 때·1분마다 알린다).
+# 학교 메일 서버는 연결을 로그인 뒤 20~40초면 끊어 5분마다 매번 새로 로그인하고(2026-10-22 실측: 5초마다 NOOP 을
+# 보내도 21초에 응답 15.9초, 42초에 응답 없음), 로그인이 잦으면 맞는 비밀번호도 거절한다(9/27·10/12·10/21·10/22).
+# 보고 있을 때는 설정한 주기 그대로, 안 볼 때는 메일을 15분마다로 늦춰 로그인을 줄인다(사용자 결정 2026-10-22).
+PRESENCE: dict[str, Any] = {"viewing": False, "at": 0.0}
+AWAY_EMAIL_MINUTES = 15
+PRESENCE_FRESH_SECONDS = 180
+
+
+def user_viewing() -> bool:
+    """앱을 보고 있는지. 화면이 3분 넘게 소식이 없으면(창을 닫았거나 화면이 멈춤) 안 보는 것으로 본다."""
+    return bool(PRESENCE["viewing"]) and time.time() - float(PRESENCE["at"] or 0) < PRESENCE_FRESH_SECONDS
+
+
+def effective_minutes(config: dict[str, Any]) -> dict[str, int]:
+    """자동 실행에 실제로 쓰는 주기. 앱을 안 볼 때 메일은 15분마다 (설정이 더 길거나 꺼져 있으면 그대로)."""
+    minutes = auto_minutes(config)
+    if minutes["emails"] > 0 and not user_viewing():
+        minutes["emails"] = max(minutes["emails"], AWAY_EMAIL_MINUTES)
+    return minutes
 
 
 def _merge_cloud_save(existing: dict[str, Any], incoming: Any) -> dict[str, dict[str, Any]]:
@@ -408,24 +437,39 @@ def write_config(workspace: UserWorkspace, payload: dict[str, Any]) -> dict[str,
         values["EMAIL_HIDE_PAST"] = bool(existing.get("EMAIL_HIDE_PAST", False))
 
     # 명시적 삭제 요청 (저장된 비밀 값 제거)
-    if payload.get("clearGeminiKey") is True:
-        values["GEMINI_API_KEY"] = ""
-    if payload.get("clearEmailPassword") is True:
-        values["EMAIL_PASSWORD"] = ""
-    if payload.get("clearSchoolEmailPassword") is True:
-        values["SCHOOL_EMAIL_PASSWORD"] = ""
+    cleared = [key for flag, key in (("clearGeminiKey", "GEMINI_API_KEY"), ("clearEmailPassword", "EMAIL_PASSWORD"),
+                                     ("clearSchoolEmailPassword", "SCHOOL_EMAIL_PASSWORD")) if payload.get(flag) is True]
+    for key in cleared:
+        values[key] = ""
 
-    save_config_dict(workspace, values)
+    save_config_dict(workspace, values, cleared=tuple(cleared))
     Path(download_path).mkdir(parents=True, exist_ok=True)
     ensure_data_files(workspace)
     return values
 
 
-def save_config_dict(workspace: UserWorkspace, values: dict[str, Any]) -> None:
-    """설정을 저장한다. 비밀 항목은 DPAPI로 암호화해서 넣는다 (맥은 키체인에 두고 표시만)."""
+def save_config_dict(workspace: UserWorkspace, values: dict[str, Any], cleared: tuple[str, ...] = ()) -> None:
+    """설정을 저장한다. 비밀 항목은 DPAPI로 암호화해서 넣는다 (맥은 키체인에 두고 표시만).
+
+    cleared: 사용자가 '지우기' 를 누른 비밀 항목. 이것만 빈 값으로 저장하고 키체인에서도 뺀다.
+    """
+    try:
+        before = read_config(workspace) if workspace.config_path.exists() else {}
+        raw_before = read_json(workspace.config_path, {}) if workspace.config_path.exists() else {}
+    except Exception:
+        before, raw_before = {}, {}
+    if not isinstance(raw_before, dict):
+        raw_before = {}
     to_write = dict(values)
     for key in SECRET_KEYS:
         raw = str(to_write.get(key, "") or "")
+        old = raw_before.get(key)
+        if not raw and key not in cleared and secret_store.is_marker(old):
+            # 맥·리눅스: 키체인을 못 읽어(업데이트 직후 허락 전·거부) 빈 값으로 읽힌 비밀번호는 표시를 그대로 둔다.
+            # 예전엔 이때 아무 설정이나 저장하면 키체인 항목까지 지워져, 그 뒤로 LMS·메일이 '계정을 먼저 입력' 으로
+            # 계속 실패했다(2026-10-25 흉내: 예약 시각만 바꿔 저장 → 비밀 항목 5개 forget, 두 비밀번호가 빈 값)
+            to_write[key] = old
+            continue
         # 이미 암호문이면 그대로 두고, 평문이면 암호화
         if raw and not raw.startswith(_SECRET_PREFIXES):
             to_write[key] = dpapi_protect(raw, key)
@@ -436,10 +480,17 @@ def save_config_dict(workspace: UserWorkspace, values: dict[str, Any]) -> None:
             except Exception:
                 pass
     workspace.root.mkdir(parents=True, exist_ok=True)
-    atomic_write_text(workspace.config_path, 
+    atomic_write_text(workspace.config_path,
         json.dumps(to_write, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
+    # 계정을 넣거나 바꿨으면 그 작업의 실패 기록을 지워 다음 자동 확인(30초 안)이 곧바로 돌게 한다 (reset_task_failures)
+    changed = [
+        kind for kind, keys in TASK_ACCOUNT_KEYS.items()
+        if any(dpapi_unprotect(str(values.get(key) or "")) != str(before.get(key) or "") for key in keys)
+    ]
+    if changed:
+        reset_task_failures(workspace, changed)
 
 
 BUNDLED_CREDENTIALS_PATH = PROJECT_ROOT / "credentials.json"
@@ -676,6 +727,10 @@ def get_google_oauth_status(workspace: UserWorkspace, base_url: str | None = Non
         token_data = read_json(workspace.token_path, {})
         granted = set(token_data.get("scopes") or []) if isinstance(token_data, dict) else set()
         status["calendarGranted"] = calendar_scope_granted(granted)
+        status["driveFullGranted"] = GOOGLE_DRIVE_READ_SCOPE in granted
+        # 동의 화면에서 Drive 칸을 체크하지 않아도 연결은 된다. 그러면 올리기가 모두 403 으로 거절되는데 화면은
+        # 'Drive · 연결됨' 이었다. 'scopes' 가 없는 아주 예전 토큰은 있다고 본다(drive_uploader.drive_scope_granted 와 같은 규칙)
+        status["driveGranted"] = (not granted) or bool(granted & {GOOGLE_DRIVE_SCOPE, GOOGLE_DRIVE_READ_SCOPE, "https://www.googleapis.com/auth/drive"})
     except Exception as exc:
         status["error"] = str(exc)
     return status
@@ -726,10 +781,189 @@ def finish_google_oauth(code: str, state: str) -> tuple[UserWorkspace, dict[str,
         code_verifier=saved_state.get("code_verifier"),
         autogenerate_code_verifier=False,
     )
+    # 권한 하나를 끄고 허락해도 연결은 되게 (runtime_config.granted_token_json)
+    os.environ.setdefault("OAUTHLIB_RELAX_TOKEN_SCOPE", "1")
     flow.fetch_token(code=code)
     workspace.root.mkdir(parents=True, exist_ok=True)
-    atomic_write_text(workspace.token_path, flow.credentials.to_json(), encoding="utf-8")
+    from runtime_config import granted_token_json
+
+    atomic_write_text(workspace.token_path, granted_token_json(flow.credentials), encoding="utf-8")
+    # 이 서버가 예전 토큰으로 만들어 둔 Drive 접속을 버린다. 안 버리면 다시 연결해도 앱을 껐다 켜기 전까지
+    # 예전 권한으로 돌았다(2026-10-22 실측: 새 토큰엔 drive.readonly 가 있는데 Drive 창은 여전히 앱 폴더 2개뿐)
+    if "drive_uploader" in sys.modules:
+        sys.modules["drive_uploader"]._service = None
     return workspace, saved_state
+
+
+# ===== Drive 고르기 창 (구글 Picker, 데스크톱 방식) =====
+# 메일에 붙일 파일을 내 Drive 전체·공유 문서함에서 고른다. 구글이 기본 브라우저에 고르기 창을 띄우고, 고른 파일에만
+# drive.file 권한을 준다(인증 주소에 trigger_onepick=true). Drive 전체 읽기(drive.readonly)는 제한된 범위라 심사 전엔
+# '확인되지 않은 앱' 경고·사용자 100명 한도가 걸려서 이쪽으로 바꿨다(runtime_config.GOOGLE_DRIVE_READ_SCOPE).
+# 2026-10-25 실측: 동의 화면이 경고 없이 "선택하려는 파일의 경우 Daling 에서…" 로 나오고, 고르기 창에 최근·내 드라이브·
+# 공유 문서함이 다 보였다. 구글 문서: developers.google.com/workspace/drive/picker/guides/desktop-mobile-picker
+drive_picks: dict[str, dict[str, Any]] = {}  # state → {"user_id", "status": waiting|done|cancelled|error, "files", "message"}
+drive_pick_tokens: dict[str, dict[str, Any]] = {}  # 고른 파일 id → {"user_id", "token", "until"} (/api/drive/get 이 씀)
+
+
+def create_drive_pick_url(
+    workspace: UserWorkspace,
+    base_url: str | None = None,
+    session_token: str | None = None,
+) -> tuple[str, str]:
+    if not google_credentials_available():
+        raise FileNotFoundError("이 판에서는 아직 Google 연결을 쓸 수 없어요.")
+    from google_auth_oauthlib.flow import Flow
+
+    now = time.time()
+    for key in [k for k, v in drive_picks.items() if now - v.get("at", now) > 3600]:
+        drive_picks.pop(key, None)
+    # 고르기 창은 drive.file 하나만 받는다(구글: 다른 범위와 섞을 수 없음). 그래서 이 토큰은 token.json 에 쓰지 않는다 —
+    # 쓰면 캘린더 권한이 사라진다. access_type=online: 고를 때마다 갱신 토큰이 새로 생기지 않게. 구글은 한 계정·한 앱의
+    # 갱신 토큰을 100개까지만 두고, 넘치면 가장 오래된 것(늘 쓰는 token.json 일 수 있다)을 말없이 끊는다.
+    flow = Flow.from_client_config(
+        google_client_config_for_flow(),
+        scopes=[GOOGLE_DRIVE_SCOPE],
+        redirect_uri=choose_google_redirect_uri(base_url),
+    )
+    auth_url, state = flow.authorization_url(
+        access_type="online",
+        prompt="consent",
+        trigger_onepick="true",
+        allow_multiple="true",
+    )
+    remember_oauth_state(workspace, state, flow.redirect_uri, flow.code_verifier, session_token, purpose="drive-pick")
+    drive_picks[state] = {"user_id": workspace.user_id, "status": "waiting", "files": [], "at": now}
+    return auth_url, state
+
+
+def oauth_state_purpose(state: str) -> str:
+    saved = oauth_states.get(state) or load_oauth_pending().get(state) or {}
+    return str(saved.get("purpose") or "") if isinstance(saved, dict) else ""
+
+
+def finish_drive_pick(state: str, code: str, error: str, picked_ids: str) -> tuple[str, str, bool]:
+    """고르기 창이 돌아왔다. 고른 파일의 이름·크기를 화면이 가져가도록 drive_picks 에 적는다. (제목, 안내, 성공)"""
+    saved = pop_oauth_state(state)
+    pick = drive_picks.setdefault(state, {"user_id": (saved or {}).get("user_id"), "files": [], "at": time.time()})
+    if not saved:
+        pick.update(status="error", message="고르기 창이 오래되어 닫혔어요. Daling 에서 다시 열어 주세요.")
+        return "파일 고르기 실패", pick["message"], False
+    ids = [i for i in str(picked_ids or "").split(",") if i.strip()]
+    if error or not code or not ids:
+        pick.update(status="cancelled")
+        return "파일을 고르지 않았어요", "Daling 으로 돌아가 주세요. 이 탭은 닫아도 됩니다.", False
+    try:
+        from google_auth_oauthlib.flow import Flow
+        from googleapiclient.discovery import build
+
+        flow = Flow.from_client_config(
+            google_client_config_for_flow(),
+            scopes=[GOOGLE_DRIVE_SCOPE],
+            redirect_uri=saved.get("redirect_uri") or choose_google_redirect_uri(),
+            code_verifier=saved.get("code_verifier"),
+            autogenerate_code_verifier=False,
+        )
+        os.environ.setdefault("OAUTHLIB_RELAX_TOKEN_SCOPE", "1")
+        flow.fetch_token(code=code)
+        creds = flow.credentials
+        service = build("drive", "v3", credentials=creds, cache_discovery=False)
+        files = []
+        until = time.time() + 50 * 60  # 접근 토큰은 1시간짜리
+        for file_id in ids[:50]:
+            meta = service.files().get(
+                fileId=file_id.strip(), fields="id,name,size,mimeType", supportsAllDrives=True
+            ).execute()
+            files.append(meta)
+            drive_pick_tokens[meta["id"]] = {"user_id": saved.get("user_id"), "token": creds.token, "until": until}
+        pick.update(status="done", files=files)
+        return "파일을 골랐어요", f"{len(files)}개를 Daling 메일에 붙입니다. 이 탭은 닫아도 됩니다.", True
+    except Exception as exc:
+        pick.update(status="error", message=str(exc))
+        return "파일 고르기 실패", str(exc), False
+
+
+# ===== 큰 첨부 → Google Drive 링크 =====
+# 학교 SMTP 는 메일 한 통 35MB(첨부 원본 약 25MB, email_reader.SEND_ATTACH_MAX)까지만 받는다. 그보다 큰 파일은
+# Gmail 처럼 내 Drive 'Daling 메일 첨부' 폴더에 올리고 '링크가 있는 사람 보기' 로 열어 본문에 링크를 넣는다
+# (받는 사람은 대부분 학교 주소라 구글 계정으로 나눠 줄 수 없다). 앱이 만든 파일이라 drive.file 권한으로 된다.
+BIG_ATTACH_MAX = 2 * 1024 * 1024 * 1024
+BIG_ATTACH_FOLDER = "Daling 메일 첨부"
+big_uploads: dict[str, dict[str, Any]] = {}  # job → {"user_id", "status": uploading|done|error|cancelled, "sent", "total", "name", "id", "link", "message", "cancel"}
+
+
+def _big_drive_service():
+    """화면 서버의 다른 요청과 Drive 접속(httplib2, 스레드에 안전하지 않음)을 나눠 쓰지 않게 따로 만든다.
+    로그인 창은 열지 않는다 — 연결이 없으면 DriveLoginRequired."""
+    import drive_uploader
+    from googleapiclient.discovery import build
+
+    creds = drive_uploader.authorize_drive(interactive=False)
+    return build("drive", "v3", credentials=creds, cache_discovery=False)
+
+
+def start_big_upload(user_id: str, path: Path, name: str, size: int) -> str:
+    job = secrets.token_hex(8)
+    big_uploads[job] = {"user_id": user_id, "status": "uploading", "sent": 0, "total": size, "name": name, "cancel": False}
+    threading.Thread(target=_run_big_upload, args=(job, path), daemon=True, name="big-attach").start()
+    return job
+
+
+def _run_big_upload(job_id: str, path: Path) -> None:
+    job = big_uploads[job_id]
+    try:
+        import mimetypes
+
+        import drive_uploader
+        from googleapiclient.http import MediaFileUpload
+
+        service = _big_drive_service()
+        folder = drive_uploader.get_or_create_folder(service, BIG_ATTACH_FOLDER)
+        mime = mimetypes.guess_type(job["name"])[0] or "application/octet-stream"
+        media = MediaFileUpload(str(path), mimetype=mime, resumable=True, chunksize=8 * 1024 * 1024)
+        request = service.files().create(
+            body={"name": job["name"], "parents": [folder]}, media_body=media, fields="id,webViewLink"
+        )
+        response = None
+        while response is None:
+            if job["cancel"]:
+                job["status"] = "cancelled"
+                return
+            status, response = request.next_chunk()
+            if status:
+                job["sent"] = int(status.resumable_progress)
+        file_id = response["id"]
+        if job["cancel"]:  # 다 올라간 뒤에 지웠으면 휴지통으로
+            service.files().update(fileId=file_id, body={"trashed": True}).execute()
+            job["status"] = "cancelled"
+            return
+        service.permissions().create(fileId=file_id, body={"type": "anyone", "role": "reader"}, fields="id").execute()
+        job.update(
+            status="done", sent=job["total"], id=file_id,
+            link=response.get("webViewLink") or f"https://drive.google.com/file/d/{file_id}/view",
+        )
+    except Exception as exc:  # noqa: BLE001 - 화면에 이유를 보여 준다
+        login = type(exc).__name__ == "DriveLoginRequired"
+        job.update(status="error", message="구글 연결이 필요해요. 설정에서 Google 을 연결해 주세요." if login else str(exc))
+    finally:
+        shutil.rmtree(path.parent, ignore_errors=True)
+
+
+def trash_big_attachment(file_id: str) -> None:
+    """작성 중에 뺀 큰 첨부는 Drive 휴지통으로 (지우지 않는다 — 30일 안에 되살릴 수 있다)."""
+    _big_drive_service().files().update(fileId=file_id, body={"trashed": True}).execute()
+
+
+def drive_service_for_file(workspace: UserWorkspace, file_id: str):
+    """고르기 창으로 고른 파일은 그때 받은 토큰으로, 나머지는 늘 쓰는 Drive 접속(token.json)으로 읽는다."""
+    picked = drive_pick_tokens.get(file_id)
+    if picked and picked.get("user_id") == workspace.user_id and picked.get("until", 0) > time.time():
+        from google.oauth2.credentials import Credentials
+        from googleapiclient.discovery import build
+
+        return build("drive", "v3", credentials=Credentials(picked["token"]), cache_discovery=False)
+    import drive_uploader
+
+    return drive_uploader.get_drive_service()
 
 
 def stored_relpath(name: str, meta: Any) -> str:
@@ -752,6 +986,7 @@ from folder_layout import (  # noqa: E402
     layout_subfolders,
     lms_subfolders,
     normalize_layout,
+    fit_file_name,
     safe_folder as _safe_folder,
 )
 
@@ -843,7 +1078,7 @@ def organize_downloads(workspace: UserWorkspace) -> dict[str, Any]:
             missing += 1
             continue
 
-        target = target_dir / _safe_folder(display, 120)
+        target = target_dir / fit_file_name(_safe_folder(display, 120))
         if current.resolve() == target.resolve():
             skipped += 1
             continue
@@ -1385,6 +1620,19 @@ _SCHOOL_EVENT_WORDS = (
 )
 
 
+# 세미나는 설정의 관심사 중 분야(학과·주제) 낱말로만 고른다. '세미나·특강' 태그나 예전 관심사 문장의 '세미나' 는
+# 모든 세미나 제목에 들어 있어, 학과와 상관없이 세미나가 다 캘린더에 올라갔다(2026-10-28 실측: 캘린더 메일 행사
+# 12건 중 세미나 10건, 고르지 않은 뉴바이올로지·화학물리 포함).
+_GENERIC_TALK_WORDS = frozenset(w.lower() for w in _INTEREST_WORDS["세미나·특강"])
+
+
+def _word_hit(word: str, text: str) -> bool:
+    """짧은 영어 낱말은 낱말 경계로만. 'ai' 가 'Brain'·'main' 안에서 걸려 뇌과학 세미나가 '컴퓨터·AI' 로 잡혔다."""
+    if len(word) <= 3 and word.isascii():
+        return re.search(rf"(?<![a-z]){re.escape(word)}(?![a-z])", text) is not None
+    return word in text
+
+
 def _interest_words(config: dict[str, Any]) -> list[str]:
     tags = config.get("EMAIL_INTEREST_TAGS") or []
     words: list[str] = []
@@ -1480,6 +1728,8 @@ def _mark_events(emails: list[dict[str, Any]], config: dict[str, Any], school_ev
     import email_reader
 
     words = _interest_words(config)
+    # 분야를 하나도 안 고르고 '세미나·특강' 만 골랐으면 세미나를 다 올린다 (그 사람은 세미나 전부를 원한 것)
+    topic_words = [w for w in words if w not in _GENERIC_TALK_WORDS] or words
     for mail in emails:
         if not isinstance(mail, dict) or mail.get("folder") in ("sent", "draft", "trash", "spam"):
             continue
@@ -1506,12 +1756,21 @@ def _mark_events(emails: list[dict[str, Any]], config: dict[str, Any], school_ev
         if "seminar" not in mail:
             mail["seminar"] = email_reader.guess_seminar_info(str(mail.get("subject", "")), str(mail.get("body", "")))
         head = f"{mail.get('subject', '')} {mail.get('fromName', '')} {mail.get('fromEmail', '')}".lower()
-        hits = [w for w in words if w in head]
+        hits = [w for w in words if _word_hit(w, head)]
         school = any(w in head for w in _SCHOOL_EVENT_WORDS)
         mail["interestHits"] = hits[:4]
         mail["schoolEvent"] = school
-        # Gemini 가 매긴 점수가 있으면 그것도 인정한다
-        mail["calendar"] = bool(hits or school or (mail.get("score") or 0) >= 5)
+        if mail.get("isReply") or re.match(r"^\s*(re|답장|회신)\s*:", str(mail.get("subject", "")), re.IGNORECASE):
+            # 답장은 일정 안내가 아니라 주고받는 말이다. '[특별근로장학] 근로시간 변경 요청' 답장이 관심사 '장학' 과
+            # 본문 날짜로 캘린더에 올라갔다(2026-10-28). 분류의 '답신' 과 같은 기준
+            mail["calendar"] = False
+        elif any(w in str(mail.get("subject", "")).lower() for w in email_reader._TALK_WORDS):
+            # 세미나: 설정에서 고른 분야와 맞을 때만 (학교 전체 행사는 그대로). Gemini 점수는 보지 않는다:
+            # 분야를 골랐는데도 점수 하나로 다른 학과 세미나가 올라오면 고른 뜻이 없어진다
+            mail["calendar"] = bool(school or any(w in topic_words for w in hits))
+        else:
+            # Gemini 가 매긴 점수가 있으면 그것도 인정한다
+            mail["calendar"] = bool(hits or school or (mail.get("score") or 0) >= 5)
 
     # 같은 행사를 여러 번 알린다(미리 알림·장소 수정·당일 알림). 같은 날 같은 행사는 가장 새 메일 하나만.
     def event_key(mail: dict[str, Any]) -> tuple[str, str]:
@@ -1631,6 +1890,14 @@ _IMAGE_EXT = {
 }
 
 
+def _int_or_zero(value: Any) -> int:
+    """화면이 보낸 번호(이어 쓰던 임시 메일 uid 등). 숫자가 아니면 0."""
+    try:
+        return max(0, int(str(value or "0").strip() or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
 def mail_image_path(workspace: UserWorkspace, mail_id: str, index: int, mime: str = "") -> Path:
     """본문 그림을 받아 둘 자리. 메일 id 는 'inbox:12345' 꼴이라 ':' 를 바꾼다."""
     safe = re.sub(r"[^A-Za-z0-9_.-]", "_", mail_id)
@@ -1655,7 +1922,13 @@ def ensure_mail_images(workspace: UserWorkspace, mail: dict[str, Any]) -> None:
 
     folder, _, raw_uid = str(mail.get("id", "")).partition(":")
     uid = int(mail.get("uid") or raw_uid or 0)
-    blobs = email_reader.fetch_inline_images(uid, folder or "inbox", [image for _, image in missing])
+    wanted = [image for _, image in missing]
+    try:
+        blobs = email_reader.fetch_inline_images(uid, folder or "inbox", wanted)
+    except (OSError, ConnectionError):
+        # 같이 쓰던 연결이 서버 쪽에서 끊겨 있었으면 한 번만 다시 (그림 받기는 읽기만 해서 두 번 해도 된다).
+        # 예전엔 여기서 실패하면 cid: 가 그대로 남아 그림이 깨진 채 보였다(2026-10-22 총학생회 메일 로고)
+        blobs = email_reader.fetch_inline_images(uid, folder or "inbox", wanted)
     target_dir = workspace.root / "mail_images"
     target_dir.mkdir(parents=True, exist_ok=True)
     for index, image in missing:
@@ -1792,14 +2065,21 @@ def local_autosave_mode(config: dict[str, Any]) -> str:
 # ===== 클라우드 폴더에도 자동 저장 =====
 # 클라우드마다 계정 로그인(API)을 붙이지 않고, PC용 동기화 프로그램이 지켜보는 폴더에 넣는다.
 # 그러면 로그인·앱 등록·토큰이 필요 없고, 그 프로그램이 알아서 올린다.
-# 폴더 안에 '붕어빵 강의자료\<과목>\<파일>' 로 둔다.
+# 폴더 안에 'Daling 강의자료\<과목>\<파일>' 로 둔다. 1.12.52 까지는 '붕어빵 강의자료' 였다: 이미 그 폴더가
+# 있으면 그대로 쓴다(옮기면 동기화 프로그램이 전부 다시 올리고, 받은 기록의 경로도 어긋난다).
 CLOUD_PROVIDERS: tuple[tuple[str, str], ...] = (
     ("onedrive", "OneDrive"),
     ("dropbox", "Dropbox"),
     ("icloud", "iCloud Drive"),
     ("mybox", "네이버 MYBOX"),
 )
-CLOUD_FOLDER_NAME = "붕어빵 강의자료"
+CLOUD_FOLDER_NAME = "Daling 강의자료"
+LEGACY_CLOUD_FOLDER_NAME = "붕어빵 강의자료"
+
+
+def cloud_folder(root: Path) -> Path:
+    legacy = root / LEGACY_CLOUD_FOLDER_NAME
+    return legacy if legacy.is_dir() and not (root / CLOUD_FOLDER_NAME).exists() else root / CLOUD_FOLDER_NAME
 
 
 def _first_dir(candidates: list[Any]) -> Path | None:
@@ -1819,24 +2099,38 @@ def detect_cloud_roots() -> dict[str, Path | None]:
     """이 PC 에 깔린 클라우드 동기화 폴더를 찾는다. 없으면 None."""
     home = Path.home()
     env = os.environ
+    # 맥: 요즘 클라우드 앱은 ~/Library/CloudStorage 아래에 '<앱>-<계정>' 폴더를 만든다 (OneDrive-Personal, Dropbox 등).
+    # 예전 판은 홈 바로 아래라 그것도 본다. 맥에서 직접 확인하지는 못했다 — 못 찾으면 사용자가 고른다.
+    # (Windows 에서는 빈 목록이라 예전과 똑같다)
+    cloud_storage: list[Path] = []
+    if sys.platform == "darwin":
+        try:
+            cloud_storage = sorted(p for p in (home / "Library" / "CloudStorage").iterdir() if p.is_dir())
+        except OSError:
+            pass
+
+    def on_mac(word: str) -> list[Path]:
+        return [p for p in cloud_storage if word in p.name.lower()]
+
     # OneDrive: 프로그램이 로그인할 때 환경변수에 폴더를 적어 둔다 (개인 / 학교·회사)
-    onedrive = _first_dir([env.get("OneDrive"), env.get("OneDriveConsumer"), env.get("OneDriveCommercial"), home / "OneDrive"])
-    # Dropbox: 설치 프로그램이 info.json 에 동기화 폴더를 적는다 (개인이 먼저)
+    onedrive = _first_dir([env.get("OneDrive"), env.get("OneDriveConsumer"), env.get("OneDriveCommercial")]
+                          + on_mac("onedrive") + [home / "OneDrive"])
+    # Dropbox: 설치 프로그램이 info.json 에 동기화 폴더를 적는다 (개인이 먼저). 맥·리눅스는 ~/.dropbox/info.json
     dropbox_paths: list[Any] = []
-    for base in (env.get("APPDATA"), env.get("LOCALAPPDATA")):
-        if not base:
-            continue
-        info = read_json(Path(base) / "Dropbox" / "info.json", {})
+    infos = [Path(base) / "Dropbox" / "info.json" for base in (env.get("APPDATA"), env.get("LOCALAPPDATA")) if base]
+    for info_path in infos + [home / ".dropbox" / "info.json"]:
+        info = read_json(info_path, {})
         if isinstance(info, dict):
             for kind in ("personal", "business"):
                 entry = info.get(kind)
                 if isinstance(entry, dict):
                     dropbox_paths.append(entry.get("path"))
-    dropbox = _first_dir(dropbox_paths + [home / "Dropbox"])
-    # iCloud for Windows 기본 폴더
-    icloud = _first_dir([home / "iCloudDrive", home / "iCloud Drive"])
+    dropbox = _first_dir(dropbox_paths + on_mac("dropbox") + [home / "Dropbox"])
+    # iCloud for Windows 기본 폴더, 맥은 iCloud Drive 의 실제 자리
+    icloud = _first_dir([home / "iCloudDrive", home / "iCloud Drive",
+                         home / "Library" / "Mobile Documents" / "com~apple~CloudDocs"])
     # 네이버 MYBOX PC 앱: 흔한 이름만 본다(실제 설치본에서 확인하지 못했다). 못 찾으면 사용자가 고른다.
-    mybox = _first_dir([home / "MYBOX", home / "네이버 MYBOX", home / "NAVER MYBOX", home / "Naver MYBOX"])
+    mybox = _first_dir([home / "MYBOX", home / "네이버 MYBOX", home / "NAVER MYBOX", home / "Naver MYBOX"] + on_mac("mybox"))
     return {"onedrive": onedrive, "dropbox": dropbox, "icloud": icloud, "mybox": mybox}
 
 
@@ -1865,7 +2159,8 @@ def cloud_targets(config: dict[str, Any]) -> list[dict[str, Any]]:
             "installed": root is not None,
             "picked": bool(chosen),
             "root": str(root) if root else "",
-            "folder": str(root / CLOUD_FOLDER_NAME) if root else "",
+            "folder": str(cloud_folder(root)) if root else "",
+            "folderName": cloud_folder(root).name if root else CLOUD_FOLDER_NAME,
             "on": bool(saved[key]["on"] and root is not None),
         })
     return rows
@@ -2096,7 +2391,8 @@ def get_local_save_job() -> dict[str, Any]:
 def get_local_save_dir(workspace: UserWorkspace) -> Path:
     """'내 컴퓨터에 저장' 의 뿌리 폴더.
 
-    설정(LOCAL_SAVE_PATH)이 있으면 그곳, 없으면 문서\\붕어빵 파일 정리.
+    설정(LOCAL_SAVE_PATH)이 있으면 그곳, 없으면 문서\\Daling 파일 정리. 1.12.52 까지 쓰던
+    문서\\붕어빵 파일 정리 가 있으면 그것을 그대로 쓴다(옮기면 받은 기록의 경로가 어긋난다).
     실제 저장은 이 아래 과목별 폴더로 갈라진다.
     """
     config = read_config(workspace)
@@ -2108,7 +2404,10 @@ def get_local_save_dir(workspace: UserWorkspace) -> Path:
             return path
         except OSError:
             pass
-    return documents_dir() / "붕어빵 파일 정리"
+    legacy = documents_dir() / "붕어빵 파일 정리"
+    if legacy.is_dir() and not (documents_dir() / "Daling 파일 정리").exists():
+        return legacy
+    return documents_dir() / "Daling 파일 정리"
 
 
 SECRET_KEYS = (
@@ -2217,7 +2516,7 @@ def export_settings(workspace: UserWorkspace, include_secrets: bool = False) -> 
         for key in SECRET_KEYS:
             config.pop(key, None)
     return {
-        "app": "붕어빵",
+        "app": "Daling",
         "version": (PROJECT_ROOT / "VERSION").read_text(encoding="utf-8").strip()
         if (PROJECT_ROOT / "VERSION").exists()
         else "",
@@ -2233,7 +2532,7 @@ def import_settings(workspace: UserWorkspace, payload: dict[str, Any]) -> dict[s
     """내보낸 백업을 되돌린다. 빠진 항목은 기존 값을 유지한다."""
     data = payload.get("data") if isinstance(payload.get("data"), dict) else payload
     if not isinstance(data, dict) or "config" not in data:
-        raise ValueError("붕어빵에서 내보낸 백업 파일이 아닙니다.")
+        raise ValueError("Daling에서 내보낸 백업 파일이 아닙니다.")
 
     restored = []
     incoming = data.get("config")
@@ -2289,6 +2588,9 @@ def record_boot_done(workspace: UserWorkspace) -> dict[str, Any]:
         "pageRequested": round(BOOT.get("page", start) - start, 2) if BOOT.get("page") else None,
         "firstScreen": round(BOOT["done"] - start, 2),
     }
+    if BOOT.get("unlock"):
+        # 앱 잠금을 켜 두었으면 firstScreen 에 비밀번호를 누른 시간이 들어간다. 언제 풀었는지 같이 적어 둔다
+        entry["unlocked"] = round(BOOT["unlock"] - start, 2)
     path = workspace.root / "boot_times.json"
     rows = read_json(path, [])
     rows = (rows if isinstance(rows, list) else [])[-29:] + [entry]
@@ -2332,6 +2634,24 @@ def get_health(workspace: UserWorkspace) -> dict[str, Any]:
         days = (datetime.now() - max(stamps)).days
         out["staleDays"] = days
         out["stale"] = days >= 3
+    # 두 번 넘게 잇달아 실패한 작업들 (한 번은 학교 서버가 잠깐 느린 것일 때가 많아 띄우지 않는다)
+    raw_failures = data.get("failures") if isinstance(data.get("failures"), dict) else {}
+    failing = [
+        {"kind": kind, **info}
+        for kind, info in raw_failures.items()
+        if isinstance(info, dict) and int(info.get("count", 0) or 0) >= 2
+    ]
+    last = out["lastFailure"] if isinstance(out["lastFailure"], dict) else {}
+    old_kind = str(last.get("kind") or "")
+    old_streak = int(out["failStreak"].get(old_kind, 0) or 0) if isinstance(out["failStreak"], dict) else 0
+    if old_kind and old_kind not in raw_failures and old_streak >= 2:
+        # 1.12.53 까지의 기록(작업별 실패가 없음)
+        category, title, hint = FAILURE_UNKNOWN
+        failing.append({"kind": old_kind, "since": last.get("at"), "at": last.get("at"), "count": old_streak,
+                        "category": category, "title": title, "hint": hint, "reason": last.get("reason", ""), "tail": []})
+    failing.sort(key=lambda f: -int(f.get("count", 0) or 0))
+    out["failures"] = raw_failures
+    out["failing"] = failing
     auth = data.get("authFailed") or {}
     if auth:
         names = {"emails": "학교 메일", "sync": "LMS", "deadlines": "LMS"}
@@ -2345,16 +2665,155 @@ def get_health(workspace: UserWorkspace) -> dict[str, Any]:
             f"{who} 서버가 로그인을 거절했어요{said}. 2시간 뒤 자동으로 다시 해 볼게요. "
             "비밀번호를 바꿨다면 설정에서 새 비밀번호를 넣어 주세요."
         )
-    elif out["consecutiveFailures"] >= 2:
-        kind = out["lastFailure"].get("kind", "작업")
-        out["warning"] = f"{kind}이(가) {out['consecutiveFailures']}번 연속 실패했습니다. 설정에서 계정 정보를 확인해 주세요."
+    elif failing:
+        # 예전엔 'deadlines이(가) 7번 연속 실패했습니다' 처럼 횟수만 컸고 왜 실패했는지는 없었다. 횟수는 모든 작업을
+        # 합친 수라 실제보다 커 보였다. 이제 작업마다 언제부터 안 되는지와 까닭 갈래(failures[kind])를 말한다
+        top = failing[0]
+        out["warning"] = FAIL_WARNINGS.get(top["kind"], FAIL_WARNINGS[""]).format(
+            since=_short_when(top.get("since")), count=top.get("count", 0)
+        )
     elif out["stale"]:
         out["warning"] = f"{out['staleDays']}일째 동기화가 되지 않았습니다."
+    # 맥·리눅스: 비밀번호를 저장소에서 못 꺼내면 LMS·메일이 모두 실패한다. 다른 알림보다 먼저, 까닭과 할 일을 말한다
+    problems = secret_read_problems(workspace)
+    if problems:
+        labels = " · ".join(SECRET_LABELS.get(k, k) for k in problems)
+        waiting = secret_store.waiting()
+        out["keychain"] = {"keys": sorted(problems), "waiting": waiting}
+        out["warning"] = (
+            KEYCHAIN_WAIT_MESSAGE if waiting else secret_store.read_problem(labels, next(iter(problems.values())))
+        )
     return out
 
 
+# 자동 실행에 쓰는 계정. 칸이 비었으면 스케줄러가 자동으로 돌리지 않는다(app.scheduler_loop · account_ready).
+# 2026-10-25 새 데이터 폴더로 재현: 계정을 넣기 전인 켠 지 0.8분·17.2분에 메일 자동 확인이 '계정을 먼저 입력' 으로
+# 실패해 '동기화가 계속 실패하고 있어요' 띠가 떴고, 실패마다 두 배로 느는 간격 때문에 32분에 계정을 넣고도
+# 47분에야 처음 받았다(늦게 넣을수록 최대 6시간). 계정이 오래전부터 있던 이 PC 에선 안 나고 새 기기마다 났다.
+TASK_ACCOUNT_KEYS = {
+    "emails": ("SCHOOL_EMAIL", "SCHOOL_EMAIL_PASSWORD"),
+    "deadlines": ("LMS_ID", "LMS_PASSWORD"),
+    "sync": ("LMS_ID", "LMS_PASSWORD"),
+}
+# 작업마다 문장을 통째로 둔다. '{이름} {횟수}번' 처럼 빈자리 둘을 띄어 쓰면 영어 화면 번역표가 이름을 잘못 끊었다.
+# 까닭(갈래·할 일·서버의 말)은 화면이 failing 으로 따로 그린다
+FAIL_WARNINGS = {
+    "emails": "메일 가져오기가 {since}부터 안 되고 있어요 ({count}번 시도).",
+    "deadlines": "마감 확인이 {since}부터 안 되고 있어요 ({count}번 시도).",
+    "sync": "자료 동기화가 {since}부터 안 되고 있어요 ({count}번 시도).",
+    "": "동기화가 {since}부터 안 되고 있어요 ({count}번 시도).",
+}
+
+
+def _short_when(stamp: Any) -> str:
+    """'21:10' (오늘) · '11월 3일 21:10' (다른 날)."""
+    try:
+        when = datetime.fromisoformat(str(stamp))
+    except (TypeError, ValueError):
+        return "얼마 전"
+    if when.date() == datetime.now().date():
+        return when.strftime("%H:%M")
+    return f"{when.month}월 {when.day}일 {when.strftime('%H:%M')}"
+
+
+def account_ready(config: dict[str, Any], kind: str) -> bool:
+    """그 작업에 필요한 계정 칸이 다 찼는지 (read_config 처럼 비밀 값을 푼 설정을 받는다)."""
+    return all(str(config.get(key) or "").strip() for key in TASK_ACCOUNT_KEYS.get(kind, ()))
+
+
+def reset_task_failures(workspace: UserWorkspace, kinds: list[str]) -> None:
+    """계정을 넣거나 바꾼 작업의 실패 기록(늘어난 쉬는 간격·로그인 거절)을 지운다. 수동 새로고침을 안 눌러도 곧 다시 한다."""
+    data = read_json(workspace.health_path, {})
+    if not isinstance(data, dict):
+        return
+    changed = False
+    for name in ("failStreak", "authFailed", "failures"):
+        bucket = data.get(name)
+        if isinstance(bucket, dict):
+            for kind in kinds:
+                changed = bucket.pop(kind, None) is not None or changed
+    if (data.get("lastFailure") or {}).get("kind") in kinds:
+        data.pop("lastFailure", None)
+        data["consecutiveFailures"] = 0
+        changed = True
+    if not changed:
+        return
+    try:
+        atomic_write_text(workspace.health_path, json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    except OSError:
+        pass
+
+
+def _failure_reason(logs: list[Any]) -> str:
+    """작업 로그에서 실패 까닭 한 줄 ('작업이 실패했습니다: …' 의 뒷부분). 소스 위치 '(email_reader.py:1403)' 는 로그에만 둔다."""
+    for line in reversed(logs[-40:]):
+        text = str(line)
+        if "작업이 실패했습니다:" in text:
+            reason = text.split("작업이 실패했습니다:", 1)[1].strip()
+            return re.sub(r"\s*\([\w.]+\.py:\d+\)$", "", reason)[:160]
+        if text.startswith("[오류]"):
+            return text[4:].strip()[:160]
+    return ""
+
+
+# 실패 까닭 갈래. 위에서부터 먼저 맞는 것을 쓴다.
+# 예전엔 'deadlines이(가) 7번 연속 실패' 만 떠서 비밀번호 탓인지, 학교 서버가 막은 것인지, 사이트가 바뀐 것인지
+# 알 수 없었고, 로그는 메모리에만 있어 앱을 다시 켜면 까닭도 사라졌다(2026-11-03 사용자 신고).
+FAILURE_KINDS: list[tuple[str, str, str, tuple[str, ...]]] = [
+    ("account", "계정 정보가 없어요", "설정에서 계정을 넣어 주세요.",
+     (r"먼저 입력해 주세요", r"키체인", r"비밀번호를 꺼내지")),
+    ("login", "로그인이 거절됐어요", "비밀번호가 바뀌었거나 학교 로그인 서버가 잠시 막은 것일 수 있어요.",
+     (r"로그인에 실패",)),
+    ("browser", "브라우저를 띄우지 못했어요", "Edge 를 업데이트하거나 컴퓨터를 다시 켠 뒤 해 보세요.",
+     (r"브라우저를 준비하지 못", r"Executable doesn't exist", r"BrowserType\.launch", r"playwright install")),
+    ("server", "학교 서버가 요청을 거절했어요", "학교 서버가 바쁘거나 점검 중이에요. 잠시 뒤 다시 해 볼게요.",
+     (r"HTTP (?:403|429|5\d\d)\b", r"\b(?:429|50[0234]) (?:Too Many|Internal|Bad Gateway|Service|Gateway)",
+      r"Too Many Requests", r"Service Unavailable")),
+    ("network", "인터넷이나 학교 서버에 닿지 않아요", "인터넷 연결을 확인해 주세요. 학교 서버 점검 중일 수도 있어요.",
+     (r"net::ERR_(?:NAME_NOT_RESOLVED|INTERNET_DISCONNECTED|NETWORK_CHANGED|ADDRESS_UNREACHABLE|CONNECTION_\w+|TIMED_OUT|PROXY\w*)",
+      r"getaddrinfo", r"WinError 100(?:51|53|54|60|61|65)", r"Errno 1100[14]", r"Connection(?:Refused|Reset|Aborted)?Error",
+      r"Connection (?:refused|reset|aborted)", r"Name or service not known", r"No route to host",
+      r"Network is unreachable", r"\btimed out\b")),
+    ("site", "학교 사이트에서 필요한 것을 못 찾았어요", "사이트가 느리거나 모양이 바뀐 것일 수 있어요. 계속되면 앱 업데이트가 필요하니 알려 주세요.",
+     (r"waiting for (?:locator|selector)", r"JSONDecodeError", r"Expecting value", r"KeyError",
+      r"'NoneType' object", r"로그인 화면이 예상과 달라")),
+    ("timeout", "학교 사이트가 너무 느려요", "학교 서버가 느린 때예요. 잠시 뒤 다시 해 볼게요.",
+     (r"Timeout \d+ms exceeded", r"TimeoutError")),
+    ("drive", "Google Drive 연결에 문제가 있어요", "설정에서 구글을 다시 연결해 주세요.",
+     (r"invalid_grant", r"googleapiclient", r"HttpError", r"RefreshError")),
+    ("disk", "파일을 저장하지 못했어요", "저장 공간이 넉넉한지, 파일이 다른 프로그램에 열려 있지 않은지 확인해 주세요.",
+     (r"No space left", r"Errno 28", r"WinError 32", r"Permission denied", r"PermissionError")),
+]
+FAILURE_UNKNOWN = ("unknown", "알 수 없는 오류가 났어요", "계속되면 설정의 실행 로그를 보내 주세요.")
+
+
+def classify_failure(logs: list[Any]) -> dict[str, str]:
+    """실패한 작업의 로그로 까닭 갈래를 고른다 {category, title, hint, reason}.
+
+    로그 전체를 훑지 않고 마지막 오류 추적(Traceback)·실패 줄부터 끝까지만 본다. 과목 하나가 지난 학기라
+    '콘텐츠 API 실패 (403)' 로 건너뛰는 것은 정상이라(CLAUDE.md 5절) 그런 줄로 '서버 거절' 을 고르면 안 된다.
+    """
+    lines = [str(line) for line in logs[-200:]]
+    start = None
+    for at in range(len(lines) - 1, -1, -1):
+        text = lines[at]
+        if text.startswith("Traceback (most recent call last)") or "작업이 실패했습니다:" in text or text.startswith("[오류]"):
+            start = at
+            if text.startswith("Traceback"):
+                break
+    # 실패 줄 바로 앞의 '로그인 검증 실패 (HTTP 503)' 같은 진단도 함께 본다
+    window = "\n".join(lines[max(0, (start if start is not None else len(lines)) - 6):])
+    reason = _failure_reason(lines)
+    for category, title, hint, patterns in FAILURE_KINDS:
+        if any(re.search(p, window) for p in patterns):
+            return {"category": category, "title": title, "hint": hint, "reason": reason}
+    category, title, hint = FAILURE_UNKNOWN
+    return {"category": category, "title": title, "hint": hint, "reason": reason}
+
+
 def record_task_result(
-    workspace: UserWorkspace, kind: str, return_code: int, auth_failed: bool = False, auth_reason: str = ""
+    workspace: UserWorkspace, kind: str, return_code: int, auth_failed: bool = False, auth_reason: str = "",
+    reason: str = "", logs: list[Any] | None = None,
 ) -> dict[str, Any]:
     """작업 성공/실패를 기록한다. 실패가 쌓이면 사용자에게 알리기 위함.
 
@@ -2369,17 +2828,37 @@ def record_task_result(
     data.setdefault("lastSuccess", {})
     streaks = data.setdefault("failStreak", {})
     auth = data.setdefault("authFailed", {})
+    # 작업마다 따로 둔 실패 기록. lastFailure 는 하나뿐이라 메일이 5분마다 성공할 때마다 지워졌고,
+    # 그러면 마감 확인은 '실패 뒤 쉬는 간격' 을 잴 시각을 잃어 곧바로 다시 하고 또 실패해 횟수만 불었다(app.next_due_job).
+    failures = data.setdefault("failures", {})
     stamp = now_iso()
     if return_code == 0:
         data["lastSuccess"][kind] = stamp
-        data["consecutiveFailures"] = 0
-        data.pop("lastFailure", None)
         streaks.pop(kind, None)
         auth.pop(kind, None)
+        failures.pop(kind, None)
+        if (data.get("lastFailure") or {}).get("kind") == kind:
+            data.pop("lastFailure", None)
+        data["consecutiveFailures"] = sum(int(v.get("count", 0) or 0) for v in failures.values() if isinstance(v, dict))
     else:
         data["consecutiveFailures"] = int(data.get("consecutiveFailures", 0) or 0) + 1
         data["lastFailure"] = {"kind": kind, "at": stamp, "code": return_code}
+        if reason:
+            data["lastFailure"]["reason"] = reason
         streaks[kind] = int(streaks.get(kind, 0) or 0) + 1
+        prev = failures.get(kind) if isinstance(failures.get(kind), dict) else {}
+        info = classify_failure(logs or [])
+        if reason and not info.get("reason"):
+            info["reason"] = reason
+        failures[kind] = {
+            "since": prev.get("since") or stamp,
+            "at": stamp,
+            "count": int(prev.get("count", 0) or 0) + 1,
+            "code": return_code,
+            **info,
+            # 앱을 다시 켜도 까닭을 볼 수 있게 마지막 로그 몇 줄을 남긴다 (작업 로그는 메모리에만 있다)
+            "tail": [str(line).rstrip()[:300] for line in (logs or [])[-30:]],
+        }
         if auth_failed:
             auth[kind] = {"at": stamp, "configStamp": list(_file_stamp(workspace.config_path))}
             if auth_reason:
@@ -2526,7 +3005,7 @@ def get_storage(workspace: UserWorkspace) -> dict[str, Any]:
 def pick_folder_dialog() -> str:
     """운영체제 기본 '폴더 선택' 창을 띄워 고른 경로를 돌려준다 (취소하면 빈 문자열).
 
-    예전에는 tkinter 를 썼는데, 설치 파일(bungeoppang.spec)이 크기를 줄이려고 tkinter 를 빼서
+    예전에는 tkinter 를 썼는데, 설치 파일(daling.spec)이 크기를 줄이려고 tkinter 를 빼서
     설치형 앱에서는 '폴더 바꾸기'·'폴더 고르기' 가 늘 실패했다. 맥에서는 tkinter 창을
     서버 스레드에서 열 수도 없다. 앱 창(pywebview)이 가진 폴더 창을 쓴다.
     개발 서버처럼 앱 창이 없을 때만 tkinter 로 대신한다.
@@ -2541,8 +3020,12 @@ def pick_folder_dialog() -> str:
             return str(result[0] if isinstance(result, (list, tuple)) else result)
     except ImportError:
         pass
-    import tkinter
-    from tkinter import filedialog
+    try:
+        import tkinter
+        from tkinter import filedialog
+    except ImportError:
+        # 리눅스 배포판 파이썬은 tkinter 를 따로 깔아야 한다(python3-tk) — 'No module named _tkinter' 대신 알아듣게
+        raise RuntimeError("폴더 고르기 창을 열 수 없어요. 앱 창에서 다시 해 주세요.") from None
 
     root_widget = tkinter.Tk()
     root_widget.withdraw()
@@ -2610,7 +3093,16 @@ def app_footprint(workspace: UserWorkspace, download_dir: Path) -> dict[str, Any
     parts = []
     if getattr(sys, "frozen", False):
         program = Path(sys.executable).resolve().parent
-        parts.append({"key": "program", "label": "프로그램", "bytes": _cached_dir_size("program", program)})
+        appimage = os.environ.get("APPIMAGE", "")
+        if appimage and Path(appimage).is_file():
+            # 리눅스 AppImage: 실행 폴더는 풀린 임시 마운트라 크기가 디스크와 다르다 — 실제로 차지하는 건 AppImage 파일 하나
+            size = Path(appimage).stat().st_size
+        else:
+            # 맥은 실행 파일이 Daling.app/Contents/MacOS 에 홀로 있고 몸통은 Contents/Frameworks·Resources 에 있다
+            if sys.platform == "darwin" and program.name == "MacOS" and program.parent.name == "Contents":
+                program = program.parent
+            size = _cached_dir_size("program", program)
+        parts.append({"key": "program", "label": "프로그램", "bytes": size})
     try:
         import browser_setup
 
@@ -2667,7 +3159,7 @@ def trash_old_browser(workspace: UserWorkspace) -> dict[str, Any]:
 
 
 def cloud_save_footprint(config: dict[str, Any]) -> dict[str, Any]:
-    """켜 둔 클라우드 폴더(붕어빵 강의자료)가 이 PC 에서 차지하는 크기."""
+    """켜 둔 클라우드 폴더(Daling 강의자료)가 이 PC 에서 차지하는 크기."""
     parts = []
     for cloud in cloud_targets(config):
         if not cloud["on"]:
@@ -2812,6 +3304,12 @@ def save_shelves(workspace: UserWorkspace, payload: dict[str, Any]) -> dict[str,
 
 
 ALLOWED_LINK_HOSTS = (".dgist.ac.kr",)
+# 설정 'AI 연결' 카드의 설치 안내 (app.js AI_INSTALL_URL 과 같게). 이 주소와 똑같을 때만 연다
+AI_HELP_LINKS = {
+    "https://docs.claude.com/en/docs/claude-code/setup",
+    "https://github.com/google-gemini/gemini-cli",
+    "https://github.com/openai/codex",
+}
 
 
 def open_mail_link(payload: dict[str, Any]) -> dict[str, Any]:
@@ -2856,7 +3354,11 @@ def open_external_url(payload: dict[str, Any]) -> dict[str, Any]:
     if parsed.scheme not in ("http", "https"):
         raise ValueError("열 수 없는 주소입니다.")
     if not (host == "dgist.ac.kr" or host.endswith(ALLOWED_LINK_HOSTS)):
-        raise ValueError("학교(dgist.ac.kr) 사이트만 열 수 있습니다.")
+        # FGLP 파견 대학의 홈페이지·여름학기 안내·위키백과·지도·사진 출처는 앱에 넣어 둔 주소와 똑같을 때만
+        import fglp
+
+        if url not in fglp.known_links() and url not in AI_HELP_LINKS:
+            raise ValueError("학교(dgist.ac.kr) 사이트만 열 수 있습니다.")
 
     opened = False
     if not MULTI_USER_MODE:
@@ -3081,8 +3583,17 @@ def get_course_announcements(workspace: UserWorkspace) -> dict[str, Any]:
 UI_THEMES = ("auto", "graphite", "graphite-dark", "claude", "light", "navy", "dark")  # 그래파이트 두 개는 2026-10-14 추가
 
 
-def _window_chrome_call(action):
-    """창 제목 줄을 앱이 그리는지(custom)와 최대화 여부. 개발 서버(브라우저)에서는 custom=False."""
+def _window_chrome_call(action, payload=None):
+    """창 제목 줄을 앱이 그리는지(custom)와 최대화 여부. 개발 서버(브라우저)에서는 custom=False.
+
+    맥은 mac_window(신호등은 운영체제 것, 화면이 끌 곳을 regions 로 알려 준다), Windows 는 window_chrome.
+    """
+    if sys.platform == "darwin":
+        try:
+            import mac_window
+        except Exception:
+            return {"custom": False, "maximized": False}
+        return mac_window.command(action, payload) if action else mac_window.state()
     try:
         import window_chrome
     except Exception:
@@ -3103,7 +3614,32 @@ def get_ui_prefs(workspace: UserWorkspace) -> dict[str, Any]:
         "theme": theme if theme in UI_THEMES else None,
         "lang": lang if lang in UI_LANGS else None,
         "mailLayout": layout,
+        "dashLayout": _clean_dash_layout(data.get("dashLayout")),
+        "dashFold": _clean_dash_fold(data.get("dashFold")),
     }
+
+
+# 대시보드 '화면 편집' 결과(블록 순서·숨김·폭)와 블록 접힘. 예전에는 창 저장소에만 두어
+# 앱을 다시 켜면 기본 배치로 돌아갔다(2026-10-27 실측: 재시작 뒤 localStorage 가 비어 있음)
+DASH_BLOCK_KEY = re.compile(r"^[a-z][a-z0-9_-]{0,31}$")
+
+
+def _clean_dash_layout(rows: Any) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for row in rows[:40] if isinstance(rows, list) else []:
+        key = str(row.get("key") or "") if isinstance(row, dict) else ""
+        if not DASH_BLOCK_KEY.match(key) or key in seen:
+            continue
+        seen.add(key)
+        out.append({"key": key, "off": bool(row.get("off")), "size": "half" if row.get("size") == "half" else "full"})
+    return out
+
+
+def _clean_dash_fold(fold: Any) -> dict[str, bool]:
+    if not isinstance(fold, dict):
+        return {}
+    return {str(k): bool(v) for k, v in list(fold.items())[:40] if DASH_BLOCK_KEY.match(str(k))}
 
 
 # 화면 언어. None 이면 화면이 윈도우 언어를 보고 고른다 (한국어가 아니면 영어)
@@ -3111,7 +3647,7 @@ UI_LANGS = ("ko", "en")
 
 
 def save_ui_prefs(workspace: UserWorkspace, payload: dict[str, Any]) -> dict[str, Any]:
-    """테마·언어 중 보낸 것만 바꾼다."""
+    """테마·언어·메일함 칸·대시보드 배치 중 보낸 것만 바꾼다."""
     data = read_json(workspace.root / "ui_prefs.json", {})
     data = data if isinstance(data, dict) else {}
     if "theme" in payload:
@@ -3137,9 +3673,232 @@ def save_ui_prefs(workspace: UserWorkspace, payload: dict[str, Any]) -> dict[str
         if "railFolded" in incoming:
             layout["railFolded"] = bool(incoming["railFolded"])
         data["mailLayout"] = layout
+    if isinstance(payload.get("dashLayout"), list):
+        data["dashLayout"] = _clean_dash_layout(payload["dashLayout"])
+    if isinstance(payload.get("dashFold"), dict):
+        data["dashFold"] = _clean_dash_fold(payload["dashFold"])
     workspace.root.mkdir(parents=True, exist_ok=True)
     atomic_write_text(workspace.root / "ui_prefs.json", json.dumps(data, ensure_ascii=False))
     return {"ok": True, **{k: data.get(k) for k in ("theme", "lang")}}
+
+
+# ===== 앱 잠금: 네 자리 비밀번호 (2026-10-27) =====
+# 앱을 켜면 메일·과제·자료가 로그인 없이 다 보인다(사용자: '로그인 없이도 얻을 수 있는 정보가 너무 많다').
+# 켜 두면 앱을 켤 때·자동 잠금·'지금 잠그기' 뒤에 네 자리를 물어본다. 화면만 덮으면 같은 PC 의 브라우저로
+# http://127.0.0.1:<포트>/api/emails 를 열어 그대로 볼 수 있으므로, 잠겨 있는 동안에는 서버가 데이터 API 를
+# 423 으로 거절한다(LOCK_OPEN_GET/POST 만 통과). 데이터 폴더의 파일 자체를 지키는 것은 아니다(그건 운영체제 계정 몫).
+# 비밀번호는 PBKDF2 해시로만 app_lock.json 에 둔다 — config.json 이 아니라서 '설정 내보내기' 파일에 섞이지 않는다.
+# 체험 모드여도 진짜 데이터 폴더(AUTOSAVER_ROOT)의 파일을 쓴다: 잠금은 앱에 거는 것이다.
+APP_LOCK_PATH = AUTOSAVER_ROOT / "app_lock.json"
+LOCK_IDLE_CHOICES = (0, 1, 5, 10, 30, 60)  # 자동 잠금(분), 0 = 안 함
+LOCK_TRIES = 5  # 이만큼 틀릴 때마다 잠깐 막는다: 30초 → 1분 → 2분 … 15분까지 (네 자리는 만 개뿐이라)
+LOCK_ITERATIONS = 200_000
+_PIN_RE = re.compile(r"^\d{4}$")
+_app_lock: dict[str, Any] = {"locked": None}  # None = 아직 안 봄. 처음 물을 때 파일을 보고 정한다(켤 때 잠김)
+_app_lock_mutex = threading.Lock()
+
+
+def _lock_read() -> dict[str, Any]:
+    data = read_json(APP_LOCK_PATH, {})
+    return data if isinstance(data, dict) else {}
+
+
+def _lock_on(data: dict[str, Any]) -> bool:
+    return bool(isinstance(data.get("hash"), str) and isinstance(data.get("salt"), str) and data["hash"])
+
+
+def _lock_write(data: dict[str, Any]) -> None:
+    AUTOSAVER_ROOT.mkdir(parents=True, exist_ok=True)
+    atomic_write_text(APP_LOCK_PATH, json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
+
+
+def _pin_hash(pin: str, salt: str, iterations: int) -> str:
+    return hashlib.pbkdf2_hmac("sha256", pin.encode("utf-8"), bytes.fromhex(salt), iterations).hex()
+
+
+def _lock_wait(data: dict[str, Any]) -> int:
+    try:
+        return max(0, int(float(data.get("waitUntil") or 0) - time.time() + 0.999))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _lock_check(data: dict[str, Any], pin: str) -> bool:
+    """맞으면 틀린 횟수를 지우고, 틀리면 세어서 다섯 번마다 막는 시간을 건다. 파일은 여기서 쓴다(앱을 다시 켜도 이어짐)."""
+    good = False
+    if _PIN_RE.match(pin or "") and _lock_on(data):
+        try:
+            iterations = int(data.get("iterations") or LOCK_ITERATIONS)
+            good = secrets.compare_digest(_pin_hash(pin, data["salt"], iterations), data["hash"])
+        except (TypeError, ValueError):
+            good = False
+    _lock_count(data, good)
+    return good
+
+
+def _lock_count(data: dict[str, Any], good: bool) -> None:
+    if good:
+        if data.get("failures") or data.get("waitUntil"):
+            data["failures"], data["waitUntil"] = 0, 0
+            _lock_write(data)
+        return
+    failures = int(data.get("failures") or 0) + 1
+    data["failures"] = failures
+    if failures % LOCK_TRIES == 0:
+        data["waitUntil"] = time.time() + min(30 * 2 ** (failures // LOCK_TRIES - 1), 900)
+    _lock_write(data)
+
+
+def _lock_fail(data: dict[str, Any], message: str) -> dict[str, Any]:
+    wait = _lock_wait(data)
+    left = LOCK_TRIES - int(data.get("failures") or 0) % LOCK_TRIES
+    if wait:
+        message = "여러 번 틀려서 잠시 막았어요."
+    return {"ok": False, "message": message, "waitSeconds": wait, "triesLeft": 0 if wait else left}
+
+
+def _account_passwords(unseal: bool = True) -> list[str]:
+    """비밀번호를 잊었을 때 확인용: 앱에 이미 저장된 학교 메일·LMS 비밀번호 (새로 저장하는 것은 없다).
+    체험 중이어도 진짜 데이터 폴더의 config.json 을 본다. unseal=False 면 있는지만 본다 — 맥은 꺼낼 때마다
+    키체인을 열므로, 상태를 물을 때(GET /api/lock)는 꺼내지 않는다."""
+    data = read_json(AUTOSAVER_ROOT / "config.json", {})
+    data = data if isinstance(data, dict) else {}
+    out = []
+    for key in ("SCHOOL_EMAIL_PASSWORD", "LMS_PASSWORD"):
+        value = data.get(key)
+        if unseal and isinstance(value, str) and value.startswith(_SECRET_PREFIXES):
+            value = dpapi_unprotect(value)
+        if isinstance(value, str) and value:
+            out.append(value)
+    return out
+
+
+def app_locked() -> bool:
+    if MULTI_USER_MODE:
+        return False
+    with _app_lock_mutex:
+        if _app_lock["locked"] is None:
+            _app_lock["locked"] = _lock_on(_lock_read())
+        return bool(_app_lock["locked"])
+
+
+def lock_status() -> dict[str, Any]:
+    data = _lock_read()
+    on = _lock_on(data)
+    idle = data.get("idleMinutes", 10)
+    return {
+        "ok": True,
+        "available": not MULTI_USER_MODE,
+        "enabled": on,
+        "locked": app_locked(),
+        "idleMinutes": idle if idle in LOCK_IDLE_CHOICES else 10,
+        "waitSeconds": _lock_wait(data) if on else 0,
+        "canReset": on and bool(_account_passwords(unseal=False)),
+    }
+
+
+def lock_unlock(pin: str, open_it: bool = True) -> dict[str, Any]:
+    """open_it=False 는 맞는지만 본다(설정의 '바꾸기' 첫 단계). 틀린 횟수는 똑같이 센다."""
+    with _app_lock_mutex:
+        data = _lock_read()
+        if not _lock_on(data):
+            _app_lock["locked"] = False
+            return {"ok": True}
+        if _lock_wait(data):
+            return _lock_fail(data, "")
+        if not _lock_check(data, pin):
+            return _lock_fail(data, "비밀번호가 맞지 않아요." if open_it else "지금 비밀번호가 맞지 않아요.")
+        if not open_it:
+            return {"ok": True}
+        _app_lock["locked"] = False
+    BOOT.setdefault("unlock", time.time())  # 켤 때 걸린 시간 기록에 '비밀번호 푼 때' 를 함께 남긴다
+    return {"ok": True}
+
+
+def lock_now() -> dict[str, Any]:
+    with _app_lock_mutex:
+        if not _lock_on(_lock_read()):
+            return {"ok": False, "message": "앱 잠금이 꺼져 있어요."}
+        _app_lock["locked"] = True
+    return {"ok": True}
+
+
+def lock_set_pin(pin: str, current: str) -> dict[str, Any]:
+    """잠금 켜기(처음 정하기)와 비밀번호 바꾸기. 이미 켜져 있으면 지금 비밀번호부터 맞아야 한다."""
+    if not _PIN_RE.match(pin or ""):
+        return {"ok": False, "message": "숫자 네 자리로 정해 주세요."}
+    with _app_lock_mutex:
+        data = _lock_read()
+        if _lock_on(data):
+            if _lock_wait(data):
+                return _lock_fail(data, "")
+            if not _lock_check(data, current):
+                return _lock_fail(data, "지금 비밀번호가 맞지 않아요.")
+        salt = secrets.token_hex(16)
+        idle = data.get("idleMinutes", 10)
+        _lock_write({
+            "version": 1,
+            "salt": salt,
+            "hash": _pin_hash(pin, salt, LOCK_ITERATIONS),
+            "iterations": LOCK_ITERATIONS,
+            "idleMinutes": idle if idle in LOCK_IDLE_CHOICES else 10,
+            "failures": 0,
+            "waitUntil": 0,
+            "setAt": now_iso(),
+        })
+        _app_lock["locked"] = False  # 정한 사람이 지금 쓰고 있다
+    return {"ok": True, **lock_status()}
+
+
+def lock_turn_off(current: str) -> dict[str, Any]:
+    with _app_lock_mutex:
+        data = _lock_read()
+        if _lock_on(data):
+            if _lock_wait(data):
+                return _lock_fail(data, "")
+            if not _lock_check(data, current):
+                return _lock_fail(data, "지금 비밀번호가 맞지 않아요.")
+        APP_LOCK_PATH.unlink(missing_ok=True)  # 앱이 만든 파일(해시만 든)이라 지워도 된다
+        _app_lock["locked"] = False
+    return {"ok": True, **lock_status()}
+
+
+def lock_set_idle(minutes: Any) -> dict[str, Any]:
+    try:
+        minutes = int(minutes)
+    except (TypeError, ValueError):
+        minutes = -1
+    if minutes not in LOCK_IDLE_CHOICES:
+        return {"ok": False, "message": "고를 수 없는 시간이에요."}
+    with _app_lock_mutex:
+        data = _lock_read()
+        if not _lock_on(data):
+            return {"ok": False, "message": "앱 잠금이 꺼져 있어요."}
+        data["idleMinutes"] = minutes
+        _lock_write(data)
+    return {"ok": True, **lock_status()}
+
+
+def lock_reset_with_account(password: str) -> dict[str, Any]:
+    """비밀번호를 잊었을 때: 앱에 저장된 학교 메일(또는 LMS) 비밀번호가 맞으면 잠금을 끈다. 틀린 횟수는 네 자리와 함께 센다."""
+    with _app_lock_mutex:
+        data = _lock_read()
+        if not _lock_on(data):
+            _app_lock["locked"] = False
+            return {"ok": True, "enabled": False}
+        if _lock_wait(data):
+            return _lock_fail(data, "")
+        saved = _account_passwords()
+        if not saved:
+            return {"ok": False, "message": "앱에 저장된 학교 계정 비밀번호가 없어 여기서는 풀 수 없어요."}
+        good = any(secrets.compare_digest(str(password or "").encode("utf-8"), p.encode("utf-8")) for p in saved)
+        _lock_count(data, good)
+        if not good:
+            return _lock_fail(data, "학교 계정 비밀번호가 맞지 않아요.")
+        APP_LOCK_PATH.unlink(missing_ok=True)
+        _app_lock["locked"] = False
+    BOOT.setdefault("unlock", time.time())
+    return {"ok": True, "enabled": False}
 
 
 def get_tutorial_state(workspace: UserWorkspace) -> dict[str, Any]:
@@ -3150,10 +3909,15 @@ def get_tutorial_state(workspace: UserWorkspace) -> dict[str, Any]:
     """
     data = read_json(workspace.root / "tutorial.json", {})
     data = data if isinstance(data, dict) else {}
+    views = data.get("views")
+    if not isinstance(views, list):
+        # 화면별 소개(2026-10-21) 전 기록: 27단계를 끝까지 본 사람은 다 본 것으로, 건너뛴 사람은 화면마다 보여 준다
+        views = ["*"] if data.get("done") and not data.get("skipped") else []
     return {
         "done": bool(data.get("done")),
         "skipped": bool(data.get("skipped")),
         "at": data.get("at"),
+        "views": [str(v) for v in views][:40],
     }
 
 
@@ -3165,6 +3929,8 @@ def mark_tutorial_done(workspace: UserWorkspace, payload: dict[str, Any]) -> dic
         "skipped": bool(payload.get("skipped")),
         "step": int(payload.get("step") or 0),
         "at": now_iso(),
+        # 처음 소개를 끝내도 화면별 소개는 남는다 (본 화면 목록은 그대로 이어 간다)
+        "views": [v for v in get_tutorial_state(workspace)["views"] if v != "*"],
     }
     workspace.root.mkdir(parents=True, exist_ok=True)
     atomic_write_text((workspace.root / "tutorial.json"), json.dumps(record, ensure_ascii=False), encoding="utf-8")
@@ -3174,6 +3940,24 @@ def mark_tutorial_done(workspace: UserWorkspace, payload: dict[str, Any]) -> dic
     if not (isinstance(seen, dict) and seen.get("seen")):
         mark_whats_new_seen(workspace, updater.local_version())
     return {"ok": True, **record}
+
+
+def mark_tutorial_view(workspace: UserWorkspace, payload: dict[str, Any]) -> dict[str, Any]:
+    """화면별 소개를 본 화면을 적는다. reset 이면 비운다('앱 소개 다시 보기')."""
+    path = workspace.root / "tutorial.json"
+    data = read_json(path, {})
+    data = data if isinstance(data, dict) else {}
+    views = [v for v in get_tutorial_state(workspace)["views"] if v != "*"]
+    if payload.get("reset"):
+        views = []
+    else:
+        view = str(payload.get("view") or "")[:30]
+        if view and view not in views:
+            views.append(view)
+    data["views"] = views
+    workspace.root.mkdir(parents=True, exist_ok=True)
+    atomic_write_text(path, json.dumps(data, ensure_ascii=False), encoding="utf-8")
+    return {"ok": True, "views": views}
 
 
 def mark_whats_new_seen(workspace: UserWorkspace, version: str) -> dict[str, Any]:
@@ -3312,21 +4096,38 @@ def get_shuttle(workspace: UserWorkspace, refresh: bool = False) -> dict[str, An
 
 
 _directory_cache: dict[str, Any] = {}
+FACULTY_SEED = "seed_directory_faculty.json"
 
 
-def search_directory_api(workspace: UserWorkspace, query: str, limit: int = 8) -> dict[str, Any]:
-    """조직도에서 사람 찾기. 받은 메일 연락처와 합쳐서 돌려준다.
+def directory_people(workspace: UserWorkspace) -> list[dict[str, Any]]:
+    """조직도 = 내가 넣은 directory.json + 설치 파일에 든 교원 주소록.
 
-    조직도는 4,800여 명·600KB 라 글자를 칠 때마다 다시 읽지 않고 파일 도장이 바뀔 때만 읽는다.
+    새 사용자는 조직도를 넣을 데가 없어 교수·조교 주소가 비어 있었다(2026-10-15). 교수 주소는 학교
+    홈페이지에 공개된 정보라 교원만 설치 파일에 넣는다(scripts/build_faculty_seed.py). 학생·직원까지 든
+    전체 조직도는 포탈 로그인 뒤에만 보이는 정보라 공개 배포물에 넣지 않고, 각자 설정에서 넣은 파일만 쓴다.
+    체험 중에는 가짜 사람만 보이게(실명 금지) 교원 주소록을 섞지 않는다.
+    4,800여 명·600KB 라 글자를 칠 때마다 다시 읽지 않고 파일 도장이 바뀔 때만 읽는다.
     """
     import directory
 
-    stamp = (str(workspace.directory_path), _file_stamp(workspace.directory_path))
+    stamp = (str(workspace.directory_path), _file_stamp(workspace.directory_path), demo_mode.active())
     if _directory_cache.get("stamp") != stamp:
-        _directory_cache.update(stamp=stamp, people=directory.load_directory(workspace.directory_path))
-    people = _directory_cache["people"]
+        mine = directory.load_directory(workspace.directory_path)
+        people = list(mine)
+        if not demo_mode.active():
+            seen = {str(p.get("email", "")).lower() for p in mine}
+            people += [p for p in directory.load_directory(SEED_DIR / FACULTY_SEED) if str(p.get("email", "")).lower() not in seen]
+        _directory_cache.update(stamp=stamp, people=people, imported=len(mine))
+    return _directory_cache["people"]
+
+
+def search_directory_api(workspace: UserWorkspace, query: str, limit: int = 8) -> dict[str, Any]:
+    """조직도에서 사람 찾기. imported 는 내가 넣은 조직도 인원(0 이면 설치 파일의 교원만)."""
+    import directory
+
+    people = directory_people(workspace)
     hits = directory.search_directory(people, query, limit=max(1, min(int(limit or 8), 50)))
-    return {"ok": True, "total": len(people), "results": hits}
+    return {"ok": True, "total": len(people), "imported": _directory_cache.get("imported", 0), "results": hits}
 
 
 _COURSE_META_RE = re.compile(r"^(.*?)\s*\((.*)\)\s*_([0-9A-Za-z]+)\s*\[\s*(\d{4})_([^\]]+?)\s*\]")
@@ -3381,7 +4182,6 @@ def course_people_index(workspace: UserWorkspace, staff_rows: list[dict[str, Any
       과목 정보(instructorsMembership)에는 대표 교수 한 명만 들어 있다(2026-10-09 실측) → 내 과목 조교만.
     이름으로 맞추므로 메일 주소는 조직도(이름)·보낸 사람 이름 둘 다로 찾는다.
     """
-    import directory
     import timetable_import
 
     term_value = timetable_import.current_term_value()
@@ -3431,7 +4231,7 @@ def course_people_index(workspace: UserWorkspace, staff_rows: list[dict[str, Any
     for row in staff_rows:
         add(row["name"], {"role": row["role"], "title": row["title"], "section": row["section"], "mine": True})
 
-    people = directory.load_directory(workspace.directory_path)
+    people = directory_people(workspace)
     dir_name = {str(p.get("email", "")).lower(): str(p.get("name", "")) for p in people if p.get("email")}
     # 조직도에서 학생으로 나온 주소에는 '교수' 꼬리표를 달지 않는다 (이름만 같은 학생이 교수로 보이지 않게)
     students = {
@@ -3472,35 +4272,54 @@ def get_course_staff(workspace: UserWorkspace) -> dict[str, Any]:
     조교는 학생·대학원생, 교수는 교원 쪽을 고른다. 그래도 하나로 안 좁혀지면 이메일을 비워 둔다
     (엉뚱한 사람에게 메일이 가는 것보다 낫다).
     """
-    import directory
-
     path = workspace.root / "course_staff.json"
     raw = read_json(path, {})
     if not isinstance(raw, dict):
         raw = {}
-    stamp = (str(workspace.directory_path), _file_stamp(workspace.directory_path))
-    if _directory_cache.get("stamp") != stamp:
-        _directory_cache.update(stamp=stamp, people=directory.load_directory(workspace.directory_path))
-    people = _directory_cache["people"]
+    people = directory_people(workspace)
     by_name: dict[str, list[dict[str, Any]]] = {}
     for p in people:
         key = re.sub(r"\s+", "", str(p.get("name") or "")).lower()
         if key:
             by_name.setdefault(key, []).append(p)
+    faculty_emails = {str(p.get("email", "")).lower() for p in people if str(p.get("role", "")) == "교원"}
 
     # 주고받은 메일에 나온 주소: 동명이인 중 실제로 메일을 주고받은 사람을 고르는 데 쓴다
     mail = read_json(workspace.emails_log, {}) if hasattr(workspace, "emails_log") else {}
     known: set[str] = set()
+    # 이름 → 메일에서 본 학교 주소. 조직도에 없는 사람(새 사용자는 교원만 있다)의 주소를 찾는 데 쓴다
+    mail_names: dict[str, set[str]] = {}
+
+    def seen(addr: Any, who: Any) -> None:
+        addr = str(addr or "").strip().lower()
+        known.add(addr)
+        key = _norm_person(str(who or ""))
+        if addr.endswith("@dgist.ac.kr") and len(key) >= 2:
+            mail_names.setdefault(key, set()).add(addr)
+
     if isinstance(mail, dict):
         for c in mail.get("contacts") or []:
-            known.add(str(c.get("email", "")).lower())
+            seen(c.get("email"), c.get("name"))
         for m in mail.get("emails") or []:
-            known.add(str(m.get("fromEmail", "")).lower())
-            known.add(str(m.get("toEmail", "")).lower())
+            seen(m.get("fromEmail"), m.get("fromName"))
+            if m.get("folder") == "sent":
+                seen(m.get("toEmail"), m.get("toName"))
+            else:
+                known.add(str(m.get("toEmail") or "").strip().lower())
 
     def find_email(name: str, role: str) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
         """(확실한 한 사람, 동명이인 후보들)"""
         cands = by_name.get(re.sub(r"\s+", "", name).lower(), [])
+        if role != "교수":
+            # 새 사용자 조직도는 교원뿐이라, 조교 이름이 교수 이름과 같으면 그 교수가 유일한 후보가 되어 조교 메일이
+            # 교수에게 갔다(검토 실측: 대학원생 17명이 교원과 이름이 같음). 조교 찾기에는 교원을 쓰지 않는다.
+            cands = [p for p in cands if str(p.get("role", "")) != "교원"]
+        if not cands:
+            # 조교에게 메일을 받았으면 그 주소를 쓴다. 이름이 같은 학교 주소가 둘 이상이면 고르지 않는다
+            found = mail_names.get(_norm_person(name)) or set()
+            if role != "교수":
+                found = found - faculty_emails  # 이름이 같은 교수님과 주고받은 메일 주소를 조교에게 붙이지 않게
+            return ({"email": next(iter(found)), "dept": ""}, []) if len(found) == 1 else (None, [])
         if len(cands) > 1:
             if role == "교수":
                 narrowed = [p for p in cands if "학생" not in str(p.get("dept", "")) + str(p.get("role", ""))]
@@ -3560,6 +4379,74 @@ def get_course_staff(workspace: UserWorkspace) -> dict[str, Any]:
         print(f"[교수·조교] 메일 꼬리표를 만들지 못했습니다: {exc}")
         people = {"byEmail": {}}
     return {"ok": True, "term": now_term, "courses": out, "past": past, "people": people}
+
+
+MAIL_ME_KEYS = ("name", "nameEn", "studentId", "dept", "flow")
+
+
+def mail_me(workspace: UserWorkspace) -> dict[str, Any]:
+    """메일에 쓰는 내 정보: 직접 적은 값(ai_profile.json) > LMS(lms_profile.json) > 조직도.
+
+    AI 도우미를 꺼도 메일 쓰기 흐름(인사·자기소개·서명)은 쓰므로 AI 스위치와 상관없이 준다.
+    설정 파일은 비밀값을 풀지 않으려고 read_config 대신 그대로 읽는다(학교 메일 주소만 필요).
+    """
+    import ai_cli
+    import mail_flow
+
+    manual = ai_cli.load_profile(workspace.root / "ai_profile.json")
+    raw_config = read_json(workspace.config_path, {})
+    school_email = str((raw_config or {}).get("SCHOOL_EMAIL") or "") if isinstance(raw_config, dict) else ""
+    auto = mail_flow.auto_profile(workspace.root, directory_people(workspace), school_email)
+    return {
+        "ok": True,
+        "manual": {k: manual.get(k, "") for k in MAIL_ME_KEYS},
+        "auto": auto,
+        "me": mail_flow.my_profile(manual, auto),
+    }
+
+
+def save_mail_me(workspace: UserWorkspace, payload: dict[str, Any]) -> dict[str, Any]:
+    """설정 '메일에 쓰는 내 정보' 저장. 같은 파일의 AI 고르기·스위치 값은 그대로 둔다."""
+    import ai_cli
+
+    path = workspace.root / "ai_profile.json"
+    current = ai_cli.load_profile(path)
+    current.update({k: str(payload.get(k) or "").strip() for k in MAIL_ME_KEYS if k in payload})
+    ai_cli.save_profile(path, current)
+    return mail_me(workspace)
+
+
+def ai_connections(workspace: UserWorkspace) -> dict[str, Any]:
+    """설정 'AI 연결' 카드. 세 CLI 의 상태 명령을 한꺼번에 돌린다(하나가 1초쯤, 따로 돌리면 3초)."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    import ai_cli
+
+    ai_cli.available()  # 새로 깐 CLI 도 바로 보이게 찾은 길을 비운다
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        items = list(pool.map(ai_cli.auth_status, ai_cli.PROVIDERS))
+    return {"ok": True, "items": items, "profile": ai_cli.load_profile(workspace.root / "ai_profile.json")}
+
+
+def mail_flow_for(workspace: UserWorkspace, payload: dict[str, Any]) -> dict[str, Any]:
+    """메일 쓰기 흐름: 받는 사람 칸(첫 주소) → 인사·자기소개·마무리·서명 조각(한국어·영어)."""
+    import mail_flow
+
+    raw = str(payload.get("to") or "").split(",")[0]
+    m = re.search(r"[\w.+-]+@[\w-]+(\.[\w-]+)+", raw)
+    email = m.group(0).lower() if m else ""
+    # 주소가 없는 글(받는 사람 칸에 이름을 치는 중)은 쓰지 않는다. 치는 동안 언어가 영어↔한국어로 바뀌었다
+    typed = raw.split("<")[0].strip().strip('"') if "<" in raw and email else ""
+    staff = get_course_staff(workspace).get("courses") or {}
+    table = read_json(workspace.timetable_path, {})
+    entries = table.get("entries") if isinstance(table, dict) and isinstance(table.get("entries"), list) else []
+    me = mail_me(workspace)["me"]
+    to = mail_flow.recipient(email, typed, staff, directory_people(workspace), entries)
+    try:
+        index = int(payload.get("courseIndex") or 0)
+    except (TypeError, ValueError):
+        index = 0
+    return mail_flow.build(me, to, index)
 
 
 def import_directory(workspace: UserWorkspace, people: list[dict[str, Any]]) -> dict[str, Any]:
@@ -3711,7 +4598,7 @@ def search_place(query: str) -> dict[str, Any]:
         url,
         headers={
             # Nominatim 은 신원을 밝히지 않으면 막는다
-            "User-Agent": "bungeoppang-dgist-autosaver/1.0 (personal student app)",
+            "User-Agent": "daling-dgist-autosaver/1.0 (personal student app)",
             "Accept": "application/json",
         },
     )
@@ -3884,6 +4771,8 @@ def get_status(workspace: UserWorkspace, base_url: str | None = None) -> dict[st
         "credentialsExists": google_credentials_available(),
         "tokenExists": workspace.token_path.exists(),
         "googleOAuth": google_oauth,
+        # 마지막 동기화의 Drive 올리기 결과(main._save_drive_status): 실패 수와 까닭을 상단 Drive 불빛에 보인다
+        "driveResult": read_json(workspace.root / "drive_status.json", None),
         "scheduleTime": config.get("SCHEDULE_TIME", "08:00"),
         "counts": {
             "files": len(files),
@@ -3954,7 +4843,119 @@ def append_log(user_id: str, line: str) -> None:
         task_state["logs"] = task_state["logs"][-500:]
 
 
-def run_process(workspace: UserWorkspace, kind: str, command: list[str], extra_env: dict[str, str] | None = None, auto: bool = False) -> None:
+def _mail_in_process(workspace: UserWorkspace) -> bool:
+    """메일 새로고침을 이 서버 안에서 돌려도 되는지.
+
+    작업 프로세스(Daling.exe --autosaver-job emails)를 띄우는 데만 약 1초가 들었다(2026-10-21 실측: 작업 3.9초 중
+    메일 서버와 주고받기 2.7초). 메일은 브라우저도 안 띄우고 IMAP 만 쓰니 서버 안 스레드로 충분하다.
+    다만 email_reader 는 모듈 전역(계정·저장 파일)을 쓰므로, 이 서버가 보는 데이터·설정 파일과 같은
+    사람일 때(혼자 쓰는 앱)만. 여러 사람이 쓰는 웹 모드는 예전처럼 프로세스를 따로 띄운다.
+    """
+    if MULTI_USER_MODE:
+        return False
+    try:
+        import runtime_config
+
+        return (
+            Path(workspace.root).resolve() == Path(runtime_config.AUTOSAVER_DATA_ROOT).resolve()
+            and Path(workspace.config_path).resolve() == Path(runtime_config.CONFIG_JSON_PATH).resolve()
+        )
+    except Exception:
+        return False
+
+
+def _run_emails_here(key: str) -> int:
+    """메일 새로고침을 이 스레드에서 돌린다. email_reader 가 print 로 남기는 진행 상황은 이 작업의 로그로.
+
+    print 를 email_reader 모듈 안에서만 바꿔 끼운다. 다른 스레드(메일 보내기 등)가 같은 모듈을 부르면
+    그쪽 출력은 원래 print 로 간다.
+    """
+    import builtins
+    import traceback
+
+    import email_reader
+
+    me = threading.current_thread()
+
+    def log(*args, sep=" ", end="\n", file=None, flush=False):
+        if threading.current_thread() is me and file in (None, sys.stdout, sys.stderr):
+            append_log(key, sep.join(str(a) for a in args))
+        else:
+            builtins.print(*args, sep=sep, end=end, file=file, flush=flush)
+
+    email_reader.print = log
+    try:
+        days, max_count = email_reader.reload_settings()
+        email_reader.refresh_emails(days, max_count)
+        return 0
+    except Exception as exc:
+        # '로그인에 실패' 가 있으면 run_process 가 자동 재시도를 멈춘다. 오류 추적 전체는 남기지 않는다:
+        # 소스 줄 '(서버: {reply})' 이 먼저 걸려 이유가 '{reply}' 로 적혔다(2026-10-21 실측). 실제 말과 위치만.
+        frame = traceback.extract_tb(exc.__traceback__)[-1:] or [None]
+        where = f" ({Path(frame[0].filename).name}:{frame[0].lineno})" if frame[0] else ""
+        append_log(key, f"작업이 실패했습니다: {str(exc) or type(exc).__name__}{where}")
+        return 1
+    finally:
+        email_reader.close_active()
+        try:
+            del email_reader.print
+        except AttributeError:
+            pass
+
+
+def _secret_handover(workspace: UserWorkspace) -> str | None:
+    """작업 프로세스에 표준 입력으로 넘길 비밀 값(JSON 한 줄). 맥·리눅스만 (Windows 는 DPAPI 라 묻는 창이 없다).
+
+    본체가 저장소(키체인·키링)를 읽고(한 번 읽으면 기억한다) 작업은 저장소를 열지 않는다 — runtime_config._HANDED_SECRETS.
+    """
+    if not secret_store.supported():
+        return None
+    raw = read_json(workspace.config_path, {})
+    handed: dict[str, Any] = {}
+    errors: dict[str, str] = {}
+    for key in SECRET_KEYS:
+        value = raw.get(key) if isinstance(raw, dict) else None
+        if secret_store.is_marker(value):
+            handed[key] = dpapi_unprotect(value)
+            if not handed[key]:
+                errors[key] = secret_store.last_error() or "까닭을 알 수 없음"
+    if errors:
+        # 못 읽은 까닭도 넘긴다: 작업이 '로그인 실패' 대신 '키체인을 못 읽음' 을 말하게 (runtime_config._HANDED_ERRORS)
+        handed["_secret_errors"] = errors
+    return json.dumps(handed, ensure_ascii=False) + "\n"
+
+
+# 맥: 켤 때 조용히 못 읽어 키체인 허락을 기다리는 동안의 안내 (건강 알림·작업 시작·메일 새로고침이 같이 쓴다).
+# 창이 떠 있는 동안에는 이 프로세스의 키체인 호출이 막혀(2026-10-22 CI) 다시 저장으로는 못 푼다. 껐다 켜면 창이 뜬 뒤 다시 묻는다
+KEYCHAIN_WAIT_MESSAGE = "키체인 창에 맥 로그인 암호를 넣고 '항상 허용'을 눌러 주세요. 창이 안 보이면 Daling 을 껐다 켜 주세요. 그때까지 LMS·메일 동기화를 멈춰요."
+
+
+SECRET_LABELS = {
+    "LMS_PASSWORD": "LMS 비밀번호",
+    "SCHOOL_EMAIL_PASSWORD": "학교 메일 비밀번호",
+    "EMAIL_PASSWORD": "알림 메일 비밀번호",
+    "GEMINI_API_KEY": "Gemini 키",
+    "DGIST_API_KEY": "공공데이터 키",
+}
+
+
+def secret_read_problems(workspace: UserWorkspace) -> dict[str, str]:
+    """맥·리눅스: 설정에 표시는 있는데 저장소에서 값을 못 꺼낸 비밀 설정 {키: 까닭}. Windows 는 늘 빈 dict.
+
+    한 번 읽은 값은 mac_keychain 이 기억하므로 건강 확인(12초마다)에서 불러도 키체인을 다시 열지 않는다.
+    """
+    if not secret_store.supported():
+        return {}
+    raw = read_json(workspace.config_path, {})
+    out: dict[str, str] = {}
+    for key in SECRET_KEYS:
+        value = raw.get(key) if isinstance(raw, dict) else None
+        if secret_store.is_marker(value) and not secret_store.unprotect(value):
+            out[key] = secret_store.last_error() or "까닭을 알 수 없음"
+    return out
+
+
+def run_process(workspace: UserWorkspace, kind: str, command: list[str] | None, extra_env: dict[str, str] | None = None, auto: bool = False) -> None:
     key = task_key(workspace.user_id, kind)
     env = os.environ.copy()
     env["PYTHONIOENCODING"] = "utf-8"
@@ -3983,10 +4984,19 @@ def run_process(workspace: UserWorkspace, kind: str, command: list[str], extra_e
             }
         )
 
-    try:
+    if command is None:
+        return_code = _run_emails_here(key)
+    else:
+      try:
+        handover = _secret_handover(workspace)
+        if handover is not None:
+            from runtime_config import SECRETS_STDIN_FLAG
+
+            env[SECRETS_STDIN_FLAG] = "1"
         process = subprocess.Popen(
             command,
             cwd=str(PROJECT_ROOT),
+            stdin=subprocess.PIPE if handover is not None else None,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
@@ -3994,6 +5004,11 @@ def run_process(workspace: UserWorkspace, kind: str, command: list[str], extra_e
             errors="replace",
             env=env,
         )
+        if handover is not None and process.stdin is not None:
+            try:
+                process.stdin.write(handover)
+            finally:
+                process.stdin.close()
         with task_lock:
             current_processes[key] = process
 
@@ -4001,7 +5016,7 @@ def run_process(workspace: UserWorkspace, kind: str, command: list[str], extra_e
         for line in process.stdout:
             append_log(key, line)
         return_code = process.wait()
-    except Exception as exc:  # pragma: no cover - defensive runtime guard
+      except Exception as exc:  # pragma: no cover - defensive runtime guard
         append_log(key, f"[오류] {exc}")
         return_code = -1
 
@@ -4018,6 +5033,10 @@ def run_process(workspace: UserWorkspace, kind: str, command: list[str], extra_e
         task_state["logs"].append(
             f"[{now_iso()}] {kind} 작업이 종료되었습니다. 종료 코드: {return_code}"
         )
+
+    # 작업 프로세스가 구글을 다시 연결했으면 이 서버의 예전 Drive 접속을 버린다 (finish_google_oauth 와 같은 까닭)
+    if kind == "google-oauth" and "drive_uploader" in sys.modules:
+        sys.modules["drive_uploader"]._service = None
 
     # 자료를 새로 받았으면 곧바로 '학기 / 과목' 폴더로 정리한다.
     # 버튼을 눌러야만 정리되면, 새로 받은 자료는 계속 폴더 밖에 쌓인다.
@@ -4042,14 +5061,17 @@ def run_process(workspace: UserWorkspace, kind: str, command: list[str], extra_e
         recent = " ".join(str(line) for line in (task_state.get("logs") or [])[-40:])
         auth_failed = return_code != 0 and "로그인에 실패" in recent
         reason = re.search(r"\(서버: ([^)]{1,160})\)", recent) if auth_failed else None
+        logs = list(task_state.get("logs") or [])
         health = record_task_result(
-            workspace, kind, return_code, auth_failed=auth_failed, auth_reason=reason.group(1) if reason else ""
+            workspace, kind, return_code, auth_failed=auth_failed, auth_reason=reason.group(1) if reason else "",
+            reason=_failure_reason(logs) if return_code != 0 else "",
+            logs=logs if return_code != 0 else None,
         )
         if return_code != 0:
-            fails = health.get("consecutiveFailures", 0)
+            info = (health.get("failures") or {}).get(kind) or {}
             append_log(
                 key,  # 메일 작업이면 메일 칸에 (예전엔 자료 칸에 적혀 메일 실패가 엉뚱한 곳에 보였다)
-                f"[알림] {kind} 작업이 실패했습니다 (연속 {fails}회). 계정 정보나 네트워크를 확인해 주세요.",
+                f"[알림] 실패 까닭: {info.get('title', '알 수 없음')} (이 작업 연속 {info.get('count', 1)}회). {info.get('hint', '')}",
             )
 
     # 메일을 새로 읽어온 뒤 구글 캘린더 자동 동기화 (설정에서 켠 경우에만)
@@ -4107,6 +5129,10 @@ def start_task(workspace: UserWorkspace, kind: str, sync_mode: str = "fast", aut
     if demo_mode.active():
         # 체험 중: LMS·메일 서버에 가짜 계정으로 로그인하러 가지 않는다 (자동 실행도 여기서 멈춘다)
         return False, demo_mode.BLOCK_MESSAGE
+    if kind in ("sync", "deadlines", "emails") and secret_store.waiting():
+        # 맥: 키체인 허락을 기다리는 중이면 빈 비밀번호로 로그인하러 가지 않는다. 가면 실패가 쌓이고
+        # '서버가 로그인을 거절' 로 2시간 쉬기까지 한다. 허락하면 다음 자동 확인부터 그대로 돈다
+        return False, KEYCHAIN_WAIT_MESSAGE
     with task_lock:
         task_state = task_states.setdefault(task_key(workspace.user_id, kind), default_task_state())
         if task_state["running"]:
@@ -4126,8 +5152,14 @@ def start_task(workspace: UserWorkspace, kind: str, sync_mode: str = "fast", aut
     if kind not in ("sync", "verify", "deadlines", "emails", "google-oauth"):
         return False, "알 수 없는 작업입니다."
 
+    if kind == "emails" and _mail_in_process(workspace):
+        # 메일은 따로 된 프로세스를 띄우지 않고 이 서버 안에서 돈다 (_run_emails_here 설명)
+        ensure_data_files(workspace)
+        threading.Thread(target=run_process, args=(workspace, kind, None, None, auto), daemon=True).start()
+        return True, "작업을 시작했습니다."
+
     if getattr(sys, "frozen", False):
-        # EXE 에서는 sys.executable 이 '붕어빵.exe' 다.
+        # EXE 에서는 sys.executable 이 'Daling.exe' 다.
         # `-c "..."` 를 붙여도 무시되고 앱이 통째로 다시 켜지므로(창이 계속 늘어남),
         # app.py 의 작업 전용 진입점으로 들어가게 한다.
         from runtime_config import WORKER_FLAG
@@ -4195,6 +5227,13 @@ def stop_task(workspace: UserWorkspace, lane: str = "") -> tuple[bool, str]:
         with task_lock:
             process = current_processes.get(key)
             running = bool(task_states.setdefault(key, default_task_state())["running"])
+        if running and process is None and key == task_key(workspace.user_id, "emails"):
+            import email_reader
+
+            if email_reader.abort_refresh():  # 서버 안에서 도는 메일 새로고침 (_run_emails_here)
+                append_log(key, f"[{now_iso()}] 사용자가 작업 중지를 요청했습니다.")
+                stopped.append(key)
+            continue
         if not running or process is None or process.poll() is not None:
             continue
         process.terminate()
@@ -4301,6 +5340,37 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         ensure_data_files(workspace)
         return workspace
 
+    def receive_big_upload(self) -> None:
+        """큰 첨부 파일을 그대로 받아(JSON·base64 가 아니라 application/octet-stream, 1MB 씩 디스크로) Drive 로 올리는 일을 건다.
+        이 Content-Type 은 교차 출처에서 미리 묻지(preflight) 않고는 보낼 수 없어 JSON 요구와 같은 CSRF 막이가 된다."""
+        ctype = (self.headers.get("Content-Type") or "").split(";")[0].strip().lower()
+        length = int(self.headers.get("Content-Length") or 0)
+        if ctype != "application/octet-stream" or demo_mode.active() or not 0 < length <= BIG_ATTACH_MAX:
+            self.close_connection = True  # 본문(최대 2GB)을 읽지 않고 답하니 연결은 닫는다
+            message = demo_mode.BLOCK_MESSAGE if demo_mode.active() else "2GB 까지 Drive 링크로 보낼 수 있어요."
+            self.send_json({"ok": False, "message": message}, HTTPStatus.BAD_REQUEST)
+            return
+        import tempfile
+
+        params = parse_qs(urlparse(self.path).query)
+        name = Path(str(params.get("name", [""])[0]).replace("\\", "/")).name.strip() or "첨부파일"
+        folder = Path(tempfile.mkdtemp(prefix="daling-big-"))
+        path = folder / "upload.bin"
+        left = length
+        with open(path, "wb") as fh:
+            while left > 0:
+                chunk = self.rfile.read(min(left, 1024 * 1024))
+                if not chunk:
+                    break
+                fh.write(chunk)
+                left -= len(chunk)
+        if left:
+            shutil.rmtree(folder, ignore_errors=True)
+            self.send_json({"ok": False, "message": "파일을 끝까지 받지 못했어요."}, HTTPStatus.BAD_REQUEST)
+            return
+        job = start_big_upload(self.get_workspace().user_id, path, unicodedata.normalize("NFC", name), length)
+        self.send_json({"ok": True, "job": job})
+
     def read_body_json(self) -> dict[str, Any]:
         # 본문은 한 번만 읽을 수 있다. 체험 모드 문지기(_demo_post)가 먼저 읽어도 원래 처리가 같은 값을 받게 담아 둔다.
         if hasattr(self, "_body_json"):
@@ -4404,6 +5474,11 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             code = params.get("code", [""])[0]
             state = params.get("state", [""])[0]
             error = params.get("error", [""])[0]
+            if state and oauth_state_purpose(state) == "drive-pick":
+                # Drive 고르기 창에서 돌아왔다 (token.json 은 건드리지 않는다)
+                title, message, ok = finish_drive_pick(state, code, error, params.get("picked_file_ids", [""])[0])
+                self.send_html(title, message, success=ok)
+                return
             if error:
                 self.send_html(
                     "Google OAuth 연결 실패",
@@ -4433,6 +5508,12 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                     str(exc),
                     success=False,
                 )
+            return
+        if route == "/api/lock":
+            self.send_json(lock_status())
+            return
+        if route.startswith("/api/") and route not in self.LOCK_OPEN_GET and app_locked():
+            self.send_locked()
             return
         if route == "/api/demo":
             self.send_json({**demo_mode.status(), "available": not MULTI_USER_MODE})
@@ -4507,6 +5588,41 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             except Exception as exc:
                 self.send_json({"ok": False, "items": [], "message": str(exc)})
             return
+        if route == "/api/mail/draft":
+            # 임시 보관함의 메일을 '메일 쓰기' 에 다시 채운다 (이어 쓰기, email_reader.load_draft)
+            try:
+                import email_reader
+
+                uid_text = params.get("uid", [""])[0]
+                if not uid_text.isdigit():
+                    raise ValueError("방금 옮긴 메일이에요. 메일을 다시 받은 뒤 열어 주세요.")
+                self.send_json(email_reader.load_draft(int(uid_text), params.get("folder", ["draft"])[0]))
+            except Exception as exc:
+                self.send_json({"ok": False, "message": str(exc)}, HTTPStatus.BAD_REQUEST)
+            return
+        if route == "/api/mail/attachment":
+            # 읽기 화면의 첨부 받기 (?uid=&folder=&part=). 이름은 서버 구조/파트 머리말에서 다시 읽는다.
+            try:
+                import email_reader
+                from urllib.parse import quote
+
+                uid_text = params.get("uid", [""])[0]
+                if not uid_text.isdigit():
+                    self.send_json({"ok": False, "pendingTrash": True, "message": "방금 휴지통으로 옮긴 메일이에요. 메일을 다시 받은 뒤(잠시 뒤) 해 주세요."}, HTTPStatus.CONFLICT)
+                    return
+                name, mime, data = email_reader.fetch_attachment(
+                    int(uid_text), params.get("folder", ["inbox"])[0], params.get("part", [""])[0]
+                )
+                name = Path(name.replace("\\", "/")).name or "첨부파일"
+                self.send_response(HTTPStatus.OK)
+                self.send_header("Content-Type", mime or "application/octet-stream")
+                self.send_header("Content-Length", str(len(data)))
+                self.send_header("Content-Disposition", f"attachment; filename*=UTF-8''{quote(name)}")
+                self.end_headers()
+                self.wfile.write(data)
+            except Exception as exc:
+                self.send_json({"ok": False, "message": str(exc)}, HTTPStatus.BAD_REQUEST)
+            return
         if route == "/api/mail/eml":
             # 메일 원본을 .eml 파일로 내려준다
             try:
@@ -4532,6 +5648,11 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         if route == "/api/whats-new":
             self.send_json(get_whats_new(workspace))
             return
+        if route == "/api/autostart":
+            # 맥·리눅스 '컴퓨터를 켤 때 Daling 켜기' (autostart.py). Windows 는 설치 파일이 맡아 supported=False
+            supported = autostart.supported() and not MULTI_USER_MODE
+            self.send_json({"ok": True, "supported": supported, "enabled": supported and autostart.enabled()})
+            return
         if route == "/api/tutorial":
             self.send_json(get_tutorial_state(workspace))
             return
@@ -4540,6 +5661,9 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             return
         if route == "/api/window":
             self.send_json(_window_chrome_call(None))
+            return
+        if route == "/api/ai/connections":
+            self.send_json(ai_connections(workspace))
             return
         if route == "/api/ai/status":
             import ai_cli
@@ -4587,7 +5711,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                             "ok": False,
                             "items": [],
                             "needsKey": True,
-                            "message": "DGIST 오픈API 인증키가 없습니다. 설정에서 등록해 주세요.",
+                            "message": "학교 공식 정보를 지금은 불러올 수 없어요.",
                         }
                     )
                     return
@@ -4695,6 +5819,9 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         if route == "/api/course-staff":
             self.send_json(get_course_staff(workspace))
             return
+        if route == "/api/mail/me":
+            self.send_json(mail_me(workspace))
+            return
         if route == "/api/diagnostics":
             # 문의·오류 제보 메일에 붙일 앱 정보. 메일 주소·비밀번호·파일 경로 같은 개인 정보는 넣지 않는다.
             import platform
@@ -4746,16 +5873,21 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             return
         if route == "/api/drive/list":
             # 메일 첨부용 Drive 창. 폴더 안(parent) 또는 검색(q) 결과를 폴더·파일로 나눠 준다.
-            # 앱 권한이 drive.file 이라 이 앱이 올린 파일(강의자료 등)만 보인다.
+            # 보통 토큰(drive.file)은 이 앱이 올린 파일만 보인다 — fullAccess=false 면 화면이 '구글 고르기 창' 단추를 보인다
+            # (/api/drive/pick). 1.12.38~39 에 drive.readonly 를 허락해 둔 토큰은 내 Drive 전체·공유 문서함이 보인다.
             parent = (params.get("parent", [""])[0] or "root").strip()
             q = (params.get("q", [""])[0] or "").strip()
             token = (params.get("pageToken", [""])[0] or "").strip() or None
             try:
                 import drive_uploader
                 service = drive_uploader.get_drive_service()
+                granted = read_json(workspace.token_path, {}) or {}
+                full = GOOGLE_DRIVE_READ_SCOPE in set(granted.get("scopes") or []) if isinstance(granted, dict) else False
                 if q:
                     safe = q.replace("\\", "").replace("'", "\\'")
                     query = f"trashed=false and name contains '{safe}'"
+                elif parent == "shared":
+                    query = "trashed=false and sharedWithMe"  # '공유 문서함' (내 드라이브 폴더 밖)
                 else:
                     safe_parent = parent.replace("'", "")
                     query = f"trashed=false and '{safe_parent}' in parents"
@@ -4765,26 +5897,47 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                     q=query,
                     orderBy="folder,name_natural",
                     fields="nextPageToken, files(id,name,size,mimeType,modifiedTime)",
+                    supportsAllDrives=True,
+                    includeItemsFromAllDrives=True,
                 ).execute()
                 items = results.get("files", [])
                 folders = [f for f in items if f.get("mimeType") == "application/vnd.google-apps.folder"]
                 files = [f for f in items if f.get("mimeType") != "application/vnd.google-apps.folder"]
+                if full and not q and parent == "root" and not token:
+                    folders.insert(0, {"id": "shared", "name": "공유 문서함", "mimeType": "application/vnd.google-apps.folder"})
                 self.send_json({
                     "ok": True,
                     "folders": folders,
                     "files": files,
+                    "fullAccess": full,
                     "nextPageToken": results.get("nextPageToken", ""),
                 })
             except Exception as exc:
                 self.send_json({"ok": False, "folders": [], "files": [], "message": str(exc)}, HTTPStatus.BAD_REQUEST)
             return
+        if route == "/api/drive/picked":
+            # Drive 고르기 창(/api/drive/pick)의 결과. 화면이 브라우저에서 고르는 동안 물어본다
+            pick = drive_picks.get(params.get("state", [""])[0])
+            if not pick or pick.get("user_id") != workspace.user_id:
+                self.send_json({"status": "gone", "files": []})
+            else:
+                self.send_json({k: pick.get(k) for k in ("status", "files", "message")})
+            return
+        if route == "/api/mail/big-upload":
+            # 큰 첨부를 Drive 에 올리는 진행 (?job=)
+            job = big_uploads.get(params.get("job", [""])[0])
+            if not job or job.get("user_id") != workspace.user_id:
+                self.send_json({"status": "gone"})
+            else:
+                self.send_json({k: job.get(k) for k in ("status", "sent", "total", "id", "link", "message")})
+            return
         if route == "/api/drive/get":
             file_id = params.get("id", [""])[0]
             try:
                 import base64 as _b64
-                import drive_uploader
-                service = drive_uploader.get_drive_service()
-                meta = service.files().get(fileId=file_id, fields="name,size,mimeType").execute()
+                import email_reader
+                service = drive_service_for_file(workspace, file_id)
+                meta =service.files().get(fileId=file_id, fields="name,size,mimeType", supportsAllDrives=True).execute()
                 name = meta.get("name", "file")
                 mime = str(meta.get("mimeType", ""))
                 if mime.startswith("application/vnd.google-apps."):
@@ -4792,9 +5945,9 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                     content = service.files().export(fileId=file_id, mimeType="application/pdf").execute()
                     name = f"{name}.pdf"
                 else:
-                    content = service.files().get_media(fileId=file_id).execute()
-                if len(content) > 20 * 1024 * 1024:
-                    raise ValueError("파일이 20MB를 넘어 메일에 붙일 수 없습니다.")
+                    content = service.files().get_media(fileId=file_id, supportsAllDrives=True).execute()
+                if len(content) > email_reader.SEND_ATTACH_MAX:
+                    raise ValueError("파일이 25MB를 넘어 메일에 붙일 수 없어요. Drive 링크로 보내 주세요.")
                 self.send_json({
                     "filename": name,
                     "size": len(content),
@@ -4815,7 +5968,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body)
             return
-        if route in ("/", "/index.html") and demo_mode.active() and self.send_demo_index():
+        if route in ("/", "/index.html") and (demo_mode.active() or app_locked()) and self.send_demo_index():
             return
         # 화면 파일은 압축해서 준다 (app.js 316KB, styles.css 203KB → 1/4 정도)
         static_types = {
@@ -4831,23 +5984,66 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 return
         super().do_GET()
 
+    # ===== 앱 잠금 (app_locked) =====
+    # 잠긴 동안 통과시키는 것: 잠금 화면을 그리는 데 드는 것(테마·언어)과 창 단추·끌 곳(창 제목 줄 = 상단 바)뿐.
+    # /healthz 와 구글 로그인에서 돌아오는 길('/?code=')은 /api/ 밖이라 그대로 둔다(내용이 없거나, 연결을 시작한 사람만 씀).
+    LOCK_OPEN_GET = {"/api/lock", "/api/ui-prefs", "/api/window"}
+    LOCK_OPEN_POST = {"/api/window"}
+
+    def send_locked(self) -> None:
+        self.send_json({"ok": False, "locked": True, "message": "앱이 잠겨 있어요. 비밀번호를 넣어 주세요."}, HTTPStatus.LOCKED)
+
+    def handle_lock_post(self, route: str) -> None:
+        """POST /api/lock/<unlock|reset|lock|check|set|off|idle>. 확인·켜기·바꾸기·끄기·자동 잠금 시간은 풀린 상태에서만."""
+        payload = self.read_body_json()
+        payload = payload if isinstance(payload, dict) else {}
+        if MULTI_USER_MODE:
+            self.send_json({"ok": False, "message": "공유 웹사이트 모드에서는 쓸 수 없습니다."}, HTTPStatus.BAD_REQUEST)
+            return
+        action = route.rsplit("/", 1)[-1]
+        if action == "unlock":
+            result = lock_unlock(str(payload.get("pin") or ""))
+        elif action == "reset":
+            result = lock_reset_with_account(str(payload.get("password") or ""))
+        elif action == "lock":
+            result = lock_now()
+        elif app_locked():
+            self.send_locked()
+            return
+        elif action == "check":
+            result = lock_unlock(str(payload.get("pin") or ""), open_it=False)
+        elif action == "set":
+            result = lock_set_pin(str(payload.get("pin") or ""), str(payload.get("current") or ""))
+        elif action == "off":
+            result = lock_turn_off(str(payload.get("current") or ""))
+        elif action == "idle":
+            result = lock_set_idle(payload.get("minutes"))
+        else:
+            self.send_json({"ok": False, "message": "없는 요청입니다."}, HTTPStatus.NOT_FOUND)
+            return
+        # 틀린 비밀번호는 오류가 아니라 '맞지 않음' 이다. 화면이 메시지·남은 횟수를 그대로 보여 주도록 200 으로 준다
+        self.send_json(result)
+
     # ===== 체험 모드 (demo_mode) =====
     # 화면 서버가 바깥 서버에 묻는 라우트를 체험 중에는 여기서 먼저 받는다. 소켓 차단(demo_mode)은 빠뜨린 곳을 위한 안전망.
     DEMO_BLOCKED_GET = {
-        "/api/mail/eml", "/api/mail-image", "/api/drive/list", "/api/drive/get",
-        "/api/place-search", "/api/fglp", "/api/seminars",
+        "/api/mail/eml", "/api/mail/attachment", "/api/mail/draft", "/api/mail/big-upload", "/api/mail-image", "/api/drive/list", "/api/drive/get", "/api/drive/picked",
+        "/api/place-search", "/api/fglp", "/api/seminars", "/api/ai/connections",
     }
     DEMO_BLOCKED_POST = {
         "/api/config", "/api/config/import", "/api/run", "/api/verify", "/api/refresh-deadlines", "/api/refresh-emails",
         "/api/update/apply", "/api/update/open-download", "/api/send-email", "/api/mail/save-draft",
+        "/api/mail/big-cancel", "/api/drive/share",
         "/api/mail/move", "/api/mail/folder-create", "/api/mail/translate", "/api/timetable/import-image",
         "/api/timetable/import-link", "/api/samsung-notes/send", "/api/samsung-notes/organize", "/api/organize-files",
         "/api/assignment/open", "/api/storage/cleanup", "/api/storage/trash-browser", "/api/google/credentials", "/api/google/connect",
-        "/api/google/disconnect", "/api/gcal/sync-academic", "/api/gcal/sync", "/api/local-autosave/run",
+        "/api/google/disconnect", "/api/drive/pick", "/api/gcal/sync-academic", "/api/gcal/sync", "/api/local-autosave/run",
         # 내 컴퓨터(문서·다운로드 폴더)에 가짜 자료를 쓰지 않는다
         "/api/save-local", "/api/export-ics",
         # AI CLI 는 바깥 서비스에 묻는다
-        "/api/ai/search", "/api/ai/draft",
+        "/api/ai/search", "/api/ai/draft", "/api/ai/polish", "/api/ai/continue", "/api/ai/login",
+        # 로그인 항목(LaunchAgents·~/.config/autostart)에 쓰지 않는다
+        "/api/autostart",
     }
     DEMO_MAIL_POST = {
         "/api/mark-read": "mark-read", "/api/mark-all-read": "mark-all-read", "/api/delete-email": "delete",
@@ -4920,13 +6116,26 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         self.send_json({"ok": True, **demo_mode.status()})
 
     def send_demo_index(self) -> bool:
-        """체험 중 첫 화면: <html data-demo> 를 달고(처음 그릴 때부터 체험 띠를 보이게) 바깥 글꼴을 빼서 준다."""
+        """체험 중·잠긴 동안의 첫 화면. 체험 중: <html data-demo> 를 달고(처음 그릴 때부터 체험 띠를 보이게) 바깥 글꼴을 뺀다.
+        잠김: <html data-locked> 를 달아 첫 그림부터 잠금 화면만 보이게 하고, 고른 테마(다크)를 미리 칠하는 한 줄을 넣는다 —
+        테마는 app.js 가 /api/ui-prefs 로 늦게 받아서, 그대로 두면 다크 테마 사람도 밝은 잠금 화면이 번쩍 보였다."""
         try:
             text = (WEB_ROOT / "index.html").read_text(encoding="utf-8")
         except OSError:
             return False
-        text = text.replace("<html ", '<html data-demo="1" ', 1)
-        text = re.sub(r'\s*<link[^>]*id="webFonts"[^>]*>', "", text, count=1)
+        if demo_mode.active():
+            text = text.replace("<html ", '<html data-demo="1" ', 1)
+            text = re.sub(r'\s*<link[^>]*id="webFonts"[^>]*>', "", text, count=1)
+        if app_locked():
+            theme = get_ui_prefs(self.get_workspace()).get("theme")
+            theme = theme if theme in ("claude", "dark") else "auto"
+            paint = (
+                "<script>(function(t){if(t==='dark'||(t==='auto'&&window.matchMedia&&"
+                "matchMedia('(prefers-color-scheme: dark)').matches))document.documentElement.dataset.theme='dark';})"
+                f"({json.dumps(theme)});</script>"
+            )
+            text = text.replace("<html ", '<html data-locked="1" ', 1).replace("</head>", f"  {paint}\n  </head>", 1)
+        BOOT.setdefault("page", time.time())
         body = text.encode("utf-8")
         self.send_response(HTTPStatus.OK)
         self.send_header("Content-Type", "text/html; charset=utf-8")
@@ -4969,17 +6178,27 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def serve_download(self, workspace: UserWorkspace, name: str) -> None:
-        """다운로드 폴더의 파일을 첨부파일로 전송 (브라우저 모드용)."""
+    @staticmethod
+    def _stored_file(workspace: UserWorkspace, name: str) -> tuple[Path | None, dict, str]:
+        """강의자료 이름 → (내 컴퓨터의 실제 파일, 메타데이터, 이름). 다운로드 폴더 밖이거나 없으면 파일은 None."""
         safe_name = Path(str(name)).name
         if not safe_name:
-            self.send_json({"ok": False, "message": "파일 이름이 필요합니다."}, HTTPStatus.BAD_REQUEST)
-            return
+            return None, {}, ""
         download_path = get_download_path(workspace).resolve()
         metadata = read_json(workspace.file_metadata_log, {})
         meta = metadata.get(safe_name, {}) if isinstance(metadata, dict) else {}
         file_path = (download_path / stored_relpath(safe_name, meta)).resolve()
-        if not str(file_path).startswith(str(download_path)) or not file_path.is_file():
+        if not file_path.is_relative_to(download_path) or not file_path.is_file():
+            return None, meta, safe_name
+        return file_path, meta, safe_name
+
+    def serve_download(self, workspace: UserWorkspace, name: str) -> None:
+        """다운로드 폴더의 파일을 첨부파일로 전송 (브라우저 모드용)."""
+        file_path, meta, safe_name = self._stored_file(workspace, name)
+        if not safe_name:
+            self.send_json({"ok": False, "message": "파일 이름이 필요합니다."}, HTTPStatus.BAD_REQUEST)
+            return
+        if file_path is None:
             self.send_json({"ok": False, "message": "파일을 찾을 수 없습니다."}, HTTPStatus.NOT_FOUND)
             return
         display_name = str(meta.get("original_name", safe_name)) if isinstance(meta, dict) else safe_name
@@ -5008,7 +6227,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>{safe_title}</title>
   <style>
-    body {{ margin: 0; font-family: "Segoe UI", system-ui, sans-serif; background: #f7f8fb; color: #17202a; }}
+    body {{ margin: 0; font-family: "Segoe UI", "Malgun Gothic", -apple-system, "Apple SD Gothic Neo", system-ui, sans-serif; background: #f7f8fb; color: #17202a; }}
     main {{ max-width: 680px; margin: 12vh auto; padding: 28px; border: 1px solid #d9e0e8; border-radius: 8px; background: white; }}
     h1 {{ margin: 0 0 10px; color: {color}; font-size: 26px; }}
     p {{ margin: 0 0 22px; color: #667085; line-height: 1.6; }}
@@ -5032,15 +6251,32 @@ class DashboardHandler(SimpleHTTPRequestHandler):
     def _do_POST(self) -> None:
         if self.reject_bad_host():
             return
+        if urlparse(self.path).path == "/api/mail/big-upload":
+            if app_locked():
+                self.close_connection = True  # 본문(최대 2GB)을 읽지 않고 답하니 연결은 닫는다
+                self.send_locked()
+                return
+            self.receive_big_upload()
+            return
         if not self.csrf_ok():
             self.send_json(
                 {"ok": False, "message": "잘못된 요청입니다 (Content-Type: application/json 필요)."},
                 HTTPStatus.FORBIDDEN,
             )
             return
+        # 본문을 먼저 다 읽어 둔다(처리는 read_body_json 이 담아 둔 값을 쓴다). 체험 모드에서 막는 길처럼 본문을 안 읽고
+        # 답하면, 연결을 닫을 때 읽지 않은 본문 때문에 운영체제가 연결을 끊어(RST) 화면이 답을 못 받았다
+        # (2026-10-22 POST 점검에서 실측: WinError 10053).
+        self.read_body_json()
         workspace = self.get_workspace()
         base_url = self.request_base_url()
         route = urlparse(self.path).path
+        if route.startswith("/api/lock/"):
+            self.handle_lock_post(route)
+            return
+        if route not in self.LOCK_OPEN_POST and app_locked():
+            self.send_locked()
+            return
         if route == "/api/demo":
             self.toggle_demo()
             return
@@ -5079,6 +6315,17 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             return
         if route == "/api/refresh-emails":
             config = read_config(workspace)
+            if config.get("SCHOOL_EMAIL") and not config.get("SCHOOL_EMAIL_PASSWORD"):
+                # 넣어 둔 비밀번호를 저장소에서 못 꺼냈으면 '계정을 먼저 입력' 이 아니라 그 까닭을 말한다 (2026-10-22 맥)
+                problem = secret_read_problems(workspace).get("SCHOOL_EMAIL_PASSWORD")
+                if problem:
+                    message = (KEYCHAIN_WAIT_MESSAGE if secret_store.waiting()
+                               else secret_store.read_problem("학교 메일 비밀번호", problem))
+                    self.send_json(
+                        {"ok": False, "message": message},
+                        HTTPStatus.BAD_REQUEST,
+                    )
+                    return
             if not config.get("SCHOOL_EMAIL") or not config.get("SCHOOL_EMAIL_PASSWORD"):
                 self.send_json(
                     {"ok": False, "message": "설정 → 학교 이메일에서 계정을 먼저 입력해 주세요."},
@@ -5160,6 +6407,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                     port=int(config.get("SCHOOL_SMTP_PORT", 465) or 465),
                     imap_host=config.get("SCHOOL_IMAP_HOST", "mail.dgist.ac.kr"),
                     draft_id=str(payload.get("draftId", "")),
+                    replace_uid=_int_or_zero(payload.get("replaceUid")),
                 )
                 message = f"메일을 보냈습니다: {result['to']}"
                 if result.get("refused"):
@@ -5181,10 +6429,42 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                     account=config.get("SCHOOL_EMAIL"),
                     password=config.get("SCHOOL_EMAIL_PASSWORD"),
                     imap_host=config.get("SCHOOL_IMAP_HOST", "mail.dgist.ac.kr"),
+                    replace_uid=_int_or_zero(payload.get("replaceUid")),
                 )
                 self.send_json({"ok": True, "dropped": n})
             except Exception as exc:
                 self.send_json({"ok": False, "message": f"임시저장본을 지우지 못했습니다: {exc}"}, HTTPStatus.BAD_REQUEST)
+            return
+        if route == "/api/mail/big-cancel":
+            # 쓰는 중에 뺀 큰 첨부: 올리는 중이면 멈추고, 다 올라갔으면 Drive 휴지통으로. 이 앱이 올린 것(job)만.
+            payload = self.read_body_json()
+            job = big_uploads.get(str(payload.get("job", "")))
+            if not job or job.get("user_id") != workspace.user_id:
+                self.send_json({"ok": False, "message": "이미 끝난 일이에요."}, HTTPStatus.BAD_REQUEST)
+                return
+            job["cancel"] = True
+            try:
+                if job.get("status") == "done" and job.get("id"):
+                    trash_big_attachment(job["id"])
+                    job["status"] = "cancelled"
+                self.send_json({"ok": True})
+            except Exception as exc:
+                self.send_json({"ok": False, "message": str(exc)}, HTTPStatus.BAD_REQUEST)
+            return
+        if route == "/api/drive/share":
+            # Drive 에서 고른 25MB 넘는 파일은 내려받아 붙이지 않고 링크로 보낸다 — '링크가 있는 사람 보기' 로 연다
+            payload = self.read_body_json()
+            file_id = str(payload.get("id", "")).strip()
+            try:
+                service = drive_service_for_file(workspace, file_id)
+                service.permissions().create(
+                    fileId=file_id, body={"type": "anyone", "role": "reader"}, fields="id", supportsAllDrives=True
+                ).execute()
+                meta = service.files().get(fileId=file_id, fields="name,size,webViewLink", supportsAllDrives=True).execute()
+                self.send_json({"ok": True, "name": meta.get("name"), "size": int(meta.get("size") or 0),
+                                "link": meta.get("webViewLink") or f"https://drive.google.com/file/d/{file_id}/view"})
+            except Exception as exc:
+                self.send_json({"ok": False, "message": str(exc)}, HTTPStatus.BAD_REQUEST)
             return
         if route == "/api/mail/save-draft":
             # 임시저장을 서버의 '임시 보관함'에 넣는다 (웹메일·휴대폰에서도 이어서 쓰게)
@@ -5209,6 +6489,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                     password=config.get("SCHOOL_EMAIL_PASSWORD"),
                     imap_host=config.get("SCHOOL_IMAP_HOST", "mail.dgist.ac.kr"),
                     draft_id=str(payload.get("draftId", "")),
+                    replace_uid=_int_or_zero(payload.get("replaceUid")),
                 )
                 self.send_json({"ok": True, "message": "임시 보관함에 저장했습니다.", **result})
             except Exception as exc:
@@ -5428,9 +6709,13 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                     return safe, meta, path
 
                 done, failed, skipped = [], [], []
+                fail_reason = ""  # 실패 까닭(사람 말). Drive 는 drive_uploader.last_error
 
                 if action == "drive":
+                    import drive_uploader
                     from drive_uploader import upload_to_drive_with_path
+
+                    drive_uploader.last_error = ""
 
                     # 설정은 한 번만 읽는다 (파일마다 읽으면 수백 개를 고를 때 디스크·복호화가 그만큼 반복된다)
                     drive_layout = read_config(workspace).get("FOLDER_LAYOUT")
@@ -5447,12 +6732,19 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                                 meta.get("folder_path") if isinstance(meta, dict) else None,
                                 drive_layout,
                             )
-                            (skipped if result == "exists" else done).append(display)
+                            # 올리기는 실패하면 예외 대신 '' 를 돌려준다. 예전엔 그것까지 '올렸습니다' 로 셌다
+                            if not result:
+                                failed.append(display)
+                            else:
+                                (skipped if result == "exists" else done).append(display)
                         except Exception:
                             failed.append(display)
+                    if failed and not done and not skipped:
+                        raise ValueError(f"Drive에 올리지 못했습니다. {drive_uploader.last_error or ''}".strip())
                     message = f"Drive에 {len(done)}개 올렸습니다."
                     if skipped:
                         message += f" 이미 있던 {len(skipped)}개는 건너뛰었습니다."
+                    fail_reason = drive_uploader.last_error
 
                 elif action == "notes":
                     import samsung_notes
@@ -5499,7 +6791,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                         "done": len(done),
                         "skipped": len(skipped),
                         "failed": len(failed),
-                        "message": message + (f" 실패 {len(failed)}개." if failed else ""),
+                        "message": message + (f" 실패 {len(failed)}개." if failed else "") + (f" {fail_reason}" if failed and fail_reason else ""),
                     }
                 )
             except Exception as exc:
@@ -5581,6 +6873,60 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         if route == "/api/open-url":
             try:
                 self.send_json(open_external_url(self.read_body_json()))
+            except Exception as exc:
+                self.send_json({"ok": False, "message": str(exc)}, HTTPStatus.BAD_REQUEST)
+            return
+        if route == "/api/presence":
+            # 앱을 보고 있는지 (메일 자동 확인 주기, effective_minutes)
+            PRESENCE.update(viewing=bool(self.read_body_json().get("viewing")), at=time.time())
+            self.send_json({"ok": True})
+            return
+        if route == "/api/autostart":
+            try:
+                if MULTI_USER_MODE:
+                    raise ValueError("공유 웹사이트 모드에서는 쓰지 않습니다.")
+                result = autostart.set_enabled(bool(self.read_body_json().get("on")))
+                self.send_json(result, HTTPStatus.OK if result.get("ok") else HTTPStatus.BAD_REQUEST)
+            except Exception as exc:
+                self.send_json({"ok": False, "message": str(exc)}, HTTPStatus.BAD_REQUEST)
+            return
+        if route == "/api/open-app-url":
+            # 맥 앱 창(WKWebView)은 window.open 을 무시한다 — pywebview cocoa 는 링크를 '눌렀을 때' 만 바깥 브라우저로
+            # 넘긴다(2026-10-21 점검). 그래서 맥에서 강의자료 열기·강의계획서·메일 .eml 저장이 아무 반응이 없었다.
+            # 이 앱 서버의 정해진 길만 기본 브라우저로 연다(Windows·리눅스 창은 window.open 이 이미 이렇게 한다).
+            try:
+                path = str(self.read_body_json().get("path") or "")
+                if not path.startswith(("/api/file?", "/api/mail/eml?", "/api/deadlines.ics")) or "\n" in path:
+                    raise ValueError("열 수 없는 주소입니다.")
+                if MULTI_USER_MODE:
+                    raise ValueError("공유 웹사이트 모드에서는 쓰지 않습니다.")
+                url = f"http://127.0.0.1:{self.server.server_address[1]}{path}"
+                self.send_json({"ok": True, "opened": bool(webbrowser.open(url))})
+            except Exception as exc:
+                self.send_json({"ok": False, "message": str(exc)}, HTTPStatus.BAD_REQUEST)
+            return
+        if route == "/api/open-file":
+            # 강의자료 '열기'는 이미 내 컴퓨터에 있는 파일을 기본 앱(PDF 보기·한컴·파워포인트)으로 바로 연다.
+            # 예전엔 /api/file(첨부파일로 보내기)을 창에 띄워 '다운로드'가 한 번 더 일어났다
+            # (2026-10-27 사용자: '로컬에 저장돼 있다며, 바로 오픈이 아니잖아').
+            try:
+                if MULTI_USER_MODE:
+                    raise ValueError("공유 웹사이트 모드에서는 쓰지 않습니다.")
+                file_path, _meta, safe_name = self._stored_file(workspace, self.read_body_json().get("name") or "")
+                if file_path is None:
+                    raise FileNotFoundError("내 컴퓨터에서 이 파일을 찾지 못했어요. 자료를 다시 받아 주세요.")
+                if os.name == "nt":
+                    os.startfile(str(file_path))
+                elif sys.platform.startswith("linux"):
+                    import linux_support
+
+                    if not linux_support.open_external(str(file_path)):
+                        raise RuntimeError("파일을 열 프로그램을 찾지 못했어요 (xdg-open 없음)")
+                else:
+                    subprocess.Popen(["open", str(file_path)])
+                self.send_json({"ok": True, "path": str(file_path)})
+            except FileNotFoundError as exc:
+                self.send_json({"ok": False, "message": str(exc)}, HTTPStatus.NOT_FOUND)
             except Exception as exc:
                 self.send_json({"ok": False, "message": str(exc)}, HTTPStatus.BAD_REQUEST)
             return
@@ -5685,6 +7031,22 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 self.send_json({"ok": False, "message": str(exc)}, HTTPStatus.BAD_REQUEST)
             return
 
+        if route == "/api/drive/pick":
+            # Drive 전체·공유 문서함에서 첨부할 파일을 구글 고르기 창으로 (create_drive_pick_url). 결과는 /api/drive/picked
+            try:
+                payload = self.read_body_json()
+                auth_url, pick_state = create_drive_pick_url(workspace, base_url, getattr(self, "_session_token", None))
+                opened = False
+                if payload.get("openBrowser") and not MULTI_USER_MODE:
+                    try:
+                        opened = webbrowser.open(auth_url)
+                    except Exception:
+                        opened = False
+                self.send_json({"ok": True, "authUrl": auth_url, "state": pick_state, "openedInBrowser": opened})
+            except Exception as exc:
+                self.send_json({"ok": False, "message": str(exc)}, HTTPStatus.BAD_REQUEST)
+            return
+
         if route == "/api/google/connect":
             try:
                 payload = self.read_body_json()
@@ -5745,7 +7107,30 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         if route == "/api/tutorial/done":
             self.send_json(mark_tutorial_done(workspace, self.read_body_json()))
             return
-        if route in ("/api/ai/profile", "/api/ai/search", "/api/ai/draft"):
+        if route == "/api/tutorial/view":
+            self.send_json(mark_tutorial_view(workspace, self.read_body_json()))
+            return
+        if route in ("/api/mail/me", "/api/mail/flow"):
+            try:
+                payload = self.read_body_json() or {}
+                self.send_json(save_mail_me(workspace, payload) if route == "/api/mail/me" else mail_flow_for(workspace, payload))
+            except Exception as exc:
+                self.send_json({"ok": False, "message": str(exc)}, HTTPStatus.BAD_REQUEST)
+            return
+        if route == "/api/ai/login":
+            # 설정 'AI 연결' 카드: 그 CLI 의 로그인 창 띄우기
+            import ai_cli
+
+            try:
+                payload = self.read_body_json() or {}
+                provider = str(payload.get("provider") or "")
+                if provider not in ai_cli.PROVIDERS:
+                    raise ValueError("모르는 AI 예요.")
+                self.send_json(ai_cli.open_login(provider))
+            except (ai_cli.AIError, ValueError) as exc:
+                self.send_json({"ok": False, "message": str(exc)}, HTTPStatus.BAD_REQUEST)
+            return
+        if route in ("/api/ai/profile", "/api/ai/search", "/api/ai/draft", "/api/ai/polish", "/api/ai/continue"):
             # AI CLI 도우미 (ai_cli.py). 답이 10초쯤 걸리지만 서버가 요청마다 스레드를 써서 화면은 멈추지 않는다.
             import ai_cli
 
@@ -5756,16 +7141,36 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                     self.send_json({"ok": True, "profile": ai_cli.save_profile(profile_path, payload)})
                     return
                 profile = ai_cli.load_profile(profile_path)
-                if not ai_cli.enabled(profile):
-                    raise ai_cli.AIError("AI 도우미가 꺼져 있어요. 설정 → AI 도우미(실험실)에서 켜 주세요.")
+                # 실험실 켜기 스위치는 없앴다(2026-10-20 사용자: '어차피 /ai 쳐서 쓸 거니까'). AI 는 사용자가 /ai·단추로
+                # 부를 때만 돈다는 원칙은 그대로라, 따로 켜 둘 필요가 없다.
                 provider = profile.get("provider") or None
                 model = profile.get("model") or ""
+                # '/ai with opus5.5 [ … ]' 처럼 이번 한 번만 고른 모델. 아는 CLI·안전한 글자일 때만 받는다(인자로 넘어감)
+                once_provider = str(payload.get("provider") or "")
+                once_model = str(payload.get("model") or "")
+                if once_provider in ai_cli.PROVIDERS:
+                    provider = once_provider
+                    model = once_model if ai_cli._SAFE_MODEL.match(once_model or "x") and once_model else ""
                 if route == "/api/ai/search":
                     index = payload.get("index") if isinstance(payload.get("index"), list) else []
                     res = ai_cli.search(str(payload.get("query") or ""), index, provider, model=model)
+                elif route == "/api/ai/polish":
+                    # 메일 쓰기 흐름의 가운데(용건)만 다듬는다. 인사·소개·서명은 화면이 이미 넣었다.
+                    flow = payload.get("flow") if isinstance(payload.get("flow"), dict) else {}
+                    res = ai_cli.polish(str(payload.get("text") or ""), str(payload.get("lang") or "ko"), flow,
+                                        provider, model=model)
+                elif route == "/api/ai/continue":
+                    # 메일 쓰기 칸의 '/ai 지시' 자리에 들어갈 글 (앞 글에 이어지고 뒤 글과 겹치지 않게)
+                    flow = payload.get("flow") if isinstance(payload.get("flow"), dict) else {}
+                    res = ai_cli.continue_text(str(payload.get("instruction") or ""), str(payload.get("before") or ""),
+                                               str(payload.get("after") or ""), str(payload.get("lang") or "ko"), flow,
+                                               provider, model=model)
                 else:
                     context = payload.get("context") if isinstance(payload.get("context"), dict) else {}
-                    res = ai_cli.draft(str(payload.get("request") or ""), profile, context, provider, model=model)
+                    # 이름·학번·소속은 직접 적은 값이 없으면 LMS·조직도에서 가져온 값으로
+                    me = mail_me(workspace)["me"]
+                    merged = {**profile, **{k: str(me.get(k) or "") for k in ("name", "nameEn", "studentId", "dept", "deptEn", "year")}}
+                    res = ai_cli.draft(str(payload.get("request") or ""), merged, context, provider, model=model)
                 res["engine"] = res.get("modelLabel") or ai_cli.LABELS.get(res.get("provider"), "")
                 self.send_json(res)
             except ai_cli.AIError as exc:
@@ -5774,9 +7179,11 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 self.send_json({"ok": False, "message": str(exc)}, HTTPStatus.BAD_REQUEST)
             return
         if route == "/api/window":
-            # 앱 상단 바의 최소화·최대화·닫기 단추
-            action = str((self.read_body_json() or {}).get("action") or "")
-            self.send_json(_window_chrome_call(action))
+            # 앱 상단 바의 최소화·최대화·닫기 단추, 맥은 끌 곳 알림(regions)
+            body = self.read_body_json()
+            body = body if isinstance(body, dict) else {}
+            action = str(body.get("action") or "")
+            self.send_json(_window_chrome_call(action, body))
             return
         if route == "/api/ui-prefs":
             try:
@@ -5830,7 +7237,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                     failed.append(safe_name or str(raw_name))
                     continue
                 display_name = str(meta.get("original_name", safe_name)) if isinstance(meta, dict) else safe_name
-                # 문서\붕어빵 파일 정리\<과목>\(<LMS 하위 폴더>)\ 로 담는다 (자동 저장·Drive 와 같은 정리 방식)
+                # 문서\Daling 파일 정리\<과목>\(<LMS 하위 폴더>)\ 로 담는다 (자동 저장·Drive 와 같은 정리 방식)
                 course = str(meta.get("course", "")) if isinstance(meta, dict) else ""
                 sub = layout_subfolders(
                     meta.get("folder_path") if isinstance(meta, dict) else None,

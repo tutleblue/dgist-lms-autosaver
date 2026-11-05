@@ -5,12 +5,13 @@
 앱은 그것을 받아 조용히 설치한 뒤 다시 켠다.
 
   1) api.github.com/repos/<저장소>/releases/latest 에서 최신 릴리스(태그 v1.2.3)를 읽는다
-  2) 첨부된 bungeoppang-<버전>-win-x64-setup.exe 를 내려받는다
+  2) 첨부된 daling-<버전>-win-x64-setup.exe 를 내려받는다
   3) GitHub 이 붙여 주는 SHA-256(자산 digest) 과 맞는지 확인한다 — 안 맞거나 값이 없으면 설치하지 않는다
   4) 설치 파일을 /SILENT 로 실행하고 앱은 스스로 끈다. 설치가 끝나면 설치 프로그램이 앱을 다시 켠다(/RELAUNCH=1)
 
 맥(Daling.app)도 2)·3) 까지 같고, 4) 는 앱에 묶은 install.sh(docs/install.sh 와 같은 파일)가 한다:
 앱이 꺼지기를 기다려 받은 DMG 의 Daling.app 으로 바꿔 끼우고 다시 켠다 (_start_mac_install).
+그 직전에 키체인 값을 0600 파일로 새 판에 넘긴다 — 새 판이 '키체인 암호 입력' 을 다시 묻지 않게 (_mac_hand_off_secrets).
 리눅스는 1) 만 하고 daling-<버전>-linux-x86_64.AppImage 를 찾아 브라우저로 연다 (.github/workflows/linux.yml 이 만든다).
 
 예전 방식(저장소 main 의 VERSION 과 비교)은 저장소가 1.8.6 에 멈춰 있어 늘 '최신' 으로 나왔다(2026-09-28).
@@ -35,9 +36,15 @@ PROJECT_ROOT = Path(__file__).resolve().parent
 # 배포자 GitHub 저장소 (공개)
 REPO = "tutleblue/dgist-lms-autosaver"
 LATEST_RELEASE_API = f"https://api.github.com/repos/{REPO}/releases/latest"
-ASSET_PATTERN = re.compile(r"^bungeoppang-[\d.]+-win-x64-setup\.exe$")
-# 맥 빌드(.github/workflows/mac.yml)가 만드는 DMG.
-MAC_ASSET_PATTERN = re.compile(r"^daling-[\d.]+-mac-arm64\.dmg$")
+# 1.12.53 부터 설치 파일 이름이 daling-… 이다. 릴리스에는 예전 앱을 위한 같은 파일의 bungeoppang-… 사본도 있어
+# 둘 다 맞으면 앞에 오는 것을 고르므로, 새 이름만 찾는다
+ASSET_PATTERN = re.compile(r"^daling-[\d.]+-win-x64-setup\.exe$")
+# 맥 빌드(.github/workflows/mac.yml)가 만드는 DMG. M칩(arm64)·인텔(x86_64) 따로다 (인텔은 2026-10-21~).
+# 제 칩 것만 본다 — 인텔 맥에 M칩 판을 깔면 열리지 않는다.
+MAC_ASSET_PATTERNS = {
+    "arm64": re.compile(r"^daling-[\d.]+-mac-arm64\.dmg$"),
+    "x86_64": re.compile(r"^daling-[\d.]+-mac-x86_64\.dmg$"),
+}
 # 맥은 앱이 직접 받아 바꾼다 (2026-10-15). 예전에는 브라우저로 DMG 주소만 열었는데, 브라우저가 받은 파일에 붙이는
 # 격리 표시(com.apple.quarantine) 때문에 업데이트할 때마다 Gatekeeper 가 다시 막았다(ad-hoc 서명, 공증 없음 →
 # '그래도 열기' 를 또 눌러야 했다). 앱이 urllib 로 받은 파일에는 격리 표시가 붙지 않는다(Info.plist 에
@@ -49,9 +56,9 @@ MAC_MISSING_NOTE = "맥용 새 버전 파일이 아직 올라오지 않았어요
 # 리눅스 빌드(.github/workflows/linux.yml)가 만드는 AppImage. 리눅스 앱도 스스로 덮어쓰지 않는다:
 # AppImage 는 켜 둔 동안 읽기 전용으로 마운트돼 있고, tar.gz 로 깐 사람은 ~/.local/opt 에 있어 어느 쪽을 바꿀지 앱이 모른다.
 LINUX_ASSET_PATTERN = re.compile(r"^daling-[\d.]+-linux-x86_64\.AppImage$")
-LINUX_MANUAL_NOTE = "리눅스에서는 새 AppImage 를 내려받아 실행 권한을 주고 예전 파일과 바꾸면 돼요"
+LINUX_MANUAL_NOTE = "리눅스에서는 새 AppImage 를 내려받아 실행 권한을 주고, Daling 을 끈 뒤 예전 파일과 바꾸면 돼요"
 # tar.gz·한 줄 설치(~/.local/opt/daling)로 깐 사람에게 AppImage 를 권하면 둘이 생긴다. 같은 명령을 다시 돌리면 바뀐다
-LINUX_SCRIPT_NOTE = "터미널에서 curl -fsSL https://gudaling.dev/install.sh | sh 를 다시 실행하면 새 버전으로 바뀌어요"
+LINUX_SCRIPT_NOTE = "Daling 을 끈 뒤 터미널에서 curl -fsSL https://gudaling.dev/install.sh | sh 를 다시 실행하면 새 버전으로 바뀌어요"
 LINUX_MISSING_NOTE = "리눅스용 새 버전 파일이 아직 올라오지 않았어요"
 # Microsoft Store 판(MSIX, packaging/msix): 새 버전은 Store 가 받아 바꾼다. 여기서 GitHub 설치 파일을 돌리면
 # Store 판과 따로 노는 두 번째 Daling(Inno 설치본)이 깔린다. 그래서 GitHub 에 묻지도, 받지도 않는다.
@@ -86,7 +93,7 @@ def _manual_note() -> str:
 # 설치 파일만 받는다. 다른 호스트로 넘어가는 주소는 쓰지 않는다 (GitHub 이 저장소를 옮기는 곳은 이 둘)
 ALLOWED_DOWNLOAD_HOSTS = ("github.com", "objects.githubusercontent.com", "release-assets.githubusercontent.com")
 VERSION_FILE = PROJECT_ROOT / "VERSION"
-USER_AGENT = "Bungeoppang-Updater"
+USER_AGENT = "Daling-Updater"
 
 
 def local_version() -> str:
@@ -111,11 +118,27 @@ def _get_json(url: str) -> dict:
         return json.loads(resp.read().decode("utf-8"))
 
 
+def _mac_arch() -> str:
+    """이 맥의 칩: arm64(M칩) 또는 x86_64(인텔). docs/install.sh 의 mac_arch 와 같은 규칙.
+
+    인텔 판을 M칩 맥에서 로제타로 돌리는 중이어도(platform.machine() 이 x86_64) M칩이면 arm64 — 다음 업데이트로
+    제 칩 판에 옮겨 간다. hw.optional.arm64 는 인텔 맥에는 아예 없다(sysctl 이 실패).
+    """
+    try:
+        out = subprocess.run(["/usr/sbin/sysctl", "-n", "hw.optional.arm64"],
+                             capture_output=True, text=True, timeout=5)
+        if out.stdout.strip() == "1":
+            return "arm64"
+    except (OSError, subprocess.SubprocessError):
+        pass
+    return "arm64" if os.uname().machine == "arm64" else "x86_64"
+
+
 def _pick_asset(release: dict) -> dict | None:
-    # 맥은 맥용 DMG 만 본다. 릴리스에 DMG 가 없으면 '새 버전 없음' 으로 보인다 (깔 수 없는 것을 권하지 않게).
+    # 맥은 이 칩용 DMG 만 본다. 릴리스에 DMG 가 없으면 '새 버전 없음' 으로 보인다 (깔 수 없는 것을 권하지 않게).
     # 리눅스도 같은 까닭으로 리눅스용 AppImage 만 본다.
     if sys.platform == "darwin":
-        pattern = MAC_ASSET_PATTERN
+        pattern = MAC_ASSET_PATTERNS[_mac_arch()]
     elif sys.platform.startswith("linux"):
         pattern = LINUX_ASSET_PATTERN
     else:
@@ -257,7 +280,7 @@ def update_marker_path() -> Path:
 
         return Path(AUTOSAVER_DATA_ROOT) / "update_done.json"
     except Exception:
-        return Path(tempfile.gettempdir()) / "bungeoppang-update" / "update_done.json"
+        return Path(tempfile.gettempdir()) / "daling-update" / "update_done.json"
 
 
 def _write_update_marker(old: str, new: str) -> None:
@@ -284,7 +307,7 @@ def _run_update(on_ready_to_exit) -> None:
             # 확인할 값이 없으면 받은 파일이 진짜인지 알 수 없다. 설치하지 않는다.
             raise RuntimeError("설치 파일의 확인값(SHA-256)이 없어 설치하지 않았습니다.")
 
-        folder = Path(tempfile.gettempdir()) / "bungeoppang-update"
+        folder = Path(tempfile.gettempdir()) / "daling-update"
         folder.mkdir(parents=True, exist_ok=True)
         dest = folder / asset["name"]
         _set_job(stage="내려받기", message="새 버전을 내려받는 중", total=int(asset.get("size") or 0))
@@ -296,7 +319,12 @@ def _run_update(on_ready_to_exit) -> None:
 
         _set_job(stage="설치", message="설치를 시작합니다. 잠시 뒤 앱이 다시 켜집니다.")
         if sys.platform == "darwin":
-            _start_mac_install(dest)
+            handoff = _mac_hand_off_secrets()
+            try:
+                _start_mac_install(dest, handoff)
+            except Exception:
+                _mac_drop_handoff()
+                raise
             # 다시 켜진 앱이 '업데이트를 마쳤어요' 를 보여 줄 수 있게 적어 둔다 (web_ui.get_whats_new)
             _write_update_marker(local_version(), latest)
         else:
@@ -359,10 +387,36 @@ def mac_install_log_path() -> Path:
 
         return Path(AUTOSAVER_DATA_ROOT) / "update-mac.log"
     except Exception:
-        return Path(tempfile.gettempdir()) / "bungeoppang-update" / "update-mac.log"
+        return Path(tempfile.gettempdir()) / "daling-update" / "update-mac.log"
 
 
-def _start_mac_install(dmg: Path) -> None:
+def _mac_hand_off_secrets() -> Path | None:
+    """새 판이 처음 켤 때 '키체인 암호 입력' 창을 띄우지 않게, 이 앱이 읽어 둔 비밀 값을 0600 파일로 넘긴다.
+
+    사설 인증서·ad-hoc 서명이면 키체인 항목에 partition_id = 'cdhash:<만든 빌드>' 가 붙어 새 판은 옛 항목을 못 읽는다
+    (2026-10-15 CI 실측, FEATURES.md 'macOS 판'). 새 판은 이 파일이 있으면 옛 항목을 묻지 않고 지우고 제 항목을
+    다시 만든 뒤 파일을 지운다(mac_keychain._restore_handoff). 못 넘기면 새 판이 예전처럼 한 번 묻는다.
+    """
+    try:
+        import mac_keychain
+
+        if mac_keychain.write_handoff():
+            return mac_keychain.handoff_path()
+    except Exception:
+        pass
+    return None
+
+
+def _mac_drop_handoff() -> None:
+    try:
+        import mac_keychain
+
+        mac_keychain.drop_handoff()
+    except Exception:
+        pass
+
+
+def _start_mac_install(dmg: Path, handoff: Path | None = None) -> None:
     """확인한 DMG 로 바꿔 끼우는 install.sh 를 앱과 따로 띄운다. 앱이 꺼지면(on_ready_to_exit) 일을 시작한다."""
     # 바꿔 끼우는 동안 앱 묶음 안의 파일을 읽지 않게 밖으로 꺼내 둔다
     script = dmg.parent / "install.sh"
@@ -374,6 +428,9 @@ def _start_mac_install(dmg: Path) -> None:
         DALING_UPDATE="1",  # 앱이 스스로 꺼지는 중이니 먼저 기다린다
         LANG=env.get("LANG") or "ko_KR.UTF-8",
     )
+    if handoff:
+        # 바꿔 끼우지 못하고 끝나면 install.sh 가 지운다 (옛 판은 키체인을 그대로 읽으니 필요 없다)
+        env["DALING_HANDOFF"] = str(handoff)
     log_path = mac_install_log_path()
     log_path.parent.mkdir(parents=True, exist_ok=True)
     with open(log_path, "ab") as log:

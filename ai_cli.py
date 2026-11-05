@@ -20,6 +20,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 import time
 from pathlib import Path
@@ -31,16 +32,46 @@ TIMEOUT = 180  # 초. 긴 메일 번역도 이 안에 끝났다
 _found: dict[str, str | None] = {}
 
 
+def _unix_bin_dirs() -> list[Path]:
+    """맥·리눅스에서 PATH 밖에 CLI 가 있을 만한 곳.
+
+    맥에서 Finder·Dock 으로 켠 앱은 PATH 가 /usr/bin:/bin:/usr/sbin:/sbin 뿐이다(터미널의 셸 설정을 읽지 않는다).
+    그래서 터미널에서는 되는 claude 를 앱은 '없음' 으로 봤다. 공식 설치 스크립트·Homebrew·npm 전역·nvm 자리를 직접 본다.
+    """
+    home = Path.home()
+    dirs = [
+        home / ".local" / "bin",          # Claude Code 공식 설치 스크립트
+        home / ".claude" / "local",       # 예전 Claude Code 설치 자리
+        Path("/opt/homebrew/bin"),        # Homebrew (M칩 맥)
+        Path("/usr/local/bin"),           # Homebrew (인텔 맥)·npm 기본 전역
+        home / ".npm-global" / "bin",
+        home / ".volta" / "bin",
+        home / ".bun" / "bin",
+    ]
+    # nvm 은 판마다 따로 깔린다. 새 판부터
+    dirs += sorted((home / ".nvm" / "versions" / "node").glob("*/bin"), reverse=True)
+    return [d for d in dirs if d.is_dir()]
+
+
 def _which(name: str) -> str | None:
-    """npm 전역 설치는 PATH 에 claude.cmd 로 잡힌다. 설치형 앱은 사용자 PATH 를 그대로 물려받는다."""
+    """npm 전역 설치는 PATH 에 claude.cmd 로 잡힌다. 설치형 앱은 사용자 PATH 를 그대로 물려받는다(Windows)."""
     if name in _found:
         return _found[name]
     path = shutil.which(name)
     if not path and os.name == "nt":
         npm = Path(os.environ.get("APPDATA", "")) / "npm" / f"{name}.cmd"
         path = str(npm) if npm.exists() else None
+    elif not path:
+        path = shutil.which(name, path=os.pathsep.join(map(str, _unix_bin_dirs())))
     _found[name] = path
     return path
+
+
+def _child_path(exe: str) -> str:
+    """맥·리눅스에서 CLI 를 돌릴 때의 PATH. npm 으로 깐 CLI 는 '#!/usr/bin/env node' 라서 node 가 있는 곳도 있어야 한다."""
+    parts = [str(Path(exe).parent)] + [str(d) for d in _unix_bin_dirs()] + os.environ.get("PATH", "").split(os.pathsep)
+    seen: set[str] = set()
+    return os.pathsep.join(p for p in parts if p and not (p in seen or seen.add(p)))
 
 
 def available() -> dict:
@@ -134,13 +165,146 @@ def _command(provider: str, exe: str, out_file: Path, model: str = "") -> list[s
             "--color", "never", *extra, "-o", str(out_file), "-"]
 
 
+# 로그인을 다시 하는 법 (CLI 마다 다르다). 2026-11-04 사용자: '터미널로 안내하지 말고 설정창에서 연결하게'
+LOGIN_HOW = {
+    "claude": "설정 → AI 연결에서 Claude 를 다시 연결",
+    "gemini": "Claude 나 Codex 로 바꾸어 사용",
+    "codex": "설정 → AI 연결에서 Codex 를 다시 연결",
+}
+
+
+# ===== 연결(로그인) =====
+# 앱은 키·비밀번호를 받지 않고 각 CLI 의 로그인을 그대로 쓴다. 설정 화면이 상태를 보이고, '연결' 을 누르면
+# 그 CLI 의 로그인 명령을 보이는 터미널 창에서 띄운다(브라우저가 열리고 사용자가 직접 로그인한다).
+# 실측(2026-11-04, 이 PC):
+# - claude 2.x: 'claude auth status --json' → {"loggedIn": false, "authMethod": "none", …}, 로그인은 'claude auth login'
+# - codex: 'codex login status' → 'Logged in using ChatGPT' / 'Not logged in', 로그인은 'codex login'
+# - gemini 0.62: 로그인 명령이 없고, 구글 개인 계정 로그인은 'This client is no longer supported for Gemini Code
+#   Assist for individuals'(IneligibleTierError)로 막혔다 → API 키로만 된다. 앱은 API 키 칸을 두지 않는다
+#   (2026-10-21·11-04 사용자: 'API 키 넣기는 다 빼라'). 사용자가 운영체제 환경 변수에 GEMINI_API_KEY 를 둔 경우만 쓸 수 있다.
+#   창 없이 돌릴 때는 폴더 신뢰 질문이 막으므로 GEMINI_CLI_TRUST_WORKSPACE.
+
+
+def _quiet_kwargs() -> dict:
+    return {"creationflags": 0x08000000} if os.name == "nt" else {}  # CREATE_NO_WINDOW
+
+
+def _cli_env(provider: str, exe: str) -> dict:
+    env = dict(os.environ)
+    if sys.platform.startswith("linux") and getattr(sys, "frozen", False):
+        # 리눅스 묶음 앱은 LD_LIBRARY_PATH 가 묶음 안을 가리킨다 — node(claude·gemini·codex)가 묶음의 옛 libstdc++ 를
+        # 집어 죽을 수 있어, 브라우저·xdg-open 처럼 원래 환경으로 띄운다(2026-10-21 맥·리눅스 점검)
+        try:
+            import linux_support
+
+            env = linux_support.system_env()
+        except Exception:
+            pass
+    if os.name != "nt":
+        env["PATH"] = _child_path(exe)
+    env.setdefault("NO_COLOR", "1")
+    if provider == "gemini":
+        env["GEMINI_CLI_TRUST_WORKSPACE"] = "true"
+    return env
+
+
+def auth_status(provider: str) -> dict:
+    """{provider, label, installed, connected(True/False/None=모름), note}. 네트워크를 쓰지 않는 상태 명령만 부른다."""
+    out = {"provider": provider, "label": LABELS[provider], "installed": False, "connected": None, "note": ""}
+    exe = _which(provider)
+    if not exe:
+        out["note"] = "이 컴퓨터에 설치되어 있지 않아요"
+        return out
+    out["installed"] = True
+    if provider == "gemini":
+        has_key = bool(os.environ.get("GEMINI_API_KEY"))
+        out["connected"] = has_key
+        out["blocked"] = not has_key
+        out["note"] = "연결됨" if has_key else "구글이 개인 계정 로그인을 막아 지금은 쓸 수 없어요"
+        return out
+    cmd = [exe, "auth", "status", "--json"] if provider == "claude" else [exe, "login", "status"]
+    try:
+        proc = subprocess.run(cmd, capture_output=True, stdin=subprocess.DEVNULL, timeout=25,
+                              env=_cli_env(provider, exe), **_quiet_kwargs())
+    except (subprocess.TimeoutExpired, OSError) as exc:
+        out["note"] = f"상태를 확인하지 못했어요 ({type(exc).__name__})"
+        return out
+    text = (proc.stdout + proc.stderr).decode("utf-8", errors="replace")
+    if provider == "claude":
+        import json
+
+        try:
+            data = json.loads(proc.stdout.decode("utf-8", errors="replace"))
+        except ValueError:
+            data = {}
+        if isinstance(data, dict) and "loggedIn" in data:
+            out["connected"] = bool(data.get("loggedIn"))
+            who = data.get("email") or data.get("account") or ""
+            out["note"] = (f"{who} 로 로그인됨" if who else "로그인됨") if out["connected"] else "로그인이 필요해요"
+        else:
+            out["note"] = "상태를 확인하지 못했어요"
+        return out
+    low = text.lower()
+    if "not logged in" in low:
+        out["connected"], out["note"] = False, "로그인이 필요해요"
+    elif "logged in" in low:
+        out["connected"] = True
+        out["note"] = "ChatGPT 계정으로 로그인됨" if "chatgpt" in low else "로그인됨"
+    else:
+        out["note"] = "상태를 확인하지 못했어요"
+    return out
+
+
+def open_login(provider: str) -> dict:
+    """그 CLI 의 로그인 명령을 보이는 터미널 창에서 띄운다. 로그인은 사용자가 브라우저에서 직접 한다."""
+    if provider not in ("claude", "codex"):
+        raise AIError("이 AI 는 로그인 창이 없어요.")
+    exe = _which(provider)
+    if not exe:
+        raise AIError(f"{LABELS[provider]} CLI 가 이 컴퓨터에 없어요.")
+    args = ["auth", "login"] if provider == "claude" else ["login"]
+    title = f"{LABELS[provider]} 로그인 - 브라우저에서 로그인한 뒤 이 창을 닫으세요"
+    if os.name == "nt":
+        # 보이는 콘솔 창(CREATE_NEW_CONSOLE). exe 는 _which 가 찾은 경로, 나머지는 고정 문자열이라 인자 해석 걱정이 없다
+        line = f'title {title} & "{exe}" {" ".join(args)} & echo. & pause'
+        # 목록으로 넘기면 파이썬이 안쪽 따옴표를 \" 로 바꾸는데 cmd 는 그걸 모른다 → 한 줄 그대로 넘긴다
+        subprocess.Popen(f"cmd.exe /c {line}", creationflags=0x00000010, cwd=str(Path.home()))
+        return {"ok": True}
+    import shlex
+
+    command = f"cd ~ && {shlex.join([exe, *args])}"
+    if sys.platform == "darwin":
+        # 터미널.app 에 명령을 넘긴다. 글은 osascript 인자로만(문자열을 스크립트에 끼우지 않는다)
+        script = ('on run argv\ntell application "Terminal"\nactivate\ndo script (item 1 of argv)\n'
+                  'end tell\nend run')
+        subprocess.Popen(["osascript", "-e", script, command])
+        return {"ok": True}
+    env = _cli_env(provider, exe)
+    for term, flag in (("x-terminal-emulator", "-e"), ("gnome-terminal", "--"), ("konsole", "-e"), ("xterm", "-e")):
+        found = shutil.which(term)
+        if found:
+            subprocess.Popen([found, flag, "sh", "-c", command + "; echo; read -r _"], env=env)
+            return {"ok": True}
+    raise AIError(f"터미널을 찾지 못했어요. 터미널에서 {shlex.join([Path(exe).name, *args])} 를 실행해 주세요.")
+
+
 def _explain_failure(provider: str, text: str) -> str:
     low = text.lower()
-    if "auth method" in low or "login" in low or "log in" in low or "not logged" in low or "unauthorized" in low:
-        return f"{LABELS[provider]} 로그인이 필요해요. 터미널에서 {provider} 를 한 번 실행해 로그인해 주세요."
+    if provider == "gemini" and ("ineligibletier" in low or "no longer supported" in low or "gemini_api_key" in low
+                                 or "auth method" in low or "api key" in low):
+        return "Gemini 는 구글이 개인 계정 로그인을 막아 지금은 쓸 수 없어요. 메일 쓰기 창의 모델 단추에서 Claude 나 Codex 를 골라 주세요."
+    # 2026-11-04: Claude CLI 가 'Failed to authenticate: OAuth session expired and could not be refreshed' 로 끝났는데
+    # 아래 낱말 어디에도 안 걸려 'Claude 가 답하지 못했어요' 만 떴다 — 메일의 /ai 가 그냥 안 되는 것처럼 보였다
+    if any(word in low for word in ("auth method", "login", "log in", "not logged", "unauthorized", "authenticate",
+                                    "oauth", "session expired", "token expired", "credentials")):
+        return (f"{LABELS[provider]} 로그인이 만료됐어요. {LOGIN_HOW[provider]}하거나, "
+                "메일 쓰기 창의 모델 단추에서 다른 AI 를 골라 주세요.")
     if "rate limit" in low or "quota" in low or "usage limit" in low:
         return f"{LABELS[provider]} 사용 한도에 걸렸어요. 잠시 뒤 다시 해 보거나 다른 AI 를 골라 주세요."
-    return f"{LABELS[provider]} 가 답하지 못했어요."
+    # 그 밖의 실패는 CLI 가 한 말 첫 줄을 붙인다 (무엇 때문인지 알 수 있게). 'Denying Bash …' 같은 경고 줄은 뺀다
+    said = next((line.strip() for line in text.splitlines()
+                 if line.strip() and not re.search(r"^(Denying|Permission deny rule|Warning)", line.strip())), "")
+    return f"{LABELS[provider]} 가 답하지 못했어요" + (f" ({said[:140]})." if said else ".")
 
 
 def run(prompt: str, provider: str | None = None, timeout: int = TIMEOUT, model: str = "") -> dict:
@@ -160,11 +324,8 @@ def run(prompt: str, provider: str | None = None, timeout: int = TIMEOUT, model:
             model = (models().get(chosen) or {}).get("default", "")
             provider = chosen
         cmd = _command(chosen, exe, out_file, model)
-        kwargs = {}
-        if os.name == "nt":
-            kwargs["creationflags"] = 0x08000000  # CREATE_NO_WINDOW
-        env = dict(os.environ)
-        env.setdefault("NO_COLOR", "1")
+        kwargs = _quiet_kwargs()
+        env = _cli_env(chosen, exe)
         try:
             proc = subprocess.run(
                 cmd,
@@ -237,6 +398,131 @@ def search(query: str, index: list[dict], provider: str | None = None, model: st
     return {**res, "ids": ids, "note": note}
 
 
+def _calendar(days: int = 21) -> str:
+    """오늘부터 며칠의 날짜·요일. 모델이 '다음 주 화요일'을 날짜로 바꿀 때 요일을 틀리지 않게(달력 계산을 맡기지 않는다)."""
+    from datetime import date, timedelta
+
+    ko = "월화수목금토일"
+    today = date.today()
+    return ", ".join(
+        f"{d.isoformat()}({ko[d.weekday()]}/{d.strftime('%a')})" for d in (today + timedelta(n) for n in range(days))
+    )
+
+
+# 용건에 무엇이 들어가야 하는지 (교수님께 보내는 메일에서 자주 빠지는 것)
+SITUATION_GUIDE = (
+    "- 결석·지각·조퇴: 날짜(요일)와 시간, 사유, 학교 공식 행사면 주관 부서·행사 이름, 미리 알리는 것임을 밝히고, "
+    "출석 인정(공결)이 되는지와 증빙 서류가 필요한지 정중히 묻는다. 조교에게 먼저 연락했으면 그 사실도.\n"
+    "- 과제·시험 연장이나 재응시: 사유, 원래 마감, 바라는 새 마감, 불이익을 감수하겠다는 태도.\n"
+    "- 성적·채점 문의: 어느 과제·문항인지, 무엇이 궁금한지. 따지지 말고 확인을 부탁하는 말투.\n"
+    "- 수업 내용 질문: 어느 강의·쪽·문제인지 구체적으로, 내가 이해한 데까지.\n"
+    "- 면담 요청: 목적, 가능한 시간 2~3개, 장소(연구실·온라인).\n"
+    "- 자료·공지 문의: 무엇을 어디서 찾았는데 없었는지."
+)
+
+
+def polish(text: str, lang: str, flow: dict, provider: str | None = None, model: str = "") -> dict:
+    """메일 가운데 용건만 다듬는다 (2026-10-19 사용자: AI 는 내용 정리 같은 필요한 곳에만).
+
+    text: 사용자가 대충 적은 용건(한국어 메모여도 된다). 인사·자기소개·마무리·서명은 이미 메일에 있어 쓰지 않는다.
+    flow: 받는 사람(이름·교수/조교·외국인)·과목(이름·학수번호·분반) — 화면이 /api/mail/flow 에서 받은 것.
+    """
+    lang = "en" if lang == "en" else "ko"
+    to = flow.get("to") if isinstance(flow.get("to"), dict) else {}
+    courses = to.get("courses") if isinstance(to.get("courses"), list) else []
+    course = courses[0] if courses and isinstance(courses[0], dict) else {}
+    role = {"professor": "교수", "ta": "조교", "staff": "직원"}.get(str(to.get("kind") or ""), "")
+    facts = "\n".join(f"- {k}: {v}" for k, v in (
+        ("받는 사람", f"{to.get('name') or ''} {role}".strip()),
+        ("과목", " / ".join(x for x in (course.get("title"), course.get("titleEn")) if x)),
+        ("학수번호", course.get("courseNo")), ("분반", course.get("section")),
+    ) if v)
+    if lang == "en":
+        rule = (
+            "Write in natural, polite academic English for a professor. Start with \"I am writing to \" "
+            "(if the notes already start that way, continue it). 2-4 short paragraphs, plain sentences, no bullet points. "
+            "Typical flow: what happens and when (weekday, date, time) and why -> relevant background "
+            "(e.g. already emailed the TA but no reply yet) -> the request (e.g. whether the absence can be excused, "
+            "and offer to prepare supporting documents if needed)."
+        )
+    else:
+        rule = (
+            "교수님께 보내는 정중한 한국어(합쇼체, 과하지 않게)로. '다름이 아니라 ' 로 시작(메모가 이미 그렇게 시작하면 이어서). "
+            "2~4문단, 목록 기호 없이 문장으로. 흐름: 무슨 일이 언제(요일·날짜·시간) 왜 → 관련 사정(예: 조교님께 먼저 메일을 "
+            "드렸지만 아직 답을 받지 못함) → 부탁(예: 출석 인정이 가능한지, 필요한 서류가 있으면 바로 준비하겠다)."
+        )
+    prompt = (
+        "당신은 대학생이 교수·조교에게 보내는 메일의 '용건 부분'만 다듬는 비서입니다.\n"
+        "인사, 자기소개, 마무리 인사, 서명은 이미 메일에 있으니 절대 쓰지 마세요. 용건 문단만 출력합니다(설명·따옴표 없이).\n"
+        f"{rule}\n"
+        "메모에 있는 사실(날짜·시간·장소·이름·행사명)은 그대로 쓰고, 없는 사실을 지어내지 마세요. "
+        "꼭 필요한데 모르는 것은 [ ] 로 비워 두세요. 요일은 아래 달력으로 맞추세요.\n\n"
+        f"[상황별로 들어가면 좋은 것]\n{SITUATION_GUIDE}\n\n"
+        f"[달력] {_calendar()}\n\n[받는 사람·과목]\n{facts or '- (모름)'}\n\n"
+        f"[학생이 적은 메모]\n{text[:4000]}"
+    )
+    res = run(prompt, provider, model=model)
+    body = res["text"].strip().strip("`").strip()
+    # 모델이 그래도 인사·서명을 붙이면 떼어 낸다(이미 메일에 있다)
+    lines = body.splitlines()
+    while lines and re.match(r"^\s*(dear|hello|hi|안녕하세요)\b", lines[0], re.I):
+        lines.pop(0)
+    while lines and re.match(r"^\s*(sincerely|best regards|kind regards|regards|.{0,6}드림)\s*,?\s*$", lines[-1], re.I):
+        lines.pop()
+    return {**res, "text": "\n".join(lines).strip()}
+
+
+def continue_text(instruction: str, before: str, after: str, lang: str, flow: dict,
+                  provider: str | None = None, model: str = "") -> dict:
+    """메일 쓰기 칸의 '/ai 지시' 자리에 들어갈 글 (2026-10-19 사용자: /ai 로 시작해 쓰다가 Ctrl+Enter 하면
+    그 자리에 자연스럽게 이어 붙여 주기). 앞 글(before)에 바로 이어지고 뒤 글(after)과 겹치지 않게.
+    """
+    lang = "en" if lang == "en" else "ko"
+    to = flow.get("to") if isinstance(flow.get("to"), dict) else {}
+    courses = to.get("courses") if isinstance(to.get("courses"), list) else []
+    course = courses[0] if courses and isinstance(courses[0], dict) else {}
+    role = {"professor": "교수", "ta": "조교", "staff": "직원"}.get(str(to.get("kind") or ""), "")
+    facts = "\n".join(f"- {k}: {v}" for k, v in (
+        ("받는 사람", f"{to.get('name') or ''} {role}".strip()),
+        ("과목", " / ".join(x for x in (course.get("title"), course.get("titleEn")) if x)),
+        ("학수번호", course.get("courseNo")), ("분반", course.get("section")),
+    ) if v)
+    language = "English (polite academic English for a professor)" if lang == "en" else "한국어 (교수님께 쓰는 정중한 합쇼체, 과하지 않게)"
+    before = before[-6000:]
+    prompt = (
+        "당신은 메일 편집기 안의 자동완성입니다. 대학생이 교수·조교에게 쓰는 메일에서, 커서 자리에 들어갈 글만 씁니다.\n"
+        "- 학생의 지시를 메일 글로 바꿔 쓰세요(지시 문장을 그대로 옮기지 않음).\n"
+        "- [커서 앞 글]에 바로 이어지게 쓰고, 앞 글을 되풀이하지 마세요. 앞 글이 문장 중간(예: 'I am writing to ', "
+        "'다름이 아니라 ')에서 끝났으면 그 문장을 이어서 끝맺으세요.\n"
+        "- [커서 뒤 글]에 이미 있는 것(감사 인사·서명·다음 문단)은 쓰지 마세요. 인사·자기소개가 앞에 있으면 다시 쓰지 마세요.\n"
+        f"- 언어: {language}. 지시가 다른 언어여도 이 언어로 씁니다.\n"
+        "- 목록 기호 없이 문장으로, 문단은 빈 줄로 나눕니다. 지시가 짧으면 한두 문장으로 짧게.\n"
+        "- 지시와 메일에 있는 사실(날짜·시간·장소·이름·행사명)만 쓰고, 없는 사실은 지어내지 마세요. 꼭 필요한데 모르면 [ ].\n"
+        "- 출력은 넣을 글만(설명·따옴표·머리말 없이). 요일은 아래 달력으로 맞추세요.\n\n"
+        f"[상황별로 들어가면 좋은 것]\n{SITUATION_GUIDE}\n\n"
+        f"[달력] {_calendar()}\n\n[받는 사람·과목]\n{facts or '- (모름)'}\n\n"
+        f"[커서 앞 글]\n<<<\n{before}\n>>>\n\n[커서 뒤 글]\n<<<\n{after[:3000]}\n>>>\n\n"
+        f"[학생의 지시]\n{instruction[:3000]}"
+    )
+    res = run(prompt, provider, model=model)
+    text = res["text"].strip()
+    text = re.sub(r"^```[a-z]*\s*|\s*```$", "", text).strip()
+    if len(text) > 1 and text[0] == text[-1] and text[0] in "\"'“”":
+        text = text[1:-1].strip()
+    # 앞 줄을 되풀이해 시작하면(예: 'I am writing to let you know…') 겹친 부분을 뗀다
+    tail = before.rstrip().splitlines()[-1].strip() if before.strip() else ""
+    if tail and len(tail) >= 4 and text.lower().startswith(tail.lower()):
+        text = text[len(tail):].lstrip()
+    # 뒤에 이미 감사 인사·서명이 있으면 모델이 붙인 것을 뗀다
+    lines = text.splitlines()
+    if re.search(r"(thank you|감사)", after, re.I):
+        while lines and re.match(r"^\s*(sincerely|best regards|kind regards|regards|thank you|thanks|.{0,6}드림|감사합니다)\b", lines[-1], re.I):
+            lines.pop()
+            while lines and not lines[-1].strip():
+                lines.pop()
+    return {**res, "text": "\n".join(lines).strip()}
+
+
 def draft(request: str, profile: dict, context: dict, provider: str | None = None, model: str = "") -> dict:
     """메일 초안 + 받는 사람·참조 추천 (밀착형: 글만 주는 게 아니라 누구에게 보낼지까지).
 
@@ -246,7 +532,9 @@ def draft(request: str, profile: dict, context: dict, provider: str | None = Non
     import json
 
     me = "\n".join(f"- {k}: {v}" for k, v in (
-        ("이름", profile.get("name")), ("학번", profile.get("studentId")), ("소속", profile.get("dept")),
+        ("이름", profile.get("name")), ("영문 이름", profile.get("nameEn")), ("학번", profile.get("studentId")),
+        ("소속", profile.get("dept")), ("소속(영문)", profile.get("deptEn")),
+        ("학년", f"{profile.get('year')}학년" if str(profile.get("year") or "0") != "0" else ""),
         ("자기소개", profile.get("intro")), ("서명", profile.get("signature")),
     ) if v)
     ctx = "\n".join(f"- {k}: {v}" for k, v in (
@@ -264,8 +552,14 @@ def draft(request: str, profile: dict, context: dict, provider: str | None = Non
         "1) 받는 사람(to)과 참조(cc)를 '후보' 목록에서 고르세요. 예: 과목 일로 교수님께 보내면 그 과목 조교를 참조로, "
         "조교에게 보내면 필요할 때만 교수님을 참조로. 지금 받는 사람 칸이 이미 맞으면 그대로 두세요. 후보에 없는 주소는 쓰지 마세요.\n"
         "2) 제목은 '[과목 분반] 학번 이름 용건' 꼴로 짧게.\n"
-        "3) 본문은 정중하고 간결하게: 인사 → 자기소개(소속·학번·이름, 과목·분반) → 용건 → 마무리 → 서명. "
-        "받는 사람이 외국인 교수(영문 이름)면 영어로 씁니다. 사실을 지어내지 말고 모르는 부분은 [ ] 로 비워 두세요.\n"
+        "3) 본문은 정중하고 간결하게: 인사 → 자기소개(소속·학년·이름·학번, 과목·학수번호·분반) → 용건 → 마무리 → 서명. "
+        "받는 사람 이름이 로마자(외국인 교수)면 영어로, 한글이면 한국어로 씁니다. 사실을 지어내지 말고 모르는 부분은 [ ] 로 비워 두세요.\n"
+        "   영어 꼴: 'Dear Professor <성>,' / 'I hope this email finds you well. My name is <영문 이름> (Student ID: <학번>), "
+        "a <first-year> student in the <소속(영문)> taking your <과목> class (<학수번호>, Section <분반>).' / "
+        "'I am writing to …' / 'Thank you for your time and understanding.' / 'Sincerely,' 다음 줄부터 영문 이름, 소속, Student ID.\n"
+        "   한국어 꼴: '안녕하세요, <이름> 교수님.' / '<과목>(<학수번호>) <분반>분반을 수강 중인 <소속> <학년> <이름>(<학번>)입니다.' / "
+        "'다름이 아니라 …' / '바쁘신 와중에 메일 읽어 주셔서 감사합니다.' / '<이름> 드림'.\n"
+        f"   상황별로 들어가면 좋은 것:\n{SITUATION_GUIDE}\n   요일은 이 달력으로 맞추세요: {_calendar()}\n"
         '출력은 JSON 한 줄만: {"to": ["주소"], "cc": ["주소"], "why": "누구에게 왜(한 줄)", "subject": "제목", "body": "본문(줄바꿈 \n)"}\n\n'
         f"[내 정보]\n{me or '- (입력 안 됨)'}\n\n[상황]\n{ctx or '- (없음)'}\n\n"
         f"[후보: 주소 | 이름 | 역할 | 과목 분반]\n{cand_lines or '- (없음)'}\n\n"
@@ -294,7 +588,9 @@ def draft(request: str, profile: dict, context: dict, provider: str | None = Non
 
 # ===== 내 정보 (메일 초안에 매번 쓰는 학번·소개) =====
 # enabled: 실험실 스위치. "1" 이면 켬, 빈 값이면 끔(처음엔 꺼져 있다 — 2026-10-15 사용자: 실험실 기능으로, 껐다 켤 수 있게)
-PROFILE_KEYS = ("name", "studentId", "dept", "intro", "signature", "provider", "model", "enabled")
+# nameEn: 영문 이름(LMS 가 주지 않아 한글 이름을 로마자로 바꿔 제안하고, 여기 적으면 그 값을 쓴다)
+# flow: 메일 쓰기 흐름(회색 글씨) — "off" 면 끔, 빈 값이면 켬
+PROFILE_KEYS = ("name", "nameEn", "studentId", "dept", "intro", "signature", "provider", "model", "enabled", "flow")
 
 
 def load_profile(path: Path) -> dict:
@@ -310,12 +606,15 @@ def load_profile(path: Path) -> dict:
 def save_profile(path: Path, payload: dict) -> dict:
     from runtime_config import atomic_write_json
 
-    data = {k: str(payload.get(k) or "")[:2000] for k in PROFILE_KEYS}
+    # 보낸 키만 바꾼다. 내 정보(설정 '메일에 쓰는 내 정보')와 AI 고르기(설정 'AI 도우미')가 같은 파일을 따로 저장한다
+    existing = load_profile(path)
+    data = {k: str(payload.get(k, existing.get(k)) or "")[:2000] for k in PROFILE_KEYS}
     if data["provider"] not in PROVIDERS:
         data["provider"] = ""  # 빈 값 = 자동(설치된 것 중 앞에서부터)
     if not _SAFE_MODEL.match(data["model"] or "x"):
         data["model"] = ""
     data["enabled"] = "1" if data["enabled"] in ("1", "true", "True") else ""
+    data["flow"] = "off" if data["flow"] == "off" else ""
     atomic_write_json(path, data)
     return data
 

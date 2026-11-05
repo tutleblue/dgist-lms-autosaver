@@ -2,11 +2,30 @@
 import asyncio
 import time
 import os
-from runtime_config import SCHEDULE_TIME, DOWNLOAD_PATH, DRIVE_UPLOAD, FOLDER_LAYOUT, course_upload_enabled, load_upload_selection
+from datetime import datetime, timezone
+from runtime_config import (
+    SCHEDULE_TIME, DOWNLOAD_PATH, DRIVE_UPLOAD, FOLDER_LAYOUT, AUTOSAVER_DATA_ROOT, atomic_write_json,
+    course_upload_enabled, load_upload_selection,
+)
 from lms_crawler import crawl_lms, load_file_metadata, get_all_courses
+import drive_uploader
 from drive_uploader import (
     DriveLoginRequired, upload_to_drive_with_path, get_drive_service, get_or_create_folder, drive_folder_name, ROOT_FOLDER,
+    drive_scope_granted, explain_error, get_root_folder,
 )
+
+# 마지막 Drive 올리기 결과. 화면 서버가 읽어 상단 Drive 불빛·설정 카드에 실패를 보인다(web_ui.get_status 'driveResult').
+# 예전엔 올리기가 모두 실패해도 동기화는 '성공' 이었고 화면은 'Drive · 연결됨' 이라, 다른 PC 에서 아무것도 안 올라가도 알 수 없었다.
+DRIVE_STATUS_PATH = AUTOSAVER_DATA_ROOT / "drive_status.json"
+
+
+def _save_drive_status(**fields):
+    try:
+        atomic_write_json(DRIVE_STATUS_PATH, {
+            "at": datetime.now(timezone.utc).isoformat(), "folder": ROOT_FOLDER, **fields,
+        }, ensure_ascii=False, indent=2)
+    except OSError:
+        pass
 from email_notifier import send_kakao_message
 
 async def run_job():
@@ -32,6 +51,14 @@ async def run_job():
         service = get_drive_service(interactive=False)
     except DriveLoginRequired as exc:
         print(f"\n[Drive] {exc} 드라이브에는 올리지 않았습니다. (설정 > 연결된 계정에서 로그인)")
+        _save_drive_status(state="login", error=str(exc))
+        _notify_new_files(new_files)
+        print("\n✅ 모든 작업 완료!")
+        return
+    if not drive_scope_granted():
+        message = explain_error(RuntimeError("insufficient scope"))
+        print(f"\n[Drive] {message}")
+        _save_drive_status(state="scope", error=message)
         _notify_new_files(new_files)
         print("\n✅ 모든 작업 완료!")
         return
@@ -43,11 +70,22 @@ async def run_job():
     upload_selection = load_upload_selection()
     print("\n[Drive 과목 폴더 생성]")
     all_courses = await get_all_courses()
-    root_id = get_or_create_folder(service, ROOT_FOLDER)
-    for course_name in all_courses:
-        if not course_upload_enabled(course_name, upload_selection):
-            continue
-        get_or_create_folder(service, drive_folder_name(course_name), root_id)
+    # 여기서 난 오류(권한·공간·인터넷)가 동기화 전체를 '실패' 로 만들어 뒤따르는 폴더 정리·내 컴퓨터 저장까지 건너뛰지 않게,
+    # Drive 만 멈추고 까닭을 남긴다
+    try:
+        root_id = get_root_folder(service)
+        for course_name in all_courses:
+            if not course_upload_enabled(course_name, upload_selection):
+                continue
+            get_or_create_folder(service, drive_folder_name(course_name), root_id)
+    except Exception as exc:
+        message = explain_error(exc)
+        print(f"[Drive] 폴더를 만들지 못해 올리지 않았습니다: {message} ({exc})")
+        _save_drive_status(state="error", error=message)
+        _notify_new_files(new_files)
+        print("\n✅ 모든 작업 완료!")
+        return
+    print(f"Drive 폴더: 내 드라이브 / {ROOT_FOLDER}")
 
     # 4. 로컬 파일 전체를 Drive에 동기화 (선택된 과목만)
     print("\n[Drive 동기화 시작]")
@@ -84,6 +122,8 @@ async def run_job():
 
     updated_count = 0
     moved_count = 0  # 정리 방식(LMS 폴더 그대로 ↔ 과목 폴더에 모아서)을 바꿔 Drive 안에서 옮긴 것
+    failed_count = 0
+    first_error = ""
     if targets:
         for file_name, file_path, meta in targets:
 
@@ -106,13 +146,22 @@ async def run_job():
                 updated_count += 1
             elif result:
                 uploaded_count += 1
+            else:
+                failed_count += 1
+                first_error = first_error or drive_uploader.last_error
 
     summary = f"[Drive 동기화 완료] 신규 {uploaded_count}개 업로드, 새 판 {updated_count}개 교체, 기존 {skipped_count}개 스킵, 선택 제외 {excluded_count}개"
     if moved_count:
         summary += f", 정리 방식대로 옮김 {moved_count}개"
     if personal_count:
         summary += f", 앱과 무관한 개인 파일 {personal_count}개는 건드리지 않음"
+    if failed_count:
+        summary += f", 실패 {failed_count}개 ({first_error})"
     print(summary)
+    _save_drive_status(
+        state="error" if failed_count else "ok", error=first_error if failed_count else "",
+        uploaded=uploaded_count, updated=updated_count, exists=skipped_count, moved=moved_count, failed=failed_count,
+    )
 
     # 5. 이메일 알림
     _notify_new_files(new_files)

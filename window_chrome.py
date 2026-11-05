@@ -6,7 +6,7 @@
   화면 가장자리 스냅·그림자·최대화 애니메이션이 모두 사라진다. 그래서 테두리는 그대로 두고
   WM_NCCALCSIZE 에서 제목 줄 높이만 클라이언트 영역으로 돌려준다 (Windows Terminal 과 같은 방법).
   좌우·아래 크기 조절, Aero 스냅, 둥근 모서리·그림자는 운영체제가 계속 그려 준다.
-- 창 끌기는 WebView2 의 non-client region 기능(CSS `app-region: drag`)을 켜서 처리한다. 진짜 제목 줄처럼
+- 창 끌기는 WebView2 의 non-client region 기능(CSS `app-region: drag`, 모양은 styles.css 의 '창 제목 줄 = 상단 바' 설명)을 켜서 처리한다. 진짜 제목 줄처럼
   끌기·두 번 눌러 최대화·화면 끝 스냅이 된다. 자바스크립트로 창을 옮기면 끊기고 스냅이 안 된다.
 - 최소화·최대화·닫기 단추는 화면(web)에 그리고, 누르면 /api/window 로 여기 함수를 부른다.
 """

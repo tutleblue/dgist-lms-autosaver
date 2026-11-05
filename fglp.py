@@ -88,17 +88,37 @@ _EXCHANGE = [
 ]
 
 
-def _load_photos() -> dict:
-    """tools/fetch_uni_photos.py 가 받아 둔 사진 정보.
+# 시간대(IANA). 화면이 브라우저의 Intl 로 '지금 현지 시각·한국과의 시차'를 그때그때 계산한다(서머타임 포함).
+_TZ = {
+    "미국": {"버클리": "America/Los_Angeles", "로스앤젤레스": "America/Los_Angeles", "어바인": "America/Los_Angeles",
+             "스탠퍼드": "America/Los_Angeles", "템피": "America/Phoenix", "매디슨": "America/Chicago",
+             "웨스트라피엣": "America/Indiana/Indianapolis"},
+    "캐나다": {"밴쿠버": "America/Vancouver", "캘거리": "America/Edmonton"},
+    "네덜란드": "Europe/Amsterdam", "독일": "Europe/Berlin", "영국": "Europe/London", "프랑스": "Europe/Paris",
+    "핀란드": "Europe/Helsinki", "아일랜드": "Europe/Dublin", "오스트리아": "Europe/Vienna", "스페인": "Europe/Madrid",
+    "튀르키예": "Europe/Istanbul", "대만": "Asia/Taipei", "싱가포르": "Asia/Singapore", "일본": "Asia/Tokyo",
+    "홍콩": "Asia/Hong_Kong", "중국": "Asia/Shanghai", "말레이시아": "Asia/Kuala_Lumpur", "호주": "Australia/Melbourne",
+}
+_US_EAST = "America/New_York"  # 미국에서 위에 없는 도시(케임브리지·보스턴·샬러츠빌·볼티모어)
+
+
+def _tz(country: str, city: str) -> str:
+    zone = _TZ.get(country, "")
+    if isinstance(zone, dict):
+        return zone.get(city, _US_EAST if country == "미국" else "")
+    return zone
+
+
+def _load_info() -> dict:
+    """tools/fetch_uni_info.py 가 받아 둔 홈페이지·기본 정보·사진.
 
     앱 안에 넣어 두었으므로 인터넷이 없어도 보이고, 어느 대학을 들여다보는지
-    바깥에 알려지지도 않는다. 라이선스 표기는 화면에 같이 띄운다.
+    바깥에 알려지지도 않는다. 사진 라이선스 표기는 화면에 같이 띄운다.
     """
     # EXE 로 묶였을 때도 찾도록
     base = Path(getattr(sys, "_MEIPASS", "") or Path(__file__).resolve().parent)
-    path = base / "uni_photos.json"
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        return json.loads((base / "uni_info.json").read_text(encoding="utf-8"))
     except Exception:
         return {}
 
@@ -108,17 +128,26 @@ def _slug(name: str) -> str:
 
 
 def get_fglp() -> dict:
-    photos = _load_photos()
+    info = _load_info()
 
     def photo_of(name: str) -> dict:
-        meta = photos.get(_slug(name))
-        if not meta:
-            return {}
+        meta = info.get(_slug(name)) or {}
+        photos = [
+            {"src": f"/img/uni/{p['file']}", "by": p.get("author", ""), "license": p.get("license", ""), "source": p.get("source", "")}
+            for p in meta.get("photos", [])
+        ]
         return {
-            "photo": f"/img/uni/{meta['file']}",
-            "photoBy": meta.get("author", ""),
-            "photoLicense": meta.get("license", ""),
-            "photoSource": meta.get("source", ""),
+            "photos": photos,
+            # 지도·목록의 썸네일은 첫 장
+            "photo": photos[0]["src"] if photos else "",
+            "koName": meta.get("koName", ""),
+            "website": meta.get("website", ""),
+            "summer": meta.get("summer", ""),
+            "wiki": meta.get("wiki", ""),
+            "founded": meta.get("founded", ""),
+            "students": meta.get("students", 0),
+            "studentsYear": meta.get("studentsYear", ""),
+            "kinds": meta.get("kinds", []),
         }
 
     schools = [
@@ -131,6 +160,7 @@ def get_fglp() -> dict:
             "kind": "fglp",
             "language": lang,
             "group": group,
+            "tz": _tz(country, city),
             **photo_of(name),
         }
         for (name, country, city, lat, lon, lang, group) in _FGLP
@@ -143,6 +173,7 @@ def get_fglp() -> dict:
             "lon": lon,
             "kind": "exchange",
             "language": "",
+            "tz": _tz(country, city),
             **photo_of(name),
         }
         for (name, country, city, lat, lon) in _EXCHANGE
@@ -193,3 +224,16 @@ def get_fglp() -> dict:
             },
         ],
     }
+
+
+def known_links() -> set[str]:
+    """화면이 '기본 브라우저로 열기'를 부탁할 수 있는 바깥 주소. 앱에 넣어 둔 자료에 있는 것만 허락한다
+    (web_ui.open_external_url 은 학교 도메인 말고는 막는다)."""
+    out = {SOURCE_URL, OFFICIAL_URL}
+    for s in get_fglp()["schools"]:
+        out.update(x for x in (s.get("website"), s.get("summer"), s.get("wiki")) if x)
+        out.update(p["source"] for p in s.get("photos", []) if p.get("source"))
+        lat, lon = s["lat"], s["lon"]
+        # app.js fglpLinksHtml 과 같은 모양
+        out.add(f"https://www.openstreetmap.org/?mlat={lat}&mlon={lon}#map=15/{lat}/{lon}")
+    return out

@@ -24,7 +24,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Lora:wght@600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="../style.css">
+<link rel="stylesheet" href="../style.css?v=2afe714b">
 <style>
   /* 영어 페이지는 제목도 Lora, 본문은 Inter */
   :root { --font-serif: "Lora", Georgia, serif; --font-sans: "Inter", "Segoe UI", system-ui, sans-serif; }
@@ -39,7 +39,6 @@
     <nav aria-label="Main">
       <a href="#why">About</a>
       <a href="#features">Features</a>
-      <a href="#tips">Tips</a>
       <a href="#privacy">Privacy</a>
       <a href="#faq">FAQ</a>
     </nav>
@@ -55,7 +54,7 @@
   <div class="container">
     <div class="hero-copy">
       <p class="eyebrow">A desktop app for DGIST students · Windows · macOS · Linux</p>
-      <h1>LMS, mail, academic calendar.<br><em>Now on one screen.</em></h1>
+      <h1>LMS, mail, academic calendar.<br>Now on <em>one screen</em>.</h1>
       <p class="lede"><strong>Daling</strong> gathers your course materials, assignment deadlines, school e-mail, the academic calendar and campus notices into one screen. Files can also go to your own Google Drive, and deadlines and events to Google Calendar.</p>
       <div class="cta">
         <a class="btn primary" href="#download" data-hero-dl data-win="Download for Windows" data-mac="Download for Mac" data-linux="Download for Linux">
@@ -64,7 +63,7 @@
         </a>
         <a class="btn ghost" href="#download">Other platforms</a>
       </div>
-      <p class="fine"><span>Free</span> · <span>Open source</span> · <span>No developer server</span> · <span>Your files and passwords stay on <b>your own computer</b></span></p>
+      <p class="fine"><span>Free · Open source</span> · <span data-latest data-fmt="Latest {v}">Latest 1.12.54</span> · <span>Your files and passwords stay on <b>your own computer</b></span></p>
     </div>
     <div class="hero-stage reveal">
       <figure class="window">
@@ -79,7 +78,7 @@
 <section class="section tint" id="why">
   <div class="container">
     <div class="center reveal">
-      <p class="kicker">Why Daling</p>
+      <p class="kicker"><span>01</span>Why Daling</p>
       <h2>How many windows did you open today?</h2>
       <p class="sub">The LMS, webmail, the academic calendar and the notice board. Separate logins, separate checks, and it's easy to miss a deadline.</p>
     </div>
@@ -113,124 +112,316 @@
   </div>
 </section>
 
-<!-- 기능: 화면마다 하나씩 -->
+<!-- 기능: 파트별로 (LMS 강의자료 · 학교 메일 · 학사일정·공지 · 마감·세미나 일정) -->
 <section class="section" id="features">
   <div class="container">
     <div class="center reveal">
-      <p class="kicker">Features</p>
+      <p class="kicker"><span>02</span>Features</p>
       <h2>Leave it running. It collects for you.</h2>
-      <p class="sub">Sign in once and Daling checks mail every 5 minutes, deadlines every hour and course files every 3 hours, fetching only what's new.</p>
+      <p class="sub">Sign in once and only what's new comes in on its own.</p>
+      <ul class="parts-nav" aria-label="Feature parts">
+        <li><a href="#lms"><span>1</span>LMS course files</a></li>
+        <li><a href="#mail"><span>2</span>School mail</a></li>
+        <li><a href="#academic"><span>3</span>Academic calendar &amp; notices</a></li>
+        <li><a href="#deadlines"><span>4</span>Your seminars &amp; deadlines</a></li>
+      </ul>
     </div>
 
-    <article class="feature reveal">
-      <div class="copy">
-        <p class="tag" style="--c: var(--accent-ink)">Dashboard · Deadlines</p>
-        <h3>Today's to-dos and deadlines come first</h3>
-        <p>The first screen shows your remaining classes, assignments due within 7 days and unread mail.</p>
-        <ul class="checks">
-          <li>Every assignment from every course in one list, sorted by D-day</li>
-          <li>"Go submit" opens the LMS submission page for an unsubmitted assignment</li>
-          <li>D-day for exams and registration, plus a weekly timetable</li>
-        </ul>
+    <!-- PART 1. 직접 하던 일 ↔ 정리된 탐색기, 그리고 클라우드 -->
+    <div class="part" id="lms">
+      <div class="part-head reveal">
+        <p class="part-no">PART 1</p>
+        <h3>LMS course files</h3>
       </div>
-      <figure class="window">
-        <div class="bar" aria-hidden="true"><i></i><i></i><i></i><span>Deadlines</span></div>
-        <img src="../img/en/app-deadlines.webp" width="1440" height="900" loading="lazy" alt="Deadlines screen: assignments from each course sorted by D-day with a 'Go submit' button">
-      </figure>
-    </article>
 
-    <article class="feature flip reveal">
-      <div class="copy">
-        <p class="tag" style="--c: var(--amber)">Course files</p>
-        <h3>The LMS folder structure, kept up to date</h3>
-        <p>Only new lecture files are downloaded, organized exactly like the week and lecture folders on the LMS.</p>
-        <ul class="checks">
-          <li>Also sorted by course in a folder on your computer</li>
-          <li>Open or save many files at once <small>(on Windows, send to Samsung Notes too)</small></li>
-        </ul>
-      </div>
-      <figure class="window">
-        <div class="bar" aria-hidden="true"><i></i><i></i><i></i><span>Files</span></div>
-        <img src="../img/en/app-files.webp" width="1440" height="900" loading="lazy" alt="Files screen: a course folder expanded into Announcements, Assignments and Course Materials with Week 5, 6 and 7 folders, matching the LMS">
-      </figure>
-    </article>
+      <div class="ba reveal">
+        <div class="ba-col before">
+          <p class="ba-label">UNTIL NOW · BY HAND</p>
+          <h4>For every course, every week</h4>
+          <ol class="chores">
+            <li><b>Sign in to the LMS</b></li>
+            <li><b>Open a course</b></li>
+            <li><b>Download files one by one</b></li>
+            <li><b>Dig through Downloads</b></li>
+            <li><b>Move them into course folders</b></li>
+          </ol>
+          <figure class="xp messy" role="img" aria-label="A messy Downloads folder: 38 items with files from different courses, duplicates like Lecture 05 (1).pdf and even a chat photo">
+            <div class="xp-top"><span class="xp-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="xp-tab"><i class="fi dir"></i>Downloads</span><span class="xp-ctl" aria-hidden="true"><i>—</i><i>□</i><i>✕</i></span></div>
+            <div class="xp-body">
+              <div class="xp-list">
+                <div class="xp-row head"><span>Name</span><span>Size</span></div>
+                <div class="xp-row"><span><i class="fi pdf"></i>Lecture 05.pdf</span><span>2.4MB</span></div>
+                <div class="xp-row dup"><span><i class="fi pdf"></i>Lecture 05 (1).pdf</span><span>2.4MB</span></div>
+                <div class="xp-row"><span><i class="fi pdf"></i>HW3.pdf</span><span>0.8MB</span></div>
+                <div class="xp-row"><span><i class="fi img"></i>KakaoTalk_20261020_1532.jpg</span><span>1.1MB</span></div>
+                <div class="xp-row"><span><i class="fi ppt"></i>week3_final_v2.pptx</span><span>5.6MB</span></div>
+                <div class="xp-row dup"><span><i class="fi pdf"></i>download (2).pdf</span><span>0.3MB</span></div>
+                <div class="xp-row"><span><i class="fi word"></i>Lab_Report_Template.docx</span><span>0.1MB</span></div>
+                <div class="xp-row dup"><span><i class="fi pdf"></i>lecture06 (1).pdf</span><span>3.1MB</span></div>
+              </div>
+            </div>
+            <div class="xp-status">38 items</div>
+          </figure>
+          <p class="repeat"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 2l4 4-4 4"/><path d="M3 11V9a3 3 0 0 1 3-3h15"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v2a3 3 0 0 1-3 3H3"/></svg>× every course, all semester</p>
+        </div>
 
-    <article class="feature reveal">
-      <div class="copy">
-        <p class="tag" style="--c: var(--blue)">School mail</p>
-        <h3>Read and write school mail inside the app</h3>
-        <p>No separate webmail login: read your mail and reply right in Daling.</p>
-        <ul class="checks">
-          <li>Sorted automatically: seminars &amp; events, admin &amp; student teams, careers and more</li>
-          <li>Translate or summarize mail <small>(optional, with your own Gemini key)</small></li>
-        </ul>
-      </div>
-      <figure class="window">
-        <div class="bar" aria-hidden="true"><i></i><i></i><i></i><span>Mailbox</span></div>
-        <img src="../img/en/app-emails.webp" width="1440" height="900" loading="lazy" alt="Mailbox: categories on the left, messages grouped by date in the middle and the selected message on the right">
-      </figure>
-    </article>
+        <div class="ba-arrow" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg></div>
 
-    <article class="feature flip reveal">
-      <div class="copy">
-        <p class="tag" style="--c: var(--violet)">Calendar</p>
-        <h3>Deadlines, school dates and your plans in one calendar</h3>
-        <p>Assignment deadlines, the academic calendar and holidays fill in on their own, and you can add your own plans.</p>
-        <ul class="checks">
-          <li>Deadlines in red, school events in yellow, your plans in blue</li>
-          <li>Export deadlines as a calendar file (.ics)</li>
-        </ul>
+        <div class="ba-col after">
+          <p class="ba-label">DALING · AUTOMATIC</p>
+          <h4>Leave it running and it looks like this</h4>
+          <figure class="xp" role="img" aria-label="File Explorer: four course folders under Documents › Daling 파일 정리. General Physics II holds Announcements, Assignments and Course Materials like the LMS, with Week 1 to 3 inside. Week 3 has four lecture and homework PDFs, one just downloaded">
+            <div class="xp-top"><span class="xp-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="xp-tab"><i class="fi dir"></i>Week 3</span><span class="xp-ctl" aria-hidden="true"><i>—</i><i>□</i><i>✕</i></span></div>
+            <div class="xp-tools"><span class="xp-btns" aria-hidden="true">←→↑</span><span class="xp-addr">Documents › Daling 파일 정리 › General Physics II › Course Materials › <b>Week 3</b></span><span class="xp-search">Search Week 3</span></div>
+            <div class="xp-body">
+              <ul class="xp-nav">
+                <li class="open"><i class="fi dir"></i>Daling 파일 정리</li>
+                <li class="l1 open"><i class="fi dir"></i>General Physics II</li>
+                <li class="l2 has"><i class="fi dir"></i>Announcements</li>
+                <li class="l2 has"><i class="fi dir"></i>Assignments</li>
+                <li class="l2 open"><i class="fi dir"></i>Course Materials</li>
+                <li class="l3"><i class="fi dir"></i>Week 1</li>
+                <li class="l3"><i class="fi dir"></i>Week 2</li>
+                <li class="l3 sel"><i class="fi dir"></i>Week 3</li>
+                <li class="l1 has"><i class="fi dir"></i>Calculus II</li>
+                <li class="l1 has"><i class="fi dir"></i>Intro to Programming</li>
+                <li class="l1 has"><i class="fi dir"></i>Writing &amp; Communication</li>
+              </ul>
+              <div class="xp-list">
+                <div class="xp-row head"><span>Name</span><span>Downloaded</span><span>Size</span></div>
+                <div class="xp-row"><span><i class="fi pdf"></i>Lecture 05 - Gauss's Law.pdf</span><span>10-19 09:12</span><span>2.4MB</span></div>
+                <div class="xp-row"><span><i class="fi pdf"></i>Lecture 06 - Electric Potential.pdf</span><span>10-21 09:05</span><span>3.1MB</span></div>
+                <div class="xp-row"><span><i class="fi pdf"></i>Problem Set 3.pdf</span><span>10-21 13:40</span><span>0.8MB</span></div>
+                <div class="xp-row new"><span><i class="fi pdf"></i>Recitation 3 Solutions.pdf<em class="badge-new">New</em></span><span>Just now</span><span>1.2MB</span></div>
+              </div>
+            </div>
+            <div class="xp-status">4 items</div>
+          </figure>
+          <p class="ba-note">Same course and week folders as the LMS. Updated files replace the old version.</p>
+        </div>
       </div>
-      <figure class="window">
-        <div class="bar" aria-hidden="true"><i></i><i></i><i></i><span>Calendar</span></div>
-        <img src="../img/en/app-calendar.webp" width="1440" height="900" loading="lazy" alt="Calendar: October with midterms, assignment deadlines, the fall festival and study sessions color-coded">
-      </figure>
-    </article>
+
+      <div class="cloud reveal">
+        <div class="copy">
+          <p class="tag">In the cloud too</p>
+          <h4>The same folders in Google Drive</h4>
+          <p>Your Drive's <b>AutoSaver</b> folder and your cloud folder get the same layout, ready on your phone or tablet.</p>
+          <ul class="svc-list" aria-label="Where course files can go">
+          <li><span class="logo"><svg aria-hidden="true" focusable="false" viewBox="0 0 87.3 78"><path d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8h-27.5c0 1.55.4 3.1 1.2 4.5z" fill="#0066da"/><path d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44a9.06 9.06 0 0 0 -1.2 4.5h27.5z" fill="#00ac47"/><path d="m73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5h-27.502l5.852 11.5z" fill="#ea4335"/><path d="m43.65 25 13.75-23.8c-1.35-.8-2.9-1.2-4.5-1.2h-18.5c-1.6 0-3.15.45-4.5 1.2z" fill="#00832d"/><path d="m59.8 53h-32.3l-13.75 23.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.45 4.5-1.2z" fill="#2684fc"/><path d="m73.4 26.5-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8 16.15 28h27.45c0-1.55-.4-3.1-1.2-4.5z" fill="#ffba00"/></svg></span>Google Drive</li>
+          <li><span class="logo"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path fill="#0364b8" d="M9.8 8.2a5.3 5.3 0 0 1 8.9 2.3 3.9 3.9 0 0 1 1.2 7.6H7.4l2.4-9.9Z"/><path fill="#0078d4" d="M9.6 8.4 7 18.1H5.2a3.7 3.7 0 0 1-.8-7.3 5 5 0 0 1 5.2-2.4Z"/><path fill="#28a8ea" d="M20 11.2a3.5 3.5 0 0 1-.6 6.9H7.4l3.1-5.3a4 4 0 0 1 5-1.6l4.5 0Z"/></svg></span>OneDrive</li>
+          <li><span class="logo"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path fill="#3e9bf0" d="M17.6 18H6.8a4.3 4.3 0 0 1-.6-8.5 5.9 5.9 0 0 1 11.2 1.6 3.5 3.5 0 0 1 .2 6.9Z"/></svg></span>iCloud Drive</li>
+          <li><span class="logo"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="#0061ff"><path d="m7 3 5 3.2-5 3.2L2 6.2 7 3Zm10 0 5 3.2-5 3.2-5-3.2L17 3ZM2 12.6l5-3.2 5 3.2-5 3.2-5-3.2Zm15-3.2 5 3.2-5 3.2-5-3.2 5-3.2ZM7 17l5-3.2 5 3.2-5 3.2L7 17Z"/></svg></span>Dropbox</li>
+          <li><span class="logo"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><rect width="20" height="20" x="2" y="2" rx="5" fill="#03c75a"/><path fill="#fff" d="M8 7h2.6l3.1 4.6V7H16v10h-2.6l-3.1-4.6V17H8V7Z"/></svg></span>NAVER MYBOX</li>
+        </ul>
+        </div>
+        <figure class="gd" role="img" aria-label="Google Drive: four course folders under My Drive › AutoSaver, and General Physics II › Course Materials › Week 3 holding the same files as on the computer">
+          <div class="gd-top"><span class="gd-brand"><svg aria-hidden="true" focusable="false" viewBox="0 0 87.3 78"><path d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8h-27.5c0 1.55.4 3.1 1.2 4.5z" fill="#0066da"/><path d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44a9.06 9.06 0 0 0 -1.2 4.5h27.5z" fill="#00ac47"/><path d="m73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5h-27.502l5.852 11.5z" fill="#ea4335"/><path d="m43.65 25 13.75-23.8c-1.35-.8-2.9-1.2-4.5-1.2h-18.5c-1.6 0-3.15.45-4.5 1.2z" fill="#00832d"/><path d="m59.8 53h-32.3l-13.75 23.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.45 4.5-1.2z" fill="#2684fc"/><path d="m73.4 26.5-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8 16.15 28h27.45c0-1.55-.4-3.1-1.2-4.5z" fill="#ffba00"/></svg>Drive</span><span class="gd-search">Search in Drive</span></div>
+          <div class="gd-body">
+            <div class="gd-crumb">My Drive › <b>AutoSaver</b></div>
+            <p class="gd-h">Folders</p>
+            <div class="gd-folders">
+              <span class="sel"><i class="fi dir"></i>General Physics II</span>
+              <span><i class="fi dir"></i>Calculus II</span>
+              <span><i class="fi dir"></i>Intro to Programming</span>
+              <span><i class="fi dir"></i>Writing &amp; Communication</span>
+            </div>
+            <div class="gd-crumb">General Physics II › Course Materials › <b>Week 3</b></div>
+            <div>
+              <div class="xp-row"><span><i class="fi pdf"></i>Lecture 05 - Gauss's Law.pdf</span><span>Oct 19</span></div>
+              <div class="xp-row"><span><i class="fi pdf"></i>Lecture 06 - Electric Potential.pdf</span><span>Oct 21</span></div>
+              <div class="xp-row"><span><i class="fi pdf"></i>Problem Set 3.pdf</span><span>Oct 21</span></div>
+              <div class="xp-row new"><span><i class="fi pdf"></i>Recitation 3 Solutions.pdf</span><span>Just now</span></div>
+            </div>
+          </div>
+        </figure>
+      </div>
+    </div>
+
+    <!-- PART 2. 학교 메일 -->
+    <div class="part" id="mail">
+      <div class="part-head reveal">
+        <p class="part-no">PART 2</p>
+        <h3>School mail</h3>
+      </div>
+
+      <article class="feature reveal">
+        <div class="copy">
+          <p class="tag">Inbox</p>
+          <h3>Read and reply inside the app</h3>
+          <ul class="checks">
+            <li>Seminar, admin and career mail sorted for you</li>
+            <li>Reminder drafts for mail with no reply</li>
+            <li>Translate English mail</li>
+          </ul>
+        </div>
+        <figure class="window">
+          <div class="bar" aria-hidden="true"><i></i><i></i><i></i><span>Mailbox</span></div>
+          <img src="../img/en/app-emails.webp" width="1440" height="900" loading="lazy" alt="Mailbox: categories on the left, messages grouped by date in the middle and the selected message on the right">
+        </figure>
+      </article>
+
+      <div class="tip-hero has-film reveal" id="compose">
+        <div class="copy">
+          <p class="tag">AI mail writing</p>
+          <h3>Say what you need. AI writes the mail.</h3>
+          <ul class="checks">
+            <li><b>/ai [what to say]</b>, then <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>Enter</kbd> — Claude, Gemini or Codex on your computer writes it. No API key needed.</li>
+            <li>One <kbd>Tab</kbd> for the greeting and intro</li>
+          </ul>
+        </div>
+        <figure class="film">
+          <video muted loop playsinline preload="none" width="1600" height="1112" poster="../img/en/film-ai.webp?v=50194fab" aria-label="Recording of the real app: Gildong Hong goes in the To field, Tab adds the greeting and intro, the student types '/ai [HW6 is due Friday, ask if I can hand it in Monday because of a hospital appointment]' and presses Ctrl+Enter, and a polite paragraph asking to submit HW6 by next Monday (November 2) appears in place">
+            <source src="../img/en/film-ai.mp4?v=c673fd6f" type="video/mp4">
+          </video>
+          <button class="film-toggle" type="button" data-pause="Pause video" data-play="Play video" aria-label="Play video"></button>
+        </figure>
+      </div>
+
+      <div class="tip-hero has-film reveal">
+        <div class="copy">
+          <p class="tag">Courses · Professors · TAs</p>
+          <h3>Type a course name, get its professors and TAs</h3>
+          <ul class="checks">
+            <li>Course cards start a mail with <b>[Course, Section 01]</b> filled in</li>
+            <li>Senders get a tag like "General Physics II · Sec. 3 · Professor"</li>
+          </ul>
+        </div>
+        <figure class="film">
+          <video muted loop playsinline preload="none" width="1600" height="1112" poster="../img/en/film-staff.webp?v=bd3a20c4" aria-label="Recording of the real app: typing 'General Physics' in the To field lists the course's professor and TAs with their section, and one is picked">
+            <source src="../img/en/film-staff.mp4?v=fcb440c9" type="video/mp4">
+          </video>
+          <button class="film-toggle" type="button" data-pause="Pause video" data-play="Play video" aria-label="Play video"></button>
+        </figure>
+      </div>
+    </div>
+
+    <!-- PART 3. 학사일정·공지 -->
+    <div class="part" id="academic">
+      <div class="part-head reveal">
+        <p class="part-no">PART 3</p>
+        <h3>Academic calendar &amp; notices</h3>
+      </div>
+      <article class="feature flip reveal">
+        <div class="copy">
+          <p class="tag">Calendar</p>
+          <h3>School dates and your plans in one calendar</h3>
+          <ul class="checks">
+            <li>Exams, registration and holidays fill in on their own</li>
+            <li>School notices (scholarships, jobs, news) in the app</li>
+            <li>Send to Google Calendar</li>
+          </ul>
+        </div>
+        <figure class="window">
+          <div class="bar" aria-hidden="true"><i></i><i></i><i></i><span>Calendar</span></div>
+          <img src="../img/en/app-calendar.webp" width="1440" height="900" loading="lazy" alt="Calendar: October with midterms, assignment deadlines, the fall festival and study sessions color-coded">
+        </figure>
+      </article>
+    </div>
+
+    <!-- PART 4. 마감·세미나 일정 -->
+    <div class="part" id="deadlines">
+      <div class="part-head reveal">
+        <p class="part-no">PART 4</p>
+        <h3>Your seminars &amp; deadlines</h3>
+      </div>
+
+      <div class="ba reveal">
+        <div class="ba-col before">
+          <p class="ba-label">UNTIL NOW · BY HAND</p>
+          <h4>Opening seminar mail one by one</h4>
+          <ol class="chores">
+            <li><b>Find seminar mail in the inbox</b></li>
+            <li><b>Open each for the date and room</b></li>
+            <li><b>Check reposts and room changes too</b></li>
+            <li><b>"When was it again?" Search again</b></li>
+          </ol>
+          <figure class="xp messy inbox" role="img" aria-label="An inbox where seminar and event mail is mixed with scholarship and career notices, with reposts, room changes and schedule changes arriving separately">
+            <div class="xp-top"><span class="xp-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="xp-tab"><i class="fi mail"></i>Inbox</span><span class="xp-ctl" aria-hidden="true"><i>—</i><i>□</i><i>✕</i></span></div>
+            <div class="xp-body">
+              <div class="xp-list">
+                <div class="xp-row unread"><span><i class="fi mail"></i>[Seminar] Quantum Materials Seminar</span><span>10-21</span></div>
+                <div class="xp-row"><span><i class="fi mail"></i>[Reminder] Colloquium this Friday</span><span>10-23</span></div>
+                <div class="xp-row dup"><span><i class="fi mail"></i>[Room change] Physics seminar</span><span>10-24</span></div>
+                <div class="xp-row"><span><i class="fi mail"></i>Fall scholarship applications open</span><span>10-24</span></div>
+                <div class="xp-row dup"><span><i class="fi mail"></i>[Repost] Business model seminar</span><span>10-25</span></div>
+                <div class="xp-row unread"><span><i class="fi mail"></i>[Seminar] Deep Learning for Biology</span><span>10-25</span></div>
+                <div class="xp-row"><span><i class="fi mail"></i>Career fair sign-up</span><span>10-26</span></div>
+                <div class="xp-row dup"><span><i class="fi mail"></i>Re: Seminar schedule change</span><span>10-26</span></div>
+              </div>
+            </div>
+            <div class="xp-status">37 unread</div>
+          </figure>
+          <p class="repeat"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 2l4 4-4 4"/><path d="M3 11V9a3 3 0 0 1 3-3h15"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v2a3 3 0 0 1-3 3H3"/></svg>Every time a seminar mail arrives</p>
+        </div>
+
+        <div class="ba-arrow" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg></div>
+
+        <div class="ba-col after">
+          <p class="ba-label">DALING · AUTOMATIC</p>
+          <h4>Only seminars in your fields, on one calendar</h4>
+          <figure class="xp wk" role="img" aria-label="One week (Oct 26–30) on Daling's calendar. The fields you picked (Physics, AI, Startups) show at the top, and their seminars sit in purple, school events in yellow and deadlines in red sit on their days, and the selected seminar shows its date, room, speaker and talk title. Three mails were merged into one event">
+            <div class="xp-top"><span class="xp-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="xp-tab">Calendar</span><span class="xp-ctl" aria-hidden="true"><i>—</i><i>□</i><i>✕</i></span></div>
+            <div class="wk-head"><b>Oct 26 – 30</b><span class="wk-pick">Your fields <b>Physics · AI · Startups</b></span><span class="wk-legend"><span class="sem"><i></i>Seminar</span><span class="sch"><i></i>School event</span><span class="due"><i></i>Deadline</span></span></div>
+            <div class="wk-grid">
+              <div class="wk-day"><b>Mon <em>26</em></b><span class="ev due"><b>HW5 due</b><span>General Physics II</span></span></div>
+              <div class="wk-day"><b>Tue <em>27</em></b><span class="ev"><b>Physics colloquium</b><span>16:00</span></span></div>
+              <div class="wk-day today"><b>Wed <em>28</em></b><span class="ev sel"><b>Quantum Materials</b><span>16:00 · E7 101</span></span></div>
+              <div class="wk-day"><b>Thu <em>29</em></b><span class="ev"><b>Deep Learning for Biology</b><span>14:00</span></span><span class="ev sch"><b>Career fair</b><span>13:00</span></span></div>
+              <div class="wk-day"><b>Fri <em>30</em></b><span class="ev"><b>Business model seminar</b><span>10:00</span></span><span class="ev due"><b>HW6 due</b><span>General Physics II</span></span></div>
+            </div>
+            <div class="wk-detail"><b>Quantum Materials Seminar</b><span>Wed, Oct 28 · 16:00 · E7 101</span><span>Speaker Prof. Mongryong Lee · Topological Phases in 2D Materials</span><em class="wk-merge">3 mails → 1 event</em></div>
+          </figure>
+          <p class="ba-note">Only seminars in the fields you pick in Settings. Date, speaker and venue are read from the mail, and reposts merge into one event.</p>
+        </div>
+      </div>
+
+      <div class="cloud reveal">
+        <div class="copy">
+          <p class="tag">Your calendar</p>
+          <h4>In your Google Calendar too</h4>
+          <p>Turn it on once and seminars in your fields go to your Google Calendar, with speaker and venue, so they're on your phone too.</p>
+          <ul class="checks"><li>Only one calendar the app made is touched. Your other events stay as they are.</li></ul>
+        </div>
+        <figure class="gc" role="img" aria-label="Google Calendar schedule view. Between your own event (club meeting), seminars and school events from the 'DGIST mail events' calendar appear with their venue, marked 'Just synced'">
+          <div class="gc-top"><span class="gd-brand"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path fill="#4285F4" d="M18.316 5.684H24v12.632h-5.684V5.684zM5.684 24h12.632v-5.684H5.684V24zM18.316 5.684V0H1.895A1.894 1.894 0 0 0 0 1.895v16.421h5.684V5.684h12.632zm-7.207 6.25v-.065c.272-.144.5-.349.687-.617s.279-.595.279-.982c0-.379-.099-.72-.3-1.025a2.05 2.05 0 0 0-.832-.714 2.703 2.703 0 0 0-1.197-.257c-.6 0-1.094.156-1.481.467-.386.311-.65.671-.793 1.078l1.085.452c.086-.249.224-.461.413-.633.189-.172.445-.257.767-.257.33 0 .602.088.816.264a.86.86 0 0 1 .322.703c0 .33-.12.589-.36.778-.24.19-.535.284-.886.284h-.567v1.085h.633c.407 0 .748.109 1.02.327.272.218.407.499.407.843 0 .336-.129.614-.387.832s-.565.327-.924.327c-.351 0-.651-.103-.897-.311-.248-.208-.422-.502-.521-.881l-1.096.452c.178.616.505 1.082.977 1.401.472.319.984.478 1.538.477a2.84 2.84 0 0 0 1.293-.291c.382-.193.684-.458.902-.794.218-.336.327-.72.327-1.149 0-.429-.115-.797-.344-1.105a2.067 2.067 0 0 0-.881-.689zm2.093-1.931l.602.913L15 10.045v5.744h1.187V8.446h-.827l-2.158 1.557zM22.105 0h-3.289v5.184H24V1.895A1.894 1.894 0 0 0 22.105 0zm-3.289 23.5l4.684-4.684h-4.684V23.5zM0 22.105C0 23.152.848 24 1.895 24h3.289v-5.184H0v3.289z"/></svg>Calendar</span><span class="gc-month">October 2026</span><span class="gc-sync"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 0 1-15.5 6.2L3 16"/><path d="M3 21v-5h5"/><path d="M3 12a9 9 0 0 1 15.5-6.2L21 8"/><path d="M21 3v5h-5"/></svg>Just synced</span></div>
+          <div class="gc-body">
+            <ul class="gc-cals"><li class="h">My calendars</li><li class="mine"><i></i>Personal</li><li class="sem"><i></i>DGIST mail events</li></ul>
+            <div class="gc-agenda">
+              <div class="gc-day today"><span class="gc-date">Wed<b>28</b></span><span class="gc-evs"><span class="gc-ev sem"><b>Quantum Materials Seminar</b><span>16:00–17:00 · E7 101</span></span><span class="gc-ev mine"><b>Club meeting</b><span>19:00–21:00</span></span></span></div>
+              <div class="gc-day"><span class="gc-date">Thu<b>29</b></span><span class="gc-evs"><span class="gc-ev sem"><b>Career fair</b><span>13:00–14:00</span></span><span class="gc-ev sem"><b>Deep Learning for Biology</b><span>14:00–15:00</span></span></span></div>
+              <div class="gc-day"><span class="gc-date">Fri<b>30</b></span><span class="gc-evs"><span class="gc-ev sem"><b>Business model seminar</b><span>10:00–11:00</span></span></span></div>
+            </div>
+          </div>
+        </figure>
+      </div>
+
+      <article class="feature reveal">
+        <div class="copy">
+          <p class="tag">Deadlines</p>
+          <h3>Every course's deadlines, sorted by D-day</h3>
+          <ul class="checks">
+            <li>"Go submit" opens the LMS submission page</li>
+            <li>A notification as a deadline gets close</li>
+            <li>Send to Google Calendar or export .ics</li>
+          </ul>
+        </div>
+        <figure class="window">
+          <div class="bar" aria-hidden="true"><i></i><i></i><i></i><span>Deadlines</span></div>
+          <img src="../img/en/app-deadlines.webp" width="1440" height="900" loading="lazy" alt="Deadlines screen: assignments from each course sorted by D-day with a 'Go submit' button">
+        </figure>
+      </article>
+    </div>
 
     <div class="more reveal">
       <h3 class="block-title">And more</h3>
       <div class="extras">
-        <div class="extra"><b>Unified search</b><span>Courses, files, assignments, mail and events from one search box.</span></div>
-        <div class="extra"><b>Notifications</b><span>Get notified before deadlines and when new files or notices appear.</span></div>
-        <div class="extra"><b>Shuttle bus &amp; notices</b><span>The shuttle timetable and school notices, right in the app.</span></div>
-        <div class="extra"><b>Exchange map</b><span>FGLP and credit-exchange partner universities on a world map.</span></div>
-        <div class="extra"><b>5 themes · English UI</b><span>Light, dark and navy themes, and the whole app in English.</span></div>
-        <div class="extra"><b>Guided tour</b><span>A short tour of every screen on first launch.</span></div>
+        <div class="extra"><b>Unified search</b><span>Everything from one search box</span></div>
+        <div class="extra"><b>Shuttle bus</b><span>Shuttle timetables in the app</span></div>
+        <div class="extra"><b>Exchange map</b><span>FGLP and partner schools on a map</span></div>
+        <div class="extra"><b>Korean or English</b><span>The whole app in either</span></div>
+        <div class="extra"><b>Demo mode</b><span>Look around with sample data</span></div>
+        <div class="extra"><b>Notifications</b><span>When new files or notices arrive</span></div>
       </div>
-    </div>
-  </div>
-</section>
-
-<!-- 꿀기능: 학교 서비스를 따로 쓸 때는 못 하던 것만 -->
-<section class="section tint" id="tips">
-  <div class="container">
-    <div class="center reveal">
-      <p class="kicker">Tips</p>
-      <h2>Small features that save a lot of time</h2>
-      <p class="sub">Things you couldn't do with the LMS and webmail on their own.</p>
-    </div>
-
-    <div class="tip-hero stack reveal">
-      <div class="copy">
-        <p class="tag" style="--c: var(--blue)">Courses · Mail</p>
-        <h3>Professors, TAs and their mail, by course name</h3>
-        <ul class="checks">
-          <li>Type a course name such as <b>General Physics</b> in the To field and its professors and TAs appear with their section.</li>
-          <li>Each course card lists this term's professors and TAs. Click the envelope to start a mail with the subject <b>[Course, Section 01]</b> filled in.</li>
-          <li>Search "General Chemistry II", "General Chemistry 2" or the Korean course name to get that course's mail. Senders get a tag such as "General Physics II · Sec. 3 · Professor".</li>
-        </ul>
-      </div>
-      <div class="strips">
-        <figure class="shot-strip"><img src="../img/en/feat-staff.webp" width="2160" height="302" loading="lazy" alt="Typing 'General Physics' in the To field lists Gildong Hong (General Physics II, Sec. 1, Professor), Cheolsu Kim and Younghee Lee (TAs) and Jiho Song (General Physics Lab II TA) with their addresses"></figure>
-        <figure class="shot-strip"><img src="../img/en/feat-courses.webp" width="2160" height="773" loading="lazy" alt="Three course cards, each showing the next deadline and the professor and TAs with their section"></figure>
-      </div>
-    </div>
-
-    <div class="tips reveal">
-      <div class="tip"><p class="tag" style="--c: var(--amber)">Files</p><b>Lecture files to Drive and cloud folders</b><span>Course and week folders in your Google Drive, with revised files replaced. Also copied to the cloud folders below for your phone.</span><span class="svc"><span class="logo" title="Google Drive"><svg aria-hidden="true" focusable="false" viewBox="0 0 87.3 78"><path d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8h-27.5c0 1.55.4 3.1 1.2 4.5z" fill="#0066da"/><path d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44a9.06 9.06 0 0 0 -1.2 4.5h27.5z" fill="#00ac47"/><path d="m73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5h-27.502l5.852 11.5z" fill="#ea4335"/><path d="m43.65 25 13.75-23.8c-1.35-.8-2.9-1.2-4.5-1.2h-18.5c-1.6 0-3.15.45-4.5 1.2z" fill="#00832d"/><path d="m59.8 53h-32.3l-13.75 23.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.45 4.5-1.2z" fill="#2684fc"/><path d="m73.4 26.5-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8 16.15 28h27.45c0-1.55-.4-3.1-1.2-4.5z" fill="#ffba00"/></svg></span><span class="logo" title="OneDrive"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path fill="#0364b8" d="M9.8 8.2a5.3 5.3 0 0 1 8.9 2.3 3.9 3.9 0 0 1 1.2 7.6H7.4l2.4-9.9Z"/><path fill="#0078d4" d="M9.6 8.4 7 18.1H5.2a3.7 3.7 0 0 1-.8-7.3 5 5 0 0 1 5.2-2.4Z"/><path fill="#28a8ea" d="M20 11.2a3.5 3.5 0 0 1-.6 6.9H7.4l3.1-5.3a4 4 0 0 1 5-1.6l4.5 0Z"/></svg></span><span class="logo" title="iCloud Drive"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path fill="#3e9bf0" d="M17.6 18H6.8a4.3 4.3 0 0 1-.6-8.5 5.9 5.9 0 0 1 11.2 1.6 3.5 3.5 0 0 1 .2 6.9Z"/></svg></span><span class="logo" title="Dropbox"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="#0061ff"><path d="m7 3 5 3.2-5 3.2L2 6.2 7 3Zm10 0 5 3.2-5 3.2-5-3.2L17 3ZM2 12.6l5-3.2 5 3.2-5 3.2-5-3.2Zm15-3.2 5 3.2-5 3.2-5-3.2 5-3.2ZM7 17l5-3.2 5 3.2-5 3.2L7 17Z"/></svg></span><span class="logo" title="NAVER MYBOX"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><rect width="20" height="20" x="2" y="2" rx="5" fill="#03c75a"/><path fill="#fff" d="M8 7h2.6l3.1 4.6V7H16v10h-2.6l-3.1-4.6V17H8V7Z"/></svg></span></span></div>
-      <div class="tip"><p class="tag" style="--c: var(--violet)">Calendar</p><b>Seminar mail → calendar</b><span>Reads the date, speaker, title and venue from seminar mail and adds it to your calendar and Google Calendar.</span></div>
-      <div class="tip"><p class="tag" style="--c: var(--accent-ink)">Timetable</p><b>Timetable from a photo</b><span>Fill your weekly timetable from an Everytime link or a screenshot. <small>(photos need a Gemini key)</small></span></div>
-      <div class="tip"><p class="tag" style="--c: var(--blue)">Mail</p><b>Unanswered mail</b><span>See sent mail that never got a reply and draft a reminder in one click.</span></div>
     </div>
   </div>
 </section>
@@ -239,9 +430,9 @@
 <section class="section" id="privacy">
   <div class="container trust">
     <div class="reveal">
-      <p class="kicker">Privacy</p>
+      <p class="kicker"><span>03</span>Privacy</p>
       <h2>Runs only on <em>your own computer</em></h2>
-      <p class="sub">There is no developer-operated server. Your files and account details are stored only on <b>your own computer</b> and are never sent to anyone, including the developer.</p>
+      <p class="sub">There is no developer-operated server. Your files and account details are stored on <b>your own computer</b> and are never sent to the developer. Data goes only to the Google account you connect and to the AI program you call yourself, and only what each task needs.</p>
       <ul class="checks">
         <li>Passwords and API keys encrypted on your own computer (Windows DPAPI, macOS Keychain, Linux keyring)</li>
         <li>No analytics, ads or usage tracking; nothing is ever sold</li>
@@ -250,9 +441,9 @@
       <p style="margin-top:18px"><a href="../privacy#english">Read the full Privacy Policy →</a></p>
     </div>
     <div class="perm reveal">
-      <div class="row"><div><b><span class="logo"><svg aria-hidden="true" focusable="false" viewBox="0 0 87.3 78"><path d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8h-27.5c0 1.55.4 3.1 1.2 4.5z" fill="#0066da"/><path d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44a9.06 9.06 0 0 0 -1.2 4.5h27.5z" fill="#00ac47"/><path d="m73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5h-27.502l5.852 11.5z" fill="#ea4335"/><path d="m43.65 25 13.75-23.8c-1.35-.8-2.9-1.2-4.5-1.2h-18.5c-1.6 0-3.15.45-4.5 1.2z" fill="#00832d"/><path d="m59.8 53h-32.3l-13.75 23.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.45 4.5-1.2z" fill="#2684fc"/><path d="m73.4 26.5-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8 16.15 28h27.45c0-1.55-.4-3.1-1.2-4.5z" fill="#ffba00"/></svg></span>Google Drive</b><code>drive.file</code></div><p>Uploads course files into course/week folders the app creates and checks for duplicates. The app cannot see Drive files it did not create.</p></div>
+      <div class="row"><div><b><span class="logo"><svg aria-hidden="true" focusable="false" viewBox="0 0 87.3 78"><path d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8h-27.5c0 1.55.4 3.1 1.2 4.5z" fill="#0066da"/><path d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44a9.06 9.06 0 0 0 -1.2 4.5h27.5z" fill="#00ac47"/><path d="m73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5h-27.502l5.852 11.5z" fill="#ea4335"/><path d="m43.65 25 13.75-23.8c-1.35-.8-2.9-1.2-4.5-1.2h-18.5c-1.6 0-3.15.45-4.5 1.2z" fill="#00832d"/><path d="m59.8 53h-32.3l-13.75 23.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.45 4.5-1.2z" fill="#2684fc"/><path d="m73.4 26.5-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8 16.15 28h27.45c0-1.55-.4-3.1-1.2-4.5z" fill="#ffba00"/></svg></span>Google Drive</b><code>drive.file</code></div><div><p>Uploads course files into course/week folders the app creates and checks whether a file was already uploaded.</p><p>When you attach a Drive file to a mail, it can open only the files you pick in Google's file picker. Files you don't pick stay out of reach.</p></div></div>
       <div class="row"><div><b><span class="logo"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path fill="#4285F4" d="M18.316 5.684H24v12.632h-5.684V5.684zM5.684 24h12.632v-5.684H5.684V24zM18.316 5.684V0H1.895A1.894 1.894 0 0 0 0 1.895v16.421h5.684V5.684h12.632zm-7.207 6.25v-.065c.272-.144.5-.349.687-.617s.279-.595.279-.982c0-.379-.099-.72-.3-1.025a2.05 2.05 0 0 0-.832-.714 2.703 2.703 0 0 0-1.197-.257c-.6 0-1.094.156-1.481.467-.386.311-.65.671-.793 1.078l1.085.452c.086-.249.224-.461.413-.633.189-.172.445-.257.767-.257.33 0 .602.088.816.264a.86.86 0 0 1 .322.703c0 .33-.12.589-.36.778-.24.19-.535.284-.886.284h-.567v1.085h.633c.407 0 .748.109 1.02.327.272.218.407.499.407.843 0 .336-.129.614-.387.832s-.565.327-.924.327c-.351 0-.651-.103-.897-.311-.248-.208-.422-.502-.521-.881l-1.096.452c.178.616.505 1.082.977 1.401.472.319.984.478 1.538.477a2.84 2.84 0 0 0 1.293-.291c.382-.193.684-.458.902-.794.218-.336.327-.72.327-1.149 0-.429-.115-.797-.344-1.105a2.067 2.067 0 0 0-.881-.689zm2.093-1.931l.602.913L15 10.045v5.744h1.187V8.446h-.827l-2.158 1.557zM22.105 0h-3.289v5.184H24V1.895A1.894 1.894 0 0 0 22.105 0zm-3.289 23.5l4.684-4.684h-4.684V23.5zM0 22.105C0 23.152.848 24 1.895 24h3.289v-5.184H0v3.289z"/></svg></span>Google Calendar</b><code>calendar.app.created</code></div><p>Creates one dedicated calendar and adds or updates deadlines, academic events and dates found in mail there. It can only open calendars the app created, so your other calendars and events stay out of reach.</p></div>
-      <div class="row"><div><b>Other connections</b></div><p>DGIST LMS and mail (with your school account), the school website and public data (public info only), GitHub for update checks. Google data is never used for ads or AI training.</p></div>
+      <div class="row"><div><b>Other connections</b></div><p>DGIST LMS and mail (with your school account), the school website and public data (public info only), GitHub for update checks. Only when you use <code>/ai</code> or "Ask AI" does the text that task needs go to the AI program on your computer (Claude, Gemini or Codex). Google data is never used for ads or AI training and is never sent to the AI.</p></div>
     </div>
   </div>
 </section>
@@ -261,7 +452,7 @@
 <section class="section tint" id="download">
   <div class="container">
     <div class="center reveal">
-      <p class="kicker">Download</p>
+      <p class="kicker"><span>04</span>Download</p>
       <h2>Free to use</h2>
       <p class="sub">Free and open source under the Apache License 2.0.</p>
     </div>
@@ -273,11 +464,11 @@
             <h3>Windows</h3>
           </div>
           <p class="req">Windows 10 · 11 (64-bit) · Installer (.exe)</p>
-          <a class="btn primary" href="https://github.com/tutleblue/dgist-lms-autosaver/releases/download/v1.12.27/bungeoppang-1.12.27-win-x64-setup.exe" data-dl="win" download>
+          <a class="btn primary" href="https://github.com/tutleblue/dgist-lms-autosaver/releases/download/v1.12.54/daling-1.12.54-win-x64-setup.exe" data-dl="win" download>
             <span class="logo btn-logo"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M1.5 1.5h10v10h-10zM12.5 1.5h10v10h-10zM1.5 12.5h10v10h-10zM12.5 12.5h10v10h-10z"/></svg></span>
             Download for Windows
           </a>
-          <p class="ver" data-ver="win" data-fmt="Version {v} · {mb} MB">Version 1.12.27 · 57 MB</p>
+          <p class="ver" data-ver="win" data-fmt="Version {v} · {mb} MB">Version 1.12.54 · 57 MB</p>
           <details>
             <summary>If "Windows protected your PC" appears</summary>
             <ol><li>Click <b>More info</b>.</li><li>Click <b>Run anyway</b> to continue.</li></ol>
@@ -289,12 +480,13 @@
             <h3>macOS</h3>
             <span class="pill">Beta</span>
           </div>
-          <p class="req">Apple silicon (M1 or later) · macOS 12+ · Disk image (.dmg)</p>
-          <a class="btn primary" href="https://github.com/tutleblue/dgist-lms-autosaver/releases/download/v1.12.27/daling-1.12.27-mac-arm64.dmg" data-dl="mac" download>
+          <p class="req" data-req-intel="Apple silicon or Intel Mac · macOS 12+ · Disk image (.dmg)">Apple silicon or Intel Mac · macOS 12+ · Disk image (.dmg)</p>
+          <a class="btn primary" href="https://github.com/tutleblue/dgist-lms-autosaver/releases/download/v1.12.54/daling-1.12.54-mac-arm64.dmg" data-dl="mac" download>
             <span class="logo btn-logo"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.014-2.117 3.675-.546 9.103 1.519 12.09 1.013 1.454 2.208 3.09 3.792 3.039 1.52-.065 2.09-.987 3.935-.987 1.831 0 2.35.987 3.96.948 1.637-.026 2.676-1.48 3.676-2.948 1.156-1.688 1.636-3.325 1.662-3.415-.039-.013-3.182-1.221-3.22-4.857-.026-3.04 2.48-4.494 2.597-4.559-1.429-2.09-3.623-2.324-4.39-2.376-2-.156-3.675 1.09-4.61 1.09zM15.53 3.83c.843-1.012 1.4-2.427 1.245-3.83-1.207.052-2.662.805-3.532 1.818-.78.896-1.454 2.338-1.273 3.714 1.338.104 2.715-.688 3.559-1.701"/></svg></span>
             Download for Mac
           </a>
-          <p class="ver" data-ver="mac" data-fmt="Version {v} · {mb} MB">Version 1.12.27 · 77 MB</p>
+          <p class="ver" data-ver="mac" data-fmt="Version {v} · {mb} MB">Version 1.12.54 · 78 MB</p>
+          <p class="ver" data-dl-wrap="mac-intel">Intel Mac: <a href="https://github.com/tutleblue/dgist-lms-autosaver/releases/download/v1.12.54/daling-1.12.54-mac-x86_64.dmg" data-dl="mac-intel" download>Intel DMG</a> <span data-ver="mac-intel" data-fmt="({mb} MB)">(81 MB)</span></p>
           <details>
             <summary>If the app from the DMG won't open</summary>
             <ol>
@@ -312,11 +504,11 @@
             <span class="pill">Beta</span>
           </div>
           <p class="req">x86_64 · Ubuntu 22.04, Debian 12, Fedora 36 or newer · AppImage</p>
-          <a class="btn primary" href="https://github.com/tutleblue/dgist-lms-autosaver/releases/download/v1.12.27/daling-1.12.27-linux-x86_64.AppImage" data-dl="linux" download>
+          <a class="btn primary" href="https://github.com/tutleblue/dgist-lms-autosaver/releases/download/v1.12.54/daling-1.12.54-linux-x86_64.AppImage" data-dl="linux" download>
             <span class="logo btn-logo"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M12.504 0c-.155 0-.315.008-.48.021-4.226.333-3.105 4.807-3.17 6.298-.076 1.092-.3 1.953-1.05 3.02-.885 1.051-2.127 2.75-2.716 4.521-.278.832-.41 1.684-.287 2.489a.424.424 0 00-.11.135c-.26.268-.45.6-.663.839-.199.199-.485.267-.797.4-.313.136-.658.269-.864.68-.09.189-.136.394-.132.602 0 .199.027.4.055.536.058.399.116.728.04.97-.249.68-.28 1.145-.106 1.484.174.334.535.47.94.601.81.2 1.91.135 2.774.6.926.466 1.866.67 2.616.47.526-.116.97-.464 1.208-.946.587-.003 1.23-.269 2.26-.334.699-.058 1.574.267 2.577.2.025.134.063.198.114.333l.003.003c.391.778 1.113 1.132 1.884 1.071.771-.06 1.592-.536 2.257-1.306.631-.765 1.683-1.084 2.378-1.503.348-.199.629-.469.649-.853.023-.4-.2-.811-.714-1.376v-.097l-.003-.003c-.17-.2-.25-.535-.338-.926-.085-.401-.182-.786-.492-1.046h-.003c-.059-.054-.123-.067-.188-.135a.357.357 0 00-.19-.064c.431-1.278.264-2.55-.173-3.694-.533-1.41-1.465-2.638-2.175-3.483-.796-1.005-1.576-1.957-1.56-3.368.026-2.152.236-6.133-3.544-6.139zm.529 3.405h.013c.213 0 .396.062.584.198.19.135.33.332.438.533.105.259.158.459.166.724 0-.02.006-.04.006-.06v.105a.086.086 0 01-.004-.021l-.004-.024a1.807 1.807 0 01-.15.706.953.953 0 01-.213.335.71.71 0 00-.088-.042c-.104-.045-.198-.064-.284-.133a1.312 1.312 0 00-.22-.066c.05-.06.146-.133.183-.198.053-.128.082-.264.088-.402v-.02a1.21 1.21 0 00-.061-.4c-.045-.134-.101-.2-.183-.333-.084-.066-.167-.132-.267-.132h-.016c-.093 0-.176.03-.262.132a.8.8 0 00-.205.334 1.18 1.18 0 00-.09.4v.019c.002.089.008.179.02.267-.193-.067-.438-.135-.607-.202a1.635 1.635 0 01-.018-.2v-.02a1.772 1.772 0 01.15-.768c.082-.22.232-.406.43-.533a.985.985 0 01.594-.2zm-2.962.059h.036c.142 0 .27.048.399.135.146.129.264.288.344.465.09.199.14.4.153.667v.004c.007.134.006.2-.002.266v.08c-.03.007-.056.018-.083.024-.152.055-.274.135-.393.2.012-.09.013-.18.003-.267v-.015c-.012-.133-.04-.2-.082-.333a.613.613 0 00-.166-.267.248.248 0 00-.183-.064h-.021c-.071.006-.13.04-.186.132a.552.552 0 00-.12.27.944.944 0 00-.023.33v.015c.012.135.037.2.08.334.046.134.098.2.166.268.01.009.02.018.034.024-.07.057-.117.07-.176.136a.304.304 0 01-.131.068 2.62 2.62 0 01-.275-.402 1.772 1.772 0 01-.155-.667 1.759 1.759 0 01.08-.668 1.43 1.43 0 01.283-.535c.128-.133.26-.2.418-.2zm1.37 1.706c.332 0 .733.065 1.216.399.293.2.523.269 1.052.468h.003c.255.136.405.266.478.399v-.131a.571.571 0 01.016.47c-.123.31-.516.643-1.063.842v.002c-.268.135-.501.333-.775.465-.276.135-.588.292-1.012.267a1.139 1.139 0 01-.448-.067 3.566 3.566 0 01-.322-.198c-.195-.135-.363-.332-.612-.465v-.005h-.005c-.4-.246-.616-.512-.686-.71-.07-.268-.005-.47.193-.6.224-.135.38-.271.483-.336.104-.074.143-.102.176-.131h.002v-.003c.169-.202.436-.47.839-.601.139-.036.294-.065.466-.065zm2.8 2.142c.358 1.417 1.196 3.475 1.735 4.473.286.534.855 1.659 1.102 3.024.156-.005.33.018.513.064.646-1.671-.546-3.467-1.089-3.966-.22-.2-.232-.335-.123-.335.59.534 1.365 1.572 1.646 2.757.13.535.16 1.104.021 1.67.067.028.135.06.205.067 1.032.534 1.413.938 1.23 1.537v-.043c-.06-.003-.12 0-.18 0h-.016c.151-.467-.182-.825-1.065-1.224-.915-.4-1.646-.336-1.77.465-.008.043-.013.066-.018.135-.068.023-.139.053-.209.064-.43.268-.662.669-.793 1.187-.13.533-.17 1.156-.205 1.869v.003c-.02.334-.17.838-.319 1.35-1.5 1.072-3.58 1.538-5.348.334a2.645 2.645 0 00-.402-.533 1.45 1.45 0 00-.275-.333c.182 0 .338-.03.465-.067a.615.615 0 00.314-.334c.108-.267 0-.697-.345-1.163-.345-.467-.931-.995-1.788-1.521-.63-.4-.986-.87-1.15-1.396-.165-.534-.143-1.085-.015-1.645.245-1.07.873-2.11 1.274-2.763.107-.065.037.135-.408.974-.396.751-1.14 2.497-.122 3.854a8.123 8.123 0 01.647-2.876c.564-1.278 1.743-3.504 1.836-5.268.048.036.217.135.289.202.218.133.38.333.59.465.21.201.477.335.876.335.039.003.075.006.11.006.412 0 .73-.134.997-.268.29-.134.52-.334.74-.4h.005c.467-.135.835-.402 1.044-.7zm2.185 8.958c.037.6.343 1.245.882 1.377.588.134 1.434-.333 1.791-.765l.211-.01c.315-.007.577.01.847.268l.003.003c.208.199.305.53.391.876.085.4.154.78.409 1.066.486.527.645.906.636 1.14l.003-.007v.018l-.003-.012c-.015.262-.185.396-.498.595-.63.401-1.746.712-2.457 1.57-.618.737-1.37 1.14-2.036 1.191-.664.053-1.237-.2-1.574-.898l-.005-.003c-.21-.4-.12-1.025.056-1.69.176-.668.428-1.344.463-1.897.037-.714.076-1.335.195-1.814.12-.465.308-.797.641-.984l.045-.022zm-10.814.049h.01c.053 0 .105.005.157.014.376.055.706.333 1.023.752l.91 1.664.003.003c.243.533.754 1.064 1.189 1.637.434.598.77 1.131.729 1.57v.006c-.057.744-.48 1.148-1.125 1.294-.645.135-1.52.002-2.395-.464-.968-.536-2.118-.469-2.857-.602-.369-.066-.61-.2-.723-.4-.11-.2-.113-.602.123-1.23v-.004l.002-.003c.117-.334.03-.752-.027-1.118-.055-.401-.083-.71.043-.94.16-.334.396-.4.69-.533.294-.135.64-.202.915-.47h.002v-.002c.256-.268.445-.601.668-.838.19-.201.38-.336.663-.336zm7.159-9.074c-.435.201-.945.535-1.488.535-.542 0-.97-.267-1.28-.466-.154-.134-.28-.268-.373-.335-.164-.134-.144-.333-.074-.333.109.016.129.134.199.2.096.066.215.2.36.333.292.2.68.467 1.167.467.485 0 1.053-.267 1.398-.466.195-.135.445-.334.648-.467.156-.136.149-.267.279-.267.128.016.034.134-.147.332a8.097 8.097 0 01-.69.468zm-1.082-1.583V5.64c-.006-.02.013-.042.029-.05.074-.043.18-.027.26.004.063 0 .16.067.15.135-.006.049-.085.066-.135.066-.055 0-.092-.043-.141-.068-.052-.018-.146-.008-.163-.065zm-.551 0c-.02.058-.113.049-.166.066-.047.025-.086.068-.14.068-.05 0-.13-.02-.136-.068-.01-.066.088-.133.15-.133.08-.031.184-.047.259-.005.019.009.036.03.03.05v.02h.003z"/></svg></span>
             Download for Linux
           </a>
-          <p class="ver" data-ver="linux" data-fmt="Version {v} · {mb} MB">Version 1.12.27 · 250 MB</p>
+          <p class="ver" data-ver="linux" data-fmt="Version {v} · {mb} MB">Version 1.12.54 · 250 MB</p>
           <details>
             <summary>How to run it</summary>
             <ol>
@@ -324,19 +516,18 @@
               <li>Double-click it, or run <code>./daling-*.AppImage</code></li>
               <li>If system libraries for the LMS sign-in browser are missing, the app shows the command to install them.</li>
               <li>Korean input works with ibus.</li>
-              <li>Prefer an install? Get the <a href="https://github.com/tutleblue/dgist-lms-autosaver/releases/download/v1.12.27/daling-1.12.27-linux-x86_64.tar.gz" data-dl="linux-tar">.tar.gz</a>, extract it and run <code>./install.sh</code>.</li>
+              <li>Prefer an install? Get the <a href="https://github.com/tutleblue/dgist-lms-autosaver/releases/download/v1.12.54/daling-1.12.54-linux-x86_64.tar.gz" data-dl="linux-tar">.tar.gz</a>, extract it and run <code>./install.sh</code>.</li>
             </ol>
           </details>
         </div>
       </div>
       <div class="oneline">
         <h3>Install without the warning</h3>
-        <p>Paste into PowerShell on Windows, or Terminal on Mac and Linux. It fetches the same file, checks it matches the original (SHA-256) and installs it.</p>
+        <p>Paste into PowerShell on Windows, or Terminal on Mac and Linux. It checks the download against the GitHub release (SHA-256) before installing; run it again to update.</p>
         <div class="cmd-row"><span class="cmd-os">Windows</span><code>irm https://gudaling.dev/install.ps1 | iex</code><button type="button" class="copy" data-copy data-done="Copied">Copy</button></div>
         <div class="cmd-row"><span class="cmd-os">Mac · Linux</span><code>curl -fsSL https://gudaling.dev/install.sh | sh</code><button type="button" class="copy" data-copy data-done="Copied">Copy</button></div>
         <p class="src">Script source: <a href="/install.ps1" target="_blank" rel="noopener">install.ps1</a> · <a href="/install.sh" target="_blank" rel="noopener">install.sh</a> · If macOS Terminal blocks the paste, allow it from that warning.</p>
       </div>
-      <p class="dl-note" data-mac-note>The Mac and Linux betas can't connect to Google Drive or Calendar yet; that arrives in the next build.</p>
     </div>
     <div class="start reveal" id="how">
       <h3 class="block-title">After installing</h3>
@@ -353,13 +544,13 @@
 <section class="section" id="faq">
   <div class="narrow">
     <div class="center reveal">
-      <p class="kicker">FAQ</p>
+      <p class="kicker"><span>05</span>FAQ</p>
       <h2>Questions</h2>
     </div>
     <div class="faq reveal">
       <details><summary>Is this an official DGIST app?</summary><p>No. It's an unofficial app made by a DGIST student and is not made or operated by DGIST. Always double-check important deadlines and notices on the LMS and official channels.</p></details>
-      <details><summary>Does uninstalling delete my files?</summary><p>No. Files and settings stay in the data folder (Windows <code>C:\lms-autosaver</code>, Mac and Linux <code>~/.lms-autosaver</code>). Delete that folder if you no longer need it.</p></details>
-      <details><summary>Where does the AI assistant send my mail?</summary><p>The AI assistant (translation, plain-language search, mail drafts) is an optional Labs feature that's off until you turn it on in Settings. Even then, only when you press one of its buttons does it send the needed text directly to the AI you installed and signed in to on your PC (Claude, Gemini or Codex). It never goes through the developer, and nothing from Google Drive or Calendar is sent. Details are in the <a href="../privacy#english">Privacy Policy</a>.</p></details>
+      <details><summary>Does uninstalling delete my files?</summary><p>No. Files and settings stay in the data folder (Windows <code>C:\lms-autosaver</code>, Mac <code>~/Library/Application Support/Daling</code> — or <code>~/.lms-autosaver</code> if you used an earlier version, Linux <code>~/.lms-autosaver</code>). Delete that folder if you no longer need it.</p></details>
+      <details><summary>Where does the AI send my mail?</summary><p>The grey greeting, intro and sign-off are made from templates inside the app, without AI. Only when you type <code>/ai</code> and press Ctrl+Enter (⌘+Enter on Mac), or press "Ask AI" or translate, does the text that task needs go directly to the AI program you installed and signed in to on your computer (Claude, Gemini or Codex). It never goes through the developer, and nothing from Google Drive or Calendar is sent. Details are in the <a href="../privacy#english">Privacy Policy</a>.</p></details>
       <details><summary>Where do I send feedback or bug reports?</summary><p>Use the "Feedback" button at the bottom left of the app, or write to <a href="mailto:tutleblue12@gmail.com">tutleblue12@gmail.com</a>.</p></details>
     </div>
   </div>
@@ -395,9 +586,25 @@
     items.forEach((el) => el.classList.add("in"));
   }
 
+  // 시연 영상: 화면에 보일 때만 돌리고, 움직임 줄이기를 켠 사람에게는 멈춘 장면만. 단추로 멈추고 다시 틀 수 있다
+  const calm = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  document.querySelectorAll(".film").forEach((fig) => {
+    const v = fig.querySelector("video"), btn = fig.querySelector(".film-toggle");
+    let held = calm, seen = false;
+    const show = () => { fig.classList.toggle("paused", v.paused); btn.setAttribute("aria-label", v.paused ? btn.dataset.play : btn.dataset.pause); };
+    const sync = () => { if (seen && !held) v.play().catch(show); else v.pause(); };
+    v.addEventListener("play", show); v.addEventListener("pause", show); show();
+    btn.addEventListener("click", () => { held = !v.paused; sync(); });
+    if ("IntersectionObserver" in window) {
+      new IntersectionObserver((es) => { seen = es[es.length - 1].isIntersecting; sync(); }, { threshold: 0.35 }).observe(v);
+    } else { seen = true; sync(); }
+  });
+
   const ua = navigator.userAgent;
   const os = /Windows/i.test(ua) ? "win" : /Macintosh|Mac OS X/i.test(ua) && !/iPhone|iPad|Mobile/i.test(ua) ? "mac"
     : /Linux|X11/i.test(ua) && !/Android|Mobile/i.test(ua) ? "linux" : "";
+  // 탐색기 그림을 맥이면 Finder 처럼 (왼쪽 위 점 세 개)
+  if (os === "mac") document.documentElement.classList.add("os-mac");
   const hero = document.querySelector("[data-hero-dl]");
   const pointHero = () => {
     const link = os && document.querySelector(`[data-dl="${os}"]`);
@@ -416,7 +623,8 @@
       const pick = (re, allowPre) => {
         for (const rel of list) {
           if (rel.draft || (!allowPre && rel.prerelease)) continue;
-          const asset = (rel.assets || []).find((a) => re.test(a.name));
+          // 1.12.53 부터 같은 설치 파일이 새 이름(daling-…)과 예전 이름(bungeoppang-…) 두 벌로 올라간다. 새 이름을 먼저
+          const asset = (rel.assets || []).filter((a) => re.test(a.name)).sort((a, b) => /^daling-/i.test(b.name) - /^daling-/i.test(a.name))[0];
           if (asset) return asset;
         }
         return null;
@@ -428,9 +636,15 @@
         document.querySelectorAll(`[data-ver="${osKey}"]`).forEach((el) => {
           el.textContent = (el.dataset.fmt || "Version {v} · {mb} MB").replace("{v}", v).replace("{mb}", Math.round(asset.size / 1048576));
         });
+        // shown only when the release has the file (the Intel build starts 2026-10-21; older releases have none)
+        document.querySelectorAll(`[data-dl-wrap="${osKey}"]`).forEach((el) => { el.hidden = false; });
+        if (osKey === "mac-intel") document.querySelectorAll("[data-req-intel]").forEach((el) => { el.textContent = el.dataset.reqIntel; });
+        // the hero's "Latest 1.12.x" follows the stable (Windows) release
+        if (osKey === "win" && v) document.querySelectorAll("[data-latest]").forEach((el) => { el.textContent = el.dataset.fmt.replace("{v}", v); });
       };
-      set("win", pick(/^(bungeoppang|daling)-[\d.]+-win-x64-setup\.exe$/i, false));
+      set("win", pick(/^(daling|bungeoppang)-[\d.]+-win-x64-setup\.exe$/i, false));
       set("mac", pick(/^daling-[\d.]+-mac-arm64\.dmg$/i, true));
+      set("mac-intel", pick(/^daling-[\d.]+-mac-x86_64\.dmg$/i, true));
       set("linux", pick(/^daling-[\d.]+-linux-x86_64\.AppImage$/i, true));
       set("linux-tar", pick(/^daling-[\d.]+-linux-x86_64\.tar\.gz$/i, true));
       pointHero();

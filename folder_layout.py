@@ -9,12 +9,16 @@ web_ui(화면 서버)와 main(동기화 작업)이 같은 규칙을 쓰도록 �
 """
 from __future__ import annotations
 
+import os
 import re
 from typing import Any
 
 # Drive 맨 위 폴더 이름. 화면 설정(/api/config)이 이 이름 하나 읽으려고 drive_uploader 를 불러오면
 # google.auth·googleapiclient 까지 따라 올라와 앱을 켠 뒤 첫 화면이 1초 늦었다(2026-10-15 실측 1.0s). 그래서 여기 둔다.
-DRIVE_ROOT_FOLDER = "AutoSaver"
+DRIVE_ROOT_FOLDER = "Daling"
+# 1.12.54 까지의 맨 위 폴더 이름. 앱이 만든 이 폴더가 있으면 이름만 Daling 으로 바꿔 그대로 쓴다(drive_uploader.get_root_folder).
+# 사용자: "daling 폴더로 제대로 생성되는지" — 이름이 AutoSaver 라 다른 PC 사용자가 올라간 자료를 못 찾았다.
+LEGACY_DRIVE_ROOT_FOLDERS = ("AutoSaver",)
 
 LAYOUTS = ("lms", "flat")
 DEFAULT_LAYOUT = "lms"
@@ -33,6 +37,18 @@ def safe_folder(text: str, limit: int = 60) -> str:
     cleaned = re.sub(r'[<>:"/\\|?*\x00-\x1f]', " ", str(text or "")).strip(" .")
     cleaned = re.sub(r"\s+", " ", cleaned)
     return (cleaned or "기타")[:limit].strip(" .") or "기타"
+
+
+def fit_file_name(name: str, max_bytes: int = 240) -> str:
+    """맥·리눅스는 파일 이름을 255 바이트까지만 받는다(한글은 글자당 3바이트라 약 80자).
+    글자 수(180자)만 자르면 긴 한글 자료 이름이 맥·리눅스에서 'File name too long' 으로 못 받힌다
+    (2026-10-21 맥·리눅스 점검). 확장자는 두고 앞부분을 바이트로 줄인다. Windows(NTFS 255 글자)는 그대로."""
+    if os.name == "nt" or len(name.encode("utf-8")) <= max_bytes:
+        return name
+    stem, ext = os.path.splitext(name)
+    ext = ext[:16]
+    stem = stem.encode("utf-8")[: max_bytes - len(ext.encode("utf-8"))].decode("utf-8", "ignore").rstrip(" .")
+    return (stem or "file") + ext
 
 
 def lms_subfolders(folder_path: Any) -> list[str]:

@@ -1,0 +1,1736 @@
+{
+ "builtAt": "2026-10-15T22:45:37",
+ "source": "DGIST 웹메일 조직도 중 교원",
+ "count": 247,
+ "people": [
+  {
+   "name": "Aaron Cumberledge",
+   "email": "aaroncledge@dgist.ac.kr",
+   "dept": "기초학부",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "Andrew John Miller",
+   "email": "miller.andy@dgist.ac.kr",
+   "dept": "기초학부",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "Benjamin Wilson Riley",
+   "email": "benriley73@dgist.ac.kr",
+   "dept": "기초학부",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "Carlos Scarinci",
+   "email": "cscarinci@dgist.ac.kr",
+   "dept": "기초학부",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "DEVECIOGLU DENIZ OLGU",
+   "email": "deniz@dgist.ac.kr",
+   "dept": "기초학부",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "Desta Kebede Taye",
+   "email": "ktdesta@dgist.ac.kr",
+   "dept": "기초학부",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "Felix Jonas",
+   "email": "fjonas@dgist.ac.kr",
+   "dept": "뉴바이올로지학과",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "Hudson Thomas Bryan",
+   "email": "hudson@dgist.ac.kr",
+   "dept": "기초학부(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "Mark Silverlock",
+   "email": "marksilverlock@dgist.ac.kr",
+   "dept": "기초학부",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "Thangaraj Manirathinam",
+   "email": "t_manirathinam26@dgist.ac.kr",
+   "dept": "기술경영학과",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "Yoichi Kosodo",
+   "email": "kosodo@dgist.ac.kr",
+   "dept": "뇌과학과",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "강대국",
+   "email": "dkkang@dgist.ac.kr",
+   "dept": "첨단기술공학과",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "강승관",
+   "email": "skang@dgist.ac.kr",
+   "dept": "로봇및기계전자공학과",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "강유진",
+   "email": "eugene@dgist.ac.kr",
+   "dept": "기초학부",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "강준구",
+   "email": "joongoo.kang@dgist.ac.kr",
+   "dept": "기초과학연구소(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "강효상",
+   "email": "hyosang@dgist.ac.kr",
+   "dept": "기초학부(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "고서진",
+   "email": "sjko927@dgist.ac.kr",
+   "dept": "에너지공학연구소(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "고재원",
+   "email": "jaewonko@dgist.ac.kr",
+   "dept": "핵심단백질자원센터(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "곽준명",
+   "email": "jkwak@dgist.ac.kr",
+   "dept": "뉴바이올로지연구소(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "구자욱",
+   "email": "jawook.koo@dgist.ac.kr",
+   "dept": "뇌과학과",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "구재형",
+   "email": "jkoo001@dgist.ac.kr",
+   "dept": "K-BRIDGE 사업단(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "권상일",
+   "email": "sangil.kwon@dgist.ac.kr",
+   "dept": "양자정보과학전공(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "권선국",
+   "email": "skwon@dgist.ac.kr",
+   "dept": "기술경영학과",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "권업",
+   "email": "hyunk@dgist.ac.kr",
+   "dept": "기술경영학과",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "권오상",
+   "email": "okwon@dgist.ac.kr",
+   "dept": "기술경영학과",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "권오훈",
+   "email": "jxstigma0114@dgist.ac.kr",
+   "dept": "후각융합연구센터(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "권욱현",
+   "email": "whkwon@dgist.ac.kr",
+   "dept": "전기전자컴퓨터공학과",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "권혁준",
+   "email": "hj.kwon@dgist.ac.kr",
+   "dept": "차세대센서‧반도체연구소(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "권혁진",
+   "email": "hyeokjinkwon@dgist.ac.kr",
+   "dept": "에너지공학연구소(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "기영훈",
+   "email": "ykee@dgist.ac.kr",
+   "dept": "뉴바이올로지연구소(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "길영준",
+   "email": "youngjgil@dgist.ac.kr",
+   "dept": "기술경영학과",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "길현재",
+   "email": "hyunjae.gil@dgist.ac.kr",
+   "dept": "인공지능전공(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "김가인",
+   "email": "gain.kim@dgist.ac.kr",
+   "dept": "차세대센서‧반도체연구소(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "김규형",
+   "email": "khkim@dgist.ac.kr",
+   "dept": "뇌과학연구소(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "김기섭",
+   "email": "gsk@dgist.ac.kr",
+   "dept": "인공지능전공(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "김기섭",
+   "email": "kisub.kim@dgist.ac.kr",
+   "dept": "인공지능전공(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "김도근",
+   "email": "kimvet0911@dgist.ac.kr",
+   "dept": "뇌과학과",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "김동렬",
+   "email": "dlkim7@dgist.ac.kr",
+   "dept": "화학물리학과(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "김동욱",
+   "email": "dw_kim@dgist.ac.kr",
+   "dept": "로봇및기계전자공학연구소(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "김민석",
+   "email": "kms@dgist.ac.kr",
+   "dept": "웰에이징연구센터(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "김민수",
+   "email": "minkim@dgist.ac.kr",
+   "dept": "DGIST-ETH 마이크로 로봇연구센터(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "김민식",
+   "email": "mkim@dgist.ac.kr",
+   "dept": "웰에이징연구센터(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "김민환",
+   "email": "mhk@dgist.ac.kr",
+   "dept": "의생명공학전공(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "김백규",
+   "email": "bkim@dgist.ac.kr",
+   "dept": "정보통신융합연구소(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "김병재",
+   "email": "byoungjae.kim@dgist.ac.kr",
+   "dept": "기초학부(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "김봉훈",
+   "email": "bonghoonkim@dgist.ac.kr",
+   "dept": "차세대센서‧반도체연구소(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "김선구",
+   "email": "sonkukim@dgist.ac.kr",
+   "dept": "기초학부",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "김선준",
+   "email": "sunjun_kim@dgist.ac.kr",
+   "dept": "정보통신융합연구소(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "김성균",
+   "email": "hansol@dgist.ac.kr",
+   "dept": "기초과학연구소(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "김소연",
+   "email": "dalki0724@dgist.ac.kr",
+   "dept": "후각융합연구센터(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "김소연",
+   "email": "soyeunk@dgist.ac.kr",
+   "dept": "양자정보과학전공(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "김소희",
+   "email": "soheekim@dgist.ac.kr",
+   "dept": "K-BRIDGE 사업단(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "김승현",
+   "email": "seunghyeonkim@dgist.ac.kr",
+   "dept": "에너지공학연구소(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "김아람",
+   "email": "aaram@dgist.ac.kr",
+   "dept": "양자정보과학전공(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "김영규",
+   "email": "younggyu@dgist.ac.kr",
+   "dept": "에너지공학연구소(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "김영식",
+   "email": "ysk@dgist.ac.kr",
+   "dept": "양자정보과학전공(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "김영욱",
+   "email": "y.kim@dgist.ac.kr",
+   "dept": "차세대센서‧반도체연구소(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "김운혁",
+   "email": "unhyuck.kim@dgist.ac.kr",
+   "dept": "에너지공학연구소(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "김유리",
+   "email": "yoori.kim@dgist.ac.kr",
+   "dept": "의생명공학전공(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "김윤승",
+   "email": "yoonseung.kim@dgist.ac.kr",
+   "dept": "전기전자컴퓨터공학과",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "김은경",
+   "email": "ekkim@dgist.ac.kr",
+   "dept": "뇌대사체학연구센터",
+   "title": "센터장",
+   "role": "교원"
+  },
+  {
+   "name": "김재혁",
+   "email": "orbit_scientist@dgist.ac.kr",
+   "dept": "기초학부",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "김정연",
+   "email": "kbio2000@dgist.ac.kr",
+   "dept": "대학원",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "김종구",
+   "email": "jgkim7@dgist.ac.kr",
+   "dept": "화학물리학과",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "김주현",
+   "email": "juhyun.kim@dgist.ac.kr",
+   "dept": "대학원",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "김진수",
+   "email": "jinsoo.kim@dgist.ac.kr",
+   "dept": "에너지공학연구소(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "김진해",
+   "email": "jinhaekim@dgist.ac.kr",
+   "dept": "뉴바이올로지연구소(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "김찬연",
+   "email": "chanyeon@dgist.ac.kr",
+   "dept": "에너지공학연구소(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "김창업",
+   "email": "eopchang@dgist.ac.kr",
+   "dept": "의생명공학전공(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "김철기",
+   "email": "cgkim@dgist.ac.kr",
+   "dept": "대구경북과학기술원",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "김칠민",
+   "email": "chmkim@dgist.ac.kr",
+   "dept": "화학물리학과",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "김태완",
+   "email": "taewan79@dgist.ac.kr",
+   "dept": "의생명공학전공(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "김태욱",
+   "email": "twk@dgist.ac.kr",
+   "dept": "에너지공학과",
+   "title": "",
+   "role": "교원"
+  },
+  {
+   "name": "김하석",
+   "email": "hasuckim@dgist.ac.kr",
+   "dept": "에너지공학과",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "김현희",
+   "email": "tufruf@dgist.ac.kr",
+   "dept": "기초학부(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "김형준",
+   "email": "kijang1@dgist.ac.kr",
+   "dept": "대학원",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "김회준",
+   "email": "joonkim@dgist.ac.kr",
+   "dept": "차세대센서‧반도체연구소(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "남강현",
+   "email": "khnam@dgist.ac.kr",
+   "dept": "로봇및기계전자공학연구소(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "남은주",
+   "email": "eunjunam@dgist.ac.kr",
+   "dept": "화학물리학과",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "남창훈",
+   "email": "chang@dgist.ac.kr",
+   "dept": "K-BRIDGE 사업단(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "노어진",
+   "email": "djwls9453@dgist.ac.kr",
+   "dept": "로봇및기계전자공학과",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "라종철",
+   "email": "jcrah@dgist.ac.kr",
+   "dept": "K-BRIDGE 사업단(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "문대원",
+   "email": "dwmoon@dgist.ac.kr",
+   "dept": "뉴바이올로지학과",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "문인규",
+   "email": "inkyu.moon@dgist.ac.kr",
+   "dept": "인공지능전공(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "문제일",
+   "email": "cmoon@dgist.ac.kr",
+   "dept": "뇌공학융합연구센터(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "문혜원",
+   "email": "hmoon@dgist.ac.kr",
+   "dept": "화학물리학과",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "민은선",
+   "email": "mbrownie@dgist.ac.kr",
+   "dept": "화학물리학과(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "박경서",
+   "email": "kspark@dgist.ac.kr",
+   "dept": "의생명공학전공(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "박경준",
+   "email": "kjp@dgist.ac.kr",
+   "dept": "인공지능전공(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "박기성",
+   "email": "keeseong@dgist.ac.kr",
+   "dept": "양자정보과학전공",
+   "title": "전공책임교수",
+   "role": "교원"
+  },
+  {
+   "name": "박대희",
+   "email": "dhpark@dgist.ac.kr",
+   "dept": "인공지능전공(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "박범석",
+   "email": "vinetar@dgist.ac.kr",
+   "dept": "교양학부",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "박석호",
+   "email": "shpark12@dgist.ac.kr",
+   "dept": "K-BRIDGE 사업단(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "박인철",
+   "email": "inchul@dgist.ac.kr",
+   "dept": "에너지공학연구소(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "박종래",
+   "email": "j-park@dgist.ac.kr",
+   "dept": "후각융합연구센터(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "박준혁",
+   "email": "joon.park@dgist.ac.kr",
+   "dept": "웰에이징연구센터(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "박진희",
+   "email": "jinhee@dgist.ac.kr",
+   "dept": "기초과학연구소(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "박철",
+   "email": "cpark@dgist.ac.kr",
+   "dept": "기술경영학과",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "박치영",
+   "email": "parkcy@dgist.ac.kr",
+   "dept": "에너지공학연구소(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "박포정",
+   "email": "pojeong@dgist.ac.kr",
+   "dept": "뇌과학과",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "배인환",
+   "email": "inhwanbae@dgist.ac.kr",
+   "dept": "인공지능전공(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "배하은",
+   "email": "haeunbae@dgist.ac.kr",
+   "dept": "기초학부(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "백명인",
+   "email": "bmi008@dgist.ac.kr",
+   "dept": "뇌과학과",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "상가라쥬샨무감",
+   "email": "sangarajus@dgist.ac.kr",
+   "dept": "에너지공학연구소(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "서대원",
+   "email": "dwseo@dgist.ac.kr",
+   "dept": "인공지능전공(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "서병창",
+   "email": "bcsuh@dgist.ac.kr",
+   "dept": "K-BRIDGE 사업단(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "서상원",
+   "email": "sangwon.seo@dgist.ac.kr",
+   "dept": "화학물리학과",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "서정필",
+   "email": "jseo@dgist.ac.kr",
+   "dept": "차세대센서‧반도체연구소(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "성주영",
+   "email": "jooyoung@dgist.ac.kr",
+   "dept": "기초과학연구소(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "소진현",
+   "email": "jinhyun@dgist.ac.kr",
+   "dept": "슈퍼컴퓨팅AI교육연구센터",
+   "title": "센터장",
+   "role": "교원"
+  },
+  {
+   "name": "손상혁",
+   "email": "son@dgist.ac.kr",
+   "dept": "CPS글로벌센터(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "송민영",
+   "email": "msong@dgist.ac.kr",
+   "dept": "의생명공학전공(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "송석호",
+   "email": "sukho.song@dgist.ac.kr",
+   "dept": "로봇및기계전자공학연구소(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "송인택",
+   "email": "songintek@dgist.ac.kr",
+   "dept": "화학물리학과",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "송철",
+   "email": "csong@dgist.ac.kr",
+   "dept": "의생명공학전공(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "신동훈",
+   "email": "dshin@dgist.ac.kr",
+   "dept": "정보통신융합연구소(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "신해은",
+   "email": "haeeunshin@dgist.ac.kr",
+   "dept": "기초학부",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "안흥주",
+   "email": "heungju@dgist.ac.kr",
+   "dept": "지능형로봇연구부(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "양지웅",
+   "email": "jiwoongyang@dgist.ac.kr",
+   "dept": "양자정보과학전공(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "엄지원",
+   "email": "jiwonum@dgist.ac.kr",
+   "dept": "핵심단백질자원센터(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "예경무",
+   "email": "ykm31@dgist.ac.kr",
+   "dept": "DGIST-ETH 마이크로 로봇연구센터(겸임)",
+   "title": "센터장",
+   "role": "교원"
+  },
+  {
+   "name": "오서진",
+   "email": "oosj11@dgist.ac.kr",
+   "dept": "후각융합연구센터(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "오세훈",
+   "email": "sehoon@dgist.ac.kr",
+   "dept": "인공지능전공(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "오용석",
+   "email": "ysoh2040@dgist.ac.kr",
+   "dept": "의생명공학전공(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "우혜련",
+   "email": "hrwoo@dgist.ac.kr",
+   "dept": "뉴바이올로지연구소(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "위태웅",
+   "email": "twi@dgist.ac.kr",
+   "dept": "에너지공학과",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "유성운",
+   "email": "yusw@dgist.ac.kr",
+   "dept": "뇌과학과",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "유우경",
+   "email": "wkyu@dgist.ac.kr",
+   "dept": "슈퍼컴퓨팅AI교육연구센터(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "유재석",
+   "email": "jaesok.yu@dgist.ac.kr",
+   "dept": "K-BRIDGE 사업단(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "유천열",
+   "email": "cyyou@dgist.ac.kr",
+   "dept": "차세대센서‧반도체연구소(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "윤동원",
+   "email": "mech@dgist.ac.kr",
+   "dept": "의생명공학전공(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "윤성훈",
+   "email": "shyoon@dgist.ac.kr",
+   "dept": "인공지능전공(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "윤세웅",
+   "email": "200176@dgist.ac.kr",
+   "dept": "기초학부",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "윤세웅",
+   "email": "simonyoon@dgist.ac.kr",
+   "dept": "기술경영학과",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "윤종혁",
+   "email": "jonghyeok.yoon@dgist.ac.kr",
+   "dept": "차세대센서‧반도체연구소(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "윤지성",
+   "email": "jsyoon@dgist.ac.kr",
+   "dept": "기초학부(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "은용순",
+   "email": "yeun@dgist.ac.kr",
+   "dept": "인공지능전공(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "음수빈",
+   "email": "soobin.um@dgist.ac.kr",
+   "dept": "전기전자컴퓨터공학과",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "이경태",
+   "email": "kyoungtae@dgist.ac.kr",
+   "dept": "K-BRIDGE 사업단(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "이광",
+   "email": "klee@dgist.ac.kr",
+   "dept": "뇌공학융합연구센터(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "이기준",
+   "email": "kjlee@dgist.ac.kr",
+   "dept": "K-BRIDGE 사업단(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "이덕희",
+   "email": "dukheelee@dgist.ac.kr",
+   "dept": "기술경영학과",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "이동하",
+   "email": "dhlee@dgist.ac.kr",
+   "dept": "대구경북과학기술원",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "이두석",
+   "email": "dslee@dgist.ac.kr",
+   "dept": "전기전자컴퓨터공학과(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "이민선",
+   "email": "leems@dgist.ac.kr",
+   "dept": "의생명공학전공(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "이병권",
+   "email": "byungkun@dgist.ac.kr",
+   "dept": "K-BRIDGE 사업단(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "이병문",
+   "email": "byeongmoon@dgist.ac.kr",
+   "dept": "뇌공학융합연구센터(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "이병훈",
+   "email": "byung-hoon_lee@dgist.ac.kr",
+   "dept": "뉴바이올로지연구소(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "이상임",
+   "email": "sangim@dgist.ac.kr",
+   "dept": "뉴바이올로지연구소(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "이상훈",
+   "email": "hoonw@dgist.ac.kr",
+   "dept": "의생명공학전공(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "이석규",
+   "email": "slee2012@dgist.ac.kr",
+   "dept": "핵심단백질자원센터(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "이성기",
+   "email": "sunggi.lee@dgist.ac.kr",
+   "dept": "기초과학연구소",
+   "title": "연구소장",
+   "role": "교원"
+  },
+  {
+   "name": "이성민",
+   "email": "leesm128@dgist.ac.kr",
+   "dept": "로봇및기계전자공학연구소(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "이성배",
+   "email": "sblee@dgist.ac.kr",
+   "dept": "의생명공학전공(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "이성원",
+   "email": "swlee@dgist.ac.kr",
+   "dept": "차세대센서‧반도체연구소(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "이솔빈",
+   "email": "solbin21@dgist.ac.kr",
+   "dept": "기초학부",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "이송이",
+   "email": "song527@dgist.ac.kr",
+   "dept": "뉴바이올로지학과",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "이승주",
+   "email": "cinebook@dgist.ac.kr",
+   "dept": "기술경영학과",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "이승훈",
+   "email": "seunghoon.lee@dgist.ac.kr",
+   "dept": "화학물리학과",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "이신범",
+   "email": "lee.shinbuhm@dgist.ac.kr",
+   "dept": "차세대센서‧반도체연구소(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "이아형",
+   "email": "ahhyoung_lee@dgist.ac.kr",
+   "dept": "의생명공학전공(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "이영삼",
+   "email": "lee.youngsam@dgist.ac.kr",
+   "dept": "의생명공학전공(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "이옥균",
+   "email": "oklee@dgist.ac.kr",
+   "dept": "의생명공학전공(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "이용석",
+   "email": "yslee@dgist.ac.kr",
+   "dept": "로봇및기계전자공학과",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "이용우",
+   "email": "yongwoo@dgist.ac.kr",
+   "dept": "인공지능전공(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "이원근",
+   "email": "lwkuh84@dgist.ac.kr",
+   "dept": "교양학부",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "이윤구",
+   "email": "youngulee@dgist.ac.kr",
+   "dept": "에너지공학연구소(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "이윤성",
+   "email": "sung@dgist.ac.kr",
+   "dept": "기초학부",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "이윤우",
+   "email": "yunwoo.lee@dgist.ac.kr",
+   "dept": "전기전자컴퓨터공학과",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "이재동",
+   "email": "jdlee@dgist.ac.kr",
+   "dept": "차세대센서‧반도체연구소(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "이재민",
+   "email": "jaeminlee@dgist.ac.kr",
+   "dept": "실험동물센터",
+   "title": "센터장",
+   "role": "교원"
+  },
+  {
+   "name": "이재홍",
+   "email": "jaelee@dgist.ac.kr",
+   "dept": "차세대센서‧반도체연구소(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "이재훈",
+   "email": "jrhee11@dgist.ac.kr",
+   "dept": "기술경영학과",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "이정아",
+   "email": "jalee@dgist.ac.kr",
+   "dept": "기초학부",
+   "title": "부학부장",
+   "role": "교원"
+  },
+  {
+   "name": "이정협",
+   "email": "jhlee1@dgist.ac.kr",
+   "dept": "차세대센서‧반도체연구소(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "이종민",
+   "email": "lee@dgist.ac.kr",
+   "dept": "에너지공학연구소(겸임)",
+   "title": "연구소장",
+   "role": "교원"
+  },
+  {
+   "name": "이종수",
+   "email": "jslee@dgist.ac.kr",
+   "dept": "차세대센서‧반도체연구소(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "이종찬",
+   "email": "jclee@dgist.ac.kr",
+   "dept": "K-BRIDGE 사업단(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "이주혁",
+   "email": "jhlee85@dgist.ac.kr",
+   "dept": "에너지공학연구소(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "이지혜",
+   "email": "jh0405.lee@dgist.ac.kr",
+   "dept": "기술경영학과",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "이창훈",
+   "email": "leech@dgist.ac.kr",
+   "dept": "K-BRIDGE 사업단(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "이태훈",
+   "email": "taehun.lee@dgist.ac.kr",
+   "dept": "에너지공학연구소(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "이호춘",
+   "email": "dukelee@dgist.ac.kr",
+   "dept": "에너지공학연구소(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "이효근",
+   "email": "hyokeun.lee@dgist.ac.kr",
+   "dept": "전기전자컴퓨터공학과",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "이효상",
+   "email": "hyosang22@dgist.ac.kr",
+   "dept": "후각융합연구센터(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "인수일",
+   "email": "insuil@dgist.ac.kr",
+   "dept": "웰에이징연구센터(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "임용섭",
+   "email": "yslim73@dgist.ac.kr",
+   "dept": "인공지능전공(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "임평옥",
+   "email": "polim@dgist.ac.kr",
+   "dept": "대구경북과학기술원",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "임희현",
+   "email": "heehyun@dgist.ac.kr",
+   "dept": "기초학부",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "장근영",
+   "email": "ky091239@dgist.ac.kr",
+   "dept": "대학원",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "장보영",
+   "email": "zangby@dgist.ac.kr",
+   "dept": "기술경영학과",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "장윤희",
+   "email": "yhjang@dgist.ac.kr",
+   "dept": "에너지공학연구소(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "장익수",
+   "email": "iksoochang@dgist.ac.kr",
+   "dept": "뇌과학과",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "장재은",
+   "email": "jang1@dgist.ac.kr",
+   "dept": "차세대센서‧반도체연구소(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "장진호",
+   "email": "jhchang@dgist.ac.kr",
+   "dept": "차세대센서‧반도체연구소(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "장하원",
+   "email": "hahawon@dgist.ac.kr",
+   "dept": "기초학부",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "전강은",
+   "email": "kejeon@dgist.ac.kr",
+   "dept": "전기전자컴퓨터공학과",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "전계성",
+   "email": "jjkksss@dgist.ac.kr",
+   "dept": "기초학부",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "전민석",
+   "email": "minseok_jeon@dgist.ac.kr",
+   "dept": "교수학습센터",
+   "title": "센터장",
+   "role": "교원"
+  },
+  {
+   "name": "정낙천",
+   "email": "nc@dgist.ac.kr",
+   "dept": "교무처",
+   "title": "처장",
+   "role": "교원"
+  },
+  {
+   "name": "정민영",
+   "email": "jungbackho22@dgist.ac.kr",
+   "dept": "대학원",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "정병혁",
+   "email": "byunghyuck.jung@dgist.ac.kr",
+   "dept": "기초과학연구소(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "정소현",
+   "email": "sohyunjung@dgist.ac.kr",
+   "dept": "로봇및기계전자공학연구소(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "정순문",
+   "email": "smjeong@dgist.ac.kr",
+   "dept": "첨단기술공학연구소(겸임)",
+   "title": "연구소장",
+   "role": "교원"
+  },
+  {
+   "name": "정영태",
+   "email": "jyt@dgist.ac.kr",
+   "dept": "대구경북과학기술원",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "정찬",
+   "email": "chungc@dgist.ac.kr",
+   "dept": "의생명공학전공(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "정한빈",
+   "email": "hbjeong@dgist.ac.kr",
+   "dept": "시냅스 다양성 및 특이성 조절 연구센터(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "정효정",
+   "email": "hyojeonge@dgist.ac.kr",
+   "dept": "대학원",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "조성표",
+   "email": "knuspcho@dgist.ac.kr",
+   "dept": "기술경영학과",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "조용철",
+   "email": "axon@dgist.ac.kr",
+   "dept": "입학학생처",
+   "title": "처장",
+   "role": "교원"
+  },
+  {
+   "name": "조정아",
+   "email": "jungahcho@dgist.ac.kr",
+   "dept": "뉴바이올로지학과(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "조창희",
+   "email": "chcho@dgist.ac.kr",
+   "dept": "차세대센서‧반도체연구소(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "조현지",
+   "email": "hjcho.dr@dgist.ac.kr",
+   "dept": "뉴바이올로지학과",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "좌훈승",
+   "email": "chwahs@dgist.ac.kr",
+   "dept": "암흑데이터극한활용연구센터",
+   "title": "센터장",
+   "role": "교원"
+  },
+  {
+   "name": "주우진",
+   "email": "wchu@dgist.ac.kr",
+   "dept": "첨단기술공학과",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "천무경",
+   "email": "mkcheon@dgist.ac.kr",
+   "dept": "대학원",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "초빙석좌교수 김성희",
+   "email": "sunnyoxford@dgist.ac.kr",
+   "dept": "전기전자컴퓨터공학과",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "최경호",
+   "email": "ghchoi@dgist.ac.kr",
+   "dept": "대구경북과학기술원",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "최문종",
+   "email": "mj@dgist.ac.kr",
+   "dept": "기술경영학과",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "최승호",
+   "email": "schoe@dgist.ac.kr",
+   "dept": "에너지공학연구소(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "최원석",
+   "email": "wonseok@dgist.ac.kr",
+   "dept": "전기전자컴퓨터공학과",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "최일규",
+   "email": "ik_choi@dgist.ac.kr",
+   "dept": "뉴바이올로지연구소(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "최재호",
+   "email": "jhochoi@dgist.ac.kr",
+   "dept": "인공지능전공(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "최종민",
+   "email": "whdals1062@dgist.ac.kr",
+   "dept": "에너지공학연구소(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "최지웅",
+   "email": "jwchoi@dgist.ac.kr",
+   "dept": "K-BRIDGE 사업단(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "최태섭",
+   "email": "choi-ts@dgist.ac.kr",
+   "dept": "기초학부",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "최한경",
+   "email": "choehank@dgist.ac.kr",
+   "dept": "뇌과학연구소(겸임)",
+   "title": "연구소장",
+   "role": "교원"
+  },
+  {
+   "name": "최해원",
+   "email": "happy9950@dgist.ac.kr",
+   "dept": "기술경영학과",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "최현정",
+   "email": "dream0308@dgist.ac.kr",
+   "dept": "기초학부",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "한강진",
+   "email": "kjhan@dgist.ac.kr",
+   "dept": "로봇및기계전자공학과(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "한상윤",
+   "email": "s.han@dgist.ac.kr",
+   "dept": "양자정보과학전공(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "한석희",
+   "email": "shhan@dgist.ac.kr",
+   "dept": "화학물리학과",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "함상범",
+   "email": "hamsb78@dgist.ac.kr",
+   "dept": "기초학부",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "허수미",
+   "email": "shur@dgist.ac.kr",
+   "dept": "에너지공학연구소(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "허승정",
+   "email": "seungjung.huh@dgist.ac.kr",
+   "dept": "양자정보과학전공(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "허향숙",
+   "email": "sookhoe72@dgist.ac.kr",
+   "dept": "뇌과학과",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "현정호",
+   "email": "jungho.hyun@dgist.ac.kr",
+   "dept": "K-BRIDGE 사업단(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "호동해",
+   "email": "hodh123@dgist.ac.kr",
+   "dept": "에너지공학연구소(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "홍선기",
+   "email": "seonkihong@dgist.ac.kr",
+   "dept": "자성기반라이프케어연구센터(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "홍성욱",
+   "email": "swhong@dgist.ac.kr",
+   "dept": "첨단기술공학연구소(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "홍승태",
+   "email": "st.hong@dgist.ac.kr",
+   "dept": "에너지공학연구소(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "홍재성",
+   "email": "jhong@dgist.ac.kr",
+   "dept": "로봇및기계전자공학과",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "홍정일",
+   "email": "jihong@dgist.ac.kr",
+   "dept": "차세대센서‧반도체연구소(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "황규영",
+   "email": "kywhang@dgist.ac.kr",
+   "dept": "전기전자컴퓨터공학과",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "황민호",
+   "email": "minho@dgist.ac.kr",
+   "dept": "로봇및기계전자공학연구소(겸임)",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "황재웅",
+   "email": "jaeung.hwang@dgist.ac.kr",
+   "dept": "뉴바이올로지학과",
+   "title": "교원",
+   "role": "교원"
+  },
+  {
+   "name": "황재윤",
+   "email": "jyhwang@dgist.ac.kr",
+   "dept": "K-BRIDGE 사업단(겸임)",
+   "title": "단장",
+   "role": "교원"
+  }
+ ]
+}

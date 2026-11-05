@@ -23,6 +23,8 @@
     - 맥에서 AUTOSAVER_SMOKE_KEYCHAIN=write / read 면 그것만: 이 빌드가 남긴 항목을 '다음 빌드' 가 묻지 않고 읽는지
       (mac.yml 이 같은 자리에 같은 인증서로 다시 서명한 앱을 놓고 read 로 부른다, mac_keychain.persist_test)
       write 에 AUTOSAVER_SMOKE_KEYCHAIN_METHOD, droppart·addpart(+ …_PARTITION)·delete·readui 는 mac.yml '키체인 실험' 용 (mac_keychain_lab)
+    - 맥에서 AUTOSAVER_SMOKE_KEYCHAIN=handoff-write / handoff-read 면 그것만: 앱 안 업데이트의 키체인 넘겨주기
+      (mac.yml '키체인 넘겨주기 점검', 두 빌드가 AUTOSAVER_SMOKE_DATA_ROOT 로 같은 데이터 폴더를 쓴다, _mac_handoff)
 """
 from __future__ import annotations
 
@@ -35,11 +37,59 @@ import time
 from pathlib import Path
 
 
+# 화면 서버의 GET 길 전부 ('화면 API 전부' 점검). 쿼리가 필요한 길은 빈 값으로 — 400 이 와도 500 이 아니면 된다.
+SWEEP_GET = (
+    "/api/academic-calendar", "/api/ai/status", "/api/autostart", "/api/config", "/api/config/export", "/api/course-announcements",
+    "/api/course-catalog?q=", "/api/course-staff", "/api/course-state", "/api/course-terms", "/api/deadlines",
+    "/api/deadlines.ics", "/api/demo", "/api/dgist-api/status", "/api/diagnostics", "/api/directory?q=",
+    "/api/drive/get", "/api/drive/list", "/api/drive/picked?state=", "/api/email-body?id=1", "/api/emails", "/api/fglp", "/api/file?path=x",
+    "/api/files", "/api/files/bulk", "/api/health", "/api/local-autosave/job", "/api/lock", "/api/mail-image",
+    "/api/mail/attachment", "/api/mail/big-upload?job=", "/api/mail/discard-draft", "/api/mail/draft?uid=1", "/api/mail/eml", "/api/mail/folders", "/api/mail/me", "/api/mail/pending",
+    "/api/my-events", "/api/notices", "/api/place-search?q=", "/api/samsung-notes/job", "/api/samsung-notes/status",
+    "/api/school-events", "/api/selection", "/api/seminars", "/api/shelves", "/api/shuttle", "/api/status",
+    "/api/storage", "/api/task", "/api/timetable", "/api/tutorial", "/api/ui-prefs", "/api/update/check",
+    "/api/update/job", "/api/whats-new", "/api/window",
+)
+# 아래 '빠진 길' 비교는 쿼리 앞까지만 본다
+_SWEEP_PATHS = {r.split("?")[0] for r in SWEEP_GET}
+
+# POST 길 전부를 빈 본문({})으로 ('화면 API 전부 POST' 점검). 체험 모드라 바깥 서버에 쓰는 길은 409 로 막히고,
+# 나머지는 임시 데이터 폴더에만 쓴다. 맥·리눅스에서만 도는 분기(폴더 열기·저장·키체인)가 500 을 내는지 본다.
+SWEEP_POST = (
+    "/api/acknowledge-courses", "/api/ai/continue", "/api/ai/draft", "/api/ai/polish", "/api/ai/profile",
+    "/api/ai/search", "/api/assignment/open", "/api/autostart", "/api/boot-done", "/api/config", "/api/config/import",
+    "/api/delete-email", "/api/directory/import", "/api/drive/pick", "/api/drive/share", "/api/export-ics", "/api/files/bulk", "/api/gcal/sync",
+    "/api/gcal/sync-academic", "/api/google/connect", "/api/google/credentials", "/api/google/disconnect",
+    "/api/local-autosave/run", "/api/mail/big-cancel", "/api/mail/discard-draft", "/api/mail/flow", "/api/mail/folder-create", "/api/mail/me",
+    "/api/mail/move", "/api/mail/reminder", "/api/mail/save-draft", "/api/mail/star", "/api/mail/translate",
+    "/api/mark-all-read", "/api/mark-read", "/api/my-events/delete", "/api/my-events/save", "/api/organize-files",
+    "/api/presence",
+    "/api/refresh-deadlines", "/api/refresh-emails", "/api/restore-email", "/api/run", "/api/samsung-notes/organize",
+    "/api/samsung-notes/send", "/api/save-local", "/api/selection", "/api/send-email", "/api/shelves/save", "/api/stop",
+    "/api/storage/cleanup", "/api/storage/trash-browser", "/api/timetable/bulk", "/api/timetable/delete",
+    "/api/timetable/import-image", "/api/timetable/import-link", "/api/timetable/save", "/api/tutorial/done",
+    "/api/tutorial/view", "/api/ui-prefs", "/api/update/apply", "/api/update/open-download", "/api/verify",
+    "/api/whats-new/seen",
+)
+# 부르면 안 되는 길: 점검이 켜고 끄는 체험 모드, 앱을 다시 켜기·창 조작, 폴더 고르기 창(사람이 닫을 때까지 멈춤),
+# 파일 관리자·브라우저를 실제로 여는 길
+SWEEP_POST_SKIP = (
+    "/api/demo", "/api/restart", "/api/window", "/api/pick-folder", "/api/open-downloads", "/api/open-url",
+    "/api/open-app-url", "/api/mail/open-link", "/api/open-file",
+)
+
+
 def prepare_env() -> Path:
     """사용자 데이터(C:\\lms-autosaver, ~/.lms-autosaver)를 건드리지 않게 빈 임시 폴더를 쓴다."""
     import tempfile
 
-    root = Path(tempfile.mkdtemp(prefix="daling-smoke-"))
+    fixed = os.environ.get("AUTOSAVER_SMOKE_DATA_ROOT", "")
+    if fixed:
+        # 키체인 넘겨주기 점검: 옛 판과 새 판이 같은 데이터 폴더를 봐야 한다 (CI 가 만든 빈 폴더)
+        root = Path(fixed)
+        root.mkdir(parents=True, exist_ok=True)
+    else:
+        root = Path(tempfile.mkdtemp(prefix="daling-smoke-"))
     os.environ["AUTOSAVER_ROOT"] = str(root)
     os.environ["AUTOSAVER_DATA_ROOT"] = str(root)
     os.environ["AUTOSAVER_CONFIG_PATH"] = str(root / "config.json")
@@ -72,6 +122,81 @@ def _json(base: str, path: str) -> dict:
     return data
 
 
+def _mac_handoff(phase: str) -> str:
+    """앱 안 업데이트가 키체인 값을 다음 빌드에 넘기는 길을 실제 함수로 잰다 (mac.yml '키체인 넘겨주기 점검').
+
+    handoff-write  옛 판: 점검 계정에 값 둘을 넣고(protect, 그래서 기억한다) updater 가 업데이트 직전에 부르는
+                   함수로 넘겨주기 파일을 적는다. 파일 권한이 0600 인지 본다.
+    handoff-read   새 판(같은 데이터 폴더): 묻는 창을 프로세스 전체에서 막은 채, 넘겨주기 없이 옛 항목을 읽을 수 있는지
+                   (대조군) 본 뒤 작업 프로세스와 같은 길(runtime_config._load_config → secret_store → mac_keychain)로 읽는다.
+                   AUTOSAVER_SMOKE_HANDOFF_EXPECT  next: 다음 빌드 (대조군은 못 읽어야 함)
+                                                   same: 같은 빌드가 다시 켜짐 = 업데이트 실패 (대조군은 읽어야 함)
+                                                   stale: 하루 지난 파일 (쓰지 않고 지워야 함)
+    값은 CI 가 만든 AUTOSAVER_SMOKE_HANDOFF_TOKEN 으로 만들고 찍지 않는다. 실제 설정 항목(계정 settings)은 건드리지 않는다.
+    """
+    import stat
+
+    import mac_keychain
+
+    token = os.environ.get("AUTOSAVER_SMOKE_HANDOFF_TOKEN", "")
+    if len(token) < 16:
+        raise RuntimeError("AUTOSAVER_SMOKE_HANDOFF_TOKEN 이 없습니다")
+    want = {"LMS_PASSWORD": "lms-" + token, "GEMINI_API_KEY": "gemini-" + token}
+    mac_keychain.ACCOUNT = "smoke-handoff"  # 실제 설정 항목(settings) 대신
+    root = Path(os.environ["AUTOSAVER_SMOKE_ROOT"])
+    path = mac_keychain.handoff_path()
+    if path.parent != root:
+        raise RuntimeError(f"넘겨주기 파일이 점검 폴더 밖입니다: {path}")
+    if phase == "handoff-write":
+        for key, value in want.items():
+            mac_keychain.protect(key, value)
+        import updater
+
+        if updater._mac_hand_off_secrets() != path or not path.is_file():
+            raise RuntimeError(f"넘겨주기 파일을 적지 않았습니다 ({mac_keychain.last_handoff})")
+        mode = stat.S_IMODE(path.stat().st_mode)
+        if mode != 0o600:
+            raise RuntimeError(f"넘겨주기 파일 권한이 {oct(mode)} 입니다 (0600 이어야 함)")
+        return f"옛 판: 값 {len(want)}개를 0600 파일로 넘김"
+
+    expect = os.environ.get("AUTOSAVER_SMOKE_HANDOFF_EXPECT", "next")
+    _ct, sec, _cf = mac_keychain._load_api()
+    sec.SecKeychainSetUserInteractionAllowed(0)  # 물어야 하면 창 대신 실패 (넘겨주기 안의 _no_prompt 가 풀지 않는지도 본다)
+    try:
+        if not path.is_file():
+            raise RuntimeError("넘겨주기 파일이 없습니다")
+        try:
+            mac_keychain._read_item()
+            control = "읽힘"
+        except mac_keychain.KeychainError as exc:
+            control = f"못 읽음 OSStatus {exc.status}"
+        if (expect == "same") != (control == "읽힘"):
+            raise RuntimeError(f"대조군: 넘겨주기 없이 옛 항목을 {control} — '{expect}' 에서 기대와 다릅니다")
+        # 화면 서버·작업 프로세스와 같은 길: config.json 에는 표시만 있다
+        Path(os.environ["AUTOSAVER_CONFIG_PATH"]).write_text(
+            json.dumps({key: "keychain:" + key for key in want}), encoding="utf-8"
+        )
+        import runtime_config
+
+        got = runtime_config._load_config()
+        leftovers = sorted(p.name for p in root.iterdir() if "handoff" in p.name)
+        if leftovers:
+            raise RuntimeError(f"넘겨주기 파일이 남았습니다: {leftovers} ({mac_keychain.last_handoff})")
+        if expect == "stale":
+            if any(got.get(key) for key in want):
+                raise RuntimeError("하루 지난 넘겨주기 파일의 값을 썼습니다")
+            return f"하루 지난 파일은 쓰지 않고 지움 (대조군 {control}; {mac_keychain.last_handoff})"
+        if {key: got.get(key) for key in want} != want:
+            raise RuntimeError(f"넘겨받은 값이 다릅니다 ({mac_keychain.last_handoff})")
+        # 기억이 아니라 키체인에서 다시: 이 빌드가 묻지 않고 읽어야 한다
+        back = json.loads(mac_keychain._read_item() or "{}")
+        if {key: back.get(key) for key in want} != want:
+            raise RuntimeError("키체인 항목을 다시 읽은 값이 다릅니다")
+        return f"{expect}: 묻지 않고 넘겨받음 (대조군 {control}; {mac_keychain.last_handoff})"
+    finally:
+        sec.SecKeychainSetUserInteractionAllowed(1)
+
+
 def run(app) -> int:
     """app: 이미 불러온 app.py 모듈 (__main__). 0 이면 통과."""
     app._bind_worker_output()  # 창 없는 EXE 에서도 print 가 터지지 않게
@@ -88,6 +213,12 @@ def run(app) -> int:
         print(f"[{'OK' if ok else 'FAIL'}] {name} ({took * 1000:.0f}ms) {detail}", flush=True)
 
     phase = os.environ.get("AUTOSAVER_SMOKE_KEYCHAIN", "")
+    if sys.platform == "darwin" and phase in ("handoff-write", "handoff-read"):
+        # 앱 안 업데이트의 키체인 넘겨주기만 본다 (mac.yml '키체인 넘겨주기 점검'). 다른 점검은 건너뜀
+        check(f"키체인 넘겨주기 ({phase})", lambda: _mac_handoff(phase))
+        ok = results[-1][0]
+        print(f"SMOKE {'PASS' if ok else 'FAIL'} (키체인 {phase})", flush=True)
+        return 0 if ok else 1
     if sys.platform == "darwin" and phase in ("write", "read", "droppart", "addpart", "delete", "readui"):
         # 키체인 허락이 다음 빌드로 이어지는지만 본다 (mac.yml '키체인 허락 유지 점검'·'키체인 실험'). 다른 점검은 건너뜀
         method = os.environ.get("AUTOSAVER_SMOKE_KEYCHAIN_METHOD", "default")
@@ -222,10 +353,168 @@ def run(app) -> int:
                 raise RuntimeError("끈 뒤에도 체험 폴더가 남음")
             return f"자료 {files} · 메일 {mails} · 바깥 연결 막힘 · 끄면 지워짐"
 
+        def app_lock_check():
+            # 앱 잠금(네 자리): 정하고 잠그면 데이터 API 가 423, 첫 화면에 잠금 표시, 틀리면 남은 횟수, 맞으면 풀리고, 끄면 파일이 없어진다.
+            # 임시 데이터 폴더의 app_lock.json 만 쓴다
+            import urllib.error
+            import urllib.request
+
+            def post(path: str, payload: dict) -> dict:
+                req = urllib.request.Request(base + path, data=json.dumps(payload).encode(),
+                                             headers={"Content-Type": "application/json"}, method="POST")
+                with urllib.request.urlopen(req, timeout=20) as resp:
+                    return json.loads(resp.read().decode("utf-8"))
+
+            def status_of(path: str) -> int:
+                try:
+                    return _get(base, path)[0]
+                except urllib.error.HTTPError as err:
+                    return err.code
+
+            if _json(base, "/api/lock").get("enabled"):
+                raise RuntimeError("빈 데이터 폴더인데 잠금이 켜져 있음")
+            if not post("/api/lock/set", {"pin": "2580"}).get("ok"):
+                raise RuntimeError("비밀번호를 정하지 못함")
+            try:
+                post("/api/lock/lock", {})
+                if status_of("/api/emails") != 423 or status_of("/api/ui-prefs") != 200:
+                    raise RuntimeError("잠갔는데 데이터 API 가 열려 있거나 잠금 화면용 길이 막힘")
+                _status, body, _ = _get(base, "/")
+                if b'data-locked="1"' not in body:
+                    raise RuntimeError("첫 화면에 잠금 표시가 없음")
+                wrong = post("/api/lock/unlock", {"pin": "0000"})
+                if wrong.get("ok") or wrong.get("triesLeft") != 4:
+                    raise RuntimeError(f"틀린 비밀번호 답이 이상함: {wrong}")
+                if not post("/api/lock/unlock", {"pin": "2580"}).get("ok") or status_of("/api/emails") != 200:
+                    raise RuntimeError("맞는 비밀번호로 안 풀림")
+            finally:
+                post("/api/lock/off", {"current": "2580"})
+            if (web_ui.AUTOSAVER_ROOT / "app_lock.json").exists():
+                raise RuntimeError("끈 뒤에도 app_lock.json 이 남음")
+            return "423 으로 막힘 · 틀리면 4번 남음 · 풀림 · 끄면 지워짐"
+
+        def api_sweep():
+            # 화면이 부르는 GET 을 모두 한 번씩 (2026-10-21 사용자: 'Windows 기능이 맥·리눅스에서도 다 되는지 점검').
+            # 점검 PC 에는 맥이 없어 기능별 화면 서버 코드가 맥·리눅스에서 도는지를 CI 의 이 점검으로 본다.
+            # 체험 모드로 켜서(바깥 연결 막힘·가짜 자료) 네트워크 없이 돈다. 500·연결 끊김이 하나라도 나면 실패.
+            # 값이 없어 400/404/409 를 주는 것은 정상(빈 입력에 대한 답)이다.
+            import urllib.error
+            import urllib.request
+
+            def post(on: bool) -> None:
+                req = urllib.request.Request(base + "/api/demo", data=json.dumps({"on": on}).encode(),
+                                             headers={"Content-Type": "application/json"}, method="POST")
+                urllib.request.urlopen(req, timeout=20).read()
+
+            # 소스에서 돌 때(개발·CI 소스 점검)는 web_ui.py 의 GET 길을 다시 읽어, 새 길이 이 목록에 빠졌으면 알린다
+            if not frozen:
+                import re
+
+                src = Path(web_ui.__file__).read_text(encoding="utf-8")
+                body = src[src.index("    def _do_GET(self)"):src.index("    def _do_POST(self)")]
+                found = set(re.findall(r'route == "(/api/[^"]+)"', body))
+                for group in re.findall(r"route in \(([^)]*)\)", body):
+                    found |= set(re.findall(r'"(/api/[^"]+)"', group))
+                missing = sorted(found - _SWEEP_PATHS)
+                if missing:
+                    raise RuntimeError(f"점검 목록에 없는 GET 길: {missing} (smoke_test.SWEEP_GET 에 넣어 주세요)")
+            log = web_ui.AUTOSAVER_ROOT / "server_errors.log"
+            before = log.stat().st_size if log.exists() else 0
+            post(True)
+            bad, codes = [], {}
+            try:
+                for route in SWEEP_GET:
+                    try:
+                        status, _body, _ctype = _get(base, route, timeout=30)
+                    except urllib.error.HTTPError as err:
+                        status = err.code
+                    except Exception as exc:  # 연결이 끊기면 서버가 죽은 것
+                        bad.append(f"{route}: {type(exc).__name__} {exc}")
+                        continue
+                    codes[status] = codes.get(status, 0) + 1
+                    if status >= 500:
+                        bad.append(f"{route}: HTTP {status}")
+            finally:
+                post(False)
+            demo_log = log.stat().st_size if log.exists() else 0
+            if bad:
+                raise RuntimeError("; ".join(bad[:8]))
+            if demo_log > before:
+                raise RuntimeError(f"server_errors.log 에 새 오류 {demo_log - before}바이트")
+            summary = " · ".join(f"{c}×{n}" for c, n in sorted(codes.items()))
+            return f"{len(SWEEP_GET)}개 길 ({summary})"
+
+        def post_sweep():
+            # GET 점검과 같은 규칙으로 POST 길을 빈 본문으로 한 번씩 (2026-10-21 맥·리눅스 점검 17번)
+            import urllib.error
+            import urllib.request
+
+            def post(route: str, payload: dict) -> int:
+                req = urllib.request.Request(base + route, data=json.dumps(payload).encode(),
+                                             headers={"Content-Type": "application/json"}, method="POST")
+                try:
+                    with urllib.request.urlopen(req, timeout=30) as resp:
+                        resp.read()
+                        return resp.status
+                except urllib.error.HTTPError as err:
+                    return err.code
+
+            if not frozen:
+                import re
+
+                src = Path(web_ui.__file__).read_text(encoding="utf-8")
+                start = src.index("    def _do_POST(self)")
+                nxt = re.search(r"\n    def \w", src[start + 10:])
+                body = src[start:start + 10 + nxt.start()] if nxt else src[start:]
+                found = set(re.findall(r'route == "(/api/[^"]+)"', body))
+                for group in re.findall(r"route in \(([^)]*)\)", body):
+                    found |= set(re.findall(r'"(/api/[^"]+)"', group))
+                missing = sorted(found - set(SWEEP_POST) - set(SWEEP_POST_SKIP))
+                if missing:
+                    raise RuntimeError(f"점검 목록에 없는 POST 길: {missing} (smoke_test.SWEEP_POST 나 SWEEP_POST_SKIP 에)")
+            log = web_ui.AUTOSAVER_ROOT / "server_errors.log"
+            before = log.stat().st_size if log.exists() else 0
+            post("/api/demo", {"on": True})
+            bad, codes = [], {}
+            try:
+                for route in SWEEP_POST:
+                    try:
+                        status = post(route, {})
+                    except Exception as exc:
+                        bad.append(f"{route}: {type(exc).__name__} {exc}")
+                        continue
+                    codes[status] = codes.get(status, 0) + 1
+                    if status >= 500:
+                        bad.append(f"{route}: HTTP {status}")
+                # 체험 중엔 로그인 항목에 쓰지 않는다 (autostart)
+                if post("/api/autostart", {"on": True}) != 409:
+                    bad.append("/api/autostart: 체험 모드인데 막히지 않음")
+            finally:
+                post("/api/demo", {"on": False})
+            after = log.stat().st_size if log.exists() else 0
+            if bad:
+                raise RuntimeError("; ".join(bad[:8]))
+            if after > before:
+                raise RuntimeError(f"server_errors.log 에 새 오류 {after - before}바이트")
+            summary = " · ".join(f"{c}×{n}" for c, n in sorted(codes.items()))
+            return f"{len(SWEEP_POST)}개 길 ({summary})"
+
+        def faculty_directory():
+            # 새 사용자도 교수 주소가 채워지게 설치 파일에 넣은 교원 주소록 (web_ui.directory_people).
+            # 점검 폴더는 비어 있으니 내가 넣은 조직도는 0명이어야 한다.
+            data = _json(base, "/api/directory?q=")
+            if data.get("imported") or int(data.get("total") or 0) < 200:
+                raise RuntimeError(f"교원 주소록이 안 읽힘: total={data.get('total')} imported={data.get('imported')}")
+            return f"교원 {data['total']}명"
+
         check("GET /healthz", healthz)
         check("GET /", index)
         check("GET /app.js", app_js)
         check("체험 모드", demo_mode_check)
+        check("앱 잠금", app_lock_check)
+        check("교원 주소록", faculty_directory)
+        check("화면 API 전부 (체험 모드)", api_sweep)
+        check("화면 API 전부 POST (체험 모드)", post_sweep)
         # 네트워크 없이 파일만 읽는 것들 (설정·업데이트 내용·소개·화면 설정)
         for route in ("/api/config", "/api/whats-new", "/api/tutorial", "/api/ui-prefs", "/api/task"):
             check(f"GET {route}", lambda route=route: f"{len(_json(base, route))}개 항목")
@@ -238,6 +527,55 @@ def run(app) -> int:
                 return "없음(맥)"
 
             check("삼성 노트는 맥에서 꺼짐", samsung_off)
+
+        if sys.platform == "darwin" or sys.platform.startswith("linux"):
+            def autostart_entry():
+                # '컴퓨터 켤 때 Daling 켜기' (autostart.py). 사용자 로그인 항목을 건드리지 않게 HOME 을 임시 폴더로 바꿔
+                # 만들고·읽고·지운다. 소스로 돌면 켤 실행 파일이 없어 쓸 수 없음이 맞다.
+                import tempfile
+
+                import autostart
+
+                if not frozen:
+                    if autostart.supported():
+                        raise RuntimeError("소스 실행인데 자동 시작을 '쓸 수 있음' 으로 봄")
+                    return "소스 실행이라 건너뜀"
+                saved = {k: os.environ.get(k) for k in ("HOME", "XDG_CONFIG_HOME")}
+                home = tempfile.mkdtemp(prefix="daling-autostart-")
+                os.environ["HOME"] = home
+                os.environ.pop("XDG_CONFIG_HOME", None)
+                try:
+                    path = autostart.entry_path()
+                    if not str(path).startswith(home):
+                        raise RuntimeError(f"임시 HOME 밖을 가리킴: {path}")
+                    res = autostart.set_enabled(True)
+                    if not res.get("ok") or not autostart.enabled():
+                        raise RuntimeError(f"켜지 못함: {res}")
+                    text = path.read_bytes()
+                    if sys.platform == "darwin":
+                        import plistlib
+
+                        lint = subprocess.run(["/usr/bin/plutil", "-lint", str(path)], capture_output=True, text=True)
+                        if lint.returncode != 0:
+                            raise RuntimeError(f"plist 가 틀림: {lint.stdout.strip()}")
+                        exe = plistlib.loads(text)["ProgramArguments"][0]
+                    else:
+                        line = next(x for x in text.decode("utf-8").splitlines() if x.startswith("Exec="))
+                        exe = line[len("Exec="):].strip('"')
+                    if not Path(exe).exists():
+                        raise RuntimeError(f"자동 시작이 없는 파일을 가리킴: {exe}")
+                    autostart.set_enabled(False)
+                    if autostart.enabled():
+                        raise RuntimeError("끄지 못함")
+                    return f"{path.name} → {exe}"
+                finally:
+                    for k, v in saved.items():
+                        if v is None:
+                            os.environ.pop(k, None)
+                        else:
+                            os.environ[k] = v
+
+            check("컴퓨터 켤 때 켜기 (임시 HOME)", autostart_entry)
 
         if sys.platform.startswith("linux"):
             def samsung_off_linux():
@@ -270,12 +608,21 @@ def run(app) -> int:
             command = [sys.executable, str(Path(app.__file__).resolve()), WORKER_FLAG, "smoke"]
         env = os.environ.copy()
         env["PYTHONIOENCODING"] = "utf-8"
-        # 실제 앱(web_ui.run_process)과 같은 모양으로 띄운다
+        # 실제 앱(web_ui.run_process)과 같은 모양으로 띄운다. 맥·리눅스는 비밀 값을 표준 입력으로 넘겨받는다
+        # (runtime_config._HANDED_SECRETS) — 묶은 실행 파일에서도 그 한 줄이 닿는지 본다
+        handover = os.name != "nt"
+        if handover:
+            from runtime_config import SECRETS_STDIN_FLAG
+
+            env[SECRETS_STDIN_FLAG] = "1"
         proc = subprocess.run(command, capture_output=True, text=True, encoding="utf-8",
+                              input='{"LMS_PASSWORD": "smoke"}\n' if handover else None,
                               errors="replace", env=env, timeout=120, cwd=str(web_ui.PROJECT_ROOT))
         out = (proc.stdout or "") + (proc.stderr or "")
         if proc.returncode != 0 or "smoke-worker ok" not in out:
             raise RuntimeError(f"종료 코드 {proc.returncode}: {out.strip()[-400:]}")
+        if handover and "handed=1" not in out:
+            raise RuntimeError(f"비밀 값을 표준 입력으로 못 넘겨받음: {out.strip()[-200:]}")
         want = os.environ.get("AUTOSAVER_SMOKE_ROOT", "")
         if want and want not in out:
             raise RuntimeError(f"데이터 경로가 안 이어짐: {out.strip()[-200:]}")

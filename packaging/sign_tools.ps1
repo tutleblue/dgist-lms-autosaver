@@ -1,4 +1,4 @@
-﻿# 붕어빵 코드 서명 도구 (사설 인증서)
+﻿# Daling 코드 서명 도구 (사설 인증서)
 #
 #   # 1) 인증서 만들기 (한 번만. 개인 키는 이 PC 사용자 인증서 저장소에만, 내보낼 수 없게 만든다)
 #   powershell -ExecutionPolicy Bypass -File packaging\sign_tools.ps1 -New
@@ -7,7 +7,7 @@
 #   # 3) 서명 (build_installer.ps1 이 알아서 부른다)
 #   powershell -ExecutionPolicy Bypass -File packaging\sign_tools.ps1 -Sign <파일> [<파일> ...]
 #
-# 왜: 2026-10-02 Windows Defender 가 서명·버전 정보가 없는 붕어빵.exe 를 'Trojan:Win32/Bearfoos.A!ml'
+# 왜: 2026-10-02 Windows Defender 가 서명·버전 정보가 없는 앱 EXE 를 'Trojan:Win32/Bearfoos.A!ml'
 #     (기계학습 추정 오탐)으로 지웠다. 사설 서명은 '누가 만든 파일이 바뀌지 않았다'를 이 PC 에 알려 줄 뿐이고,
 #     다른 PC 의 SmartScreen·Defender 평판은 공인 인증서(Azure Trusted Signing 등)가 있어야 쌓인다.
 # 주의: 이 파일은 UTF-8 BOM 으로 저장한다 (PowerShell 5.1 한글).
@@ -19,8 +19,9 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+# 인증서 이름은 만들 때 정해져 바꿀 수 없다(이 PC 의 신뢰·Store 시험판 게시자가 이 값을 본다). 그래서 예전 이름 그대로
 $Subject = "CN=붕어빵 (jykim5215), O=jykim5215"
-$CerPath = Join-Path $PSScriptRoot "bungeoppang-codesign.cer"
+$CerPath = Join-Path $PSScriptRoot "daling-codesign.cer"
 $TimeStamp = "http://timestamp.digicert.com"
 
 function Get-SigningCert {
@@ -50,7 +51,7 @@ if ($Trust) {
   # CurrentUser 루트에 넣을 때 Windows 가 확인 창을 띄운다 — 지문을 확인하고 '예'.
   Import-Certificate -FilePath $CerPath -CertStoreLocation Cert:\CurrentUser\Root | Out-Null
   Import-Certificate -FilePath $CerPath -CertStoreLocation Cert:\CurrentUser\TrustedPublisher | Out-Null
-  "이 PC(현재 사용자)가 붕어빵 서명을 믿습니다"
+  "이 PC(현재 사용자)가 Daling 서명을 믿습니다"
 }
 
 if ($Sign) {

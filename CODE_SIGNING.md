@@ -7,8 +7,8 @@ Free code signing provided by [SignPath.io](https://about.signpath.io), certific
 Only binaries built from this repository's source code by GitHub Actions
 ([`.github/workflows/release.yml`](.github/workflows/release.yml)) are signed:
 
-- `붕어빵.exe` (the application)
-- `bungeoppang-<version>-win-x64-setup.exe` (the installer)
+- `Daling.exe` (the application)
+- `daling-<version>-win-x64-setup.exe` (the installer)
 
 Third-party components bundled unchanged (Python runtime and packages, Playwright driver, the Microsoft WebView2
 bootstrapper) are not re-signed by this project.

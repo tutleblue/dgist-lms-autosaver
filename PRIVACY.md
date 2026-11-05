@@ -1,6 +1,6 @@
 # 개인정보 처리 안내 (Privacy Policy)
 
-Daling(예전 이름 붕어빵)은 **개발자에게 아무 정보도 보내지 않습니다.** 분석·광고·사용 통계 수집이 없습니다.
+Daling은 **개발자에게 아무 정보도 보내지 않습니다.** 분석·광고·사용 통계 수집이 없습니다.
 모든 데이터는 사용자 PC(`C:\lms-autosaver\`)에 저장되고, 아래처럼 사용자가 켠 기능에 필요한 곳에만 직접 연결합니다.
 
 | 연결하는 곳 | 언제 | 보내는 것 |
@@ -17,7 +17,7 @@ Daling(예전 이름 붕어빵)은 **개발자에게 아무 정보도 보내지 
 
 ---
 
-**English summary.** Daling (formerly Bungeoppang) sends nothing to the developer — no analytics, ads or telemetry.
+**English summary.** Daling sends nothing to the developer — no analytics, ads or telemetry.
 Data stays on your PC (`C:\lms-autosaver\`). The app only talks to services you turn on: DGIST LMS/mail
 (with your school account), Google Drive/Calendar (when you connect Google), Google Gemini (when you add a key),
 public data portals, OpenStreetMap place search, and GitHub for update checks. Secrets are encrypted with Windows DPAPI.

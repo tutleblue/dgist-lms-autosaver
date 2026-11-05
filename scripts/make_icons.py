@@ -3,7 +3,7 @@
 원본 그림(design/logo/daling-source.webp, 흰 바탕에 검은 붓선) 하나에서
 창 아이콘(app.png), 윈도우 바로가기(app.ico), 구글 동의화면·설정 '앱' 카드용(app-logo-120.png),
 브라우저 탭 아이콘(favicon.svg)을 모두 만든다.
-로고를 바꿀 때는 원본 그림만 바꾸고 다시 실행하면 된다. (2026-10-11 붕어빵 물고기 → Daling)
+로고를 바꿀 때는 원본 그림만 바꾸고 다시 실행하면 된다. (2026-10-11 옛 물고기 로고 → Daling)
 
     python scripts/make_icons.py      (시스템 파이썬의 Pillow. 앱에는 필요 없다)
     python scripts/make_icons.py --mac   맥 앱 아이콘(packaging/mac/Daling.icns)만 다시 만든다

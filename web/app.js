@@ -38,6 +38,11 @@ const icons = {
   settings: '<svg viewBox="0 0 24 24"><path d="M12.2 2h-.4a2 2 0 0 0-2 1.7l-.1.7a2 2 0 0 1-2.9 1.2l-.6-.4a2 2 0 0 0-2.6.3l-.2.3a2 2 0 0 0-.3 2.6l.4.6a2 2 0 0 1-1.2 2.9l-.7.1A2 2 0 0 0 2 13.8v.4a2 2 0 0 0 1.7 2l.7.1a2 2 0 0 1 1.2 2.9l-.4.6a2 2 0 0 0 .3 2.6l.3.2a2 2 0 0 0 2.6.3l.6-.4a2 2 0 0 1 2.9 1.2l.1.7a2 2 0 0 0 2 1.7h.4a2 2 0 0 0 2-1.7l.1-.7a2 2 0 0 1 2.9-1.2l.6.4a2 2 0 0 0 2.6-.3l.2-.3a2 2 0 0 0 .3-2.6l-.4-.6a2 2 0 0 1 1.2-2.9l.7-.1a2 2 0 0 0 1.7-2v-.4a2 2 0 0 0-1.7-2l-.7-.1a2 2 0 0 1-1.2-2.9l.4-.6a2 2 0 0 0-.3-2.6l-.3-.2a2 2 0 0 0-2.6-.3l-.6.4a2 2 0 0 1-2.9-1.2l-.1-.7A2 2 0 0 0 12.2 2Z"/><circle cx="12" cy="12" r="3"/></svg>',
   sync: '<svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 0 0-15.5-6.2L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 15.5 6.2L21 16"/><path d="M16 16h5v5"/></svg>',
   x: '<svg viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>',
+  lock: '<svg viewBox="0 0 24 24"><rect width="16" height="11" x="4" y="11" rx="2.5"/><path d="M8 11V7.5a4 4 0 0 1 8 0V11"/></svg>',
+  grip: '<svg viewBox="0 0 24 24"><circle cx="9" cy="6" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="9" cy="18" r="1"/><circle cx="15" cy="6" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="18" r="1"/></svg>',
+  eyeOff: '<svg viewBox="0 0 24 24"><path d="M9.9 4.24A9.1 9.1 0 0 1 12 5c6.5 0 10 7 10 7a18.5 18.5 0 0 1-2.16 3.19"/><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/><path d="M17.94 17.94A10.1 10.1 0 0 1 12 19c-6.5 0-10-7-10-7a18.4 18.4 0 0 1 5.06-5.94"/><path d="m2 2 20 20"/></svg>',
+  colHalf: '<svg viewBox="0 0 24 24"><rect width="18" height="14" x="3" y="5" rx="2"/><path d="M12 5v14"/></svg>',
+  colFull: '<svg viewBox="0 0 24 24"><rect width="18" height="14" x="3" y="5" rx="2"/></svg>',
   menu: '<svg viewBox="0 0 24 24"><path d="M4 6h16"/><path d="M4 12h16"/><path d="M4 18h16"/></svg>',
   undo: '<svg viewBox="0 0 24 24"><path d="M3 7v6h6"/><path d="M3 13a9 9 0 1 0 3-7.7L3 8"/></svg>',
   user: '<svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>',
@@ -46,6 +51,10 @@ const icons = {
   star: '<svg viewBox="0 0 24 24"><path d="m12 3 2.9 5.9 6.5.9-4.7 4.6 1.1 6.5-5.8-3-5.8 3 1.1-6.5L2.6 9.8l6.5-.9Z"/></svg>',
   moonStar: '<svg viewBox="0 0 24 24"><path d="M18 5h4"/><path d="M20 3v4"/><path d="M21.5 13.5A9 9 0 1 1 10.5 2.5a7 7 0 0 0 11 11Z"/></svg>',
   box: '<svg viewBox="0 0 24 24"><path d="M21 8v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8"/><path d="M2 4h20v4H2z"/><path d="M10 12h4"/></svg>',
+  // FGLP 학교 상세의 바깥 링크 (홈페이지 · 지도 · 새 창)
+  globe: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>',
+  map: '<svg viewBox="0 0 24 24"><path d="M14.1 5.55a2 2 0 0 0 1.8 0l3.66-1.83A1 1 0 0 1 21 4.62v12.76a1 1 0 0 1-.55.9l-4.55 2.27a2 2 0 0 1-1.8 0l-4.2-2.1a2 2 0 0 0-1.8 0l-3.66 1.83A1 1 0 0 1 3 19.38V6.62a1 1 0 0 1 .55-.9L8.1 3.45a2 2 0 0 1 1.8 0z"/><path d="M15 5.76v15"/><path d="M9 3.24v15"/></svg>',
+  external: '<svg viewBox="0 0 24 24"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>',
 };
 
 const state = {
@@ -154,16 +163,117 @@ function iconHtml(name, extraClass = "") {
   return `<span class="icon ${extraClass}" data-icon="${name}" data-icon-drawn="${name}"><svg><use href="#ic-${name}"></use></svg></span>`;
 }
 
+/* 앱 잠금 상태 (아래 '앱 잠금' 절). api() 가 맨 처음 불리기 전에 있어야 해서 여기 둔다.
+   잠겨 있으면 서버가 <html data-locked> 를 달아 보내므로 켤 때는 그것을 보고 시작한다 */
+const appLock = {
+  locked: document.documentElement.dataset.locked === "1",
+  enabled: false,
+  idle: 10,
+  canReset: false,
+  waiters: [], // 풀리기를 기다리는 api() 요청들
+  pending: new Map(), // 같은 GET 은 하나만 기다린다
+  mode: "unlock", // unlock | current | new | confirm
+  flow: null, // 설정에서 연 흐름 { kind: on|change|off, current, first, resolve }
+  digits: "",
+  busy: false,
+  waitTimer: 0,
+  lastInput: Date.now(),
+  relocked: false,
+};
+// 잠긴 동안에도 서버가 받아 주는 길 (web_ui DashboardHandler.LOCK_OPEN_GET/POST, /api/lock/*)
+const LOCK_OPEN_GET = new Set(["/api/lock", "/api/ui-prefs", "/api/window"]);
+function lockOpenRoute(path, options = {}) {
+  const route = String(path).split("?")[0];
+  if (route === "/api/lock" || route.startsWith("/api/lock/")) return true;
+  return String(options.method || "GET").toUpperCase() === "GET" ? LOCK_OPEN_GET.has(route) : route === "/api/window";
+}
+function untilUnlocked() {
+  return appLock.locked ? new Promise((resolve) => appLock.waiters.push(resolve)) : Promise.resolve();
+}
+
 async function api(path, options = {}) {
+  if (appLock.locked && !lockOpenRoute(path, options)) {
+    // 잠긴 동안은 보내지 않고(서버가 423 으로 거절한다) 풀리면 이어서 보낸다. 켤 때 첫 화면 요청들도 여기서 기다린다.
+    // 12초마다 오는 확인 같은 같은 GET 은 하나만 기다리게 해, 오래 잠가 두었다 풀 때 요청이 한꺼번에 몰리지 않게 한다
+    const key = String(options.method || "GET").toUpperCase() === "GET" ? String(path) : "";
+    if (key && appLock.pending.has(key)) return appLock.pending.get(key);
+    const run = untilUnlocked().then(() => api(path, options));
+    if (key) {
+      appLock.pending.set(key, run);
+      const done = () => appLock.pending.delete(key);
+      run.then(done, done);
+    }
+    return run;
+  }
   const response = await fetch(path, {
     headers: { "Content-Type": "application/json" },
     ...options,
   });
+  if (response.status === 423 && !lockOpenRoute(path, options)) {
+    // 서버는 잠겼다는데 화면은 몰랐다(다른 창에서 잠금 등) → 잠금 판을 띄우고 풀리면 다시 보낸다
+    lockApp({ tell: false });
+    return api(path, options);
+  }
   const data = await response.json();
   if (!response.ok) {
     throw new Error(data.message || "요청에 실패했습니다.");
   }
   return data;
+}
+
+/* ===== 맥 판 =====
+   같은 화면을 맥(WKWebView)에서도 띄운다. 단축키 처리는 원래 ctrlKey·metaKey 를 함께 받으므로, 안내 문구만
+   맥 관례대로 ⌘ 로 바꿔 보여 준다. 번역표(en.json)는 'Ctrl+' 로 적혀 있으니 번역(tr)을 먼저 하고 그 결과에 입힌다.
+   뒤로·앞으로는 맥에서 ⌘[ / ⌘] (사파리와 같음). 맥의 Option+←/→ 는 글자 칸에서 단어 단위 이동이라 가로채면 안 된다. */
+const IS_MAC = /Mac/.test(navigator.platform || "") || /Mac OS X/.test(navigator.userAgent || "");
+
+/* 맥 앱 창(pywebview·WKWebView)은 window.open 을 무시한다 — 링크를 '눌렀을 때' 만 바깥 브라우저로 넘긴다
+   (2026-10-21 맥·리눅스 점검: 강의자료 열기·강의계획서·.eml 저장이 맥에서 아무 반응이 없었다).
+   앱 서버의 파일 길은 서버가 기본 브라우저로 열고, 바깥 주소는 /api/open-url 로. Windows·리눅스·개발 브라우저는 그대로. */
+const IN_MAC_APP = () => IS_MAC && Boolean(window.pywebview);
+// 맥 파일 고르기는 한글 이름을 풀어 쓴 자모(NFD)로 준다 — 그대로 첨부하면 받는 쪽에서 'ㅎㅏㄴ' 처럼 갈라져 보인다
+const nfcName = (name) => String(name || "").normalize("NFC");
+function openOutside(url) {
+  if (!IN_MAC_APP()) {
+    window.open(url, "_blank");
+    return;
+  }
+  const route = String(url).startsWith("/") ? "/api/open-app-url" : "/api/open-url";
+  const body = route === "/api/open-app-url" ? { path: url } : { url };
+  api(route, { method: "POST", body: JSON.stringify(body) }).catch((error) => showToast(humanError(error)));
+}
+
+/* 강의자료 열기: 이미 내 컴퓨터에 있는 파일을 기본 앱으로 바로 연다(/api/open-file).
+   예전엔 /api/file(첨부파일로 보내기)을 창에 띄워 '다운로드'가 한 번 더 일어났다(2026-10-27). 공유 웹사이트 모드만 내려받기. */
+function openLocalFile(name) {
+  if (state.status?.mode === "multi-user") {
+    openOutside(`/api/file?name=${encodeURIComponent(name)}`);
+    return;
+  }
+  api("/api/open-file", { method: "POST", body: JSON.stringify({ name }) }).catch((error) => showToast(humanError(error)));
+}
+
+/** 'Ctrl+K'·'Ctrl K'(검색창 kbd) → 맥에서는 '⌘K', 'Alt+←/→' → '⌘[ / ⌘]'. 다른 운영체제는 그대로 */
+function keyLabel(text) {
+  const s = String(text ?? "");
+  if (!IS_MAC) return s;
+  return s.replace(/Alt\+←\/→/g, "⌘[ / ⌘]").replace(/Alt\+←/g, "⌘[").replace(/Alt\+→/g, "⌘]").replace(/Ctrl[+ ](?=\S)/g, "⌘");
+}
+
+/** index.html 에 적힌 단축키 안내(버튼 풍선 도움말·<kbd>)를 맥 기호로. 번역이 끝난 뒤 한 번 부른다 */
+function macKeyLabels(root) {
+  if (!IS_MAC || !root) return;
+  const has = (v) => /Ctrl[+ ]|Alt\+/.test(v);
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+    if (has(n.nodeValue)) n.nodeValue = keyLabel(n.nodeValue);
+  }
+  root.querySelectorAll("[title], [aria-label], [data-hint]").forEach((el) => {
+    ["title", "aria-label", "data-hint"].forEach((name) => {
+      const v = el.getAttribute(name);
+      if (v && has(v)) el.setAttribute(name, keyLabel(v));
+    });
+  });
 }
 
 /* ===== 영어 화면 (i18n) =====
@@ -182,7 +292,7 @@ const HANGUL_RE = /[가-힣]/;
 const I18N_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const I18N_DATE_MAP = { "(월)": "(Mon)", "(화)": "(Tue)", "(수)": "(Wed)", "(목)": "(Thu)", "(금)": "(Fri)", "(토)": "(Sat)", "(일)": "(Sun)" };
 const I18N_DATE_RE = /\((월|화|수|목|금|토|일)\)/g;
-const I18N_ATTRS = ["placeholder", "title", "aria-label", "data-hint", "alt"];
+const I18N_ATTRS = ["placeholder", "data-placeholder", "title", "aria-label", "data-hint", "alt"];
 
 function i18nCompile(table) {
   I18N.exact.clear();
@@ -354,7 +464,8 @@ function i18nTranslateTree(root) {
   els.forEach((el) => {
     I18N_ATTRS.forEach((name) => {
       const v = el.getAttribute(name);
-      if (v && HANGUL_RE.test(v) && !i18nSkip(el)) {
+      // 메일 본문(contenteditable)은 사용자 글이라 건너뛰지만, 빈 칸 안내(data-placeholder)는 화면 문구다
+      if (v && HANGUL_RE.test(v) && (name === "data-placeholder" || !i18nSkip(el))) {
         const next = tr(v);
         if (next !== v) el.setAttribute(name, next);
       }
@@ -390,8 +501,13 @@ function i18nStartObserver() {
   });
 }
 
-/** 저장된 언어 → 없으면 윈도우 언어 (한국어가 아니면 영어) */
+/** 저장된 언어 → 없으면 시스템 언어 (한국어가 아니면 영어). 번역이 끝나면 맥 단축키 기호를 입힌다 */
 async function initLanguage(pref) {
+  await loadLanguage(pref);
+  macKeyLabels(document.body);
+}
+
+async function loadLanguage(pref) {
   const lang = pref === "ko" || pref === "en" ? pref : /^ko/i.test(navigator.language || "") ? "ko" : "en";
   I18N.lang = lang;
   document.documentElement.lang = lang;
@@ -426,7 +542,9 @@ function showToast(message) {
   toast.textContent = message;
   toast.classList.add("visible");
   window.clearTimeout(showToast.timer);
-  showToast.timer = window.setTimeout(() => toast.classList.remove("visible"), 2600);
+  // 긴 안내(예: 'Claude 로그인이 만료됐어요. 터미널에서 …')는 2.6초면 다 읽기 전에 사라졌다. 글 길이만큼 늘린다(최대 9초)
+  const ms = Math.min(9000, Math.max(2600, String(message || "").length * 70));
+  showToast.timer = window.setTimeout(() => toast.classList.remove("visible"), ms);
 }
 
 /* ===== 오류를 사람 말로 =====
@@ -439,14 +557,22 @@ function humanError(err) {
   const table = [
     [/Failed to fetch|NetworkError|ERR_CONNECTION/i, "앱과 연결이 끊겼어요. 앱을 다시 켜 주세요."],
     [/이미 실행 중/, "앞 작업이 아직 돌고 있어요. 끝나면 다시 눌러 주세요."],
-    [/401|인증|Unauthorized/i, "로그인 정보가 맞지 않아요. 설정에서 다시 확인해 주세요."],
+  ];
+  for (const [re, msg] of table) {
+    if (re.test(raw)) return msg;
+  }
+  // 서버가 한국어로 적어 보낸 설명은 사람이 읽으라고 쓴 말이라 그대로 보인다. 예전엔 아래 표에 없으면 모두
+  // '문제가 생겼어요…' 로 바뀌어, 'Claude 로그인이 만료됐어요' 같은 까닭이 사라졌다(2026-11-04 메일 /ai 신고).
+  if (/[가-힣]/.test(raw) && raw.length <= 400 && !/Traceback|\bat \S+ \(/.test(raw)) return raw;
+  const technical = [
+    [/401|Unauthorized/i, "로그인 정보가 맞지 않아요. 설정에서 다시 확인해 주세요."],
     [/timed? ?out|시간 초과/i, "시간이 너무 오래 걸려 멈췄어요. 잠시 뒤 다시 해 주세요."],
     [/JSON|Unexpected token/i, "받아 온 내용을 읽지 못했어요. 다시 시도해 주세요."],
     // 화면 요소를 못 찾은 경우 (대개 앱을 새로 받은 뒤 옛 화면이 남아 있을 때)
     [/Cannot (read|set) propert(y|ies)/i, "화면을 그리다 문제가 생겼어요. 앱을 다시 켜면 대개 해결됩니다."],
     [/is not a function/i, "앱 파일이 서로 안 맞아요. 앱을 다시 켜 주세요."],
   ];
-  for (const [re, msg] of table) {
+  for (const [re, msg] of technical) {
     if (re.test(raw)) return msg;
   }
   return "문제가 생겼어요. 앱을 다시 켜 보고, 계속되면 설정 → 실행 로그를 확인해 주세요.";
@@ -514,6 +640,8 @@ function statusLabel(status) {
 /* 화면 전환은 View Transitions API로 감싼다.
    예전 화면이 즉시 사라지고 새 화면이 튀어나오는 대신,
    둘이 겹쳐서 부드럽게 이어진다. 미지원 브라우저는 그냥 바로 바뀐다. */
+let lastViewTransition = null;
+
 function switchView(view) {
   const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   // 창이 가려져 있으면 화면을 그릴 필요가 없으니 전환 효과도 건너뛴다
@@ -537,6 +665,7 @@ function switchView(view) {
   const mailSwitch = [state.view, view].some((v) => v === "emails" || v === "compose");
   document.documentElement.classList.toggle("vt-quick", mailSwitch);
   const transition = document.startViewTransition(apply);
+  lastViewTransition = transition; // 소개(showTourStep)가 돌던 전환을 끝낼 수 있게
   transition.finished.finally(() => document.documentElement.classList.remove("vt-quick"));
   transition.finished.catch(() => {});
   transition.updateCallbackDone.catch(() => {});
@@ -597,7 +726,8 @@ const SYNC_KIND_LABEL = { sync: "자료", deadlines: "마감", emails: "메일" 
 async function waitForTask(maxMs = 180000, lane = "main") {
   const until = Date.now() + maxMs;
   while (Date.now() < until) {
-    await new Promise((r) => window.setTimeout(r, 900));
+    // 메일은 2초 남짓이면 끝난다. 0.9초마다 물으면 끝난 뒤 최대 0.9초를 그냥 기다렸다
+    await new Promise((r) => window.setTimeout(r, lane === "mail" ? 300 : 900));
     try {
       const task = await api("/api/task");
       // 메일은 따로 도는 칸이라 메일만 기다린다 (자료 동기화가 끝나길 기다리지 않는다)
@@ -695,6 +825,7 @@ function applyView(view) {
   if (view === "settings") {
     populateSettings();
     renderStorage();
+    loadMailMe(true);
   }
   if (view === "emails") {
     showMailPane("list");
@@ -728,6 +859,12 @@ function applyView(view) {
   // 화면을 바꿀 때 여기서 채워 줘야 한다)
   renderCurrentView();
   navPush();
+  // 그 화면에 처음 왔으면 달구가 짧게 소개한다 (tour 는 아래에서 만들어진다. 켜지는 중이면 건너뜀)
+  try {
+    maybeViewIntro(view);
+  } catch (error) {
+    /* 아직 소개 준비 전 */
+  }
 }
 
 /* ===== 마감일 헬퍼 ===== */
@@ -1047,7 +1184,7 @@ function renderDeadlines() {
             ? `'${shortText(info.name, 22)}' 제출 페이지를 열었습니다. 파일 업로드와 제출은 LMS에서 직접 해 주세요.`
             : r.message,
         );
-        if (!r.opened && r.url) window.open(r.url, "_blank");
+        if (!r.opened && r.url) openOutside(r.url);
       } catch (error) {
         showToast(error.message);
       }
@@ -1259,7 +1396,7 @@ function mailFrameDoc(html, showImages) {
     ? ""
     : `<style>img[src^="http"],img[src^="//"]{display:none !important}</style>`;
   const cs = getComputedStyle(document.documentElement);
-  const font = cs.getPropertyValue("--font-sans").trim() || "'Segoe UI', 'Malgun Gothic', sans-serif";
+  const font = cs.getPropertyValue("--font-sans").trim() || "'Segoe UI', 'Malgun Gothic', -apple-system, 'Apple SD Gothic Neo', sans-serif";
   // 밝은 테마: 본문을 투명하게 해 읽기 화면 배경 위에 그대로 앉힌다.
   //   예전에는 --surface(흰색)를 칠해서 크림색 앱 안에 흰 메모장이 떠 있는 것처럼 보였다.
   // 어두운 테마: 메일은 대부분 검은 글자를 박아 두어 어두운 바탕에서 안 읽힌다.
@@ -1269,6 +1406,8 @@ function mailFrameDoc(html, showImages) {
   const bg = onPaper ? mailPaperColor() : "transparent";
   // 본문 안의 그림은 /api/mail-image 로 온다. srcdoc 안에서도 그 주소를 찾게
   // 기준 주소를 박아 준다 (없으면 about:srcdoc 기준이라 그림이 다 깨진다).
+  // 주소(src) 없는 그림은 숨긴다: 보낸 쪽 편집기에서 그림이 빠진 자리라 빈 네모만 남았다
+  // (2026-10-22 총학생회 메일의 카드뉴스 — 원본 메일에도 그림 조각이 없었다).
   return `<!doctype html><html><head><meta charset="utf-8">
     <meta name="referrer" content="no-referrer">
     <base href="${location.origin}/" target="_blank">
@@ -1277,6 +1416,7 @@ function mailFrameDoc(html, showImages) {
       body{margin:0;padding:${onPaper ? "22px 26px" : "2px 0"};font-family:${font};
            font-size:15px;line-height:1.75;color:${text};background:${bg};word-break:break-word}
       img,table{max-width:100% !important;height:auto}
+      img:not([src]),img[src=""]{display:none !important}
       table{border-collapse:collapse}
       a{color:${cs.getPropertyValue("--accent-strong").trim() || "#c60"}}
       ::-webkit-scrollbar{width:8px;height:8px;background:transparent}
@@ -1348,6 +1488,7 @@ async function renderMailBody(mail) {
   // 다른 메일로 옮겨 갔는지 판단할 수 있다.
   state.readMail = mail;
   state.readShowImages = false;
+  renderReadAttachments(mail);
 
   if (!mail.bodyLoaded) {
     // 받아오는 동안 빈 화면 대신 미리보기라도 보여 준다
@@ -1358,6 +1499,7 @@ async function renderMailBody(mail) {
     await ensureMailBody(mail);
     // 그 사이 다른 메일을 눌렀으면 이 결과는 버린다
     if (!state.readMail || state.readMail.id !== mail.id) return;
+    renderReadAttachments(mail);
   }
 
   const html = mail.bodyHtml || "";
@@ -1374,7 +1516,7 @@ async function renderMailBody(mail) {
     if (frame) frame.hidden = true;
     if (bar) bar.hidden = true;
     plain.hidden = false;
-    plain.textContent = mail.body || mail.snippet || "(본문을 불러오지 못했습니다)";
+    plain.textContent = mail.body || mail.snippet || (mail.bodyLoaded ? "(본문 없음)" : "(본문을 불러오지 못했습니다)");
     return;
   }
 
@@ -1391,7 +1533,50 @@ async function renderMailBody(mail) {
   if (bar) bar.hidden = true;
 }
 
+/* 읽기 화면의 첨부 칸. 예전엔 이 칸이 없어 받은·보낸 메일의 첨부를 앱에서 볼 수 없었다(2026-10-25 사용자:
+   '보낸 편지함에서 첨부가 안 보인다'). 누르면 서버에서 그 파트만 받아 내려받기로 연다(/api/mail/attachment). */
+function renderReadAttachments(mail) {
+  const box = $("#readAttachments");
+  if (!box) return;
+  const atts = mail?.attachments || [];
+  box.hidden = !atts.length;
+  if (!atts.length) {
+    box.innerHTML = "";
+    return;
+  }
+  // 목록의 크기는 전송 인코딩 뒤 크기라 base64 면 실제 파일의 약 4/3 이다
+  const realSize = (a) => Math.round(Number(a.size || 0) * ((a.encoding || "base64") === "base64" ? 0.75 : 1));
+  const canGet = mail.uid !== null && mail.uid !== undefined && !mail.pendingTrash;
+  box.innerHTML = atts
+    .map(
+      (a, i) => `
+      <button type="button" class="read-att" data-att="${i}" ${canGet ? "" : "disabled"} title="${escapeHtml(a.name || "첨부파일")}">
+        ${iconHtml("file", "read-att-icon")}
+        <span class="read-att-name">${escapeHtml(a.name || "첨부파일")}</span>
+        <span class="read-att-size">${formatBytes(realSize(a))}</span>
+        ${iconHtml("download", "read-att-get")}
+      </button>`,
+    )
+    .join("");
+}
+
+function bindReadAttachments() {
+  $("#readAttachments")?.addEventListener("click", (event) => {
+    const btn = event.target.closest(".read-att");
+    const mail = state.readMail;
+    const att = btn && mail ? (mail.attachments || [])[Number(btn.dataset.att)] : null;
+    if (!att) return;
+    const q = new URLSearchParams({ uid: String(mail.uid), folder: mail.folder || "inbox", part: att.part });
+    openOutside(`/api/mail/attachment?${q}`);
+    showToast(`${shortText(att.name || "첨부파일", 30)} 받는 중`);
+  });
+}
+
 function openEmailDetail(mail) {
+  if (mail?.folder === "draft") {
+    resumeDraft(mail);
+    return;
+  }
   const color = CATEGORY_COLORS[mail.category] || "neutral";
   const chip = $("#readCategory");
   chip.className = `category-chip ${color}`;
@@ -1551,7 +1736,10 @@ async function markAllRead() {
 }
 
 /* ===== 인앱 작성 화면 ===== */
+let composeGen = 0; // 새로 쓸 때마다 올린다 — 늦게 끝난 전달 첨부가 다른 메일에 붙지 않게
+
 function openCompose({ to = "", cc = "", bcc = "", subject = "", body = "", inReplyTo = "", references = "", title = "새 메일" } = {}) {
+  composeGen += 1;
   const form = $("#composeForm");
   form.elements.to.value = to;
   form.elements.cc.value = cc;
@@ -1561,6 +1749,7 @@ function openCompose({ to = "", cc = "", bcc = "", subject = "", body = "", inRe
   form.dataset.inReplyTo = inReplyTo;
   form.dataset.references = references;
   form.dataset.draftId = "";
+  form.dataset.replaceUid = "";
   // 참조 줄은 늘 보이고, 숨은참조만 접었다 편다
   const bccField = $("#bccField");
   if (bccField) bccField.hidden = !bcc;
@@ -1580,7 +1769,64 @@ function openCompose({ to = "", cc = "", bcc = "", subject = "", body = "", inRe
   const account = state.config?.schoolEmail || "";
   $("#composeFrom").textContent = account ? `보내는 사람: ${account}` : "설정에서 학교 이메일을 먼저 입력해 주세요.";
   showMailPane("compose");
+  resetMailFlow();
   form.elements[to ? "subject" : "to"].focus();
+}
+
+/* 임시 보관함의 메일은 '메일 쓰기' 로 열어 이어 쓴다 (2026-10-22 사용자: 받은 메일처럼 띄워 이어 쓸 수 없었다).
+   서버 원본에서 숨은참조·첨부·우리 번호(draftId)까지 채운다(/api/mail/draft). 다시 저장하면 이 임시 메일을 새 판으로
+   바꾸고, 보내거나 작성 취소하면 정리한다(replaceUid = 이 메일 번호 — 웹메일에서 만든 것은 우리 번호가 없다).
+   서버에서 못 읽으면 목록에 있는 내용으로라도 연다(숨은참조·첨부는 빠질 수 있다고 알린다). */
+async function resumeDraft(mail) {
+  if (state.mailPane === "compose" && autosave.dirty && composeHasContent()) {
+    window.clearTimeout(autosave.server);
+    await saveDraftToServer({ auto: true }); // 쓰던 다른 메일은 먼저 저장해 둔다
+  }
+  const known = mail.uid !== null && mail.uid !== undefined && !mail.pendingTrash;
+  let draft = null;
+  if (known) {
+    draftNote("");
+    try {
+      draft = await api(`/api/mail/draft?uid=${encodeURIComponent(mail.uid)}&folder=draft`);
+    } catch {
+      showToast("메일 서버에서 읽지 못해 목록에 있는 내용으로 열었어요. 숨은참조·첨부는 빠졌을 수 있어요.");
+    }
+  }
+  if (!draft) {
+    await ensureMailBody(mail).catch(() => {});
+    const to = mail.toEmail ? (mail.toName ? `${mail.toName} <${mail.toEmail}>` : mail.toEmail) : "";
+    draft = {
+      to,
+      cc: "",
+      bcc: "",
+      subject: mail.subject === "(제목 없음)" ? "" : mail.subject || "",
+      body: mail.bodyHtml || escapeHtml(mail.body || "").replace(/\n/g, "<br>"),
+      attachments: [],
+      draftId: "",
+    };
+  }
+  openCompose({ to: draft.to || "", cc: draft.cc || "", bcc: draft.bcc || "", subject: draft.subject || "" });
+  setComposeBody(draft.body || "");
+  const form = $("#composeForm");
+  form.dataset.draftId = draft.draftId || "";
+  form.dataset.replaceUid = known ? String(mail.uid) : "";
+  state.attachments = (draft.attachments || []).map((a) => ({ filename: a.filename, size: a.size, content: a.content }));
+  renderAttachments();
+  // 연 그대로는 다시 저장하지 않는다 (손대면 그때 자동 저장)
+  autosave.lastSig = draftSignature(collectDraft());
+  autosave.dirty = false;
+  draftNote(draft.draftId || known ? "임시 보관함에서 이어 쓰는 중" : "");
+  // 받는 사람이 있으면 본문 끝에 커서를 둔다 (앞에 두면 이어 쓴 글이 맨 앞에 붙었다)
+  const body = $("#composeRich");
+  if (body && (draft.to || "").trim()) {
+    body.focus();
+    const range = document.createRange();
+    range.selectNodeContents(body);
+    range.collapse(false);
+    const sel = window.getSelection();
+    sel?.removeAllRanges();
+    sel?.addRange(range);
+  }
 }
 
 /** '←' 목록으로: 쓰던 내용은 바로 저장해 두고 닫는다 */
@@ -1606,10 +1852,12 @@ async function discardCompose() {
     if (!ok) return;
   }
   const id = form?.dataset.draftId;
+  const replaceUid = form?.dataset.replaceUid || "";
   clearAutosave();
-  if (id) {
-    api("/api/mail/discard-draft", { method: "POST", body: JSON.stringify({ draftId: id }) }).catch(() => {});
+  if (id || replaceUid) {
+    api("/api/mail/discard-draft", { method: "POST", body: JSON.stringify({ draftId: id || "", replaceUid }) }).catch(() => {});
     form.dataset.draftId = "";
+    form.dataset.replaceUid = "";
   }
   state.attachments = [];
   showMailPane("list");
@@ -1626,7 +1874,17 @@ function composeHasContent() {
 }
 
 /* 첨부는 웹메일처럼 표로 보여 준다 (파일명 · 출처 · 용량 · 지우기) */
-const ATTACH_LIMIT = 10 * 1024 * 1024; // 학교 메일 기준 10MB
+/* 학교 SMTP 는 메일 한 통 35MB 까지(EHLO SIZE 36700160, 2026-10-27 실측). 첨부는 base64 로 약 1.37배가 되니
+   원본 합계 25MB 까지 그대로 붙이고(email_reader.SEND_ATTACH_MAX), 넘는 파일은 Gmail 처럼 내 Drive 에 올려
+   링크로 보낸다(2GB 까지, web_ui.start_big_upload). 예전엔 화면 10MB · 서버 20MB 에서 막혔다. */
+const ATTACH_LIMIT = 25 * 1024 * 1024;
+const BIG_ATTACH_MAX = 2 * 1024 * 1024 * 1024;
+const isLinkAtt = (a) => Boolean(a.link || a.job);
+
+function attachStatus(a) {
+  if (a.job && !a.link) return a.failed ? "올리기 실패" : `올리는 중 ${a.progress || 0}%`;
+  return a.source || "내 PC";
+}
 
 function renderAttachments() {
   if (typeof scheduleAutosave === "function") scheduleAutosave();
@@ -1635,12 +1893,12 @@ function renderAttachments() {
   wrap.innerHTML = atts
     .map(
       (a, i) => `
-      <div class="attach-row">
+      <div class="attach-row${isLinkAtt(a) ? " link" : ""}" data-idx="${i}">
         <span class="ar-name" title="${escapeHtml(a.filename)}">
-          <span class="icon" data-icon="paperclip"></span>
+          <span class="icon" data-icon="${isLinkAtt(a) ? "cloud" : "paperclip"}"></span>
           ${escapeHtml(a.filename)}
         </span>
-        <span class="ar-from">${escapeHtml(a.source || "내 PC")}</span>
+        <span class="ar-from"${isLinkAtt(a) ? ` title="${escapeHtml("링크가 있는 사람은 누구나 볼 수 있어요")}"` : ""}>${escapeHtml(attachStatus(a))}</span>
         <span class="ar-size">${formatBytes(a.size)}</span>
         <button type="button" class="attach-remove" data-idx="${i}" aria-label="제거">✕</button>
       </div>`,
@@ -1651,10 +1909,11 @@ function renderAttachments() {
   const hint = $("#dropzoneHint");
   if (hint) hint.hidden = atts.length > 0;
 
-  const total = atts.reduce((s, a) => s + a.size, 0);
+  const total = atts.filter((a) => !isLinkAtt(a)).reduce((s, a) => s + a.size, 0);
+  const links = atts.filter(isLinkAtt).length;
   const note = $("#attachNote");
   if (note) {
-    note.textContent = `${formatBytes(total)} / ${formatBytes(ATTACH_LIMIT)}`;
+    note.textContent = `${formatBytes(total)} / ${formatBytes(ATTACH_LIMIT)}${links ? ` · Drive 링크 ${links}개` : ""}`;
     // 학교 메일 한도를 넘으면 눈에 띄게
     note.classList.toggle("over", total > ATTACH_LIMIT);
   }
@@ -1663,7 +1922,90 @@ function renderAttachments() {
 function formatBytes(n) {
   if (n < 1024) return `${n}B`;
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)}KB`;
-  return `${(n / 1024 / 1024).toFixed(1)}MB`;
+  if (n < 1024 * 1024 * 1024) return `${(n / 1024 / 1024).toFixed(1)}MB`;
+  return `${(n / 1024 / 1024 / 1024).toFixed(2)}GB`;
+}
+
+/* 내 PC 에서 넣은 파일(고르기·끌어 놓기 공통). 그대로 붙일 자리가 남았으면 첨부로, 아니면 Drive 링크로. */
+async function addAttachmentFiles(files) {
+  let added = 0;
+  for (const file of files) {
+    const name = nfcName(file.name);
+    const used = (state.attachments || []).filter((a) => !isLinkAtt(a)).reduce((n, a) => n + a.size, 0);
+    if (file.size + used <= ATTACH_LIMIT) {
+      state.attachments.push({ filename: name, size: file.size, content: await fileToBase64(file) });
+      added += 1;
+    } else if (file.size > BIG_ATTACH_MAX) {
+      showToast(`${shortText(name, 30)}은(는) 2GB를 넘어 보낼 수 없어요.`);
+    } else {
+      uploadBigAttachment(file, name); // 기다리지 않는다 — 올리는 동안 계속 쓸 수 있다
+      added += 1;
+    }
+  }
+  renderAttachments();
+  return added;
+}
+
+async function uploadBigAttachment(file, name) {
+  const item = { filename: name, size: file.size, content: "", source: "Drive 링크", job: "pending", progress: 0 };
+  state.attachments.push(item);
+  renderAttachments();
+  showToast(`${shortText(name, 30)}은(는) 25MB가 넘어 Drive에 올려 링크로 보내요`);
+  const setRow = () => {
+    const i = state.attachments.indexOf(item);
+    const cell = i >= 0 ? $(`#composeAttachments .attach-row[data-idx="${i}"] .ar-from`) : null;
+    if (cell) cell.textContent = attachStatus(item);
+  };
+  try {
+    const res = await fetch(`/api/mail/big-upload?name=${encodeURIComponent(name)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/octet-stream" },
+      body: file,
+    });
+    const data = await res.json();
+    if (!res.ok || !data.job) throw new Error(data.message || "올리지 못했어요");
+    item.job = data.job;
+    if (!state.attachments.includes(item)) {
+      // 받는 사이에 뺐다
+      api("/api/mail/big-cancel", { method: "POST", body: JSON.stringify({ job: item.job }) }).catch(() => {});
+      return;
+    }
+    for (;;) {
+      await new Promise((r) => setTimeout(r, 800));
+      if (!state.attachments.includes(item)) return; // 빼면 서버에 멈추라고 이미 알렸다
+      const st = await api(`/api/mail/big-upload?job=${encodeURIComponent(item.job)}`);
+      if (st.status === "uploading") {
+        item.progress = st.total ? Math.floor((st.sent / st.total) * 100) : 0;
+        setRow();
+        continue;
+      }
+      if (st.status !== "done") throw new Error(st.message || "올리지 못했어요");
+      item.link = st.link;
+      item.driveId = st.id;
+      renderAttachments();
+      showToast(`${shortText(name, 30)}을(를) Drive에 올렸어요`);
+      return;
+    }
+  } catch (error) {
+    item.failed = true;
+    setRow();
+    showToast(`${shortText(name, 30)}: ${humanError(error)}`);
+  }
+}
+
+/* 보낼 때 본문 끝에 붙이는 Drive 링크 묶음 (Gmail 의 'Google Drive 파일' 칸과 같은 자리) */
+function bigLinksBlock(items, html) {
+  if (!items.length) return "";
+  if (!html) {
+    return `\n\n[Google Drive 로 보낸 파일]\n${items.map((a) => `${a.filename} (${formatBytes(a.size)})\n${a.link}`).join("\n")}`;
+  }
+  const rows = items
+    .map(
+      (a) =>
+        `<div style="margin:4px 0">📎 <a href="${escapeHtml(a.link)}">${escapeHtml(a.filename)}</a> <span style="color:#5f6368">(${formatBytes(a.size)})</span></div>`,
+    )
+    .join("");
+  return `<div style="margin-top:16px;padding:10px 12px;border:1px solid #dadce0;border-radius:8px"><div style="font-size:12px;color:#5f6368;margin-bottom:4px">Google Drive 로 보낸 파일</div>${rows}</div>`;
 }
 
 function fileToBase64(file) {
@@ -1696,14 +2038,7 @@ function bindComposeFiles() {
     event.preventDefault();
     zone.classList.remove("drag-over");
     const files = [...(event.dataTransfer.files || [])];
-    for (const file of files) {
-      const content = await fileToBase64(file);
-      state.attachments.push({ filename: file.name, size: file.size, content });
-    }
-    if (files.length) {
-      renderAttachments();
-      showToast(`${files.length}개 파일을 첨부했습니다.`);
-    }
+    if (files.length && (await addAttachmentFiles(files))) showToast(`${files.length}개 파일을 첨부했습니다.`);
   });
 }
 
@@ -2096,11 +2431,17 @@ function composeIsRich() {
   return !$("#htmlModeToggle")?.checked;
 }
 
+/** 서식 칸의 HTML. 메일 쓰기 흐름의 회색 글씨([data-ghost])는 미리보기라 저장·보내기에 절대 섞이지 않게 뗀다 */
+function richHtml(rich) {
+  const html = rich?.innerHTML || "";
+  return html.includes("data-ghost") ? html.replace(/<span[^>]*data-ghost[^>]*>[\s\S]*?<\/span>/g, "") : html;
+}
+
 /** 어느 칸에 쓰든 본문 내용을 가져온다 */
 function composeBody() {
   const rich = $("#composeRich");
   const area = document.querySelector('#composeForm [name="body"]');
-  return composeIsRich() ? rich?.innerHTML || "" : area?.value || "";
+  return composeIsRich() ? richHtml(rich) : area?.value || "";
 }
 
 function setComposeBody(html) {
@@ -2172,7 +2513,7 @@ function bindRichToolbar() {
   $("#htmlModeToggle")?.addEventListener("change", (event) => {
     const html = event.target.checked;
     if (html) {
-      if (area) area.value = rich.innerHTML;
+      if (area) area.value = richHtml(rich);
     } else {
       rich.innerHTML = area?.value || "";
     }
@@ -2183,7 +2524,7 @@ function bindRichToolbar() {
 
   // 서식 모드에서 타이핑하면 textarea에도 반영 (전송은 textarea를 안 봐도 되지만 안전하게)
   rich.addEventListener("input", () => {
-    if (area && composeIsRich()) area.value = rich.innerHTML;
+    if (area && composeIsRich()) area.value = richHtml(rich);
   });
 }
 
@@ -2295,6 +2636,9 @@ function collectDraft() {
     // 서식 모드는 innerHTML, HTML 모드는 직접 쓴 HTML.
     // 어느 쪽이든 본문은 HTML이다. (예전에 여기가 뒤집혀 미리보기에 태그가 그대로 보였다)
     html: true,
+    // 'HTML' 칸을 켜고 쓰던 것인지는 따로 적는다. html 은 '본문이 HTML' 이라 늘 참인데, 되살릴 때 이걸 모드로 읽어
+    // 이어서 쓰면 늘 HTML 원문(<div><br></div>…)으로 열렸다(2026-11-04 실측)
+    htmlMode: Boolean($("#htmlModeToggle")?.checked),
     savedAt: new Date().toISOString(),
   };
 }
@@ -2305,11 +2649,16 @@ function collectDraft() {
    - 내용이 그대로면 서버에 다시 넣지 않는다(서명 비교).
    - 자동 저장에는 첨부가 3MB 를 넘으면 첨부를 빼고 넣는다(15초마다 수 MB 를 올리지 않게).
      '임시저장' 단추는 첨부까지 모두 넣는다.
-   - 앱을 껐다 켜면 '메일 쓰기' 를 열 때 이어서 쓸지 묻는다(restoreDraftIfAny). */
+   - 앱을 껐다 켜면 '메일 쓰기' 를 열 때 이어서 쓸지 묻는다(restoreDraftIfAny).
+   - 첨부도 함께 되살린다. 예전엔 이 컴퓨터 저장본에 첨부가 없어 '이어서 쓰기' 하면 본문만 돌아왔고,
+     그대로 보내 받는 사람은 파일을 못 받았다(2026-10-27 사용자 신고, 보낸 편지함 실측: 첨부 0개).
+     같은 실행 안에서는 메모리(memAtts)에서 전부, 껐다 켜면 합계 1.5MB 까지 이 컴퓨터 저장본에서 되살리고,
+     못 되살린 파일은 이름을 알려 다시 넣게 한다. */
 const AUTOSAVE_LOCAL_MS = 1500;
 const AUTOSAVE_SERVER_MS = 15000;
 const AUTOSAVE_ATTACH_MAX = 3 * 1024 * 1024;
-const autosave = { local: 0, server: 0, lastSig: "", busy: false, pending: false, dirty: false };
+const LOCAL_ATTACH_MAX = 1.5 * 1024 * 1024; // localStorage 는 한 곳에 5MB 남짓이라 첨부 내용은 이만큼만
+const autosave = { local: 0, server: 0, lastSig: "", busy: false, pending: false, dirty: false, memAtts: null };
 
 function ensureDraftId() {
   const form = $("#composeForm");
@@ -2337,10 +2686,25 @@ function saveLocalDraft() {
   const d = collectDraft();
   if (!d) return;
   d.draftId = ensureDraftId();
+  d.replaceUid = $("#composeForm").dataset.replaceUid || "";
+  const atts = state.attachments || [];
+  autosave.memAtts = { id: d.draftId, list: atts.slice() };
+  let room = LOCAL_ATTACH_MAX; // 앞에서부터 들어가는 만큼만 내용을 담는다
+  const listed = (withContent) =>
+    atts.map((a) => {
+      const fits = withContent && Number(a.size || 0) <= room;
+      if (fits) room -= Number(a.size || 0);
+      return { filename: a.filename, size: a.size, source: a.source, link: a.link, content: fits ? a.content : "" };
+    });
   try {
-    localStorage.setItem(DRAFT_KEY, JSON.stringify(d));
+    localStorage.setItem(DRAFT_KEY, JSON.stringify({ ...d, attachments: listed(true) }));
   } catch (error) {
-    /* 저장소가 막혀 있으면 서버 쪽만 쓴다 */
+    // 저장소가 꽉 찼으면 첨부는 이름만 남긴다(되살릴 때 다시 넣으라고 알린다). 그마저 막혀 있으면 서버 쪽만 쓴다.
+    try {
+      localStorage.setItem(DRAFT_KEY, JSON.stringify({ ...d, attachments: listed(false) }));
+    } catch {
+      /* 무시 */
+    }
   }
 }
 
@@ -2356,17 +2720,20 @@ async function saveDraftToServer({ auto }) {
   }
   autosave.busy = true;
   saveLocalDraft();
-  const atts = state.attachments || [];
+  const atts = (state.attachments || []).filter((a) => !isLinkAtt(a)); // Drive 링크는 파일이 아니다
   const attBytes = atts.reduce((n, a) => n + Number(a.size || 0), 0);
   const withAtts = !auto || attBytes <= AUTOSAVE_ATTACH_MAX;
   draftNote(auto ? "자동 저장 중…" : "저장하는 중…");
+  let finishSaving;
+  autosave.inflight = new Promise((resolve) => (finishSaving = resolve));
   try {
     await api("/api/mail/save-draft", {
       method: "POST",
       body: JSON.stringify({
         ...d,
         draftId: ensureDraftId(),
-        attachments: withAtts ? atts.map((a) => ({ filename: a.filename, content: a.content })) : [],
+        replaceUid: $("#composeForm").dataset.replaceUid || "",
+        attachments: withAtts ? atts.filter((a) => a.content).map((a) => ({ filename: a.filename, content: a.content })) : [],
       }),
     });
     autosave.lastSig = sig;
@@ -2380,11 +2747,24 @@ async function saveDraftToServer({ auto }) {
     if (!auto) showToast(error.message);
   } finally {
     autosave.busy = false;
+    finishSaving();
     if (autosave.pending) {
       autosave.pending = false;
       scheduleAutosave();
     }
   }
+}
+
+/* 보내기 직전: 예약된 자동 저장을 멈추고, 이미 서버로 가는 중인 저장은 끝날 때까지 기다린다.
+   안 그러면 보낸 뒤 1초 만에 같은 메일이 임시 보관함에 다시 생겼다(2026-10-25 실측: 보냄 22:25:17 · 임시 22:25:18).
+   보내기가 같은 번호(draftId)의 임시본을 정리하므로, 저장이 먼저 끝나야 함께 지워진다. */
+async function settleAutosave() {
+  window.clearTimeout(autosave.local);
+  window.clearTimeout(autosave.server);
+  autosave.pending = false;
+  if (autosave.busy) await autosave.inflight;
+  autosave.pending = false;
+  window.clearTimeout(autosave.server);
 }
 
 function scheduleAutosave() {
@@ -2463,7 +2843,7 @@ async function restoreDraftIfAny() {
   } catch (error) {
     draft = null;
   }
-  if (!draft || !(draft.to || draft.subject || draft.body)) return false;
+  if (!draft || !(draft.to || draft.subject || draft.body || draft.attachments?.length)) return false;
   const when = draft.savedAt ? formatEmailDate(draft.savedAt) : "";
   if (!(await uiConfirm(`쓰다 만 메일이 있어요${when ? ` (${when} 자동 저장)` : ""}. 이어서 쓸까요?`, { title: "쓰던 메일", ok: "이어서 쓰기", cancel: "새로 쓰기", icon: "edit" }))) {
     // 새로 쓰기: 이 컴퓨터 저장본만 지운다. 서버 임시 보관함 것은 그대로 둔다(거기서 열 수 있다).
@@ -2473,18 +2853,31 @@ async function restoreDraftIfAny() {
   const form = $("#composeForm");
   // 같은 번호로 이어서 저장해야 서버 임시 보관함에 같은 메일이 여러 벌 생기지 않는다
   if (draft.draftId) form.dataset.draftId = draft.draftId;
+  form.dataset.replaceUid = draft.replaceUid || "";
   if (form.elements.to) form.elements.to.value = draft.to;
   if (form.elements.cc) form.elements.cc.value = draft.cc;
   if (form.elements.bcc) form.elements.bcc.value = draft.bcc;
   if (form.elements.subject) form.elements.subject.value = draft.subject;
   const toggle = $("#htmlModeToggle");
   if (toggle) {
-    toggle.checked = Boolean(draft.html);
+    toggle.checked = Boolean(draft.htmlMode);
     toggle.dispatchEvent(new Event("change"));
   }
   setComposeBody(draft.body);
+  resetMailFlow();
+  // 첨부: 같은 실행이면 메모리에서 그대로, 아니면 이 컴퓨터 저장본에 내용이 있는 것만
+  const mem = autosave.memAtts && draft.draftId && autosave.memAtts.id === draft.draftId ? autosave.memAtts.list : null;
+  const saved = draft.attachments || [];
+  composeGen += 1;
+  state.attachments = mem ? mem.slice() : saved.filter((a) => a.content || a.link);
+  const missing = mem ? [] : saved.filter((a) => !a.content && !a.link).map((a) => a.filename);
+  renderAttachments();
   autosave.lastSig = draftSignature(collectDraft());
   draftNote(when ? `${when}에 저장한 내용` : "");
+  if (missing.length) {
+    showToast(`첨부 ${missing.length}개는 다시 넣어 주세요: ${shortText(missing.join(", "), 60)}`);
+    draftNote(`첨부 ${missing.length}개를 다시 넣어 주세요`);
+  }
   return true;
 }
 
@@ -2526,7 +2919,8 @@ async function toggleStarOnServer(mail) {
   }
 }
 
-/* 전달: 원문을 인용해 새 메일로 */
+/* 전달: 원문을 인용해 새 메일로. 원래 첨부도 서버에서 받아 붙인다 — 예전엔 본문만 옮겨
+   받는 사람이 파일을 못 받았다(2026-10-27 사용자 신고). 한도(ATTACH_LIMIT)를 넘는 것은 빼고 알린다. */
 async function forwardCurrentEmail() {
   const mail = state.replyContext;
   if (!mail) return;
@@ -2537,7 +2931,53 @@ async function forwardCurrentEmail() {
     `\n\n---------- 전달된 메일 ----------\n` +
     `보낸사람: ${mail.fromName || ""} <${mail.fromEmail || ""}>\n` +
     `날짜: ${when}\n제목: ${mail.subject || ""}\n\n`;
-  openCompose({ to: "", subject, body: header + (mail.body || mail.snippet || "") });
+  openCompose({ to: "", subject, body: header + quotableText(mail) });
+  await attachOriginalFiles(mail);
+}
+
+/* 답장·전달에 옮길 원문. 평문 파트에 그림 태그를 그대로 넣어 보내는 메일이 있다 — 학과 공지에서
+   '<img src=" base64,iVBOR…' 가 3,600자 이어져 받는 사람에게 그대로 갔다(2026-10-27 Gmail 실측). 태그와 긴 base64 만 뺀다. */
+function quotableText(mail) {
+  return String(mail.body || mail.snippet || "")
+    .replace(/<img\b[^>]*(?:>|$)/gi, "")
+    .replace(/[A-Za-z0-9+/=]{200,}/g, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trimEnd();
+}
+
+async function attachOriginalFiles(mail) {
+  const atts = (mail.attachments || []).filter((a) => a.part);
+  if (!atts.length) return;
+  if (!/^\d+$/.test(String(mail.uid ?? ""))) {
+    showToast(`원래 첨부 ${atts.length}개는 메일을 다시 받은 뒤 넣을 수 있어요`);
+    return;
+  }
+  const gen = composeGen; // 받는 동안 다른 메일을 열면 거기에 붙이지 않는다
+  showToast(`원래 첨부 ${atts.length}개 붙이는 중`);
+  const skipped = [];
+  let total = 0;
+  for (const att of atts) {
+    const name = nfcName(att.name || "첨부파일");
+    try {
+      const q = new URLSearchParams({ uid: String(mail.uid), folder: mail.folder || "inbox", part: att.part });
+      const res = await fetch(`/api/mail/attachment?${q}`);
+      if (!res.ok) throw new Error(String(res.status));
+      const blob = await res.blob();
+      if (total + blob.size > ATTACH_LIMIT) {
+        skipped.push(name);
+        continue;
+      }
+      const content = await fileToBase64(blob);
+      if (state.mailPane !== "compose" || composeGen !== gen) return;
+      total += blob.size;
+      state.attachments.push({ filename: name, size: blob.size, content, source: "원래 메일" });
+      renderAttachments();
+    } catch {
+      skipped.push(name);
+    }
+  }
+  if (skipped.length) showToast(`첨부 ${skipped.length}개는 붙이지 못했어요: ${shortText(skipped.join(", "), 60)}`);
+  else showToast(`원래 첨부 ${atts.length}개를 붙였어요`);
 }
 
 /* ⋮ 메뉴 항목 처리 */
@@ -2549,29 +2989,33 @@ async function runMailMore(action, mail) {
     case "print": {
       // 화면에 보이는 그대로 인쇄한다
       await ensureMailBody(mail);
-      const win = window.open("", "_blank");
+      // 맥 앱 창은 새 창을 열지 못한다 → 숨은 틀에 그려서 인쇄한다
+      let frame = null;
+      const win = IN_MAC_APP()
+        ? ((frame = Object.assign(document.createElement("iframe"), { style: "position:fixed;width:0;height:0;border:0" })),
+          document.body.appendChild(frame),
+          frame.contentWindow)
+        : window.open("", "_blank");
       if (!win) return showToast("팝업이 막혀 인쇄창을 열지 못했습니다.");
       const safe = mail.bodyHtml
         ? mail.bodyHtml
         : `<pre style="white-space:pre-wrap;font-family:inherit">${escapeHtml(mail.body || "")}</pre>`;
       win.document.write(
         `<!doctype html><meta charset="utf-8"><title>${escapeHtml(mail.subject || "메일")}</title>` +
-          `<body style="font-family:system-ui,'Malgun Gothic',sans-serif;padding:24px">` +
+          `<body style="font-family:system-ui,'Malgun Gothic','Apple SD Gothic Neo',sans-serif;padding:24px">` +
           `<h2>${escapeHtml(mail.subject || "")}</h2>` +
           `<p style="color:#666">${escapeHtml(mail.fromName || "")} &lt;${escapeHtml(mail.fromEmail || "")}&gt; · ${escapeHtml(mail.date || "")}</p><hr>${safe}</body>`,
       );
       win.document.close();
       win.focus();
       win.print();
+      if (frame) window.setTimeout(() => frame.remove(), 60000);
       break;
     }
 
     case "eml":
       // 서버에서 원본을 받아 .eml 로 저장
-      window.open(
-        `/api/mail/eml?uid=${encodeURIComponent(mail.uid)}&folder=${encodeURIComponent(mail.folder)}`,
-        "_blank",
-      );
+      openOutside(`/api/mail/eml?uid=${encodeURIComponent(mail.uid)}&folder=${encodeURIComponent(mail.folder)}`);
       break;
 
     case "move": {
@@ -2698,7 +3142,7 @@ async function replyToCurrentEmail(all = false) {
   await ensureMailBody(mail);
   const subject = /^\s*re\s*:/i.test(mail.subject) ? mail.subject : `Re: ${mail.subject}`;
   const when = mail.date ? formatEmailDate(mail.date) : "";
-  const quoted = (mail.body || mail.snippet || "")
+  const quoted = quotableText(mail)
     .split("\n")
     .map((line) => `> ${line}`)
     .join("\n");
@@ -3333,11 +3777,20 @@ function renderCourses() {
         course.korean.toLowerCase().includes(query)),
   );
 
-  // 편집 모드: 카드 흔들림 + 제거 버튼
+  // 편집 모드: 카드에 테두리 + 숨기기 단추 (흔들림은 카드 42장이 쉬지 않고 움직여 무거웠다)
   grid.classList.toggle("editing", !!state.courseEditMode);
   const editLabel = $("#courseEditLabel");
   if (editLabel) editLabel.textContent = state.courseEditMode ? "완료" : "편집";
-  $("#courseEditButton")?.setAttribute("aria-pressed", String(!!state.courseEditMode));
+  const editBtn = $("#courseEditButton");
+  if (editBtn) {
+    editBtn.setAttribute("aria-pressed", String(!!state.courseEditMode));
+    editBtn.classList.toggle("on", !!state.courseEditMode);
+    const icon = editBtn.querySelector(".icon");
+    if (icon && icon.dataset.icon !== (state.courseEditMode ? "check" : "edit")) {
+      icon.dataset.icon = state.courseEditMode ? "check" : "edit";
+      installIcons(editBtn);
+    }
+  }
   const restoreBtn = $("#restoreCoursesButton");
   if (restoreBtn) {
     restoreBtn.hidden = hidden.length === 0;
@@ -3349,7 +3802,7 @@ function renderCourses() {
     .map((course) => {
       const enabled = state.selection.courses[course.label] !== false;
       const removeBtn = state.courseEditMode
-        ? `<button type="button" class="course-remove" data-remove="${escapeHtml(course.label)}" aria-label="과목 제거" title="목록에서 제거">✕</button>`
+        ? `<button type="button" class="course-remove" data-remove="${escapeHtml(course.label)}" aria-label="과목 숨기기" title="목록에서 숨기기">${iconHtml("eyeOff")}</button>`
         : "";
       const nextLine = course.next
         ? `다음 마감 <b>${formatDue(course.next.due)}</b> · ${escapeHtml(shortText(course.next.name, 30))}`
@@ -3387,7 +3840,7 @@ function renderCourses() {
   grid.querySelectorAll("[data-syllabus]").forEach((btn) => {
     btn.addEventListener("click", (event) => {
       event.stopPropagation();
-      window.open(`/api/file?name=${encodeURIComponent(btn.dataset.syllabus)}`, "_blank");
+      openLocalFile(btn.dataset.syllabus);
     });
   });
 
@@ -3500,9 +3953,11 @@ function renderStatus() {
 /* ===== 설정: 구글 계정 섹션 ===== */
 function renderGoogleSection() {
   const oauth = state.status?.googleOAuth || {};
-  // 준비물이 없을 때만 '파일 고르기'를 띄운다
+  // 구글 로그인 준비물(credentials.json)을 사용자에게 달라고 하지 않는다. 맥·리눅스 판은 준비물이 안 묶여
+  // 'API 를 발급해 파일을 넣으라' 는 칸과 도움말이 떴다(2026-10-21 사용자: API 키를 요구하는 설정은 지워 달라).
+  // 준비물이 없는 판에서는 '아직 쓸 수 없어요' 로만 알리고 단추를 끈다.
   const drop = $("#credDrop");
-  if (drop) drop.hidden = Boolean(oauth.credentialsExists);
+  if (drop) drop.hidden = true;
   const statusText = $("#googleStatusText");
   const loginButton = $("#googleLoginButton");
   const disconnectButton = $("#disconnectGoogleButton");
@@ -3514,11 +3969,13 @@ function renderGoogleSection() {
     loginButton.textContent = "다시 로그인";
     loginButton.classList.remove("primary");
   } else {
-    setAccountPill("#googlePill", "need", "연결 안 됨");
-    statusText.textContent = oauth.credentialsExists ? "" : "로그인 준비 파일이 필요해요";
+    const ready = Boolean(oauth.credentialsExists);
+    setAccountPill("#googlePill", "need", ready ? "연결 안 됨" : "준비 중");
+    statusText.textContent = ready ? "" : "이 판에서는 아직 쓸 수 없어요";
     loginButton.textContent = "Google로 로그인";
-    loginButton.classList.add("primary");
+    loginButton.classList.toggle("primary", ready);
   }
+  loginButton.disabled = !oauth.credentialsExists && !oauth.tokenUsable;
   disconnectButton.hidden = !oauth.tokenExists;
   renderAccountPills();
   renderSaveDestinations();
@@ -3545,7 +4002,7 @@ async function saveFilesToComputer(localNames) {
   if (!names.length) return;
   if (state.status?.mode === "multi-user") {
     names.slice(0, 10).forEach((name) => {
-      window.open(`/api/file?name=${encodeURIComponent(name)}`, "_blank");
+      openOutside(`/api/file?name=${encodeURIComponent(name)}`);
     });
     if (names.length > 10) showToast("브라우저 모드에서는 한 번에 10개까지 다운로드됩니다.");
     return;
@@ -4494,7 +4951,8 @@ const listSig = (arr) => (Array.isArray(arr) ? `${arr.length}:${arr[arr.length -
 
 const RENDER_PARTS = [
   { key: "status", render: renderStatus,
-    of: (s) => sig(s.status?.lastRun, s.status?.running, listSig(s.status?.courses)) },
+    of: (s) => sig(s.status?.lastRun, s.status?.running, listSig(s.status?.courses), s.status?.driveResult?.at,
+      s.status?.googleOAuth?.driveGranted) },
   { key: "upcoming", views: ["dashboard"], render: renderUpcoming,
     of: (s) => sig(s.deadlines?.updatedAt, (s.deadlines?.items || []).length, (s.selection?.hiddenDeadlines || []).length) },
   { key: "events", views: ["dashboard"], render: renderEvents,
@@ -4519,7 +4977,8 @@ const RENDER_PARTS = [
   { key: "files", views: ["files"], render: renderFiles,
     of: (s) => sig((s.files || []).length, s.search, s.fileView, s.fileCourse, s.fileStatus) },
   { key: "health", render: renderHealth,
-    of: (s) => sig(s.health?.warning, s.health?.consecutiveFailures, JSON.stringify(s.health?.lastSuccess || {})) },
+    of: (s) => sig(s.health?.warning, s.health?.consecutiveFailures, JSON.stringify(s.health?.lastSuccess || {}),
+      JSON.stringify((s.health?.failing || []).map((f) => [f.kind, f.at, f.category]))) },
   { key: "quicklinks", views: ["dashboard"], render: renderQuicklinks, of: (s) => sig(s.quicklinksAll) },
   { key: "shuttle", views: ["storage"], render: renderShuttle,
     of: (s) => sig((s.shuttle || []).length, s.shuttleGroup) },
@@ -5135,14 +5594,14 @@ const EXAM_DALGU = {
     "모르는 건 표시만 해 두고 넘어가요",
     "어제 본 걸 5분만 다시 훑어봐요",
     "책상 정리하면 머리도 정리돼요",
-    "붕어빵 하나 먹고 다시 해요",
+    "간식 하나 먹고 다시 해요",
   ] },
   during: { poses: ["fight", "thumbs", "wink"], talk: [
     "시험장 가기 전에 화장실 꼭 들러요",
     "학생증 챙겼죠?",
     "첫 문제가 어려우면 뒤에서부터 풀어도 돼요",
     "끝난 과목은 답 맞춰 보지 말고 쉬어요",
-    "달구가 붕어빵 데워 놓을게요",
+    "달구가 간식 챙겨 놓을게요",
   ] },
   last: { poses: ["fight", "run"], talk: [
     "마지막 한 과목, 달구도 같이 달려요",
@@ -5151,7 +5610,7 @@ const EXAM_DALGU = {
   ] },
   after: { poses: ["yay", "lounge", "munch", "laugh"], talk: [
     "오늘은 알람 끄고 자요",
-    "붕어빵 파티해요!",
+    "간식 파티해요!",
     "보고 싶던 거 몰아 보기 어때요",
     "고생한 나한테 칭찬 한마디 해 줘요",
   ] },
@@ -5619,13 +6078,10 @@ function bindInterestChips() {
 
 function renderSecretBadges() {
   const config = state.config || {};
+  // 시간표 캡처 읽기는 Gemini 키가 있어야 된다. 키 넣는 칸을 없앴으니(2026-10-21) 이미 저장된 키가 있을 때만 단추를 보인다.
   {
-    const el = $("#geminiSavedBadge");
+    const el = $("#timetableImportImage");
     if (el) el.hidden = !config.hasGeminiKey;
-  }
-  {
-    const el = $("#dgistKeySavedBadge");
-    if (el) el.hidden = !config.hasDgistApiKey;
   }
   {
     const el = $("#emailPwSavedBadge");
@@ -5658,6 +6114,8 @@ async function populateSettings() {
   form.elements.hidePastEmails.checked = Boolean(state.config?.hidePastEmails);
   if (form.elements.notifyDeadlines) form.elements.notifyDeadlines.checked = state.config?.notifyDeadlines !== false;
   if (form.elements.notifyNewFiles) form.elements.notifyNewFiles.checked = state.config?.notifyNewFiles !== false;
+  loadAutostart();
+  loadAiConnections();
   // 구글 캘린더 동기화 (체크박스라 value 대입으로는 반영되지 않음)
   form.elements.gcalSyncEnabled.checked = Boolean(state.config?.gcalSyncEnabled);
   form.elements.gcalCalendarName.value = state.config?.gcalCalendarName || "DGIST 메일 일정";
@@ -5694,7 +6152,7 @@ async function populateSettings() {
     folderText.parentElement.title = state.config.localSaveFolder;
   }
   form.elements.driveUpload.checked = state.config?.driveUpload !== false;
-  $("#driveFolderText").textContent = state.config?.driveFolderName || "AutoSaver";
+  $("#driveFolderText").textContent = state.config?.driveFolderName || "Daling";
   // 클라우드 카드는 저장을 누르기 전까지 초안으로만 바꾼다
   state.cloudDraft = Object.fromEntries(
     (state.config?.clouds || []).map((c) => [c.key, { on: Boolean(c.on), path: c.picked ? c.root : "" }]),
@@ -6351,21 +6809,17 @@ function bindEvents() {
   $("#attachButton").addEventListener("click", () => $("#attachInput").click());
   $("#attachInput").addEventListener("change", async (event) => {
     const files = [...event.target.files];
-    for (const file of files) {
-      if (file.size > 20 * 1024 * 1024) {
-        showToast(`${file.name}은(는) 20MB를 넘어 제외됐습니다.`);
-        continue;
-      }
-      const content = await fileToBase64(file);
-      state.attachments.push({ filename: file.name, size: file.size, content });
-    }
     event.target.value = "";
-    renderAttachments();
+    await addAttachmentFiles(files);
   });
   $("#composeAttachments").addEventListener("click", (event) => {
     const rm = event.target.closest(".attach-remove");
     if (rm) {
-      state.attachments.splice(Number(rm.dataset.idx), 1);
+      const [gone] = state.attachments.splice(Number(rm.dataset.idx), 1);
+      // 이 메일 때문에 Drive 에 올린 파일은 멈추거나 Drive 휴지통으로 (Drive 에서 고른 원래 파일은 그대로)
+      if (gone?.job && gone.job !== "pending") {
+        api("/api/mail/big-cancel", { method: "POST", body: JSON.stringify({ job: gone.job }) }).catch(() => {});
+      }
       renderAttachments();
     }
   });
@@ -6394,13 +6848,46 @@ function bindEvents() {
       html: composeIsRich() || $("#htmlModeToggle").checked,
       inReplyTo: form.dataset.inReplyTo || "",
       references: form.dataset.references || "",
-      attachments: (state.attachments || []).map((a) => ({ filename: a.filename, content: a.content })),
+      attachments: (state.attachments || [])
+        .filter((a) => !isLinkAtt(a))
+        .map((a) => ({ filename: a.filename, content: a.content })),
       draftId: form.dataset.draftId || "",
+      replaceUid: form.dataset.replaceUid || "",
     };
     if (!payload.to) {
       showToast("받는 사람 주소를 입력해 주세요.");
       return;
     }
+    // Drive 에 올리는 중인 큰 첨부는 링크가 생겨야 보낼 수 있다
+    const pendingBig = (state.attachments || []).filter((a) => isLinkAtt(a) && !a.link);
+    if (pendingBig.length) {
+      const failed = pendingBig.some((a) => a.failed);
+      showToast(failed ? "Drive에 못 올린 첨부가 있어요. 빼고 다시 넣어 주세요." : "큰 첨부를 Drive에 올리는 중이에요. 끝나면 보내 주세요.");
+      return;
+    }
+    // 내용이 빠진 첨부(되살리지 못한 것)는 서버가 조용히 건너뛰므로 보내기 전에 막는다
+    const empty = (state.attachments || []).filter((a) => !a.content && !isLinkAtt(a));
+    if (empty.length) {
+      showToast(`첨부 ${empty.length}개를 다시 넣어 주세요: ${shortText(empty.map((a) => a.filename).join(", "), 60)}`);
+      return;
+    }
+    // 첨부를 말했는데 첨부가 없으면 한 번 묻는다. 인용·전달된 원문은 빼고 내가 쓴 부분만 본다.
+    if (!(state.attachments || []).length) {
+      const mine = String(payload.body || "")
+        .replace(/<[^>]+>/g, " ")
+        .split(/-{5,}\s*(?:원본 메일|전달된 메일)/)[0];
+      // 답장 제목은 상대가 쓴 것이라(Re: 자료 첨부합니다) 내가 새로 쓸 때만 본다
+      if (/첨부|attach/i.test(`${payload.inReplyTo ? "" : subject} ${mine}`)) {
+        const go = await uiConfirm("본문에 '첨부'가 있는데 첨부한 파일이 없어요. 그대로 보낼까요?", {
+          title: "첨부 확인",
+          icon: "paperclip",
+          ok: "그대로 보내기",
+          cancel: "파일 넣기",
+        });
+        if (!go) return;
+      }
+    }
+    payload.body += bigLinksBlock((state.attachments || []).filter(isLinkAtt), payload.html);
 
     // '개별' — 한 명씩 따로 보내 서로의 주소가 안 보이게 한다
     const separately = Boolean($("#sendSeparately")?.checked);
@@ -6412,6 +6899,7 @@ function bindEvents() {
     const sendBtn = $("#sendMailButton");
     sendBtn.disabled = true;
     try {
+      await settleAutosave();
       let sent = 0;
       const warnings = [];
       for (const one of targets) {
@@ -6432,6 +6920,7 @@ function bindEvents() {
       window.setTimeout(() => refreshMailNow?.(), 800);
       clearAutosave();
       form.dataset.draftId = ""; // 서버 임시저장본은 보내면서 서버가 정리했다
+      form.dataset.replaceUid = "";
       state.attachments = [];
       showMailPane("list");
     } catch (error) {
@@ -6582,8 +7071,7 @@ function bindEvents() {
   $("#googleLoginButton").addEventListener("click", () => {
     const oauth = state.status?.googleOAuth || {};
     if (!oauth.credentialsExists) {
-      $("#googleHelpDialog").showModal();
-      showToast("credentials.json을 먼저 준비해 주세요.");
+      showToast("이 판에서는 아직 Google 연결을 쓸 수 없어요.");
       return;
     }
     api("/api/google/connect", {
@@ -6620,27 +7108,6 @@ function bindEvents() {
     }
   });
 
-  $("#toggleGeminiKey")?.addEventListener("click", () => {
-    const input = $("#configForm").elements.geminiKey;
-    input.type = input.type === "password" ? "text" : "password";
-  });
-
-  $("#clearGeminiKey")?.addEventListener("click", async () => {
-    const confirmed = await uiConfirm("저장된 Gemini 키를 지웁니다. 메일 요약·번역이 멈춰요.", { title: "Gemini 키 지우기", danger: true, ok: "지우기" });
-    if (!confirmed) return;
-    try {
-      await api("/api/config", {
-        method: "POST",
-        body: JSON.stringify({ clearGeminiKey: true }),
-      });
-      showToast("Gemini API 키를 삭제했습니다.");
-      await refreshAll();
-      await loadConfig();
-      renderSecretBadges();
-    } catch (error) {
-      showToast(error.message);
-    }
-  });
 
   $("#openSettingsFromRail")?.addEventListener("click", openSettings);
 
@@ -6652,9 +7119,26 @@ function bindEvents() {
   bindQuicklinks();
 
   // 동기화 실패 배너
-  $("#healthRetryButton")?.addEventListener("click", () => {
+  $("#healthRetryButton")?.addEventListener("click", async () => {
     splashFromButton($("#healthRetryButton"));
-    startRun("/api/run", "빠른 동기화", { confirm: true, mode: "fast" });
+    // 실패한 작업을 다시 한다. 예전엔 늘 자료 동기화만 돌려서, 메일 로그인이 막혔다는 경고는 눌러도 그대로였다
+    // (메일은 다시 해 보지도 않았다 — 2026-10-21 맥 사용자 신고). 서버가 거절해 쉬는 중이어도 직접 누르면 다시 해 본다.
+    const h = state.health || {};
+    const kinds = new Set([
+      ...Object.keys(h.authFailed || {}),
+      ...(h.failing || []).map((f) => f.kind),
+      h.lastFailure?.kind,
+    ].filter(Boolean));
+    if (!kinds.size) kinds.add("sync");
+    if (kinds.has("emails")) await startRun("/api/refresh-emails", "메일 다시 가져오기");
+    if (kinds.has("deadlines")) await startRun("/api/refresh-deadlines", "마감 다시 가져오기");
+    if (kinds.has("sync")) await startRun("/api/run", "빠른 동기화", { confirm: true, mode: "fast" });
+    await Promise.all([
+      kinds.has("emails") ? waitForTask(180000, "mail") : null,
+      kinds.has("deadlines") || kinds.has("sync") ? waitForTask() : null,
+    ]);
+    state.health = null; // 결과를 다시 받아 경고를 새로 그린다
+    await refreshAll();
   });
   $("#healthSettingsButton")?.addEventListener("click", openSettings);
 
@@ -6709,7 +7193,7 @@ function bindEvents() {
 
     const openBtn = event.target.closest("[data-open-file]");
     if (openBtn && !openBtn.disabled) {
-      window.open(`/api/file?name=${encodeURIComponent(openBtn.dataset.openFile)}`, "_blank");
+      openLocalFile(openBtn.dataset.openFile);
       return;
     }
     const notesBtn = event.target.closest("[data-to-notes]");
@@ -6934,8 +7418,148 @@ function applyTheme(choice, { save = true } = {}) {
     /* localStorage 사용 불가 환경 무시 */
   }
   paintThemeCard(choice);
+  polyfillColorMix();
   // 앱 창의 저장소는 끌 때마다 지워진다. 데이터 폴더에 적어야 다음에 켤 때도 그대로다.
   if (save) api("/api/ui-prefs", { method: "POST", body: JSON.stringify({ theme: choice }) }).catch(() => {});
+}
+
+/* 옛 WebKit(업데이트 안 한 macOS 12 = Safari 15)은 color-mix()·@container 를 모른다(2026-10-21 맥·리눅스 점검 8번).
+   color-mix 안에 var() 가 있으면 읽을 때는 통과했다가 그릴 때 값이 통째로 사라져 배경·테두리가 없어진다.
+   CSS 앞줄에 단색을 적어도 소용없어(뒤 선언이 이기고 나서 사라짐), 여기서 지금 테마의 색으로 섞어 규칙에 넣는다.
+   var() 없는 것(글자 그대로의 색)은 읽을 때 버려지므로 styles.css 에 단색 앞줄을 두었다. 섞는 법은 CSS Color 5(srgb, 알파 곱). */
+const SUPPORTS_COLOR_MIX = (() => {
+  try {
+    return CSS.supports("color", "color-mix(in srgb, red 50%, blue)");
+  } catch {
+    return false;
+  }
+})();
+const colorMixSource = new WeakMap(); // 규칙 → {속성: 원래 값}. 테마를 바꾸면 원래 값에서 다시 섞는다
+
+function colorMixRules(list, out = []) {
+  for (const rule of Array.from(list || [])) {
+    if (rule.style && /color-mix\(/.test(rule.style.cssText || "") || colorMixSource.has(rule)) out.push(rule);
+    if (rule.cssRules) colorMixRules(rule.cssRules, out);
+  }
+  return out;
+}
+
+function polyfillColorMix(force = false) {
+  if (SUPPORTS_COLOR_MIX && !force) return 0;
+  const rootStyle = getComputedStyle(document.documentElement);
+  const probe = document.createElement("i");
+  probe.style.display = "none";
+  document.body.appendChild(probe);
+  const rgba = (text) => {
+    probe.style.color = "";
+    probe.style.color = text;
+    const nums = (getComputedStyle(probe).color.match(/[\d.]+/g) || []).map(Number);
+    return [nums[0] || 0, nums[1] || 0, nums[2] || 0, nums.length > 3 ? nums[3] : 1];
+  };
+  const resolveVars = (text) =>
+    text.replace(/var\(\s*(--[\w-]+)\s*(?:,\s*([^()]*))?\)/g, (_, name, fallback) => rootStyle.getPropertyValue(name).trim() || (fallback || "").trim());
+  const mixOne = (args) => {
+    // 'in srgb, A p%, B q%' — 퍼센트가 하나면 나머지는 100 - p
+    const parts = [];
+    let depth = 0;
+    let cur = "";
+    for (const ch of args) {
+      if (ch === "(") depth += 1;
+      if (ch === ")") depth -= 1;
+      if (ch === "," && depth === 0) {
+        parts.push(cur.trim());
+        cur = "";
+      } else cur += ch;
+    }
+    parts.push(cur.trim());
+    const split = (part) => {
+      const m = part.match(/^(.*?)(?:\s+([\d.]+)%)?$/);
+      return [m[1].trim(), m[2] === undefined ? null : Number(m[2]) / 100];
+    };
+    const [c1, p1raw] = split(parts[1] || "");
+    const [c2, p2raw] = split(parts[2] || "");
+    const p1 = p1raw ?? (p2raw === null ? 0.5 : 1 - p2raw);
+    const p2 = p2raw ?? 1 - p1;
+    const a = rgba(resolveVars(c1));
+    const b = rgba(resolveVars(c2));
+    const alpha = a[3] * p1 + b[3] * p2;
+    if (alpha <= 0) return "transparent";
+    const ch = (i) => Math.round((a[i] * a[3] * p1 + b[i] * b[3] * p2) / alpha);
+    return `rgba(${ch(0)}, ${ch(1)}, ${ch(2)}, ${Math.round(alpha * 1000) / 1000})`;
+  };
+  const rewrite = (value) => {
+    let out = "";
+    let i = 0;
+    while (i < value.length) {
+      const at = value.indexOf("color-mix(", i);
+      if (at < 0) {
+        out += value.slice(i);
+        break;
+      }
+      out += value.slice(i, at);
+      let depth = 0;
+      let end = at + "color-mix".length;
+      for (; end < value.length; end += 1) {
+        if (value[end] === "(") depth += 1;
+        if (value[end] === ")" && --depth === 0) break;
+      }
+      out += mixOne(value.slice(at + "color-mix(".length, end));
+      i = end + 1;
+    }
+    return out;
+  };
+  let changed = 0;
+  for (const sheet of Array.from(document.styleSheets)) {
+    let rules;
+    try {
+      rules = sheet.cssRules;
+    } catch {
+      continue; // 다른 출처(글꼴 CSS)는 못 읽는다
+    }
+    for (const rule of colorMixRules(rules)) {
+      let source = colorMixSource.get(rule);
+      if (!source) {
+        source = {};
+        // 선언 문자열에서 바로 꺼낸다 — var() 가 든 줄임 속성(border·box-shadow)은 낱 속성 값이 비어 있다
+        for (const decl of rule.style.cssText.split(/;(?![^(]*\))/)) {
+          const idx = decl.indexOf(":");
+          if (idx < 0 || !decl.includes("color-mix(")) continue;
+          const prop = decl.slice(0, idx).trim();
+          const val = decl.slice(idx + 1).trim();
+          const important = /!\s*important\s*$/i.test(val);
+          source[prop] = [val.replace(/!\s*important\s*$/i, "").trim(), important ? "important" : ""];
+        }
+        colorMixSource.set(rule, source);
+      }
+      for (const [prop, [val, prio]] of Object.entries(source)) {
+        rule.style.setProperty(prop, rewrite(val), prio);
+        changed += 1;
+      }
+    }
+  }
+  probe.remove();
+  return changed;
+}
+
+/* 맥에서 옛 WebKit 이면 한 번만: Safari 를 올리면 같은 macOS 에서도 화면이 제대로 나온다(Monterey 는 Safari 17.6 까지). */
+function warnOldWebKit() {
+  let containers = true;
+  try {
+    containers = CSS.supports("container-type", "inline-size");
+  } catch {
+    containers = false;
+  }
+  if (!IS_MAC || (SUPPORTS_COLOR_MIX && containers)) return;
+  try {
+    if (localStorage.getItem("daling-old-webkit-told")) return;
+    localStorage.setItem("daling-old-webkit-told", "1");
+  } catch {
+    /* 저장소를 못 쓰면 켤 때마다 알린다 */
+  }
+  uiConfirm(
+    "이 Mac 의 Safari 가 오래되어 Daling 화면 일부(색·좁은 창 배치)가 단순하게 보여요. 시스템 설정의 소프트웨어 업데이트에서 Safari 를 최신으로 올리면 제대로 보입니다.",
+    { title: "Safari 업데이트", icon: "alert", ok: "알겠어요", cancel: "" },
+  );
 }
 
 function paintThemeCard(choice) {
@@ -7021,6 +7645,7 @@ function initTheme() {
   api("/api/ui-prefs")
     .then((prefs) => {
       if (prefs?.theme && prefs.theme !== state.themeChoice) applyTheme(prefs.theme, { save: false });
+      restoreDashPrefs(prefs);
       initLanguage(prefs?.lang);
       paintLanguageChoice(prefs?.lang);
     })
@@ -7378,14 +8003,38 @@ async function renderHealth() {
     }
     // 실패한 작업의 마지막 성공을 보여 준다. 예전엔 모든 작업 중 가장 최근 것이라, 메일이 막혔는데
     // 마감 확인 시각(15:32)이 '마지막 성공' 으로 나와 메일은 멀쩡한 것처럼 보였다.
-    const failKind = Object.keys(h.authFailed || {})[0] || h.lastFailure?.kind;
+    const auth = Object.keys(h.authFailed || {})[0];
+    const fail = !auth && !h.keychain ? (h.failing || [])[0] : null;
+    const failKind = auth || fail?.kind || h.lastFailure?.kind;
     const last = failKind && h.lastSuccess?.[failKind]
       ? h.lastSuccess[failKind]
       : Object.values(h.lastSuccess || {}).sort().pop();
-    $("#healthTitle").textContent =
-      h.consecutiveFailures >= 2 ? "동기화가 계속 실패하고 있어요" : "한동안 동기화가 되지 않았어요";
+    // 맥 키체인에서 비밀번호를 못 꺼내면(업데이트 뒤 허락 전·거부) LMS·메일이 함께 실패한다. 그때는 그것부터 말한다
+    // 제목은 '왜' 를 말한다 (2026-11-03 사용자: '계속 실패' 만 떠서 비밀번호인지 서버인지 사이트가 바뀐 건지 모르겠다)
+    $("#healthTitle").textContent = h.keychain
+      ? h.keychain.waiting ? "키체인 허락을 기다리고 있어요" : "키체인에서 비밀번호를 못 꺼냈어요"
+      : auth ? "로그인이 거절됐어요"
+      : fail ? tr(fail.title || "동기화가 계속 실패하고 있어요") : "한동안 동기화가 되지 않았어요";
+    // 경고와 '(마지막 성공: …)' 을 따로 옮긴다. 한 줄로 붙이면 영어 화면 번역표의 어느 틀에도 안 맞아 한국어로 남았다
     $("#healthDetail").textContent =
-      h.warning + (last ? ` (마지막 성공: ${String(last).replace("T", " ")})` : "");
+      tr(h.warning) + (last && !h.keychain ? tr(` (마지막 성공: ${String(last).replace("T", " ")})`) : "");
+    // 할 일 · 다음 자동 시도 · 서버나 오류가 한 말 (서버의 말은 옮기지 않는다)
+    const cause = $("#healthCause");
+    if (cause) {
+      const parts = [];
+      if (fail?.hint) parts.push(tr(fail.hint));
+      const next = fail ? nextAutoJob(fail.kind) : null;
+      if (next) parts.push(tr(`다음 자동 시도 ${hhmm(new Date(next.at))}`));
+      const reason = fail?.reason ? `${tr("오류 내용")}: ${fail.reason}` : "";
+      cause.textContent = [parts.join(" "), reason].filter(Boolean).join("\n");
+      cause.hidden = !cause.textContent;
+    }
+    const log = $("#healthLog");
+    if (log) {
+      const tail = (fail?.tail || []).filter(Boolean);
+      log.hidden = !tail.length;
+      $("#healthLogText").textContent = tail.join("\n");
+    }
     banner.hidden = false;
   } catch (error) {
     banner.hidden = true;
@@ -8417,7 +9066,7 @@ function heroSummary() {
 }
 
 function setHeroGreeting() {
-  // '오후도 차분하게, 유준 님' 같은 인사는 오글거린다는 말을 들었다. 날짜만 담백하게 쓴다.
+  // '오후도 차분하게, ○○ 님' 같은 인사는 오글거린다는 말을 들었다. 날짜만 담백하게 쓴다.
   // 쉬는 날에는 그 이름을 붙인다 (예: 10월 5일 월요일 · 추석).
   const now = new Date();
   const holiday = specialDay(now)?.holiday;
@@ -8853,6 +9502,43 @@ function saveDashLayout() {
   } catch (error) {
     /* 저장 못 해도 이번 실행에는 반영된다 */
   }
+  saveDashPrefs();
+}
+
+/* 앱 창 저장소(localStorage)는 앱을 끌 때마다 지워진다(pywebview 사생활 모드).
+   그래서 화면 편집 결과가 다시 켜면 사라졌다 — 데이터 폴더의 ui_prefs.json 에도 둔다 */
+let dashPrefsTimer = 0;
+function saveDashPrefs() {
+  window.clearTimeout(dashPrefsTimer);
+  dashPrefsTimer = window.setTimeout(() => {
+    const body = { dashLayout: state.dashLayout || [], dashFold: state.dashFold || {} };
+    api("/api/ui-prefs", { method: "POST", body: JSON.stringify(body) }).catch(() => {});
+  }, 400);
+}
+
+/** 켤 때 ui_prefs.json 에 적힌 배치·접힘으로 맞춘다 (initTheme 이 받아 온 값) */
+function restoreDashPrefs(prefs) {
+  const layout = Array.isArray(prefs?.dashLayout) && prefs.dashLayout.length ? prefs.dashLayout : null;
+  const fold = prefs?.dashFold && Object.keys(prefs.dashFold).length ? prefs.dashFold : null;
+  if (!layout && !fold) return;
+  try {
+    if (layout) localStorage.setItem(DASH_STORE, JSON.stringify(layout));
+    if (fold) localStorage.setItem(FOLD_STORE, JSON.stringify(fold));
+  } catch (error) {
+    /* 저장소를 못 써도 아래에서 바로 칠한다 */
+  }
+  if (layout) {
+    state.dashLayout = loadDashLayout();
+    applyDashLayout();
+  }
+  if (fold) {
+    state.dashFold = { ...FOLD_DEFAULT, ...fold };
+    // 켜자마자 접히는 움직임이 보이지 않게 한 번만 애니메이션 없이
+    const view = $("#view-dashboard");
+    view?.classList.add("no-fold-anim");
+    applyFold();
+    window.setTimeout(() => view?.classList.remove("no-fold-anim"), 60);
+  }
 }
 
 function applyDashLayout() {
@@ -8875,7 +9561,17 @@ function renderDashEditor() {
   const editing = !!state.dashEditing;
   $("#view-dashboard")?.classList.toggle("dash-editing", editing);
   const label = $("#dashEditLabel");
-  if (label) label.textContent = editing ? "편집 끝내기" : "화면 편집";
+  if (label) label.textContent = editing ? "완료" : "화면 편집";
+  const toggle = $("#dashEditToggle");
+  if (toggle) {
+    toggle.classList.toggle("on", editing);
+    toggle.setAttribute("aria-pressed", String(editing));
+    const icon = toggle.querySelector(".icon");
+    if (icon && icon.dataset.icon !== (editing ? "check" : "edit")) {
+      icon.dataset.icon = editing ? "check" : "edit";
+      installIcons(toggle);
+    }
+  }
 
   const layout = state.dashLayout || [];
   dashBlocks().forEach((el) => {
@@ -8891,15 +9587,19 @@ function renderDashEditor() {
       bar.className = "dash-bar";
       el.prepend(bar);
     }
+    const half = layout[idx]?.size === "half";
+    // 같은 값이면 다시 그리지 않는다 (아이콘을 새로 넣을 때마다 알약이 깜빡였다)
+    const sig = `${half}|${off}`;
+    if (bar.dataset.sig === sig) return;
+    bar.dataset.sig = sig;
     bar.innerHTML = `
-      <span class="dash-grip" title="끌어서 순서 바꾸기">⋮⋮</span>
+      <span class="dash-grip" title="끌어서 순서 바꾸기">${iconHtml("grip")}</span>
       <span class="dash-name">${escapeHtml(el.dataset.blockLabel || el.dataset.block)}</span>
-      <button type="button" class="dash-btn" data-dash-up title="위로">↑</button>
-      <button type="button" class="dash-btn" data-dash-down title="아래로">↓</button>
-      <button type="button" class="dash-btn" data-dash-size title="반 폭으로 나누기 / 한 줄 전체로">${
-        layout[idx]?.size === "half" ? "반폭" : "전체"
-      }</button>
-      <button type="button" class="dash-btn ${off ? "" : "on"}" data-dash-toggle title="${off ? "보이기" : "숨기기"}">${off ? "숨김" : "보임"}</button>`;
+      <span class="dash-sep" aria-hidden="true"></span>
+      <button type="button" class="dash-btn" data-dash-up title="위로" aria-label="위로">${iconHtml("chevronUp")}</button>
+      <button type="button" class="dash-btn" data-dash-down title="아래로" aria-label="아래로">${iconHtml("chevronDown")}</button>
+      <button type="button" class="dash-btn" data-dash-size aria-pressed="${half}" title="${half ? "한 줄 전체로" : "반 폭으로 나누기"}" aria-label="${half ? "한 줄 전체로" : "반 폭으로 나누기"}">${iconHtml(half ? "colHalf" : "colFull")}</button>
+      <button type="button" class="dash-btn" data-dash-toggle aria-pressed="${off}" title="${off ? "보이기" : "숨기기"}" aria-label="${off ? "보이기" : "숨기기"}">${iconHtml(off ? "eyeOff" : "eye")}</button>`;
   });
 }
 
@@ -8991,7 +9691,8 @@ function bindDirectory() {
     try {
       const res = await api("/api/directory?q=");
       const status = $("#directoryStatus");
-      if (status) status.textContent = res.total ? `${res.total}명 등록됨` : "아직 없음";
+      // 넣은 조직도가 없으면 설치 파일에 든 교원만 있다 (web_ui.directory_people)
+      if (status) status.textContent = res.imported ? `${res.total}명 등록됨` : res.total ? `교수 ${res.total}명` : "아직 없음";
     } catch (error) {
       /* 무시 */
     }
@@ -9104,6 +9805,7 @@ function saveFold() {
   } catch (error) {
     /* 저장 못 해도 이번 실행에는 반영된다 */
   }
+  saveDashPrefs();
 }
 
 /** 각 블록에 접기 버튼과 요약 줄을 달아 준다 (한 번만) */
@@ -9206,10 +9908,16 @@ function bindDashEditor() {
   applyDashLayout();
   setupFold();
 
-  $("#dashEditToggle")?.addEventListener("click", (event) => {
+  $("#dashEditToggle")?.addEventListener("click", () => {
     state.dashEditing = !state.dashEditing;
-    // 편집 중인지 버튼 자체로도 보이게
-    event.currentTarget.classList.toggle("on", state.dashEditing);
+    renderDashEditor();
+  });
+  // Esc 로 편집 끝내기 (끄는 중이거나 창·입력칸이 열려 있으면 그쪽이 먼저)
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape" || !state.dashEditing || event.defaultPrevented) return;
+    if (document.body.classList.contains("dash-dragging-now")) return;
+    if (event.target.closest?.("input, textarea, select, [contenteditable='true'], dialog")) return;
+    state.dashEditing = false;
     renderDashEditor();
   });
 
@@ -9317,7 +10025,7 @@ function bindDashDrag(view) {
 
     // 보이는 위치 = 제자리(baseTop) + offset. 손을 따라가도록 offset을 정한다.
     drag.offset = event.clientY - drag.grabY + (drag.startTop - drag.baseTop);
-    drag.el.style.transform = `translateY(${drag.offset}px) scale(1.015)`;
+    drag.el.style.transform = `translateY(${drag.offset}px)`;
 
     /* 자리 바꾸기는 '바로 옆 카드와 한 칸씩'만 한다.
        중심이 어느 카드 영역에 들어왔는지로 판단하면, 카드 높이가 제각각일 때
@@ -9359,11 +10067,18 @@ function bindDashDrag(view) {
       const node = nodes.get(r.key);
       if (node) view.appendChild(node);
     });
+    /* 다시 붙이는 순간 끌던 카드의 포인터 붙잡기가 풀린다(문서에서 잠깐 빠지므로).
+       그대로 두면 창 밖에서 손을 놓았을 때 pointerup 이 오지 않아 카드가 떠 있는 채로 남았다 (2026-10-27 실측) */
+    try {
+      drag.el.setPointerCapture(event.pointerId);
+    } catch (error) {
+      /* 이미 손을 놓았으면 무시 */
+    }
     flip(before);
     // 자리가 바뀌었으니 '제자리'를 다시 재고, 손 위치는 그대로 유지한다
     drag.baseTop = naturalTop(drag.el);
     drag.offset = event.clientY - drag.grabY + (drag.startTop - drag.baseTop);
-    drag.el.style.transform = `translateY(${drag.offset}px) scale(1.015)`;
+    drag.el.style.transform = `translateY(${drag.offset}px)`;
   });
 
   const finish = (event) => {
@@ -9799,6 +10514,409 @@ function renderNowBar() {
   }
 }
 
+/* ===== 앱 잠금 (네 자리 비밀번호, 2026-10-27) =====
+   사용자: '로그인 없이도 얻을 수 있는 정보가 앱에 너무 많다' → 카카오톡처럼 네 자리로 잠그는 선택 기능.
+   - 켜는 곳: 설정 › 앱 잠금(스위치·자동 잠금 시간·바꾸기·지금 잠그기). Ctrl+L(맥 ⌘L) 로 바로 잠근다.
+   - 잠기는 때: 앱을 켤 때, 손대지 않고 정한 시간이 지났을 때(기본 10분), 지금 잠그기.
+   - 서버(web_ui 앱 잠금)가 잠긴 동안 데이터 API 를 423 으로 거절하고, 화면의 api() 는 풀릴 때까지 기다린다(맨 위 appLock).
+   - 잠금 판(#lockScreen)은 <dialog> 를 showModal 로 띄운다: 열려 있던 다른 대화 상자 위에 오고 나머지는 손댈 수 없다.
+     Esc 를 거듭 누르면 브라우저가 cancel 을 막지 못하고 닫으므로(close watcher) 닫히면 바로 다시 띄운다.
+     창 단추(#winControls, Windows 설치 앱)는 그동안 판 안으로 옮겨 최소화·닫기를 그대로 쓴다.
+   - 같은 판으로 비밀번호 정하기(on)·바꾸기(change)·끄기(off)를 한다. 숫자는 화면 숫자판이나 키보드(숫자·Backspace). */
+const LOCK_TEXT = {
+  unlock: ["Daling", "비밀번호를 입력하세요"],
+  current: ["지금 비밀번호", "확인을 위해 지금 비밀번호를 입력하세요"],
+  new: ["새 비밀번호", "숫자 네 자리를 정하세요"],
+  confirm: ["한 번 더", "같은 숫자를 한 번 더 입력하세요"],
+};
+const lockPost = (body) => ({ method: "POST", body: JSON.stringify(body) });
+
+function paintLock() {
+  const [title, sub] = LOCK_TEXT[appLock.mode] || LOCK_TEXT.unlock;
+  $("#lockTitle").textContent = appLock.mode === "unlock" ? title : tr(title);
+  $("#lockSub").textContent = tr(sub);
+  $("#lockAside").textContent = appLock.mode === "unlock" ? tr("잊었어요") : tr("취소");
+  paintLockDots();
+}
+
+function paintLockDots() {
+  const dots = $("#lockDots");
+  [...dots.children].forEach((dot, i) => dot.classList.toggle("on", i < appLock.digits.length));
+  dots.setAttribute("aria-label", tr(`네 자리 중 ${appLock.digits.length}자리 입력`));
+}
+
+function lockMessage(text, quiet = false) {
+  const msg = $("#lockMsg");
+  msg.textContent = text || "";
+  msg.classList.toggle("quiet", quiet);
+}
+
+function lockShake() {
+  const dots = $("#lockDots");
+  dots.classList.remove("wrong");
+  void dots.offsetWidth; // 연달아 틀려도 다시 흔들리게
+  dots.classList.add("wrong");
+  window.setTimeout(() => dots.classList.remove("wrong"), 600);
+}
+
+function setLockMode(mode) {
+  appLock.mode = mode;
+  appLock.digits = "";
+  lockMessage("");
+  paintLock();
+}
+
+function showLockScreen(mode = "unlock") {
+  const screen = $("#lockScreen");
+  if (!screen) return;
+  screen.classList.remove("leaving");
+  closeLockForgot();
+  setLockMode(mode);
+  if (mode === "unlock") document.documentElement.dataset.locked = "1";
+  const ctl = $("#winControls");
+  if (ctl && ctl.parentElement !== screen) screen.append(ctl);
+  if (!screen.open) {
+    try {
+      screen.showModal();
+    } catch {
+      screen.setAttribute("open", "");
+    }
+  }
+  screen.focus();
+}
+
+function hideLockScreen() {
+  const screen = $("#lockScreen");
+  if (!screen) return;
+  delete document.documentElement.dataset.locked; // 뒤의 앱이 판이 옅어지는 동안 드러난다
+  window.clearInterval(appLock.waitTimer);
+  screen.classList.remove("waiting");
+  screen.classList.add("leaving");
+  const finish = () => {
+    if (!screen.classList.contains("leaving")) return; // 그사이 다시 잠갔다
+    screen.classList.remove("leaving");
+    if (screen.open) screen.close();
+    const ctl = $("#winControls");
+    if (ctl && ctl.parentElement === screen) document.body.insertBefore(ctl, screen);
+  };
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) finish();
+  else window.setTimeout(finish, 170);
+}
+
+/** 지금 잠근다 (자동 잠금·지금 잠그기·Ctrl+L). tell=false 는 서버가 먼저 잠겼다고 알려 온 때 */
+function lockApp({ tell = true } = {}) {
+  if (appLock.flow) endLockFlow(false);
+  if (!appLock.locked) appLock.relocked = true;
+  appLock.locked = true;
+  showLockScreen("unlock");
+  if (tell) {
+    api("/api/lock/lock", lockPost({}))
+      .then((r) => {
+        if (!r.ok) unlockDone(); // 그사이 다른 곳에서 잠금을 껐다
+      })
+      .catch(() => {});
+  }
+}
+
+function unlockDone() {
+  appLock.locked = false;
+  appLock.digits = "";
+  appLock.lastInput = Date.now();
+  hideLockScreen();
+  appLock.waiters.splice(0).forEach((resolve) => resolve());
+  if (appLock.relocked) {
+    // 잠가 둔 사이 바뀐 것(새 메일·작업 끝)을 바로 받는다. 켤 때 잠금은 첫 화면 요청들이 기다렸다가 간다
+    appLock.relocked = false;
+    pollLight.last = Date.now();
+    pollLight();
+  }
+}
+
+function lockFailed(r) {
+  appLock.digits = "";
+  lockShake();
+  paintLockDots();
+  if (r.waitSeconds) return startLockWait(r.waitSeconds);
+  const left = Number(r.triesLeft || 0);
+  lockMessage(left && left <= 2 ? tr(`맞지 않아요 · ${left}번 더 틀리면 잠시 막혀요`) : tr(r.message || "비밀번호가 맞지 않아요."));
+}
+
+/** 다섯 번 틀리면 서버가 잠시 막는다(30초부터 늘어남). 그동안 숫자판을 흐리게 하고 남은 시간을 보여 준다 */
+function startLockWait(seconds) {
+  const screen = $("#lockScreen");
+  const until = Date.now() + seconds * 1000;
+  window.clearInterval(appLock.waitTimer);
+  screen.classList.add("waiting");
+  const tick = () => {
+    const left = Math.ceil((until - Date.now()) / 1000);
+    if (left <= 0) {
+      window.clearInterval(appLock.waitTimer);
+      screen.classList.remove("waiting");
+      lockMessage("");
+      return;
+    }
+    lockMessage(left > 60 ? tr(`${Math.ceil(left / 60)}분 뒤에 다시 해 보세요`) : tr(`${left}초 뒤에 다시 해 보세요`), true);
+  };
+  tick();
+  appLock.waitTimer = window.setInterval(tick, 1000);
+}
+
+function lockPress(key) {
+  const screen = $("#lockScreen");
+  if (key === "aside") {
+    if (appLock.mode === "unlock") openLockForgot();
+    else endLockFlow(false);
+    return;
+  }
+  if (appLock.busy || screen.classList.contains("waiting")) return;
+  if (key === "back") {
+    appLock.digits = appLock.digits.slice(0, -1);
+    paintLockDots();
+    return;
+  }
+  if (!/^\d$/.test(key) || appLock.digits.length >= 4) return;
+  if (!appLock.digits) lockMessage(""); // 다시 누르기 시작하면 지난 안내를 지운다
+  appLock.digits += key;
+  paintLockDots();
+  // 넷째 점이 찬 것을 잠깐 보인 뒤 확인한다
+  if (appLock.digits.length === 4) window.setTimeout(lockSubmit, 90);
+}
+
+async function lockSubmit() {
+  const pin = appLock.digits;
+  const flow = appLock.flow;
+  if (pin.length !== 4 || appLock.busy) return;
+  appLock.busy = true;
+  try {
+    if (appLock.mode === "unlock") {
+      const r = await api("/api/lock/unlock", lockPost({ pin }));
+      return r.ok ? unlockDone() : lockFailed(r);
+    }
+    if (!flow) return;
+    if (appLock.mode === "current") {
+      // 끄기는 바로 끄고(서버가 지금 비밀번호를 본다), 바꾸기는 맞는지만 보고 새 비밀번호로 넘어간다
+      const r =
+        flow.kind === "off"
+          ? await api("/api/lock/off", lockPost({ current: pin }))
+          : await api("/api/lock/check", lockPost({ pin }));
+      if (!r.ok) return lockFailed(r);
+      if (flow.kind === "off") return endLockFlow(true, r);
+      flow.current = pin;
+      return setLockMode("new");
+    }
+    if (appLock.mode === "new") {
+      flow.first = pin;
+      return setLockMode("confirm");
+    }
+    if (pin !== flow.first) {
+      lockShake();
+      setLockMode("new");
+      return lockMessage(tr("두 번 넣은 숫자가 달라요. 다시 정해 주세요."));
+    }
+    const r = await api("/api/lock/set", lockPost({ pin, current: flow.current }));
+    return r.ok ? endLockFlow(true, r) : lockFailed(r);
+  } catch (error) {
+    appLock.digits = "";
+    paintLockDots();
+    lockMessage(humanError(error));
+  } finally {
+    appLock.busy = false;
+  }
+}
+
+/** 설정에서 여는 흐름: on(새로 정하기) · change(지금 → 새 → 한 번 더) · off(지금). 끝나면 true/false */
+function lockFlow(kind) {
+  if (appLock.flow) return Promise.resolve(false);
+  return new Promise((resolve) => {
+    appLock.flow = { kind, current: "", first: "", resolve };
+    showLockScreen(kind === "on" ? "new" : "current");
+  });
+}
+
+function endLockFlow(ok, status) {
+  const flow = appLock.flow;
+  appLock.flow = null;
+  if (status) applyLockStatus(status);
+  if (!appLock.locked) hideLockScreen();
+  flow?.resolve(ok);
+}
+
+function openLockForgot() {
+  const can = appLock.canReset;
+  $("#lockPad").hidden = true;
+  $("#lockDots").hidden = true;
+  $("#lockForgot").hidden = false;
+  $("#lockSub").textContent = tr("비밀번호를 잊었나요?");
+  $("#lockForgotText").textContent = can
+    ? tr("앱에 저장된 학교 메일 비밀번호를 넣으면 잠금이 꺼져요.")
+    : tr("앱에 저장된 학교 계정 비밀번호가 없어 여기서는 풀 수 없어요.");
+  $("#lockForgotInput").hidden = !can;
+  $("#lockForgotSubmit").hidden = !can;
+  lockMessage("");
+  if (can) $("#lockForgotInput").focus();
+}
+
+function closeLockForgot() {
+  const form = $("#lockForgot");
+  if (!form || form.hidden) return;
+  form.hidden = true;
+  $("#lockForgotInput").value = "";
+  $("#lockPad").hidden = false;
+  $("#lockDots").hidden = false;
+  lockMessage("");
+  paintLock();
+  $("#lockScreen").focus();
+}
+
+async function submitLockForgot(event) {
+  event.preventDefault();
+  const input = $("#lockForgotInput");
+  if (!input.value || appLock.busy) return;
+  appLock.busy = true;
+  try {
+    const r = await api("/api/lock/reset", lockPost({ password: input.value }));
+    if (!r.ok) {
+      input.select();
+      if (r.waitSeconds) startLockWait(r.waitSeconds);
+      else lockMessage(tr(r.message || "학교 계정 비밀번호가 맞지 않아요."));
+      return;
+    }
+    input.value = "";
+    appLock.enabled = false;
+    paintLockCard();
+    unlockDone();
+    showToast(tr("앱 잠금을 껐어요. 설정에서 새 비밀번호를 정할 수 있어요."));
+  } catch (error) {
+    lockMessage(humanError(error));
+  } finally {
+    appLock.busy = false;
+  }
+}
+
+function applyLockStatus(s) {
+  if (!s) return;
+  if ("available" in s) appLock.available = Boolean(s.available);
+  if ("enabled" in s) appLock.enabled = Boolean(s.enabled);
+  if (s.idleMinutes != null) appLock.idle = Number(s.idleMinutes) || 0;
+  if ("canReset" in s) appLock.canReset = Boolean(s.canReset);
+  paintLockCard();
+}
+
+function paintLockCard() {
+  const card = $("#stLock");
+  if (!card) return;
+  card.hidden = appLock.available === false;
+  $("#lockEnabled").checked = appLock.enabled;
+  $("#lockOptions").hidden = !appLock.enabled;
+  $("#lockIdle").value = String(appLock.idle);
+}
+
+function initAppLock() {
+  const screen = $("#lockScreen");
+  if (!screen) return;
+  // 숫자판은 눌러도 초점을 판에 둔다 — 단추에 초점이 가면 Enter·Space 가 그 숫자를 한 번 더 누른다
+  screen.querySelectorAll(".lock-pad button:not(.lock-pad-text)").forEach((btn) => (btn.tabIndex = -1));
+  $("#lockPad").addEventListener("pointerdown", (event) => {
+    if (event.target.closest("button:not(.lock-pad-text)")) event.preventDefault();
+  });
+  $("#lockPad").addEventListener("click", (event) => {
+    const btn = event.target.closest("[data-key]");
+    if (btn) lockPress(btn.dataset.key);
+  });
+  const flash = (key) => {
+    const btn = screen.querySelector(`.lock-pad [data-key="${key}"]`);
+    if (!btn) return;
+    btn.classList.add("pressed");
+    window.setTimeout(() => btn.classList.remove("pressed"), 110);
+  };
+  screen.addEventListener("keydown", (event) => {
+    // 판 아래 앱의 단축키(문서에 건 keydown)로 새지 않게 여기서 멈춘다
+    event.stopPropagation();
+    if (event.target.closest?.(".lock-forgot") || event.ctrlKey || event.metaKey || event.altKey) return;
+    if (/^[0-9]$/.test(event.key)) {
+      event.preventDefault();
+      flash(event.key);
+      lockPress(event.key);
+    } else if (event.key === "Backspace") {
+      event.preventDefault();
+      flash("back");
+      lockPress("back");
+    }
+  });
+  // 이미 다시 열려 있으면 그대로 둔다 — 늦게 온 close 가 그새 누른 숫자를 지우던 것(실측)
+  const reopen = () => {
+    if (appLock.locked && !screen.open) showLockScreen("unlock");
+  };
+  screen.addEventListener("cancel", (event) => {
+    event.preventDefault();
+    if (!$("#lockForgot").hidden) closeLockForgot();
+    else if (appLock.flow) endLockFlow(false);
+    // 거듭 누른 Esc 는 막을 수 없어(cancelable=false) 곧 닫힌다. close 이벤트는 늦게 올 때가 있어(실측 1초 넘게)
+    // 닫히자마자 다시 띄운다. 그 틈에도 <html data-locked> 라 판은 그대로 보이고 뒤의 앱은 숨어 있다
+    if (!event.cancelable && appLock.locked) window.setTimeout(reopen, 0);
+  });
+  screen.addEventListener("close", () => {
+    if (appLock.locked && !screen.classList.contains("leaving")) window.setTimeout(reopen, 0);
+    else if (appLock.flow && !screen.open) endLockFlow(false);
+  });
+  $("#lockForgot").addEventListener("submit", submitLockForgot);
+  $("#lockForgotBack").addEventListener("click", closeLockForgot);
+
+  // 설정 › 앱 잠금 (바꾸는 즉시 적용, '설정 저장' 과 따로)
+  $("#lockEnabled")?.addEventListener("click", async (event) => {
+    event.preventDefault(); // 흐름이 끝난 뒤 결과대로 칠한다
+    const turnOn = !appLock.enabled;
+    if (await lockFlow(turnOn ? "on" : "off")) showToast(turnOn ? tr("앱 잠금을 켰어요") : tr("앱 잠금을 껐어요"));
+    paintLockCard();
+  });
+  $("#lockIdle")?.addEventListener("change", (event) => {
+    api("/api/lock/idle", lockPost({ minutes: Number(event.target.value) }))
+      .then((r) => {
+        if (!r.ok) throw new Error(r.message);
+        applyLockStatus(r);
+        showToast(tr("자동 잠금 시간을 바꿨어요"));
+      })
+      .catch((error) => {
+        paintLockCard();
+        showToast(humanError(error));
+      });
+  });
+  $("#lockChangeButton")?.addEventListener("click", async () => {
+    if (await lockFlow("change")) showToast(tr("비밀번호를 바꿨어요"));
+  });
+  $("#lockNowButton")?.addEventListener("click", () => lockApp());
+  document.addEventListener("keydown", (event) => {
+    if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === "l") {
+      if (!appLock.enabled || appLock.locked || appLock.flow) return;
+      event.preventDefault();
+      lockApp();
+    }
+  });
+
+  // 자동 잠금: 마우스·키보드를 정한 시간 동안 안 쓰면. 창을 내려 두면 타이머가 늦게 돌 수 있어 돌아올 때도 본다
+  ["pointerdown", "keydown", "wheel", "mousemove", "touchstart"].forEach((type) =>
+    window.addEventListener(type, () => (appLock.lastInput = Date.now()), { passive: true, capture: true }),
+  );
+  const idleCheck = () => {
+    if (!appLock.enabled || appLock.locked || appLock.flow || !appLock.idle) return;
+    if (Date.now() - appLock.lastInput >= appLock.idle * 60 * 1000) lockApp();
+  };
+  window.setInterval(idleCheck, 15 * 1000);
+  document.addEventListener("visibilitychange", idleCheck);
+
+  if (appLock.locked) showLockScreen("unlock");
+  api("/api/lock")
+    .then((s) => {
+      applyLockStatus(s);
+      if (s.locked && !appLock.locked) lockApp({ tell: false });
+      else if (!s.locked && appLock.locked && !appLock.flow) unlockDone(); // 그새 풀렸다(다른 창에서)
+      if (s.waitSeconds && appLock.locked) startLockWait(s.waitSeconds);
+    })
+    .catch(() => {});
+}
+
+// 맨 먼저: 아래 초기화 중 하나가 오류를 내도 잠금 판은 동작하게
+initAppLock();
 installIcons();
 // 버전 글자(숨은 칸)만 채우는 GitHub 확인이라 첫 화면 요청들과 연결을 다투지 않게 3초 뒤로 미룬다 (켤 때 빨리 뜨게, 2026-10-15)
 window.setTimeout(() => {
@@ -9815,6 +10933,7 @@ bindFold();
 bindRichToolbar();
 bindAddressPicker();
 bindComposeExtras();
+bindReadAttachments();
 bindAcademic();
 bindDirectory();
 bindDashEditor();
@@ -9840,7 +10959,7 @@ api("/api/samsung-notes/job")
    창을 보고 있지 않으면 쉬고, 주기도 늘렸다.
    작업이 돌고 있을 때만 자주 확인한다. */
 window.setInterval(() => {
-  if (document.hidden) return;
+  if (document.hidden || appLock.locked) return; // 잠긴 동안은 묻지 않는다(풀 때 unlockDone 이 한 번 묻는다)
   const busy = !$("#topProgress")?.hidden;
   const gap = state.offline ? 5000 : busy ? 2000 : 12000;
   if (Date.now() - (pollLight.last || 0) < gap) return;
@@ -9878,8 +10997,15 @@ const CONTINENTS = [
 ];
 
 /** 지금 보고 있는 칸 [서경, 남위, 동경, 북위] */
+// 학교를 고르면 지도가 그 학교로 다가간다(사용자: '목록에서 고르면 지도도 따라 움직여야지').
+// 가로 36도 ≈ 한 나라·지역이 보이는 넓이. 상세를 닫으면 보던 대륙으로 돌아간다.
+const FGLP_FOCUS_SPAN = 36;
+
 function fglpBox() {
-  const c = CONTINENTS.find((x) => x.key === (state.fglpView || "world")) || CONTINENTS[0];
+  const f = state.fglpFocus;
+  const c = f
+    ? { cx: Math.min(180 - FGLP_FOCUS_SPAN / 2, Math.max(-180 + FGLP_FOCUS_SPAN / 2, f.lon)), cy: f.lat, span: FGLP_FOCUS_SPAN }
+    : CONTINENTS.find((x) => x.key === (state.fglpView || "world")) || CONTINENTS[0];
   const map = $("#fglpMap");
   const rect = map ? map.getBoundingClientRect() : { width: 2, height: 1 };
   const ratio = rect.height > 0 ? rect.width / rect.height : 2;
@@ -9901,15 +11027,17 @@ function fglpBox() {
   return [c.cx - c.span / 2, s, c.cx + c.span / 2, n];
 }
 
-/** 위경도 → 지금 보는 칸 안에서의 % 좌표 */
-function projectLatLon(lat, lon, box) {
-  const [w, s, e, n] = box || fglpBox();
-  return { x: ((lon - w) / (e - w)) * 100, y: ((n - lat) / (n - s)) * 100 };
+/** 위경도 → 세계지도 전체 안에서의 % 좌표.
+    핀은 지도 그림과 같은 판(.wm-stage) 위에 붙어 있다. 예전에는 핀을 '보는 칸' 기준으로
+    다시 그려서, 대륙을 바꾸면 점은 새 자리에 먼저 뜨고 지도만 0.42초 뒤따라 미끄러졌다
+    (사용자: '점이 먼저 생기고 지도가 움직여서 어색'). 이제 판 하나를 옮기니 둘이 함께 간다. */
+function projectLatLon(lat, lon) {
+  return { x: ((lon + 180) / 360) * 100, y: ((90 - lat) / 180) * 100 };
 }
 
-/** 지도 그림을 지금 보는 칸에 맞춰 늘리고 옮긴다 */
+/** 지도 판(그림 + 핀)을 지금 보는 칸에 맞춰 늘리고 옮긴다 */
 function placeWorldImg(box) {
-  const img = $("#fglpMap")?.querySelector(".wm-img");
+  const img = $("#fglpMap")?.querySelector(".wm-stage");
   if (!img) return;
   const [w, s, e, n] = box || fglpBox();
   const wideDeg = e - w;
@@ -9925,17 +11053,25 @@ function renderFglp() {
   if (!map) return;
   if (!map.dataset.drawn) {
     // 3840x1920 그림이라 풀어 놓는 데 300ms 가 든다. 화면을 멈추지 않게 따로 푼다.
-    map.innerHTML = `<img class="wm-img" src="${WORLD_IMG}" alt="세계지도" draggable="false" decoding="async" />
-      <div class="wm-pins" id="fglpPins"></div>`;
+    map.innerHTML = `<div class="wm-stage">
+        <img class="wm-img" src="${WORLD_IMG}" alt="세계지도" draggable="false" decoding="async" />
+        <div class="wm-pins" id="fglpPins"></div>
+      </div>`;
     map.dataset.drawn = "1";
+    // 큰 그림이 풀리기 전에 점만 빈 바탕에 먼저 뜨지 않게, 그림이 준비되면 판째로 나타난다
+    const stage = map.querySelector(".wm-stage");
+    const shown = () => stage.classList.add("ready");
+    const img = map.querySelector(".wm-img");
+    if (img.decode) img.decode().then(shown, shown);
+    else img.addEventListener("load", shown, { once: true });
+    window.setTimeout(shown, 2500);
     // 창 크기가 바뀌면 보이는 각도도 달라진다
     let timer = 0;
     new ResizeObserver(() => {
       window.clearTimeout(timer);
-      timer = window.setTimeout(() => {
-        placeWorldImg();
-        renderFglpAll();
-      }, 140);
+      // 핀이 지도 판에 붙어 있으니 판만 다시 맞추면 된다. 예전처럼 renderFglpAll 을 부르면
+      // 상세를 여는 순간(페이지가 길어져 스크롤 막대가 생기며 지도 폭이 2px 줄어듦) 상세가 도로 닫혔다.
+      timer = window.setTimeout(() => placeWorldImg(), 140);
     }).observe(map);
     loadFglp();
     return;
@@ -10030,22 +11166,24 @@ function renderFglpAll() {
 
   const pins = $("#fglpPins");
   if (pins) {
-    const box = fglpBox();
-    // 핀과 지도 그림은 반드시 같은 칸을 봐야 한다
-    placeWorldImg(box);
-    pins.innerHTML = schools
+    placeWorldImg();
+    // 핀은 세계 좌표라 대륙을 바꿔도 다시 그릴 필요가 없다. 탭(FGLP/학점교류)이 바뀔 때만 새로 그리고,
+    // 그때는 점이 하나씩 피어나게 한다(--i 로 조금씩 늦게).
+    const sig = kind + ":" + schools.length;
+    if (pins.dataset.sig !== sig) {
+      pins.dataset.sig = sig;
+      pins.innerHTML = schools
       .map((s, i) => {
-        const pt = projectLatLon(s.lat, s.lon, box);
-        // 보고 있는 칸 밖이면 숨긴다
-        const out = pt.x < -2 || pt.x > 102 || pt.y < -2 || pt.y > 102;
-        return `<button type="button" class="wm-pin k-${s.kind} ${out ? "off" : ""}" data-fglp="${i}"
-          style="left:${pt.x.toFixed(2)}%;top:${pt.y.toFixed(2)}%"
+        const pt = projectLatLon(s.lat, s.lon);
+        return `<button type="button" class="wm-pin k-${s.kind}" data-fglp="${i}"
+          style="left:${pt.x.toFixed(3)}%;top:${pt.y.toFixed(3)}%;--i:${i}"
           title="${escapeHtml(s.name)} · ${escapeHtml(s.country)}">
           <span class="wm-pin-dot"></span>
           <span class="wm-pin-label">${escapeHtml(shortText(s.name, 22))}</span>
         </button>`;
       })
       .join("");
+    }
   }
 
   const list = $("#fglpList");
@@ -10104,30 +11242,63 @@ function showFglpDetail(index) {
   if (index === null || index === undefined) {
     box.hidden = true;
     box.innerHTML = "";
+    if (state.fglpFocus) {
+      state.fglpFocus = null;
+      placeWorldImg();
+    }
     return;
   }
   const s = fglpSchools()[index];
   if (!s) return;
+  state.fglpFocus = { lat: s.lat, lon: s.lon };
+  placeWorldImg();
+  // 목록에서 골랐으면 지도가 화면 밖일 수 있다 → 지도가 보이게
+  const map = $("#fglpMap");
+  const r = map?.getBoundingClientRect();
+  if (r && (r.bottom < 60 || r.top > window.innerHeight - 60)) map.scrollIntoView({ block: "nearest" });
   const prog = state.fglp?.program || {};
   box.hidden = false;
+  // 사진은 lazy 로 받지 않는다: 가로로 넘기는 칸 안에서는 다음 장이 끝내 안 불러와졌다(검은 칸). 한 학교 석 장뿐이다.
+  const photos = s.photos || [];
+  const slides = photos
+    .map((p, i) => {
+      const by = p.by || tr("위키미디어 커먼스");
+      const credit = tr(`사진 ${by} · ${p.license || ""}`);
+      return `<figure class="fd-slide">
+          <img src="${p.src}" alt="${escapeHtml(s.name)} ${i + 1}" />
+          <figcaption><button type="button" class="fd-credit" data-fglp-link="${escapeHtml(p.source || "")}">${escapeHtml(credit)}</button></figcaption>
+        </figure>`;
+    })
+    .join("");
+  const where = [s.city, s.country].filter(Boolean).map(escapeHtml).join(", ");
+  const local = fglpLocalTime(s.tz);
+  const timeHtml = local ? `<p class="fd-time">${escapeHtml(local)}</p>` : "";
+  const koHtml = s.koName && s.koName !== s.name ? `<p class="fd-ko">${escapeHtml(s.koName)}</p>` : "";
+  // 여러 장이면 옆으로 넘긴다(끌기·트랙패드). 스크롤 막대 대신 ‹ › 단추
+  const arrows =
+    photos.length > 1
+      ? `<button type="button" class="fd-nav prev" data-fglp-slide="-1" aria-label="${tr("이전 사진")}">‹</button>
+         <button type="button" class="fd-nav next" data-fglp-slide="1" aria-label="${tr("다음 사진")}">›</button>`
+      : "";
+  const gallery = photos.length
+    ? `<div class="fd-gallery-wrap"><div class="fd-gallery${photos.length > 1 ? " many" : ""}">${slides}</div>${arrows}</div>`
+    : "";
+  const facts = fglpFacts(s);
+  const factsHtml = facts.length ? `<div class="fd-facts">${facts.map((f) => `<span>${escapeHtml(f)}</span>`).join("")}</div>` : "";
   box.innerHTML = `
-    ${
-      s.photo
-        ? `<figure class="fd-photo">
-             <img src="${s.photo}" alt="${escapeHtml(s.name)} 캠퍼스" />
-             <figcaption>사진 ${escapeHtml(s.photoBy || "위키미디어")} · ${escapeHtml(s.photoLicense || "")}</figcaption>
-           </figure>`
-        : ""
-    }
+    ${gallery}
     <div class="fd-head">
       <div>
         <h3>${escapeHtml(s.name)}</h3>
-        <p class="fd-where">${escapeHtml(s.city)}, ${escapeHtml(s.country)}</p>
+        ${koHtml}
+        <p class="fd-where">${where}</p>
+        ${timeHtml}
       </div>
       <button type="button" class="icon-button" data-fglp-back aria-label="닫기">
         <span class="icon" data-icon="x"></span>
       </button>
     </div>
+    ${factsHtml}
     ${
       s.language
         ? `<dl class="fd-list"><div><dt>어학 기준</dt><dd><b>${escapeHtml(s.language)}</b></dd></div>
@@ -10135,13 +11306,120 @@ function showFglpDetail(index) {
            <div><dt>학점</dt><dd>${escapeHtml(prog.gpa || "-")}</dd></div></dl>`
         : `<p class="fd-hint">학점교류 대학입니다. 위의 공통 안내를 참고하세요.</p>`
     }
+    ${fglpLinksHtml(s)}
     <p class="fd-hint">대학별 정원은 공개 문서에 없습니다. 국제협력팀에 확인하세요.</p>`;
   installIcons(box);
+}
+
+/* --- 학교 상세에 덧붙이는 것 (2026-10-21: 홈페이지로 가기 · 사진 여러 장 · 기본 정보) ---
+   값은 tools/fetch_uni_info.py 가 위키데이터에서 받아 앱에 넣어 둔 것. 없는 값은 비운다. */
+const DGIST_LATLON = [35.7055, 128.4547];
+
+function fglpDistanceKm(lat, lon) {
+  const rad = (d) => (d * Math.PI) / 180;
+  const [a1, b1] = DGIST_LATLON.map(rad);
+  const a2 = rad(lat);
+  const b2 = rad(lon);
+  const h = Math.sin((a2 - a1) / 2) ** 2 + Math.cos(a1) * Math.cos(a2) * Math.sin((b2 - b1) / 2) ** 2;
+  return 2 * 6371 * Math.asin(Math.sqrt(h));
+}
+
+/* 시간대의 UTC 와의 차이(분). 그 순간의 벽시계를 Intl 로 읽어 계산하므로 서머타임이 저절로 반영된다. */
+function tzOffsetMinutes(tz, when) {
+  const parts = {};
+  const fmt = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    hourCycle: "h23",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  fmt.formatToParts(when).forEach((p) => {
+    parts[p.type] = p.value;
+  });
+  const asUtc = Date.UTC(+parts.year, +parts.month - 1, +parts.day, +parts.hour, +parts.minute);
+  return Math.round((asUtc - Math.floor(when.getTime() / 60000) * 60000) / 60000);
+}
+
+function fglpLocalTime(tz) {
+  if (!tz) return "";
+  try {
+    const now = new Date();
+    const locale = document.documentElement.lang === "en" ? "en-US" : "ko-KR";
+    const clock = new Intl.DateTimeFormat(locale, { timeZone: tz, hour: "numeric", minute: "2-digit" }).format(now);
+    const diff = (tzOffsetMinutes(tz, now) - tzOffsetMinutes("Asia/Seoul", now)) / 60;
+    const abs = Math.abs(diff);
+    const hours = abs % 1 ? abs.toFixed(1) : String(abs);
+    let gap = tr("한국과 같은 시각");
+    if (diff < 0) gap = tr(`한국보다 ${hours}시간 늦음`);
+    if (diff > 0) gap = tr(`한국보다 ${hours}시간 빠름`);
+    return tr(`현지 ${clock}`) + " (" + gap + ")";
+  } catch (error) {
+    return "";
+  }
+}
+
+function fglpFacts(s) {
+  const out = [];
+  if (s.founded) out.push(tr(`${s.founded}년 설립`));
+  (s.kinds || []).forEach((k) => out.push(tr(k)));
+  if (s.students) {
+    const n = Number(s.students).toLocaleString();
+    const year = s.studentsYear;
+    out.push(year ? tr(`학생 ${n}명 (${year})`) : tr(`학생 ${n}명`));
+  }
+  if (Number.isFinite(s.lat) && Number.isFinite(s.lon)) {
+    const km = Math.round(fglpDistanceKm(s.lat, s.lon) / 100) * 100;
+    const kmText = km.toLocaleString();
+    out.push(tr(`DGIST에서 약 ${kmText}km`));
+  }
+  return out;
+}
+
+function fglpLinksHtml(s) {
+  // fglp.known_links 와 같은 모양이어야 서버가 열어 준다
+  const map = Number.isFinite(s.lat) ? `https://www.openstreetmap.org/?mlat=${s.lat}&mlon=${s.lon}#map=15/${s.lat}/${s.lon}` : "";
+  const links = [
+    { url: s.website, icon: "globe", label: tr("홈페이지") },
+    { url: s.summer, icon: "calendar", label: tr("여름학기 안내") },
+    { url: s.wiki, icon: "book", label: tr("위키백과") },
+    { url: map, icon: "map", label: tr("지도") },
+  ].filter((l) => l.url);
+  if (!links.length) return "";
+  const btns = links
+    .map(
+      (l) => `<button type="button" class="fd-link" data-fglp-link="${escapeHtml(l.url)}" title="${escapeHtml(l.url)}">
+        <span class="icon" data-icon="${l.icon}"></span><span class="fd-link-text">${escapeHtml(l.label)}</span><span class="icon fd-ext" data-icon="external"></span></button>`,
+    )
+    .join("");
+  return `<div class="fd-links">${btns}</div>`;
 }
 
 function bindFglp() {
   // 지도 핀과 목록이 같은 번호를 쓰므로 한 곳에서 받는다
   const pick = (event) => {
+    // 학교 홈페이지·여름학기·위키백과·지도·사진 출처: 기본 브라우저로 (서버가 fglp 자료에 있는 주소만 연다)
+    const out = event.target.closest("[data-fglp-link]");
+    if (out) {
+      const url = out.dataset.fglpLink;
+      if (url) {
+        api("/api/open-url", { method: "POST", body: JSON.stringify({ url }) }).catch((error) => showToast(humanError(error)));
+      }
+      return;
+    }
+    const slide = event.target.closest("[data-fglp-slide]");
+    if (slide) {
+      const strip = slide.parentElement.querySelector(".fd-gallery");
+      const step = strip.querySelector(".fd-slide")?.offsetWidth || strip.clientWidth;
+      const atEnd = strip.scrollLeft + strip.clientWidth >= strip.scrollWidth - 4;
+      const dir = Number(slide.dataset.fglpSlide);
+      // 끝에서 한 번 더 누르면 처음으로. behavior:"smooth" 는 미리보기 WebView 에서 아예 움직이지 않아 바로 옮긴다
+      if (dir > 0 && atEnd) strip.scrollLeft = 0;
+      else strip.scrollBy({ left: dir * (step + 6) });
+      return;
+    }
     const back = event.target.closest("[data-fglp-back]");
     if (back) {
       showFglpDetail(null);
@@ -10158,6 +11436,7 @@ function bindFglp() {
     const btn = event.target.closest("[data-fglp-view]");
     if (!btn) return;
     state.fglpView = btn.dataset.fglpView;
+    state.fglpFocus = null;
     // 지도와 핀이 같은 박자로 미끄러진다
     placeWorldImg();
     renderFglpAll();
@@ -10176,9 +11455,13 @@ function bindFglp() {
    동기화가 끝날 때마다 서버가 알아서 맞춘다(web_ui.autosave_local).
    여기서는 '지금 저장' 버튼과, 처음 켰을 때 한 번 맞추는 일만 한다.
    처음 켜면 수백 개를 복사할 수 있어 서버가 뒤에서 돌리고 진행만 받아 온다. */
-/** C:\Users\이름\OneDrive\문서\붕어빵 → 문서\붕어빵 (전체 경로는 title 로 남긴다) */
+/** C:\Users\이름\OneDrive\문서\Daling → 문서\Daling, 맥 /Users/이름/Documents/Daling → Documents/Daling
+    (전체 경로는 title 로 남긴다) */
 function friendlyPath(path) {
-  return String(path || "").replace(/^[A-Za-z]:\\Users\\[^\\]+\\(?:OneDrive[^\\]*\\)?/i, "");
+  return String(path || "")
+    .replace(/^[A-Za-z]:\\Users\\[^\\]+\\(?:OneDrive[^\\]*\\)?/i, "")
+    .replace(/^\/Users\/[^/]+\/(?:Library\/CloudStorage\/[^/]+\/)?/, "")
+    .replace(/^\/home\/[^/]+\//, "");
 }
 
 /** 스위치 + 범위(이번 학기/모든 과목)를 서버 값(off/current/all)으로 */
@@ -10355,7 +11638,8 @@ function renderCloudDests() {
       const root = draft.path || c.root;
       const installed = Boolean(root);
       const on = installed && draft.on;
-      const where = installed ? `${friendlyPath(root)} › 붕어빵 강의자료` : "이 PC에서 찾지 못했어요";
+      // 폴더 이름은 서버가 정한다(예전 판에서 만든 '붕어빵 강의자료' 가 있으면 그것을 계속 쓴다)
+      const where = installed ? `${friendlyPath(root)} › ${c.folderName || "Daling 강의자료"}` : "이 PC에서 찾지 못했어요";
       return `
         <div class="st-cloud-card${on ? " on" : ""}${installed ? "" : " missing"}" data-cloud="${c.key}">
           <span class="st-cloud-logo" aria-hidden="true">${CLOUD_LOGOS[c.key] || ""}</span>
@@ -10382,11 +11666,13 @@ function renderCloudDests() {
   // 내 컴퓨터 저장 폴더가 이미 켜 둔 클라우드 안에 있으면 같은 파일이 두 번 올라간다
   const note = $("#cloudOverlapNote");
   if (note) {
-    const localFolder = String(state.config?.localSaveFolder || "").toLowerCase();
+    // 경로 구분자는 Windows 가 '\', 맥이 '/' 라 '/' 로 맞춰 비교한다 (예전엔 '\' 만 봐서 맥에서는 안 떴다)
+    const norm = (p) => String(p || "").replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+    const localFolder = norm(state.config?.localSaveFolder);
     const inside = localSaveMode() !== "off"
       ? clouds.find((c) => {
-          const root = String(state.cloudDraft?.[c.key]?.path || c.root || "").toLowerCase();
-          return root && state.cloudDraft?.[c.key]?.on && localFolder.startsWith(root + "\\");
+          const root = norm(state.cloudDraft?.[c.key]?.path || c.root);
+          return root && state.cloudDraft?.[c.key]?.on && localFolder.startsWith(root + "/");
         })
       : null;
     note.hidden = !inside;
@@ -10402,11 +11688,22 @@ function renderSaveDestinations() {
   const drive = $("#driveUploadToggle");
   const local = $("#localSaveToggle");
   if (!drive || !local) return;
-  const googleOk = Boolean(state.status?.googleOAuth?.tokenUsable);
-  const driveOn = drive.checked;
+  const oauth = state.status?.googleOAuth || {};
+  // 동의 화면에서 Drive 칸을 체크하지 않은 연결은 '로그인됨' 이어도 올릴 수 없다 → 같은 경고 자리에 알린다
+  const driveScopeMissing = Boolean(oauth.tokenUsable) && oauth.driveGranted === false;
+  const googleOk = Boolean(oauth.tokenUsable) && !driveScopeMissing;
+  // 구글 로그인 준비물이 없는 판(맥·리눅스): 켤 수 없게 두고 '준비 중' 으로만 (로그인하라고 조르지 않는다)
+  // 상태를 아직 못 받았으면(켜는 중) 판단하지 않는다. 안 그러면 Windows 에서도 잠깐 꺼진 것으로 바꿔 버린다
+  const unavailable = Boolean(state.status?.googleOAuth) && !googleOk && !oauth.credentialsExists;
+  drive.disabled = unavailable;
+  if (unavailable) drive.checked = false; // 켜진 것처럼 보이지 않게 (저장하면 드라이브를 끈 것으로 남는다 — 이 판에서는 맞는 값)
+  const driveOn = drive.checked && !unavailable;
   $("#driveDest").classList.toggle("on", driveOn && googleOk);
   $("#driveDest").classList.toggle("blocked", driveOn && !googleOk);
-  $("#driveState").textContent = !driveOn ? "꺼짐" : googleOk ? "자동 저장 중" : "로그인 필요";
+  $("#driveState").textContent = unavailable ? "준비 중" : !driveOn ? "꺼짐" : googleOk ? "자동 저장 중" : driveScopeMissing ? "권한 필요" : "로그인 필요";
+  $("#driveWarn").textContent = driveScopeMissing
+    ? "구글을 연결할 때 Drive 칸을 체크하지 않아 올릴 수 없어요. 위 연결된 계정에서 다시 연결하고 Drive 칸을 체크해 주세요."
+    : "구글 로그인이 필요해요. 위 연결된 계정에서 로그인하세요.";
   $("#driveWarn").hidden = !(driveOn && !googleOk);
 
   const mode = localSaveMode();
@@ -10993,16 +12290,18 @@ bindMailStripWheel();
    비출 곳을 못 찾으면 fallback(보통 그 메뉴)을, 그것도 없으면(좁은 화면) 가운데에 카드만 띄운다.
    when 이 있으면 시작할 때 물어서 거짓이면 그 단계를 뺀다(예: 학사일정이 없어 D-day 띠가 숨은 경우).
    처음 12단계는 메뉴 이름만 짚고 지나가서, 메뉴 안의 기능(시간표·공지·보기 방식·저장 위치…)을 몰랐다는
-   말을 듣고 화면 안 요소까지 비추도록 늘렸다(2026-10-02). */
+   말을 듣고 화면 안 요소까지 비추도록 늘렸다(2026-10-02).
+   그랬더니 27단계로 너무 길었다(2026-10-21 사용자). 이제 처음 켤 때는 핵심(area 없음 = core)만 보여 주고,
+   나머지는 area 의 화면에 처음 들어갔을 때 그 화면 것만 짧게 보여 준다(maybeViewIntro). 본 화면은 tutorial.json views. */
 const TOUR_STEPS = [
   {
     chapter: "시작",
     pose: "yay",
     title: "안녕! 나는 달구야",
-    text: "Daling은 학교생활에 흩어진 것들을 알아서 모아 한 화면에 보여 주는 앱이야. 어떤 걸 할 수 있는지 하나씩 보여 줄게.",
+    text: "Daling은 학교생활에 흩어진 것들을 알아서 모아 한 화면에 보여 줘. 꼭 알아야 할 것만 짧게 보여 줄게.",
     tips: ["LMS 강의자료", "과제 마감", "학교 메일", "학사일정", "과목 공지", "셔틀버스"],
     chips: true,
-    note: "← → 키로 넘기고, Esc 로 언제든 그만둘 수 있어.",
+    note: "Space 로 넘기고, Esc 로 언제든 그만둘 수 있어.",
   },
   {
     chapter: "시작",
@@ -11039,6 +12338,7 @@ const TOUR_STEPS = [
     when: () => !$("#ddayBanner")?.hidden,
     targets: ["#ddayBanner"],
     pose: "cheer",
+    area: "dashboard",
     title: "시험·수강신청 D-day",
     text: "학사일정에서 놓치면 큰 일정(시험, 수강신청, 성적 확인)을 골라 며칠 남았는지 세어 줘. 그다음 일정 두 개도 아래에 적어 둬.",
   },
@@ -11048,10 +12348,10 @@ const TOUR_STEPS = [
     targets: [".timetable-panel .panel-header"],
     fallback: ['.nav-item[data-view="dashboard"]'],
     pose: "study",
+    area: "dashboard",
     title: "주간 시간표",
     text: "시간표를 한 번 넣어 두면 대시보드·시계·알림이 모두 이걸 기준으로 움직여.",
     tips: [
-      "에브리타임 캡처로 한 번에 가져오기 (Gemini 키 필요)",
       "'시간표 편집'에서 개설과목을 찾아 넣기",
       "수업을 누르면 시간·장소를 고칠 수 있어",
       "과목마다 다른 색으로 칠해 줘",
@@ -11062,6 +12362,7 @@ const TOUR_STEPS = [
     view: "dashboard",
     targets: ["#nowBar"],
     pose: "wink",
+    area: "dashboard",
     title: "지금 무슨 수업이지?",
     text: "왼쪽 위 시계는 시간표를 보고 지금 수업과 남은 시간, 다음 수업을 알려 줘. 누르면 자세히 펼쳐져.",
   },
@@ -11070,6 +12371,7 @@ const TOUR_STEPS = [
     view: "dashboard",
     targets: ["#statusCard"],
     pose: "thumbs",
+    area: "dashboard",
     title: "잘 돌아가는지는 여기서",
     text: "LMS·메일·Drive 연결 불빛과 다음에 가져올 때를 보여 줘. 문제가 생기면 빨간불이 켜지고, 누르면 고칠 곳으로 데려가.",
   },
@@ -11078,11 +12380,12 @@ const TOUR_STEPS = [
     view: "deadlines",
     targets: ['.nav-item[data-view="deadlines"]'],
     pose: "search",
+    area: "deadlines",
     title: "과제 마감",
     text: "LMS에 올라온 과제를 마감 순서대로 모아 둬.",
     tips: [
       "아직 안 낸 과제는 눌러서 바로 제출 페이지로",
-      "마감 하루·3시간·1시간 전에 윈도우 알림",
+      "마감 하루·3시간·1시간 전에 알림",
       "과목·제출 상태로 거르고, 끝난 건 숨기기",
       "캘린더 파일(.ics)로 내보내기",
     ],
@@ -11092,6 +12395,7 @@ const TOUR_STEPS = [
     view: "calendar",
     targets: ['.nav-item[data-view="calendar"]'],
     pose: "read",
+    area: "calendar",
     title: "캘린더",
     text: "흩어진 날짜를 달력 하나에 모았어. 색만 봐도 무슨 일정인지 알 수 있어.",
     tips: [
@@ -11106,6 +12410,7 @@ const TOUR_STEPS = [
     view: "courses",
     targets: ['.nav-item[data-view="courses"]'],
     pose: "book",
+    area: "courses",
     title: "강의",
     text: "이번 학기 과목을 카드로 정리해 뒀어.",
     tips: [
@@ -11121,6 +12426,7 @@ const TOUR_STEPS = [
     targets: ['.course-tab[data-ctab="ann"]'],
     fallback: ['.nav-item[data-view="courses"]'],
     pose: "reach",
+    area: "courses",
     title: "과목 공지사항",
     text: "과목마다 흩어진 LMS 공지를 게시판처럼 모아 봐. 최근 7일 공지는 맨 위에 따로 모이고, 새 공지가 올라오면 알려 줘.",
     tips: [
@@ -11133,12 +12439,14 @@ const TOUR_STEPS = [
     view: "files",
     targets: ['.nav-item[data-view="files"]'],
     pose: "munch",
+    area: "files",
     title: "자료",
     text: "LMS 강의자료를 받아 두고, 새 자료가 올라오면 알려 줘. 여러 개를 골라 한 번에 보낼 수 있어.",
     tips: [
       "내 컴퓨터 문서 폴더에 저장",
       "Google Drive 과목 폴더에 올리기",
-      "삼성 노트로 바로 넣기 (필기용)",
+      // 삼성 노트는 이 운영체제에만 있다 — 맥·리눅스 소개에서는 뺀다
+      ...(IS_MAC || /Linux/.test(navigator.platform || "") ? [] : ["삼성 노트로 바로 넣기 (필기용)"]),
     ],
   },
   {
@@ -11147,6 +12455,7 @@ const TOUR_STEPS = [
     targets: [".file-mode-tabs"],
     fallback: ['.nav-item[data-view="files"]'],
     pose: "offer",
+    area: "files",
     title: "보는 방법은 세 가지",
     text: "자료가 많아도 원하는 방식으로 찾을 수 있어.",
     tips: [
@@ -11160,13 +12469,14 @@ const TOUR_STEPS = [
     view: "emails",
     targets: ['.nav-item[data-view="emails"]'],
     pose: "stretch",
+    area: "emails",
     title: "메일함",
     text: "학교 메일을 앱 안에서 바로 읽고 정리해.",
     tips: [
       "오늘·어제로 묶어 보고, 안읽음·중요·첨부로 거르기",
       "메일을 왼쪽 폴더로 끌어 옮기거나 휴지통으로",
       "⋮ 메뉴: 일정에 추가, 다시 알림, 인쇄",
-      "답장 안 온 보낸 메일을 찾아 리마인드",
+      "답이 없는 보낸 메일은 ⋮ › 리마인드 메일 쓰기",
     ],
   },
   {
@@ -11175,6 +12485,7 @@ const TOUR_STEPS = [
     targets: ["#emailSearchInput"],
     fallback: ['.nav-item[data-view="emails"]'],
     pose: "search",
+    area: "emails",
     title: "과목으로 메일 찾기",
     text: "검색칸에 과목 이름만 쳐도 그 과목 메일이 다 나와. 받은 편지함·보낸 편지함·LMS 탭을 한 번에 찾아.",
     tips: [
@@ -11189,6 +12500,7 @@ const TOUR_STEPS = [
     targets: ["#newsGrid .person-course"],
     fallback: ["#emailSearchInput"],
     pose: "point",
+    area: "emails",
     title: "누가 보낸 메일이야?",
     text: "보낸 사람이 이번 학기에 무슨 과목 몇 분반을 맡았는지 이름 옆에 붙여 줘. 내 수업이면 주황색이야.",
     tips: [
@@ -11202,10 +12514,12 @@ const TOUR_STEPS = [
     targets: ["#composeButton"],
     fallback: ['.nav-item[data-view="emails"]'],
     pose: "give",
+    area: "emails",
     title: "메일 쓰기",
     text: "웹메일을 따로 열 필요 없이 여기서 보내.",
     tips: [
       "'물리 조교'처럼 쳐도 그 과목 교수·조교 주소를 찾아 줘",
+      "교수님 메일의 인사·자기소개·서명이 회색으로 떠. Tab 만 누르면 써져",
       "내 PC나 Drive 파일을 첨부",
       "쓰다 멈추면 알아서 임시저장",
     ],
@@ -11215,6 +12529,7 @@ const TOUR_STEPS = [
     view: "storage",
     targets: ['.nav-item[data-view="storage"]'],
     pose: "back",
+    area: "storage",
     title: "창고",
     text: "가끔 꼭 필요한 것들을 넣어 뒀어.",
     tips: [
@@ -11244,23 +12559,24 @@ const TOUR_STEPS = [
     tips: ["메일 5분 · 과제 마감 1시간 · 강의자료 3시간마다"],
   },
   {
-    chapter: "편하게 쓰기",
+    chapter: "설정",
     view: "settings",
     targets: ["#stLook"],
+    fallback: ['.nav-item[data-view="settings"]'],
     pose: "shy",
+    area: "settings",
     title: "옷 갈아입기",
     text: "테마는 설정의 '화면'에서 골라. 기본과 다크가 있고, '자동'은 윈도우의 밝은·어두운 모드를 따라가.",
   },
   {
-    chapter: "편하게 쓰기",
-    pose: "stretch",
-    title: "창을 줄여도 괜찮아",
-    text: "창 크기에 맞춰 화면이 바뀌어. 옆에 다른 창을 띄워 놓고 같이 써도 돼.",
-    tips: [
-      "좁히면 왼쪽 메뉴가 아이콘만 남아",
-      "휴대폰처럼 세로로 줄이면 아래 탭 + 더보기",
-      "좁은 메일함은 폴더가 한 줄 띠로, 옆으로 넘겨 봐",
-    ],
+    chapter: "설정",
+    view: "settings",
+    targets: ["#stLock .st-head"],
+    fallback: ['.nav-item[data-view="settings"]'],
+    pose: "shy",
+    area: "settings",
+    title: "남이 못 보게 잠그기",
+    text: "켜 두면 앱을 열 때마다 네 자리 비밀번호를 물어. 자리를 비울 땐 Ctrl+L 로 바로 잠가.",
   },
   {
     chapter: "설정",
@@ -11268,6 +12584,7 @@ const TOUR_STEPS = [
     targets: ["#stStorage .st-head"],
     fallback: ['.nav-item[data-view="settings"]'],
     pose: "sprout",
+    area: "settings",
     title: "자료를 어디에 둘까",
     text: "켜 두면 새 강의자료가 올라올 때마다 원하는 곳에 저절로 들어가.",
     tips: [
@@ -11280,9 +12597,20 @@ const TOUR_STEPS = [
   {
     chapter: "설정",
     view: "settings",
+    targets: ["#stAi .st-head"],
+    fallback: ['.nav-item[data-view="settings"]'],
+    pose: "bow",
+    area: "settings",
+    title: "AI 연결",
+    text: "메일의 /ai·자동 완성은 이 컴퓨터의 Claude·Codex·Gemini 를 써. '연결'을 누르고 브라우저에서 로그인만 하면 돼.",
+  },
+  {
+    chapter: "설정",
+    view: "settings",
     targets: ["#stAuto .st-head"],
     fallback: ['.nav-item[data-view="settings"]'],
     pose: "lounge",
+    area: "settings",
     title: "얼마나 자주 가져올까",
     text: "메일·마감·자료를 가져오는 주기와 하루 한 번 전체 확인 시각을 정해. 마감 알림과 새 자료 알림도 여기서 켜고 꺼.",
   },
@@ -11292,6 +12620,7 @@ const TOUR_STEPS = [
     targets: ["#langRow"],
     fallback: ['.nav-item[data-view="settings"]'],
     pose: "hello",
+    area: "settings",
     title: "English도 돼",
     text: "화면을 영어로 바꿀 수 있어. 유학생 친구에게도 알려 줘. 메일·과목 이름 같은 자료는 원래 글자 그대로 둬.",
   },
@@ -11300,6 +12629,7 @@ const TOUR_STEPS = [
     view: "settings",
     targets: ["#feedbackButton", "#whatsNewButton"],
     pose: "bow",
+    area: "settings",
     title: "궁금하거나 고장 나면",
     text: "'Feedback'을 누르면 받는 사람과 서식이 채워진 메일이 열려. 새 버전이 나오면 이 근처에 '새 업데이트'가 떠.",
   },
@@ -11307,47 +12637,85 @@ const TOUR_STEPS = [
     chapter: "끝",
     pose: "laugh",
     title: "준비 끝!",
-    text: "이 소개는 설정 맨 아래 '앱 소개 다시 보기'로 언제든 다시 볼 수 있어. 이제 시작해 보자!",
+    text: "다른 메뉴는 처음 들어갈 때 내가 짧게 알려 줄게. 처음부터 다시 보려면 설정 맨 아래 '앱 소개 다시 보기'.",
     last: true,
   },
 ];
 
-const tour = { index: 0, active: false, returnView: null, buddy: null, walkTimer: 0, steps: TOUR_STEPS };
+const tour = {
+  index: 0, active: false, returnView: null, buddy: null, walkTimer: 0, steps: [],
+  mode: "core", // "core" = 처음 켤 때, 그 밖에는 화면 이름 (그 화면에 처음 들어갔을 때 소개)
+  seen: null, // 소개를 본 화면들 (서버 tutorial.json views, "*" = 전부)
+  quietUntil: 0, // 처음 소개를 막 끝내고 돌아간 화면에서 곧바로 또 소개가 뜨지 않게
+};
 
-async function maybeStartTour() {
-  try {
-    const res = await api("/api/tutorial");
-    if (res.done) return;
-  } catch (error) {
-    return; // 서버가 대답을 못 하면 소개를 억지로 띄우지 않는다
-  }
-  // 첫 화면이 다 그려진 다음에 띄운다
-  window.setTimeout(() => startTour(), 700);
-}
-
-function startTour() {
-  const root = $("#tour");
-  if (!root || tour.active) return;
-  // 그림을 미리 받아 둬서 단계를 넘길 때 달구가 깜빡이지 않게
-  [...TOUR_STEPS.map((s) => s.pose), ...Object.keys(BUDDY_MOVES)].forEach((pose) => {
-    const img = new Image();
-    img.src = `/img/dalgu/${pose}.png`;
-  });
-  tour.buddy = null; // 첫 단계에서는 화면 왼쪽 밖에서 뛰어 들어온다
-  tour.steps = TOUR_STEPS.filter((s) => {
+function tourStepsFor(area) {
+  return TOUR_STEPS.filter((s) => (s.area || "core") === area).filter((s) => {
     try {
       return !s.when || s.when();
     } catch (error) {
       return false;
     }
   });
-  // 점은 묶음(chapter)마다 띄어 놓고, 누르면 그 단계로 간다
-  $("#tourDots").innerHTML = tour.steps
-    .map((s, i) => {
-      const gap = i > 0 && s.chapter !== tour.steps[i - 1].chapter ? " gap" : "";
-      return `<span class="tour-dot${gap}" data-step="${i}" title="${escapeHtml(s.title)}"></span>`;
-    })
-    .join("");
+}
+
+async function maybeStartTour() {
+  let res;
+  try {
+    res = await api("/api/tutorial");
+  } catch (error) {
+    return; // 서버가 대답을 못 하면 소개를 억지로 띄우지 않는다
+  }
+  tour.seen = new Set(res.views || []);
+  if (res.done) {
+    // 지금 화면(보통 대시보드)의 소개가 남았으면 첫 화면이 다 그려진 뒤에
+    window.setTimeout(() => maybeViewIntro(state.view), 900);
+    return;
+  }
+  // 첫 화면이 다 그려진 다음에 띄운다
+  window.setTimeout(() => startTour(), 700);
+}
+
+/** 이 화면에 처음 들어왔으면 그 화면 소개를 띄운다 (applyView 가 부른다) */
+function maybeViewIntro(view) {
+  if (!tour.seen || tour.active || tour.seen.has("*") || tour.seen.has(view)) return;
+  if (Date.now() < tour.quietUntil || !tourStepsFor(view).length) return;
+  // 화면이 바뀌고 자리가 잡힌 뒤에. 그새 다른 화면으로 갔거나 창(대화 상자)이 열려 있으면 다음 기회에
+  window.setTimeout(() => {
+    if (state.view !== view || tour.active || tour.seen.has(view) || document.querySelector("dialog[open]")) return;
+    startTour(view);
+  }, 450);
+}
+
+function markViewSeen(view) {
+  if (!tour.seen) tour.seen = new Set();
+  tour.seen.add(view);
+  api("/api/tutorial/view", { method: "POST", body: JSON.stringify({ view }) }).catch(() => {});
+}
+
+function startTour(area = "core") {
+  const root = $("#tour");
+  if (!root || tour.active) return;
+  const steps = tourStepsFor(area);
+  if (!steps.length) return;
+  // 그림을 미리 받아 둬서 단계를 넘길 때 달구가 깜빡이지 않게
+  [...steps.map((s) => s.pose), ...Object.keys(BUDDY_MOVES)].forEach((pose) => {
+    const img = new Image();
+    img.src = `/img/dalgu/${pose}.png`;
+  });
+  tour.buddy = null; // 첫 단계에서는 화면 왼쪽 밖에서 뛰어 들어온다
+  tour.mode = area;
+  tour.steps = steps;
+  // 점은 묶음(chapter)마다 띄어 놓고, 누르면 그 단계로 간다. 한 단계짜리 화면 소개는 점이 필요 없다
+  $("#tourDots").innerHTML =
+    steps.length < 2
+      ? ""
+      : steps
+          .map((s, i) => {
+            const gap = i > 0 && s.chapter !== steps[i - 1].chapter ? " gap" : "";
+            return `<span class="tour-dot${gap}" data-step="${i}" title="${escapeHtml(s.title)}"></span>`;
+          })
+          .join("");
   tour.active = true;
   tour.index = 0;
   tour.returnView = state.view;
@@ -11367,6 +12735,13 @@ function finishTour(skipped) {
   window.clearTimeout(tour.walkTimer);
   root.hidden = true;
   document.body.classList.remove("tour-open");
+  if (tour.mode !== "core") {
+    // 화면 소개: 끝까지 봤든 건너뛰었든 다시 띄우지 않는다
+    markViewSeen(tour.mode);
+    return;
+  }
+  if (!tour.seen) tour.seen = new Set();
+  tour.quietUntil = Date.now() + 2000;
   api("/api/tutorial/done", {
     method: "POST",
     body: JSON.stringify({ skipped: Boolean(skipped), step: tour.index }),
@@ -11599,6 +12974,12 @@ function showTourStep(index) {
   const step = steps[index];
   if (!step) return;
   tour.index = index;
+  // 화면 전환 효과가 도는 동안은 그 위에 덮인 그림이 클릭을 다 받아 '다음' 이 안 눌린다. 소개 중에는 바로 끝낸다
+  try {
+    (document.activeViewTransition || lastViewTransition)?.skipTransition();
+  } catch (error) {
+    /* 오래된 WebView */
+  }
   if (step.view && state.view !== step.view) applyView(step.view);
 
   tour.pose = step.pose;
@@ -11608,24 +12989,31 @@ function showTourStep(index) {
   $("#tourChapter").textContent = step.chapter || "";
   $("#tourCount").textContent = `${index + 1} / ${steps.length}`;
   $("#tourTitle").textContent = step.title;
-  $("#tourText").textContent = step.text;
+  $("#tourText").textContent = keyLabel(tr(step.text));
   const tips = $("#tourTips");
   tips.hidden = !step.tips?.length;
   tips.classList.toggle("chips", Boolean(step.chips));
   tips.replaceChildren(
     ...(step.tips || []).map((tip) => {
       const li = document.createElement("li");
-      li.textContent = tip;
+      li.textContent = keyLabel(tr(tip));
       return li;
     }),
   );
   $("#tourNote").hidden = !step.note;
   $("#tourNote").textContent = step.note || "";
   $("#tourPrev").hidden = index === 0;
-  $("#tourDemo").hidden = !(index === 0 && demoInvite());
-  $("#tourNext").textContent =
-    index === 0 ? "둘러보기" : step.last ? (state.status?.requiredConfig?.lms ? "시작하기" : "계정 넣으러 가기") : "다음";
-  $("#tourSkip").hidden = Boolean(step.last);
+  const core = tour.mode === "core";
+  const lastOne = index === steps.length - 1;
+  $("#tourDemo").hidden = !(core && index === 0 && demoInvite());
+  $("#tourNext").textContent = step.last
+    ? state.status?.requiredConfig?.lms ? "시작하기" : "계정 넣으러 가기"
+    : core && index === 0
+      ? "둘러보기"
+      : lastOne
+        ? "알겠어"
+        : "다음";
+  $("#tourSkip").hidden = Boolean(step.last) || lastOne;
   document.querySelectorAll("#tourDots .tour-dot").forEach((dot, i) => {
     dot.classList.toggle("on", i === index);
     dot.classList.toggle("past", i < index);
@@ -11660,7 +13048,12 @@ function stepTour(delta) {
 $("#tourNext")?.addEventListener("click", () => stepTour(1));
 $("#tourPrev")?.addEventListener("click", () => stepTour(-1));
 $("#tourSkip")?.addEventListener("click", () => finishTour(true));
-$("#replayTourButton")?.addEventListener("click", () => startTour());
+$("#replayTourButton")?.addEventListener("click", () => {
+  // 화면마다의 소개도 다시 뜨게 한다
+  tour.seen = new Set();
+  api("/api/tutorial/view", { method: "POST", body: JSON.stringify({ reset: true }) }).catch(() => {});
+  startTour("core");
+});
 $("#tourDots")?.addEventListener("click", (event) => {
   const dot = event.target.closest(".tour-dot");
   if (dot && tour.active) showTourStep(Number(dot.dataset.step));
@@ -11670,14 +13063,22 @@ document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") {
     event.preventDefault();
     finishTour(true);
-  } else if (event.key === "ArrowRight" || event.key === "Enter") {
+  } else if (event.key === "ArrowRight" || event.key === "Enter" || event.key === " " || event.code === "Space") {
+    // Space: 포커스가 어디 있든 다음으로. 단추 위의 Space 는 손을 뗄 때 한 번 더 눌려(click) 두 칸 갔다 → keyup 도 막는다
     event.preventDefault();
-    stepTour(1);
+    if (!event.repeat) stepTour(1);
   } else if (event.key === "ArrowLeft") {
     event.preventDefault();
     stepTour(-1);
   }
 });
+document.addEventListener(
+  "keyup",
+  (event) => {
+    if (tour.active && (event.key === " " || event.code === "Space")) event.preventDefault();
+  },
+  true,
+);
 window.addEventListener("resize", () => {
   if (tour.active) placeTourCard(tourStepRect(tour.steps[tour.index]));
 });
@@ -11844,7 +13245,7 @@ function buildSearchResults(query, opts = {}) {
         .join(" · "),
       run: () => {
         if (f.status === "local") {
-          window.open(`/api/file?name=${encodeURIComponent(f.localName)}`, "_blank");
+          openLocalFile(f.localName);
         } else {
           setViewFilter("files", f.name);
         }
@@ -12134,6 +13535,9 @@ function statusLights() {
         ? { tone: "warn", why: "LMS 연결 오류" }
         : { tone: "ok", why: "" };
   lms.tip = `LMS · 자료 ${since("sync")} · 마감 ${since("deadlines")}`;
+  // 무엇 때문에 안 되는지 (web_ui.classify_failure 의 갈래)
+  const why = (kinds) => (h.failing || []).find((f) => kinds.includes(f.kind))?.title;
+  if (lms.tone === "warn" && why(["sync", "deadlines"])) lms.tip += ` · ${why(["sync", "deadlines"])}`;
 
   const mail = !cfg.schoolEmail || !cfg.hasSchoolEmailPassword
     ? { tone: "off", why: "메일 계정 필요" }
@@ -12143,33 +13547,58 @@ function statusLights() {
         ? { tone: "warn", why: "메일 연결 오류" }
         : { tone: "ok", why: "" };
   mail.tip = `학교 메일 · ${since("emails")}`;
+  if (mail.tone === "warn" && why(["emails"])) mail.tip += ` · ${why(["emails"])}`;
 
   const drive = cfg.driveUpload === false
     ? { tone: "off", why: "", tip: "Drive · 꺼 둠" }
+    : !oauth.tokenUsable && !oauth.credentialsExists
+      ? { tone: "off", why: "", tip: "Drive · 이 판에서는 준비 중" }
     : !oauth.tokenUsable
       ? { tone: "bad", why: "구글 로그인 필요", tip: "Drive · 로그인 필요" }
-      : { tone: "ok", why: "", tip: "Drive · 연결됨" };
+    : oauth.driveGranted === false
+      ? { tone: "bad", why: "Drive 권한 필요", tip: "Drive · 연결할 때 Drive 칸을 체크하지 않았어요. 다시 연결해 주세요" }
+      : driveResultLight();
 
   return { lms, mail, drive };
 }
 
+/** 마지막 동기화에서 Drive 에 올린 결과(main._save_drive_status → /api/status driveResult).
+    예전엔 연결만 되어 있으면 '연결됨' 이라, 올리기가 모두 실패해도 화면에서 알 수 없었다. */
+function driveResultLight() {
+  const r = state.status?.driveResult;
+  const folder = state.config?.driveFolderName || "Daling";
+  if (!r || !r.state || r.state === "ok") {
+    const sent = r ? (r.uploaded || 0) + (r.updated || 0) : 0;
+    return { tone: "ok", why: "", tip: `Drive · 내 드라이브 › ${folder}${sent ? ` · 지난번 ${sent}개 올림` : ""}` };
+  }
+  if (r.state === "error" && r.failed) {
+    return { tone: "warn", why: `Drive 실패 ${r.failed}개`, tip: `Drive · ${r.failed}개 못 올림 · ${r.error || ""}` };
+  }
+  return { tone: "warn", why: "Drive 올리기 실패", tip: `Drive · ${r.error || "올리지 못했어요"}` };
+}
+
 /** 다음 자동 확인: 메일 5분·마감 1시간·자료 3시간 주기와 마지막 성공 시각으로 계산 */
-function nextAutoJob() {
+function nextAutoJob(only = null) {
   const cfg = state.config || {};
   const h = state.health || {};
   const every = { emails: cfg.autoEmailMinutes, deadlines: cfg.autoDeadlineMinutes, sync: cfg.autoSyncMinutes };
+  // 계정이 빈 작업은 앱이 자동으로 돌리지 않는다 (app.scheduler_loop · web_ui.account_ready)
+  const lms = Boolean(cfg.lmsId && cfg.hasLmsPassword);
+  const ready = { emails: Boolean(cfg.schoolEmail && cfg.hasSchoolEmailPassword), deadlines: lms, sync: lms };
   let best = null;
   Object.entries(every).forEach(([kind, minutes]) => {
     const m = Number(minutes) || 0;
-    if (m <= 0 || (h.authFailed || {})[kind]) return;
+    if ((only && kind !== only) || m <= 0 || !ready[kind] || (h.authFailed || {})[kind]) return;
     const last = h.lastSuccess?.[kind] ? new Date(h.lastSuccess[kind]).getTime() : 0;
     let at = last + m * 60000;
-    // 실패한 뒤에는 앱이 쉬었다가 다시 한다 (app.next_due_job 과 같은 셈: 연속 실패마다 두 배, 최대 6시간)
-    const fail = h.lastFailure || {};
+    // 실패한 뒤에는 앱이 쉬었다가 다시 한다 (app.next_due_job 과 같은 셈: 연속 실패마다 두 배, 최대 6시간).
+    // 실패 시각은 작업별 기록(failures)을 먼저 본다. lastFailure 는 다른 작업이 성공하면 지워진다
+    const lastFail = h.lastFailure || {};
+    const failedAt = (h.failures || {})[kind]?.at || (lastFail.kind === kind ? lastFail.at : null);
     const streak = Number((h.failStreak || {})[kind]) || 0;
-    if (fail.kind === kind && fail.at) {
+    if (failedAt) {
       const wait = Math.max(streak ? Math.min(Math.max(5, m) * 2 ** (streak - 1), 360) : 0, Math.max(5, m / 2));
-      at = Math.max(at, new Date(fail.at).getTime() + wait * 60000);
+      at = Math.max(at, new Date(failedAt).getTime() + wait * 60000);
     }
     at = Math.max(Date.now(), at);
     if (!best || at < best.at) best = { kind, at };
@@ -12195,7 +13624,11 @@ function renderStatusCard(task) {
     line = STATUS_KIND_DOING[kind];
   } else {
     const next = nextAutoJob();
-    if (!next) line = "자동으로 가져오기 꺼짐";
+    if (!next) {
+      const c = state.config || {};
+      const noAccount = !(c.lmsId && c.hasLmsPassword) && !(c.schoolEmail && c.hasSchoolEmailPassword);
+      line = noAccount ? "계정을 넣으면 자동으로 가져와요" : "자동으로 가져오기 꺼짐";
+    }
     else {
       const mins = Math.ceil((next.at - Date.now()) / 60000);
       // 앱은 30초마다 차례를 보므로, 시간이 됐으면 1분 안에 시작한다
@@ -12287,7 +13720,7 @@ function renderDemoPill() {
     $("#demoRowButton").textContent = DEMO_ON ? "체험 끝내기" : "체험해 보기";
   }
   // 소개는 첫 목록을 받기 전에 뜰 수 있다. 목록(계정 유무)이 오면 첫 카드의 단추를 다시 맞춘다
-  if (tour.active) $("#tourDemo").hidden = !(tour.index === 0 && demoInvite());
+  if (tour.active) $("#tourDemo").hidden = !(tour.mode === "core" && tour.index === 0 && demoInvite());
 }
 
 let demoSwitching = false;
@@ -12458,7 +13891,40 @@ $("#updateReadyButton")?.addEventListener("click", () => {
   window.setTimeout(() => $("#updateRow")?.scrollIntoView({ block: "center" }), 500);
 });
 window.setTimeout(() => checkForUpdate(false), 4000);
+window.setTimeout(warnOldWebKit, 5000);
 window.setInterval(() => checkForUpdate(false), 6 * 60 * 60 * 1000);
+
+/* 앱을 보고 있는지 서버에 알린다 → 메일 자동 확인은 보고 있을 때 설정 주기, 안 볼 때 15분마다 (web_ui.effective_minutes).
+   학교 메일 서버는 연결을 금방 끊어 확인할 때마다 새로 로그인하고, 로그인이 잦으면 맞는 비밀번호도 거절한다.
+   보고 있음 = 화면이 보이고, (앱에 초점이 있고 10분 안에 손댔거나) 2분 안에 손댔다. 서버는 3분 소식이 없으면 안 보는 것으로 본다. */
+let lastInputAt = Date.now();
+let lastPresence = null;
+function reportPresence() {
+  // 잠긴 동안은 알리지 않는다: 서버가 3분 뒤 '안 보는 중' 으로 쳐서 메일 확인을 늦춘다(잠근 사람은 보고 있지 않다)
+  if (appLock.locked) return;
+  const idle = Date.now() - lastInputAt;
+  const viewing =
+    document.visibilityState === "visible" && ((document.hasFocus() && idle < 10 * 60 * 1000) || idle < 2 * 60 * 1000);
+  // 안 보는 동안은 바뀔 때 한 번만, 보는 동안은 1분마다 (신호가 끊기면 서버가 안 보는 것으로 친다)
+  if (!viewing && lastPresence === false) return;
+  lastPresence = viewing;
+  api("/api/presence", { method: "POST", body: JSON.stringify({ viewing }) }).catch(() => {});
+}
+["pointerdown", "keydown", "wheel", "mousemove", "touchstart"].forEach((type) =>
+  window.addEventListener(
+    type,
+    () => {
+      lastInputAt = Date.now();
+      if (lastPresence === false) reportPresence(); // 돌아오면 바로 알려 밀린 메일 확인을 당긴다
+    },
+    { passive: true, capture: true },
+  ),
+);
+document.addEventListener("visibilitychange", reportPresence);
+window.addEventListener("focus", reportPresence);
+window.addEventListener("blur", reportPresence);
+window.setInterval(reportPresence, 60 * 1000);
+reportPresence();
 
 /* 알림 스위치는 누르는 즉시 저장한다 ('설정 저장' 을 안 눌러 도로 꺼지는 일이 없게) */
 ["notifyDeadlines", "notifyNewFiles"].forEach((name) => {
@@ -12473,6 +13939,32 @@ window.setInterval(() => checkForUpdate(false), 6 * 60 * 60 * 1000);
       showToast(humanError(error));
     }
   });
+});
+
+
+/* 맥·리눅스: 컴퓨터를 켤 때 Daling 켜기 (/api/autostart). Windows 는 설치할 때 고르므로 줄을 숨긴 채 둔다 */
+async function loadAutostart() {
+  const row = $("#autostartRow");
+  if (!row) return;
+  try {
+    const res = await api("/api/autostart");
+    row.hidden = !res.supported;
+    $("#autostartToggle").checked = Boolean(res.enabled);
+  } catch {
+    row.hidden = true;
+  }
+}
+
+$("#autostartToggle")?.addEventListener("change", async (event) => {
+  const on = event.target.checked;
+  try {
+    const res = await api("/api/autostart", { method: "POST", body: JSON.stringify({ on }) });
+    event.target.checked = Boolean(res.enabled);
+    if (res.message) showToast(tr(res.message));
+  } catch (error) {
+    event.target.checked = !on;
+    showToast(humanError(error));
+  }
 });
 
 
@@ -12880,13 +14372,24 @@ document.addEventListener("click", (event) => {
   if (btn.dataset.nav === "back" && nav.idx > 0) history.back();
   if (btn.dataset.nav === "forward" && nav.idx < nav.max) history.forward();
 });
-// Alt+←/→ (글 쓰는 중에는 커서 이동이므로 건드리지 않는다)
+// Alt+←/→ (글 쓰는 중에는 커서 이동이므로 건드리지 않는다). 맥은 ⌘[ / ⌘] — Option+←/→ 는 맥 글자 칸의
+// 단어 단위 이동이라, 가로채면 메일을 쓰다가 화면이 넘어간다 (위 '맥 판')
 document.addEventListener("keydown", (event) => {
-  if (!event.altKey || event.ctrlKey || event.metaKey) return;
-  if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+  let dir = 0;
+  if (IS_MAC) {
+    if (!event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
+    // 자판 배열과 상관없이 같은 자리의 키 (한글 자판에서도 [ ] 자리)
+    if (event.code === "BracketLeft") dir = -1;
+    if (event.code === "BracketRight") dir = 1;
+  } else {
+    if (!event.altKey || event.ctrlKey || event.metaKey) return;
+    if (event.key === "ArrowLeft") dir = -1;
+    if (event.key === "ArrowRight") dir = 1;
+  }
+  if (!dir) return;
   event.preventDefault();
-  if (event.key === "ArrowLeft" && nav.idx > 0) history.back();
-  if (event.key === "ArrowRight" && nav.idx < nav.max) history.forward();
+  if (dir < 0 && nav.idx > 0) history.back();
+  if (dir > 0 && nav.idx < nav.max) history.forward();
 });
 // 마우스 옆 버튼 (뒤로 = 3, 앞으로 = 4)
 document.addEventListener("mouseup", (event) => {
@@ -13037,9 +14540,10 @@ function uiButtons(message, buttons, opts = {}) {
 /* ===== 메일 첨부: Drive 창 =====
    예전에는 파일 20개를 번호로 늘어놓고 번호를 적게 했다(시스템 입력창).
    이제 Drive 처럼 폴더를 열어 들어가고, 검색하고, 여러 개를 골라 한 번에 붙인다.
-   앱 권한(drive.file) 때문에 이 앱이 올린 파일만 보인다 — 강의자료는 전부 여기 있다. */
+   앱 권한(drive.file) 때문에 이 앱이 올린 파일만 보인다 — 강의자료는 전부 여기 있다. 다른 파일은 'Drive 전체에서 고르기'
+   (구글 고르기 창, pickFromGoogleDrive). */
 const DRIVE_FOLDER = "application/vnd.google-apps.folder";
-const DRIVE_ATTACH_MAX = 20 * 1024 * 1024; // 서버(/api/drive/get)와 같은 한도
+const DRIVE_ATTACH_MAX = 25 * 1024 * 1024; // 서버(/api/drive/get)와 같은 한도. 넘는 파일은 링크로 붙인다(attachDriveFiles)
 
 function driveFileIcon(mime) {
   if (mime === DRIVE_FOLDER) return "folder";
@@ -13067,6 +14571,8 @@ async function openDrivePicker() {
       <nav class="drive-crumbs" aria-label="폴더 위치"></nav>
       <label class="drive-search">${iconHtml("search")}<input type="search" placeholder="Drive에서 파일 이름 찾기" /></label>
     </div>
+    <p class="drive-scope-note" hidden>여기엔 Daling 이 올린 파일만 보여요. 다른 파일은 Google Drive 에서 골라 주세요.
+      <button type="button" class="button compact" data-act="google-pick">Drive 전체에서 고르기</button></p>
     <div class="drive-list" role="listbox" aria-multiselectable="true"></div>
     <div class="app-dialog-actions">
       <span class="drive-picked"></span>
@@ -13094,11 +14600,11 @@ async function openDrivePicker() {
   const rowHtml = (f) => {
     const folder = f.mimeType === DRIVE_FOLDER;
     const on = picked.has(f.id);
-    // 메일 한 통에 붙일 수 있는 크기를 넘는 파일은 처음부터 못 고르게 한다
+    // 메일 한 통에 붙일 수 있는 크기를 넘는 파일은 링크로 보낸다고 미리 알린다
     const tooBig = !folder && Number(f.size || 0) > DRIVE_ATTACH_MAX;
     return `
-      <div class="drive-row${folder ? " folder" : ""}${on ? " on" : ""}${tooBig ? " too-big" : ""}" role="option" aria-selected="${on}"
-           aria-disabled="${tooBig}" title="${tooBig ? "20MB가 넘어 메일에 붙일 수 없어요" : ""}"
+      <div class="drive-row${folder ? " folder" : ""}${on ? " on" : ""}" role="option" aria-selected="${on}"
+           title="${tooBig ? "25MB가 넘어 링크로 보내요 (링크가 있는 사람은 누구나 볼 수 있어요)" : ""}"
            data-id="${escapeHtml(f.id)}" tabindex="0">
         ${folder ? "" : `<span class="drive-check">${on ? iconHtml("check") : ""}</span>`}
         <span class="drive-row-icon">${iconHtml(driveFileIcon(f.mimeType))}</span>
@@ -13106,7 +14612,7 @@ async function openDrivePicker() {
         <span class="drive-row-meta">${
           folder
             ? iconHtml("chevronDown")
-            : `${escapeHtml(driveKind(f.mimeType, f.name))}${f.size ? ` · ${formatBytes(Number(f.size))}` : ""}${tooBig ? " · 너무 큼" : ""}`
+            : `${escapeHtml(driveKind(f.mimeType, f.name))}${f.size ? ` · ${formatBytes(Number(f.size))}` : ""}${tooBig ? " · 링크로 보냄" : ""}`
         }</span>
       </div>`;
   };
@@ -13130,6 +14636,8 @@ async function openDrivePicker() {
       const data = await api(`/api/drive/list?${params}`);
       if (my !== seq) return; // 그새 다른 폴더를 열었다
       current = data;
+      // 보통 토큰(drive.file)은 앱이 올린 파일만 보인다 → 나머지는 구글 고르기 창에서 (pickFromGoogleDrive)
+      dlg.querySelector(".drive-scope-note").hidden = data.fullAccess !== false;
       const rows = [...(data.folders || []), ...(data.files || [])];
       list.innerHTML = rows.length
         ? rows.map(rowHtml).join("")
@@ -13150,10 +14658,6 @@ async function openDrivePicker() {
       search.value = "";
       trail.push({ id: f.id, name: f.name });
       load();
-      return;
-    }
-    if (Number(f.size || 0) > DRIVE_ATTACH_MAX) {
-      showToast("20MB가 넘는 파일은 메일에 붙일 수 없어요. Drive 링크로 보내 주세요.");
       return;
     }
     if (picked.has(id)) picked.delete(id);
@@ -13199,6 +14703,8 @@ async function openDrivePicker() {
       const act = event.target.closest("[data-act]")?.dataset.act;
       if (act === "cancel") finish(null);
       if (act === "ok" && picked.size) finish([...picked.values()]);
+      // 이 창에서 고른 것도 함께 붙인다 (구글 고르기 창의 결과와 합침)
+      if (act === "google-pick") finish({ google: true, files: [...picked.values()] });
     });
     dlg.addEventListener("cancel", (event) => {
       event.preventDefault();
@@ -13213,15 +14719,62 @@ async function openDrivePicker() {
 }
 
 async function importFromDrive() {
-  const files = await openDrivePicker();
+  const chosen = await openDrivePicker();
+  if (chosen?.google) {
+    const more = await pickFromGoogleDrive();
+    await attachDriveFiles([...chosen.files, ...more]);
+    return;
+  }
+  await attachDriveFiles(chosen || []);
+}
+
+/* Drive 전체·공유 문서함에서 고르기: 구글 고르기 창(Picker)을 기본 브라우저에 띄우고(/api/drive/pick), 고를 때까지 묻는다.
+   고른 파일에만 권한(drive.file)이 생긴다 — Drive 전체 읽기(제한된 범위)는 심사 전엔 '확인되지 않은 앱' 경고가 떠서 뺐다. */
+async function pickFromGoogleDrive() {
+  let start;
+  try {
+    start = await api("/api/drive/pick", { method: "POST", body: JSON.stringify({ openBrowser: true }) });
+  } catch (error) {
+    showToast(humanError(error));
+    return [];
+  }
+  if (!start.openedInBrowser && start.authUrl) openOutside(start.authUrl);
+  showToast("브라우저에서 첨부할 파일을 골라 주세요.");
+  const until = Date.now() + 10 * 60 * 1000;
+  while (Date.now() < until) {
+    await new Promise((resolve) => window.setTimeout(resolve, 1500));
+    let pick;
+    try {
+      pick = await api(`/api/drive/picked?state=${encodeURIComponent(start.state)}`);
+    } catch {
+      continue;
+    }
+    if (pick.status === "waiting") continue;
+    if (pick.status === "done") return pick.files || [];
+    if (pick.status === "cancelled") showToast("파일을 고르지 않았어요.");
+    else showToast(humanError(pick.message || "Drive 에서 파일을 가져오지 못했어요."));
+    return [];
+  }
+  showToast("10분 동안 고르지 않아 기다리기를 멈췄어요.");
+  return [];
+}
+
+async function attachDriveFiles(files) {
   if (!files?.length) return;
   showTopProgress?.(`Drive에서 ${files.length}개 가져오는 중`, 30);
   let done = 0;
   const failed = [];
   for (const file of files) {
     try {
-      const got = await api(`/api/drive/get?id=${encodeURIComponent(file.id)}`);
-      state.attachments.push({ filename: got.filename, size: got.size, content: got.content });
+      const used = state.attachments.filter((a) => !isLinkAtt(a)).reduce((n, a) => n + a.size, 0);
+      if (Number(file.size || 0) + used > ATTACH_LIMIT) {
+        // 그대로 붙이면 학교 메일 한도를 넘는다 → 그 파일을 '링크가 있는 사람 보기' 로 열고 링크로 보낸다
+        const got = await api("/api/drive/share", { method: "POST", body: JSON.stringify({ id: file.id }) });
+        state.attachments.push({ filename: got.name || file.name, size: got.size || Number(file.size || 0), content: "", link: got.link, source: "Drive 링크" });
+      } else {
+        const got = await api(`/api/drive/get?id=${encodeURIComponent(file.id)}`);
+        state.attachments.push({ filename: got.filename, size: got.size, content: got.content });
+      }
       done += 1;
     } catch (error) {
       failed.push(file.name);
@@ -13238,8 +14791,8 @@ async function importFromDrive() {
 
 
 /* ===== 문의 · 오류 제보 · 아이디어 =====
-   만든 사람(FEEDBACK_TO)에게 붕어빵 메일 쓰기로 바로 보낸다.
-   종류를 고르면 받는 사람·제목·본문 서식이 채워지고, 앱 정보(버전·Windows·화면)를 아래에 붙인다.
+   만든 사람(FEEDBACK_TO)에게 Daling 메일 쓰기로 바로 보낸다.
+   종류를 고르면 받는 사람·제목·본문 서식이 채워지고, 앱 정보(버전·운영체제·화면)를 아래에 붙인다.
    오류 제보에는 최근 앱 오류 기록(server_errors.log 마지막 한 건)도 붙인다.
    메일 주소·비밀번호·파일 경로 같은 개인 정보는 붙이지 않는다 — 보내기 전에 사용자가 다 볼 수 있다. */
 const FEEDBACK_TO = "tutleblue12@gmail.com";
@@ -13317,7 +14870,7 @@ async function openFeedback() {
     "──────────────",
     "앱 정보 (자동으로 붙었어요. 빼도 괜찮아요)",
     `- 버전: ${info.version || "?"}${info.installed === false ? " (개발판)" : ""}`,
-    `- Windows: ${info.os || navigator.userAgent}`,
+    `- 운영체제: ${info.os || navigator.userAgent}`,
     `- 화면: ${window.screen.width}×${window.screen.height}, 창 ${window.innerWidth}×${window.innerHeight}${theme ? `, 테마 ${theme}` : ""}`,
     `- 보낸 때: ${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")} ${hhmm(now)}`,
   ];
@@ -13609,9 +15162,127 @@ $("#mailRailFold")?.addEventListener("click", () => setMailRailFolded(true, true
   });
 })();
 
+/* ===== 맥: 끌 곳 알리기 =====
+   맥 창(mac_window.py)도 제목 줄을 투명하게 하고 상단 바를 제목 줄로 쓴다. 그런데 WKWebView 는 CSS app-region 을
+   모르므로, styles.css '창 제목 줄 = 상단 바' 의 끌 곳(상단 바·왼쪽 메뉴의 빈 곳)과 단추 자리를 사각형으로 재서
+   앱에 알려 준다. 앱은 누른 자리가 끌 곳이면 웹에 넘기지 않고 맥 고유의 창 끌기를 한다.
+   신호등(닫기·최소화·확대)은 운영체제 것을 그대로 쓰고, 상단 바 첫 줄 가운데 높이(cy)로 옮겨 달라고 함께 보낸다. */
+const MAC_NO_DRAG =
+  "button, input, a, label, select, textarea, summary, kbd, [role='button'], [tabindex], [contenteditable], " +
+  ".search-wrap, .search-pop, .top-progress, .sync-pill, .nowbar-compact, .demo-pill";
+function macDragRegions() {
+  let last = "";
+  let timer = 0;
+  const box = (el) => {
+    const r = el.getBoundingClientRect();
+    return r.width > 0 && r.height > 0 ? [r.left, r.top, r.width, r.height].map((n) => Math.round(n * 10) / 10) : null;
+  };
+  const center = (el) => {
+    const r = el && el.getBoundingClientRect();
+    return r && r.width > 0 ? [Math.round(r.left + r.width / 2), Math.round(r.top + r.height / 2)] : null;
+  };
+  const measure = () => {
+    const drag = [];
+    const nodrag = [];
+    const areas = [];
+    const bar = document.querySelector(".topbar");
+    const barBox = bar && getComputedStyle(bar).display !== "none" ? box(bar) : null;
+    if (barBox) {
+      drag.push(barBox);
+      areas.push(bar);
+      bar.querySelectorAll(MAC_NO_DRAG).forEach((el) => {
+        const b = box(el);
+        if (b) nodrag.push(b);
+      });
+    }
+    const side = document.querySelector(".sidebar");
+    const sideBox = side ? box(side) : null;
+    // 왼쪽 세로 메뉴일 때만 (좁은 창에서는 아래 탭바가 된다). Windows 처럼 메뉴의 빈 틈만 끈다(.sidebar > * 는 빼고)
+    if (sideBox && sideBox[1] <= 1 && sideBox[3] > 200) {
+      drag.push(sideBox);
+      areas.push(side);
+      [...side.children].forEach((el) => {
+        const b = box(el);
+        if (b) nodrag.push(b);
+      });
+    }
+    // 위를 덮은 것(대화 상자·소개 카드·알림 등)은 끌지 않는다: 끌 곳 위를 띄엄띄엄 찍어 보고, 맨 위가 끌 곳 밖의 것이면
+    // 끌 곳을 품지 않는 가장 큰 조상(카드 전체)을 뺀다. 다만 화면을 어둡게 덮는 막(소개의 .tour-dim, 대화 상자 바탕)은
+    // 끌기를 막지 않는다 — 맥 CI 실측(2026-10-26): 첫 실행 소개가 뜬 동안 상단 바 전체가 '끌기 안 됨' 이 되어 창을 못 옮겼다.
+    // 막 = 글·자식이 없는 빈 판, 또는 이 끌 곳을 통째로 덮는 것
+    const seen = new Set();
+    drag.forEach((rect) => {
+      const [x, y, w, h] = rect;
+      const covers = (el) => {
+        const r = el.getBoundingClientRect();
+        return r.left <= x && r.top <= y && r.right >= x + w && r.bottom >= y + h;
+      };
+      const backdrop = (el) =>
+        (/^(DIV|SPAN)$/.test(el.tagName) && !el.firstElementChild && !el.textContent.trim()) || covers(el);
+      for (let py = y + 4; py < y + h; py += 32) {
+        for (let px = x + 4; px < x + w; px += 32) {
+          const hit = document.elementFromPoint(px, py);
+          if (!hit || areas.some((a) => a.contains(hit)) || backdrop(hit)) continue;
+          let top = hit;
+          while (
+            top.parentElement &&
+            top.parentElement !== document.body &&
+            !areas.some((a) => top.parentElement.contains(a)) &&
+            !covers(top.parentElement)
+          ) {
+            top = top.parentElement;
+          }
+          if (seen.has(top)) continue;
+          seen.add(top);
+          const b = box(top);
+          if (b) nodrag.push(b);
+        }
+      }
+    });
+    const anchor = bar && (bar.querySelector(".topbar-actions") || bar);
+    const ar = anchor ? anchor.getBoundingClientRect() : null;
+    return {
+      action: "regions",
+      w: window.innerWidth,
+      drag,
+      nodrag,
+      cy: ar && ar.height > 0 ? Math.round(ar.top + ar.height / 2) : 30,
+      lx: sideBox && sideBox[2] < 100 && sideBox[1] <= 1 ? 12 : 20, // 메일함의 좁은(72px) 메뉴 안에 신호등이 들어가게
+      // 앱의 자가 점검(CI)이 눌러 볼 자리
+      // 단추 자리는 늘 보이는 새로고침 (테마 단추는 설정 › 화면으로 옮겨 상단 바에 없다)
+      probe: { button: center(document.getElementById("refreshAllButton") || document.getElementById("themeFlip")), search: center(bar && bar.querySelector(".search-wrap")), nowbar: center(document.getElementById("nowBar")) },
+    };
+  };
+  const send = () => {
+    timer = 0;
+    const body = JSON.stringify(measure());
+    if (body === last) return;
+    last = body;
+    api("/api/window", { method: "POST", body }).catch(() => {});
+  };
+  const later = (ms = 80) => {
+    if (!timer) timer = setTimeout(send, ms);
+  };
+  // 화면이 바뀌면(대화 상자·메뉴 열림, 창 크기) 다시 잰다. 시계 글자처럼 글만 바뀌는 것은 보지 않는다(1초마다 잴 까닭이 없다)
+  const textOnly = (r) =>
+    r.type === "childList" && [...r.addedNodes, ...r.removedNodes].every((n) => n.nodeType === Node.TEXT_NODE);
+  new MutationObserver((records) => {
+    if (!records.every(textOnly)) later();
+  }).observe(document.body, {
+    subtree: true,
+    childList: true,
+    attributes: true,
+    attributeFilter: ["class", "hidden", "style", "open"],
+  });
+  window.addEventListener("resize", () => later(60));
+  document.addEventListener("transitionend", () => later(), true);
+  send();
+}
+
 /* ===== 창 제목 줄 = 상단 바 (Spotify 처럼) =====
-   설치 앱은 회색 기본 제목 줄을 없앤다(window_chrome.py). 그러면 상단 바 빈 곳을 끌어 창을 옮기고(두 번 누르면 최대화),
-   오른쪽 끝 단추로 최소화·최대화·닫기를 한다. 개발 서버(브라우저)에서는 custom=false 라 아무것도 안 바뀐다. */
+   설치 앱은 회색 기본 제목 줄을 없앤다(Windows: window_chrome.py, 맥: mac_window.py). 그러면 상단 바 빈 곳을 끌어
+   창을 옮기고(두 번 누르면 최대화), Windows 는 오른쪽 끝 단추로 최소화·최대화·닫기를 한다(맥은 왼쪽 위 신호등).
+   개발 서버(브라우저)에서는 custom=false 라 아무것도 안 바뀐다. */
 (function bindWindowChrome() {
   const box = $("#winControls");
   if (!box) return;
@@ -13627,23 +15298,46 @@ $("#mailRailFold")?.addEventListener("click", () => setMailRailFolded(true, true
   // 단추 높이를 상단 바 첫 줄에 맞춘다 (상단 바 높이는 화면 폭마다 다르다)
   const fitHeight = () => {
     const bar = document.querySelector(".topbar");
-    const h = bar && bar.offsetHeight ? Math.min(bar.offsetHeight, 64) : 48;
+    let h = bar && bar.offsetHeight ? Math.min(bar.offsetHeight, 64) : 48;
+    // 두 줄 상단 바(휴대폰 배치)는 첫 줄(단추 묶음) 가운데에 맞춘다. 바 높이로 잡으면 창 단추 칸이 둘째 줄까지
+    // 내려와 검색칸 오른쪽 빈 곳(끌기 자리, placeDragGaps)을 가렸다.
+    const acts = bar && bar.querySelector(":scope > .topbar-actions");
+    if (acts && acts.offsetHeight) h = Math.min(h, Math.round((acts.offsetTop + acts.offsetHeight / 2) * 2));
     document.documentElement.style.setProperty("--winctl-h", `${h}px`);
     // 설정 판은 상단 바 아래부터 덮는다(스크롤 막대가 창 끝까지 올라가지 않게)
     if (bar && bar.offsetHeight) document.documentElement.style.setProperty("--topbar-h", `${bar.offsetHeight}px`);
   };
+  // 맥 전체 화면에서는 신호등이 메뉴 막대와 함께 숨으므로 그 자리를 비워 두지 않는다
+  const paintMac = (st) => document.documentElement.classList.toggle("mac-fullscreen", !!(st && st.fullscreen));
   const refresh = () =>
     api("/api/window")
-      .then((st) => paintMax(st.maximized))
+      .then((st) => {
+        paintMax(st.maximized);
+        if (st.mac) paintMac(st);
+      })
       .catch(() => {});
   api("/api/window")
     .then((st) => {
       if (!st || !st.custom) return;
       document.documentElement.classList.add("custom-frame");
       placeMailSearch(); // 메일함에서 켜졌으면 검색창을 상단 바로
-      box.hidden = false;
+      if (st.mac) {
+        document.documentElement.classList.add("mac-frame");
+        paintMac(st);
+      } else {
+        // 맥은 운영체제 신호등을 쓰고, 끌 곳도 macDragRegions 가 따로 알린다(WebKit 은 app-region 을 모름)
+        watchDragGaps();
+        box.hidden = false;
+      }
       paintMax(st.maximized);
       fitHeight();
+      if (st.mac) {
+        // 상단 바 높이는 창 크기 말고도 화면(메일함 등)마다 바뀐다. 맥은 왼쪽 메뉴가 이 높이만큼 내려가므로 늘 따라간다
+        const bar = document.querySelector(".topbar");
+        // 다음 그림 차례에 고친다: 콜백 안에서 바로 고치면 'ResizeObserver loop' 오류가 window error 로 올라온다
+        if (bar && window.ResizeObserver) new ResizeObserver(() => requestAnimationFrame(fitHeight)).observe(bar);
+        macDragRegions();
+      }
       let timer = 0;
       window.addEventListener("resize", () => {
         clearTimeout(timer);
@@ -13741,6 +15435,89 @@ function placeMailSearch() {
 }
 window.addEventListener("resize", () => placeMailSearch());
 
+/* 상단 바 단추 묶음 사이 빈 칸을 창 끌기 자리로 (styles.css '창 제목 줄 = 상단 바' 설명).
+   배치(flex·grid·줄바꿈)가 화면 폭마다 달라 칸을 끼워 넣지 않고, 같은 줄 이웃 사이 틈을 재서 절대 위치 칸을 놓는다.
+   칸은 단추 높이(40px)가 아니라 상단 바 위아래 끝까지 늘린다. 단추 높이만이면 오른쪽(검색칸~동기화 칩)에서
+   끌 곳이 42×40px 하나뿐이라 '오른쪽은 안 끌린다'고 느꼈다(2026-10-26). 줄바꿈된 다른 줄 단추에는 닿지 않게 자른다.
+   값이 그대로면 건드리지 않는다: 끌기 자리가 바뀔 때마다 WebView2 가 창 조각을 다시 만든다.
+   줄 끝(오른쪽 이웃 없음)은 상단 바 오른쪽 끝까지가 틈이다. 휴대폰 배치의 둘째 줄(검색칸) 오른쪽, 창 단추 아래
+   빈 곳이 그렇다. 창 단추와 같은 줄이면 단추 앞에서 자르고, 단추보다 아래 줄이면 단추 밑에서부터 둔다. */
+function placeDragGaps() {
+  const bar = document.querySelector(".topbar");
+  if (!bar) return;
+  const base = bar.getBoundingClientRect();
+  const boxes = [...bar.children]
+    .filter((el) => !el.classList.contains("drag-gap"))
+    .map((el) => el.getBoundingClientRect())
+    .filter((r) => r.width > 0 && r.height > 0);
+  const ctl = $("#winControls");
+  const wc = ctl && !ctl.hidden ? ctl.getBoundingClientRect() : null;
+  const gaps = [];
+  boxes.forEach((a) => {
+    // 오른쪽에서 가장 가까운, 같은 줄(세로로 겹치는) 이웃
+    let b = null;
+    boxes.forEach((c) => {
+      if (c === a || c.left < a.right - 1) return;
+      if (Math.min(a.bottom, c.bottom) - Math.max(a.top, c.top) < 16) return;
+      if (!b || c.left < b.left) b = c;
+    });
+    let right = b ? b.left - 4 : base.right;
+    let top = base.top;
+    if (!b && wc && wc.width > 0 && wc.left < right) {
+      if (Math.min(a.bottom, wc.bottom) - Math.max(a.top, wc.top) >= 16) right = Math.min(right, wc.left - 4);
+      else top = Math.max(top, wc.bottom + 4);
+    }
+    const left = a.right + 4;
+    if (right - left < 16) return;
+    let bottom = base.bottom;
+    boxes.forEach((c) => {
+      if (c.right <= left || c.left >= right) return; // 이 틈 위·아래에 놓인 다른 줄 단추만
+      if (c.bottom <= Math.max(a.top, b ? b.top : a.top)) top = Math.max(top, c.bottom + 4);
+      else if (c.top >= Math.min(a.bottom, b ? b.bottom : a.bottom)) bottom = Math.min(bottom, c.top - 4);
+    });
+    if (bottom - top < 16) return;
+    gaps.push([left - base.left, top - base.top, right - left, bottom - top].map(Math.round));
+  });
+  const key = JSON.stringify(gaps);
+  if (bar.dataset.dragGaps === key) return;
+  bar.dataset.dragGaps = key;
+  const els = [...bar.querySelectorAll(":scope > .drag-gap")];
+  gaps.forEach(([left, top, width, height], i) => {
+    let el = els[i];
+    if (!el) {
+      el = document.createElement("div");
+      el.className = "drag-gap";
+      el.setAttribute("aria-hidden", "true");
+      bar.append(el);
+    }
+    Object.assign(el.style, { left: `${left}px`, top: `${top}px`, width: `${width}px`, height: `${height}px` });
+  });
+  els.slice(gaps.length).forEach((el) => el.remove());
+}
+
+function watchDragGaps() {
+  const bar = document.querySelector(".topbar");
+  if (!bar || bar.dataset.dragWatch) return;
+  bar.dataset.dragWatch = "1";
+  let frame = 0;
+  const schedule = () => {
+    if (!frame) frame = requestAnimationFrame(() => ((frame = 0), placeDragGaps()));
+  };
+  const sizes = new ResizeObserver(schedule);
+  const observeKids = () => {
+    sizes.disconnect();
+    sizes.observe(bar);
+    if ($("#winControls")) sizes.observe($("#winControls")); // 높이(--winctl-h)가 바뀌면 줄 끝 틈도 다시
+    [...bar.children].forEach((el) => el.classList.contains("drag-gap") || sizes.observe(el));
+    schedule();
+  };
+  // 메일함에서는 #topbarMail 이 들어오고 나간다 (placeMailSearch)
+  new MutationObserver((list) => {
+    if (list.some((m) => [...m.addedNodes, ...m.removedNodes].some((n) => !n.classList?.contains("drag-gap")))) observeKids();
+  }).observe(bar, { childList: true });
+  observeKids();
+}
+
 
 /* ===== AI 도우미 (ai_cli.py: Claude · Gemini · Codex CLI) =====
    2026-10-15 사용자: 'AI CLI 를 탑재해 번역·자연어 검색·메일 초안을 쓰자. 세 CLI 를 모두 고를 수 있게.
@@ -13758,11 +15535,13 @@ async function loadAiStatus(force = false) {
   }
   paintAiSettings();
   paintAiModelPicker();
+  paintAiModelButton();
   return state.ai.status;
 }
-// 실험실 스위치(ai_profile.json enabled)가 켜져 있고 CLI 가 하나라도 있을 때만 AI 기능을 보인다
-const aiOn = () => state.ai.status?.profile?.enabled === "1";
-const aiReady = () => aiOn() && Object.values(state.ai.status?.available || {}).some(Boolean);
+// 실험실 켜기 스위치는 없앴다(2026-10-20 사용자: '어차피 /ai 쳐서 쓸 거니까, 메일 창에서 만지게').
+// AI CLI 가 하나라도 깔려 있으면 /ai·모델 단추가 보인다. 내용은 /ai·단추를 눌렀을 때만 AI 로 간다.
+const aiReady = () => Object.values(state.ai.status?.available || {}).some(Boolean);
+const aiOn = aiReady;
 
 /* --- 자연어 검색 --- */
 function withAiSearch(query, grouped) {
@@ -13853,25 +15632,17 @@ const AI_PROVIDERS = [
   ["gemini", "Gemini"],
   ["codex", "Codex"],
 ];
-const AI_PROFILE_FIELDS = [
-  ["name", "#aiName"],
-  ["studentId", "#aiStudentId"],
-  ["dept", "#aiDept"],
-  ["intro", "#aiIntro"],
-  ["signature", "#aiSignature"],
-];
 
 function paintAiSettings() {
-  const box = $("#aiProviders");
   const st = state.ai.status;
-  if (!box || !st) return;
+  if (!st) return;
   const on = aiOn();
-  const sw = $("#aiEnabled");
-  if (sw) sw.checked = on;
-  if ($("#aiBody")) $("#aiBody").hidden = !on;
-  // 메일 쓰기의 모델 단추와 초안 칸도 스위치를 따른다
+  // 메일 쓰기의 모델 단추·/ai 안내는 AI CLI 가 있으면 보인다 (설정 카드가 없어도 칠한다)
   if ($("#aiDraftToggle")) $("#aiDraftToggle").hidden = !on;
-  if (!on && $("#aiDraftBox")) $("#aiDraftBox").hidden = true;
+  if ($("#mailFlowAiHint")) $("#mailFlowAiHint").hidden = !on;
+  if ($("#aiDraftBox")) $("#aiDraftBox").hidden = true; // 채팅식 초안 칸은 쓰지 않는다(2026-10-21)
+  const box = $("#aiProviders");
+  if (!box) return;
   const chosen = st.profile?.provider || "";
   box.innerHTML = AI_PROVIDERS.map(([key, label]) => {
     const has = key ? Boolean(st.available?.[key]) : aiReady();
@@ -13879,10 +15650,6 @@ function paintAiSettings() {
     return `<button type="button" class="ai-provider${chosen === key ? " on" : ""}${has ? "" : " missing"}" data-provider="${key}" role="radio" aria-checked="${chosen === key}">
       <strong>${escapeHtml(label)}</strong><span>${escapeHtml(note)}</span></button>`;
   }).join("");
-  AI_PROFILE_FIELDS.forEach(([key, sel]) => {
-    const el = $(sel);
-    if (el && document.activeElement !== el) el.value = st.profile?.[key] || "";
-  });
 }
 
 async function saveAiProfile(extra = {}) {
@@ -13892,9 +15659,6 @@ async function saveAiProfile(extra = {}) {
     enabled: state.ai.status?.profile?.enabled || "",
     ...extra,
   };
-  AI_PROFILE_FIELDS.forEach(([key, sel]) => {
-    if ($(sel)) payload[key] = $(sel).value.trim();
-  });
   const res = await api("/api/ai/profile", { method: "POST", body: JSON.stringify(payload) });
   state.ai.status = { ...(state.ai.status || {}), profile: res.profile };
   paintAiSettings();
@@ -13917,14 +15681,116 @@ $("#aiProviders")?.addEventListener("click", async (event) => {
     showToast(humanError(error));
   }
 });
-$("#aiProfileSave")?.addEventListener("click", async () => {
+
+/* --- 설정 'AI 연결' 카드 ---
+   2026-11-04 사용자: '터미널로 안내하지 말고 CLI 연결하는 설정을 설정창에'. 각 CLI 의 로그인 상태를 보이고,
+   '연결' 은 그 CLI 의 로그인 창(터미널)을 띄운다. 브라우저에서 로그인이 끝나면 몇 초마다 다시 물어 '연결됨' 으로 바꾼다.
+   Gemini 는 구글 개인 로그인이 막혀(IneligibleTierError) 상태만 보인다. API 키 칸은 두지 않는다
+   (2026-10-21·11-04 사용자: 'API 키 넣기는 다 빼라'). */
+const aiConn = { items: null, loading: false, polling: 0, pollUntil: 0 };
+
+async function loadAiConnections() {
+  if (!$("#aiConnList") || aiConn.loading) return;
+  aiConn.loading = true;
   try {
-    await saveAiProfile();
-    showToast("내 정보를 저장했어요");
+    const res = await api("/api/ai/connections");
+    aiConn.items = res.items || [];
+    aiConn.error = "";
+  } catch (error) {
+    aiConn.error = humanError(error);
+  } finally {
+    aiConn.loading = false;
+  }
+  paintAiConnections();
+  return aiConn.items;
+}
+
+function aiConnRow(item) {
+  const p = item.provider;
+  const waiting = aiConn.polling && aiConn.waitFor === p && !item.connected;
+  let kind = "need";
+  let pill = tr("연결 안 됨");
+  if (!item.installed) pill = tr("설치 안 됨");
+  else if (item.connected) { kind = "ok"; pill = tr("연결됨"); }
+  else if (item.blocked) pill = tr("지금은 못 씀");
+  else if (item.connected == null) pill = tr("확인 못 함");
+  if (waiting) pill = tr("로그인 기다리는 중");
+  let actions = "";
+  if (!item.installed) {
+    actions = `<button type="button" class="button compact ghost" data-ai-install="${p}">${tr("설치 방법")}</button>`;
+  } else if (p === "gemini") {
+    actions = ""; // 로그인 창이 없다(구글이 막음)
+  } else {
+    actions = `<button type="button" class="button compact${item.connected ? " ghost" : ""}" data-ai-login="${p}">${
+      item.connected ? tr("다시 연결") : tr("연결")}</button>`;
+  }
+  return `<div class="st-acct ai-conn" data-provider="${p}">
+      <span class="st-logo ai-conn-logo" aria-hidden="true">${aiLogo(p, waiting ? "busy" : "")}</span>
+      <div class="st-acct-name">
+        <strong>${escapeHtml(item.label || p)}</strong>
+        <span class="st-pill" data-kind="${kind}">${escapeHtml(pill)}</span>
+        <small>${escapeHtml(tr(item.note || ""))}</small>
+      </div>
+      <div class="st-acct-actions">${actions}</div>
+    </div>`;
+}
+
+function paintAiConnections() {
+  const box = $("#aiConnList");
+  if (!box) return;
+  if (aiConn.error && !aiConn.items) {
+    box.innerHTML = `<p class="ai-conn-empty">${escapeHtml(aiConn.error)}</p>`;
+    return;
+  }
+  if (!aiConn.items) return;
+  box.innerHTML = aiConn.items.map(aiConnRow).join("");
+}
+
+// 로그인 창을 띄운 뒤 4초마다 상태를 다시 본다(최대 3분). 연결되면 멈추고 메일 쓰기의 모델 단추도 새로 칠한다.
+function pollAiLogin(provider) {
+  clearInterval(aiConn.polling);
+  aiConn.waitFor = provider;
+  aiConn.pollUntil = Date.now() + 180000;
+  aiConn.polling = setInterval(async () => {
+    const items = await loadAiConnections();
+    const hit = (items || []).find((i) => i.provider === provider);
+    const viewGone = !$("#aiConnList")?.offsetParent;
+    if (hit?.connected || Date.now() > aiConn.pollUntil || viewGone) {
+      clearInterval(aiConn.polling);
+      aiConn.polling = 0;
+      paintAiConnections();
+      if (hit?.connected) {
+        showToast(tr("{name} 연결됐어요. 메일에서 /ai 를 쓸 수 있어요.").replace("{name}", hit.label));
+        loadAiStatus(true);
+      }
+    }
+  }, 4000);
+  paintAiConnections();
+}
+
+const AI_INSTALL_URL = {
+  claude: "https://docs.claude.com/en/docs/claude-code/setup",
+  gemini: "https://github.com/google-gemini/gemini-cli",
+  codex: "https://github.com/openai/codex",
+};
+
+$("#aiConnList")?.addEventListener("click", async (event) => {
+  const login = event.target.closest("[data-ai-login]");
+  const install = event.target.closest("[data-ai-install]");
+  try {
+    if (login) {
+      const p = login.dataset.aiLogin;
+      await api("/api/ai/login", { method: "POST", body: JSON.stringify({ provider: p }) });
+      showToast(tr("로그인 창을 열었어요. 브라우저에서 로그인하면 여기 '연결됨' 으로 바뀌어요."));
+      pollAiLogin(p);
+    } else if (install) {
+      openOutside(AI_INSTALL_URL[install.dataset.aiInstall]);
+    }
   } catch (error) {
     showToast(humanError(error));
   }
 });
+$("#aiConnRefresh")?.addEventListener("click", () => loadAiConnections());
 
 /* --- 메일 초안 --- */
 // 받는 사람 칸의 첫 주소 → 이름·주소, 그 사람이 맡은 과목·분반(내 수업 먼저)
@@ -13967,42 +15833,24 @@ function aiDraftCandidates() {
 
 function paintAiDraftContext() {
   const ctx = aiDraftContext();
-  const p = state.ai.status?.profile || {};
+  const p = state.mailMe?.me || {};
   const bits = [];
   if (ctx.course) bits.push(`${ctx.course}${ctx.section ? ` ${ctx.section}` : ""} ${ctx.role}`.trim());
-  bits.push(p.studentId || p.name ? `내 정보: ${[p.name, p.studentId].filter(Boolean).join(" · ")}` : "내 정보 없음 (설정 → AI 도우미)");
+  bits.push(p.studentId || p.name ? `내 정보: ${[p.name, p.studentId].filter(Boolean).join(" · ")}` : "내 정보 없음 (설정 → 메일에 쓰는 내 정보)");
   bits.push(providerLabel());
   const el = $("#aiDraftContext");
   if (el) el.textContent = bits.join(" · ");
 }
 
+// 'AI 초안' 칸 대신 모델 고르기 메뉴를 연다 (2026-10-21, 아래 'AI 모델 고르기')
 $("#aiDraftToggle")?.addEventListener("click", async () => {
-  const box = $("#aiDraftBox");
-  if (!box) return;
-  box.hidden = !box.hidden;
-  if (box.hidden) return;
+  if (aiMenu.el && !aiMenu.el.hidden) return closeAiMenu();
   await loadAiStatus();
-  paintAiDraftContext();
-  $("#aiDraftRequest")?.focus();
+  openAiMenu();
 });
 $("#composeTo")?.addEventListener("change", () => !$("#aiDraftBox")?.hidden && paintAiDraftContext());
 
-// AI 없이: 내 소개(+과목·분반)를 본문 맨 앞에. 매번 쓰는 '안녕하세요, ○○ 수강 중인 …' 을 한 번에.
-$("#aiIntroButton")?.addEventListener("click", async () => {
-  await loadAiStatus();
-  const p = state.ai.status?.profile || {};
-  const ctx = aiDraftContext();
-  const courseName = [ctx.course, ctx.section].filter(Boolean).join(" ");
-  const course = courseName ? courseName + "을 수강 중인 " : "";
-  const intro = p.intro || (p.name ? `안녕하세요, ${course}${[p.dept, p.studentId].filter(Boolean).join(" ")} ${p.name}입니다.` : "");
-  if (!intro) {
-    showToast("설정 → AI 도우미에 이름·학번·소개를 먼저 적어 주세요.");
-    return;
-  }
-  const lines = [intro, "", ""];
-  if (p.signature) lines.push("", p.signature);
-  setComposeBody(escapeHtml(lines.join("\n")).replace(/\n/g, "<br>") + composeBody());
-});
+// (예전 '내 소개 넣기' 단추는 메일 쓰기 흐름 — 회색 글씨를 Tab 으로 넣기 — 가 대신한다)
 
 $("#aiDraftRun")?.addEventListener("click", async () => {
   const request = ($("#aiDraftRequest")?.value || "").trim();
@@ -14124,3 +15972,958 @@ $("#aiEnabled")?.addEventListener("change", async (event) => {
     showToast(humanError(error));
   }
 });
+
+
+/* ===== 메일 쓰기 흐름 (mail_flow.py) =====
+   2026-10-19 사용자: 'AI 초안'을 채팅처럼 받아 붙이기보다 자동완성처럼 — 처음(인사·자기소개)과 끝(감사·서명)은 늘
+   비슷하니 다음에 올 글이 회색으로 보이고, 클릭하거나 Tab 을 치면 바로 써지게. AI 는 가운데 용건 다듬기에만.
+   - 글 조각은 서버(mail_flow.py)가 받는 사람(교수·조교, 이름이 로마자면 영어)과 LMS 에서 받은 내 이름·학번으로 만든다.
+   - 회색 글씨는 본문 안의 contenteditable=false 꼬리표([data-ghost]). 글자를 치기 전·포커스를 잃을 때 떼고,
+     저장·보내기는 richHtml() 이 한 번 더 거른다.
+   - 빈 줄에서만 보인다(쓰는 중인 문장 뒤에 끼어들지 않게). 이미 쓴 줄을 보고 다음 단계를 고른다:
+     인사 → 자기소개 → 'I am writing to'/'다름이 아니라' → (내 용건) → 감사 → 서명. */
+state.mailMe = null;
+const flow = { data: null, key: "", lang: "", course: 0, muted: false, timer: 0, toTimer: 0, seq: 0, ghost: null };
+const FLOW_STAGE = { greeting: 0, intro: 1, leadin: 2, content: 3, closing: 4, signoff: 5 };
+const FLOW_TEST_ORDER = ["signoff", "closing", "leadin", "intro", "greeting"];
+// 답장·전달에 붙는 원본 메일('----- 원본 메일 …', '>' 인용)부터는 내 글이 아니다
+const FLOW_QUOTE = /^\s*(>|-{3,}|_{3,})/;
+const FLOW_MARK = "⁣";
+const ME_FIELDS = { name: "#meName", nameEn: "#meNameEn", studentId: "#meStudentId", dept: "#meDept" };
+
+async function loadMailMe(force = false) {
+  if (state.mailMe && !force) return state.mailMe;
+  try {
+    state.mailMe = await api("/api/mail/me");
+  } catch (error) {
+    state.mailMe = null;
+  }
+  paintMailMe();
+  return state.mailMe;
+}
+const flowOn = () => state.mailMe?.manual?.flow !== "off";
+
+/* --- 설정: 메일에 쓰는 내 정보 --- */
+function paintMailMe() {
+  const d = state.mailMe;
+  if (!d) return;
+  Object.entries(ME_FIELDS).forEach(([key, sel]) => {
+    const el = $(sel);
+    if (!el || document.activeElement === el) return;
+    el.value = d.manual?.[key] || "";
+    // 비워 두면 쓸 값(LMS·조직도에서 가져온 것)을 흐린 글씨로 보인다
+    el.placeholder = d.me?.[key] ? String(d.me[key]) : "";
+  });
+  const src = $("#meSource");
+  if (src) {
+    const from = d.auto?.from;
+    src.textContent =
+      from === "lms" ? "이름·학번은 LMS 에서 가져왔어요. 영문 이름은 추정이라 확인해 주세요." :
+      from === "directory" ? "이름은 조직도에서 가져왔어요. 학번은 다음 LMS 동기화 때 채워져요." :
+      "LMS 동기화를 한 번 하면 이름·학번이 채워져요.";
+  }
+  const on = $("#meFlowOn");
+  if (on) on.checked = flowOn();
+}
+
+$("#meSave")?.addEventListener("click", async () => {
+  const payload = {};
+  Object.entries(ME_FIELDS).forEach(([key, sel]) => {
+    payload[key] = ($(sel)?.value || "").trim();
+  });
+  try {
+    state.mailMe = await api("/api/mail/me", { method: "POST", body: JSON.stringify(payload) });
+    paintMailMe();
+    flow.data = null; // 다음에 메일을 쓸 때 새 정보로
+    showToast("내 정보를 저장했어요");
+  } catch (error) {
+    showToast(humanError(error));
+  }
+});
+$("#meFlowOn")?.addEventListener("change", async (event) => {
+  const on = event.target.checked;
+  try {
+    state.mailMe = await api("/api/mail/me", { method: "POST", body: JSON.stringify({ flow: on ? "" : "off" }) });
+    paintMailMe();
+    flow.data = null;
+    showToast(on ? "메일 쓸 때 인사·서명을 미리 보여 줄게요" : "인사·서명 미리 보이기를 껐어요");
+  } catch (error) {
+    event.target.checked = !on;
+    showToast(humanError(error));
+  }
+});
+
+/* --- 받는 사람 → 흐름 조각 --- */
+function resetMailFlow() {
+  flow.data = null;
+  flow.key = "";
+  flow.lang = "";
+  flow.course = 0;
+  flow.muted = false;
+  removeGhost();
+  // 쓰던 /ai 답은 이 새 메일에 붙이지 않는다
+  Object.assign(aiJob, { box: null, typing: false, text: "", prompt: "" });
+  aiJob.seq += 1;
+  const bar = $("#mailFlowBar");
+  if (bar) bar.hidden = true;
+  loadMailFlow();
+}
+
+async function loadMailFlow(force = false) {
+  const form = $("#composeForm");
+  if (!form) return;
+  await loadMailMe();
+  if (!flowOn()) {
+    flow.data = null;
+    paintFlowBar();
+    return;
+  }
+  const to = String(form.elements.to.value || "").split(",")[0].trim();
+  if (flow.key && flow.key.split("|")[0] !== to) flow.course = 0;
+  const key = `${to}|${flow.course}`;
+  if (!force && flow.data && flow.key === key) return;
+  const seq = ++flow.seq;
+  try {
+    const res = await api("/api/mail/flow", { method: "POST", body: JSON.stringify({ to, courseIndex: flow.course }) });
+    if (seq !== flow.seq) return;
+    // 받는 사람이 바뀌면 언어도 다시 고른다(외국인 교수님 → 영어). 같은 사람이면 내가 고른 언어를 지킨다
+    if (!flow.data || flow.data.to?.email !== res.to?.email || !flow.lang) flow.lang = res.lang || "ko";
+    flow.data = res;
+    flow.key = key;
+  } catch (error) {
+    if (seq === flow.seq) flow.data = null;
+  }
+  paintFlowBar();
+  if (document.activeElement === $("#composeRich")) scheduleGhost(0);
+}
+
+function courseFlowLabel(c) {
+  return [c.title, c.section ? `${c.section}분반` : ""].filter(Boolean).join(" ");
+}
+
+function paintFlowBar() {
+  const bar = $("#mailFlowBar");
+  if (!bar) return;
+  const d = flow.data;
+  bar.hidden = !d || !flowOn();
+  if (bar.hidden) return;
+  const to = d.to || {};
+  const courses = to.courses || [];
+  const role = { professor: "교수님", ta: "조교님" }[to.kind] || "";
+  const who = $("#mailFlowWho");
+  if (who) {
+    const course = courses.length === 1 ? ` · <span data-no-i18n>${escapeHtml(courseFlowLabel(courses[0]))}</span>` : "";
+    who.innerHTML = to.name
+      ? `<strong data-no-i18n>${escapeHtml(to.name)}</strong>${role ? ` <span>${role}</span>` : ""}${course}`
+      : `<span>받는 사람을 넣으면 인사·소개를 맞춰 드려요</span>`;
+  }
+  const sel = $("#mailFlowCourse");
+  if (sel) {
+    // 한 교수님이 내 과목 둘을 맡으면 어느 과목인지 고른다
+    sel.hidden = courses.length < 2;
+    sel.innerHTML = courses
+      .map((c, i) => `<option value="${i}"${i === flow.course ? " selected" : ""}>${escapeHtml(courseFlowLabel(c))}</option>`)
+      .join("");
+  }
+  bar.querySelectorAll("[data-flow-lang]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.flowLang === flow.lang)));
+  const aiHint = $("#mailFlowAiHint");
+  if (aiHint) aiHint.hidden = !aiOn();
+}
+
+/* --- 회색 글씨 --- */
+// 흐름 회색 글씨("1")와 /ai 안내("hint")만 뗀다. AI 가 쓰는 중인 칸("ai")은 aiJob 이 따로 다룬다
+const FLOW_GHOSTS = '[data-ghost="1"], [data-ghost="hint"]';
+function removeGhost() {
+  $("#composeRich")?.querySelectorAll(FLOW_GHOSTS).forEach((n) => n.remove());
+  flow.ghost = null;
+}
+
+function scheduleGhost(delay = 120) {
+  window.clearTimeout(flow.timer);
+  flow.timer = window.setTimeout(refreshGhost, delay);
+}
+
+// 범위의 글을 줄바꿈 그대로 읽는다: 화면 밖에 잠깐 붙여 innerText 로. 끝(뒤쪽 범위는 앞)에 표시 글자를 넣는데,
+// 끝에 붙은 빈 줄(<div><br></div>)은 innerText 에서 줄바꿈을 만들지 않아 '빈 줄에 있다'를 알 수 없었기 때문이다.
+function rangeText(range, markAtEnd) {
+  const frag = range.cloneContents();
+  frag.querySelectorAll("[data-ghost]").forEach((n) => n.remove());
+  const pick = (n) => (markAtEnd ? n.lastChild : n.firstChild);
+  let node = frag;
+  while (pick(node) && (pick(node).nodeType === 3 || (pick(node).nodeType === 1 && !/^(BR|IMG|HR)$/.test(pick(node).nodeName)))) {
+    node = pick(node);
+  }
+  if (node.nodeType === 3) node.data = markAtEnd ? node.data + FLOW_MARK : FLOW_MARK + node.data;
+  else if (markAtEnd) node.appendChild(document.createTextNode(FLOW_MARK));
+  else node.insertBefore(document.createTextNode(FLOW_MARK), node.firstChild);
+  const box = document.createElement("div");
+  box.className = "flow-measure";
+  box.style.whiteSpace = getComputedStyle($("#composeRich")).whiteSpace;
+  box.appendChild(frag);
+  document.body.appendChild(box);
+  const text = box.innerText;
+  box.remove();
+  return text;
+}
+
+function flowTests() {
+  const tests = {};
+  (flow.data?.segments?.[flow.lang] || []).forEach((s) => {
+    try {
+      tests[s.kind] = new RegExp(s.match, "i");
+    } catch (error) {
+      /* 서버가 준 꼴이 이 브라우저에서 안 되면 그 단계만 못 알아본다 */
+    }
+  });
+  return tests;
+}
+
+// 줄 하나가 어느 단계인지. 앞으로만 간다(용건을 쓴 뒤에 '…입니다.' 로 끝나는 줄을 자기소개로 되돌려 보지 않는다)
+function flowKind(line, stage, tests) {
+  return FLOW_TEST_ORDER.find((k) => tests[k] && FLOW_STAGE[k] >= stage && tests[k].test(line)) || "content";
+}
+
+function nextFlowSegment(lines, afterLines = []) {
+  const tests = flowTests();
+  let stage = -1;
+  for (const raw of lines) {
+    const line = raw.replaceAll(FLOW_MARK, "").trim();
+    if (!line) continue;
+    if (FLOW_QUOTE.test(line)) break;
+    stage = Math.max(stage, FLOW_STAGE[flowKind(line, stage, tests)]);
+  }
+  const seg = (flow.data?.segments?.[flow.lang] || []).find((s) => FLOW_STAGE[s.kind] > stage);
+  if (!seg) return null;
+  // 커서 뒤에 이미 그 단계(또는 그 앞 단계·용건)의 글이 있으면 제안하지 않는다. 앞쪽만 보고 골라서, 이미 쓴
+  // 'Thank you …' 위 빈 줄에 같은 문장을 또 띄웠다(2026-10-19 사용자 화면)
+  for (const raw of afterLines) {
+    const line = raw.replaceAll(FLOW_MARK, "").trim();
+    if (!line) continue;
+    if (FLOW_QUOTE.test(line)) break;
+    if (FLOW_STAGE[flowKind(line, stage, tests)] <= FLOW_STAGE[seg.kind]) return null;
+  }
+  return seg;
+}
+
+function refreshGhost() {
+  const rich = $("#composeRich");
+  removeGhost();
+  if (!rich || rich.hidden || flow.muted || aiJob.box || document.activeElement !== rich) return;
+  const sel = window.getSelection();
+  if (!sel?.rangeCount || !sel.isCollapsed) return;
+  const caret = sel.getRangeAt(0);
+  if (!rich.contains(caret.startContainer)) return;
+  const before = document.createRange();
+  before.setStart(rich, 0);
+  before.setEnd(caret.startContainer, caret.startOffset);
+  const after = document.createRange();
+  after.setStart(caret.startContainer, caret.startOffset);
+  after.setEnd(rich, rich.childNodes.length);
+  const lines = rangeText(before, true).split("\n");
+  const here = lines.pop().replaceAll(FLOW_MARK, "").trim();
+  const afterLines = rangeText(after, false).split("\n");
+  const rest = afterLines.shift().replaceAll(FLOW_MARK, "").trim();
+  let seg = null;
+  if (!rest && findAiPrompt(rich, caret)) {
+    // '/ai …' 를 쓰는 중: 줄 끝에 'Ctrl+Enter' 안내를 흐리게 (흐름 미리보기를 꺼도 보인다)
+    seg = { kind: "aihint", text: aiReady() ? aiHintText(rich, caret) : tr("  AI CLI(Claude·Gemini·Codex)를 설치하면 /ai 로 이어 쓸 수 있어요") };
+    if (!seg.text) return;
+  } else {
+    if (here || rest || !flow.data || !flowOn()) return; // 흐름 미리보기는 빈 줄에서만
+    seg = nextFlowSegment(lines, afterLines);
+  }
+  if (!seg) return;
+  const ghost = document.createElement("span");
+  ghost.className = seg.kind === "aihint" ? "flow-ghost ai-hint" : "flow-ghost";
+  ghost.dataset.ghost = seg.kind === "aihint" ? "hint" : "1";
+  ghost.contentEditable = "false";
+  ghost.textContent = seg.text;
+  if (seg.kind !== "aihint") {
+    // 안내 줄 대신 회색 글씨 바로 옆에 Tab 키를 띄운다 (2026-10-21 사용자: 'Tab 회색 글씨 넣기' 글은 빼고 은유로)
+    const key = document.createElement("kbd");
+    key.className = "flow-ghost-key";
+    key.textContent = "Tab";
+    ghost.appendChild(key);
+  }
+  caret.insertNode(ghost);
+  const at = document.createRange();
+  at.setStartBefore(ghost);
+  at.collapse(true);
+  sel.removeAllRanges();
+  sel.addRange(at);
+  flow.ghost = seg;
+}
+
+function acceptGhost() {
+  const rich = $("#composeRich");
+  const ghost = rich?.querySelector(FLOW_GHOSTS);
+  const seg = flow.ghost;
+  if (!ghost || !seg) return false;
+  if (seg.kind === "aihint") {
+    // /ai 안내에서 Tab·클릭 = Ctrl+Enter 와 같다 (안내 글 자체는 넣지 않는다)
+    removeGhost();
+    runAiContinue();
+    return true;
+  }
+  const at = document.createRange();
+  at.setStartBefore(ghost);
+  at.collapse(true);
+  ghost.remove();
+  flow.ghost = null;
+  rich.focus();
+  const sel = window.getSelection();
+  sel.removeAllRanges();
+  sel.addRange(at);
+  // execCommand 로 넣어야 되돌리기(Ctrl+Z)와 자동 저장(input 이벤트)이 그대로 된다. 줄바꿈까지 한 번에 넣어야
+  // Ctrl+Z 한 번에 통째로 빠진다(실측: 크롬은 insertText 의 \n 을 문단으로 나누고, 되돌리기는 한 단계)
+  document.execCommand("insertText", false, seg.text + "\n".repeat(seg.after || 0));
+  scheduleGhost(0);
+  return true;
+}
+
+(() => {
+  const rich = $("#composeRich");
+  if (!rich) return;
+  rich.addEventListener("keydown", (event) => {
+    // AI 가 쓰는 중: 기다리는 동안 Esc = 취소(지시 글을 되돌림), 타자 치는 동안 아무 키 = 바로 끝까지 넣고 그 키는 그대로
+    if (aiJob.box) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
+        if (aiJob.typing) finishAiTyping();
+        else cancelAiContinue();
+        return;
+      }
+      if (aiJob.typing && !["Shift", "Control", "Alt", "Meta", "CapsLock"].includes(event.key)) finishAiTyping();
+    }
+    if (event.key === "Enter" && (event.ctrlKey || event.metaKey) && !event.isComposing) {
+      const sel = window.getSelection();
+      if (sel?.rangeCount && findAiPrompt(rich, sel.getRangeAt(0))) {
+        event.preventDefault();
+        event.stopPropagation();
+        removeGhost();
+        runAiContinue();
+        return;
+      }
+    }
+    const plainTab = event.key === "Tab" && !event.shiftKey && !event.ctrlKey && !event.altKey && !event.metaKey && !event.isComposing;
+    if (plainTab && !flow.ghost) {
+      // 회색 글씨가 뜨기 전(클릭 직후)에 Tab 을 쳐도 바로 받는다. 안 그러면 포커스가 옆 칸으로 넘어갔다
+      flow.muted = false;
+      window.clearTimeout(flow.timer);
+      refreshGhost();
+    }
+    if (!flow.ghost) return;
+    if (event.isComposing || event.keyCode === 229) {
+      removeGhost();
+      return;
+    }
+    if (event.key === "Tab" && !event.shiftKey && !event.ctrlKey && !event.altKey && !event.metaKey) {
+      event.preventDefault();
+      acceptGhost();
+      return;
+    }
+    if (event.key === "Escape") {
+      // 다시 글을 칠 때까지 숨긴다
+      event.preventDefault();
+      event.stopPropagation();
+      flow.muted = true;
+      removeGhost();
+      return;
+    }
+    if (["Shift", "Control", "Alt", "Meta", "CapsLock"].includes(event.key)) return;
+    removeGhost();
+  });
+  rich.addEventListener("input", (event) => {
+    if (event.isComposing) return;
+    flow.muted = false;
+    scheduleGhost();
+  });
+  rich.addEventListener("compositionstart", removeGhost);
+  rich.addEventListener("compositionend", () => scheduleGhost());
+  rich.addEventListener("keyup", (event) => {
+    if (!event.isComposing && /^(Arrow|Home|End|Page|Enter|Backspace|Delete)/.test(event.key)) scheduleGhost();
+  });
+  rich.addEventListener("mouseup", () => scheduleGhost(0));
+  rich.addEventListener("focus", () => {
+    if (!flow.data) loadMailFlow();
+    scheduleGhost(0);
+  });
+  rich.addEventListener("blur", () => {
+    window.clearTimeout(flow.timer);
+    removeGhost();
+  });
+  // 회색 글씨를 누르면 바로 넣는다
+  rich.addEventListener("mousedown", (event) => {
+    if (aiJob.typing && event.target.closest?.('[data-ghost="ai"]')) {
+      event.preventDefault();
+      finishAiTyping();
+      return;
+    }
+    if (!event.target.closest?.(FLOW_GHOSTS)) return;
+    event.preventDefault();
+    acceptGhost();
+  });
+})();
+
+/* --- /ai: 그 자리에서 AI 가 이어 쓰기 (2026-10-19 사용자) ---
+   '/ai' 를 치고 하고 싶은 말(한국어 메모도 됨)을 이어 쓴 뒤 Ctrl+Enter(안내에서 Tab·클릭도) → 지시 글은 지워지고,
+   메일 앞뒤 글에 자연스럽게 이어지는 글이 그 자리에 한 글자씩 타자 치듯 나온다.
+   - CLI 는 답을 한 번에 주므로(10초 안팎) 기다리는 동안 '쓰는 중' 을 보이고, 받은 뒤 글자를 흘려 보여 준다.
+   - 흘리는 동안의 글은 [data-ghost="ai"] 칸이라 저장·보내기에 섞이지 않는다. 다 나오면 execCommand 한 번으로
+     진짜 글로 넣어 Ctrl+Z 한 번이면 빠지고, 한 번 더 누르면 지운 지시 글이 돌아온다. */
+const aiJob = { box: null, typing: false, text: "", prompt: "", seq: 0 };
+
+// 커서 앞에서 가장 가까운 '/ai' (줄 처음이나 띄어쓰기 뒤) → 그 '/' 부터 커서까지의 범위
+function findAiPrompt(rich, caret) {
+  if (!rich || !caret || !rich.contains(caret.startContainer)) return null;
+  const walker = document.createTreeWalker(rich, NodeFilter.SHOW_TEXT, {
+    acceptNode: (n) => (n.parentElement?.closest("[data-ghost]") ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT),
+  });
+  const nodes = [];
+  while (walker.nextNode()) nodes.push(walker.currentNode);
+  for (let i = nodes.length - 1; i >= 0; i -= 1) {
+    const node = nodes[i];
+    if (caret.comparePoint(node, 0) > 0) continue; // 커서 뒤
+    const text = node === caret.startContainer ? node.data.slice(0, caret.startOffset) : node.data;
+    const re = /(^|[\s ])\/ai(?=[\s ]|$)/gi;
+    let at = -1;
+    let m;
+    while ((m = re.exec(text))) at = m.index + m[1].length;
+    if (at < 0) continue;
+    const range = document.createRange();
+    range.setStart(node, at);
+    range.setEnd(caret.startContainer, caret.startOffset);
+    return range;
+  }
+  return null;
+}
+
+function aiFlowTo() {
+  const to = flow.data?.to || {};
+  const courses = to.courses || [];
+  const ordered = courses[flow.course] ? [courses[flow.course], ...courses.filter((_, i) => i !== flow.course)] : courses;
+  return { ...to, courses: ordered };
+}
+
+async function runAiContinue() {
+  const rich = $("#composeRich");
+  const sel = window.getSelection();
+  if (!rich || aiJob.box || !sel?.rangeCount) return;
+  const prompt = findAiPrompt(rich, sel.getRangeAt(0));
+  if (!prompt) return;
+  closeAiModelPop();
+  await loadAiStatus();
+  if (!aiReady()) {
+    showToast("AI CLI(Claude·Gemini·Codex)가 이 컴퓨터에 없어요. 하나를 설치하고 터미널에서 한 번 로그인해 주세요.");
+    return;
+  }
+  removeGhost();
+  // '/ai [할 말]' 의 닫는 ']' 가 커서 바로 뒤에 있으면 그것까지 지시 글로 지운다
+  if (prompt.endContainer.nodeType === Node.TEXT_NODE && prompt.endContainer.data[prompt.endOffset] === "]") {
+    prompt.setEnd(prompt.endContainer, prompt.endOffset + 1);
+  }
+  const raw = rangeText(prompt, true).replaceAll(FLOW_MARK, "");
+  const cmd = parseAiCommand(raw);
+  if (cmd.token && !cmd.choice) {
+    showToast(`'${cmd.token}' 모델을 못 찾았어요. with 뒤에 모델 이름을 고르세요 (예: opus5.5)`);
+    return;
+  }
+  const instruction = cmd.instruction;
+  if (!instruction) {
+    showToast("[ ] 안에 무엇을 쓸지 적어 주세요. 예: /ai [10월 20일 기업탐방 때문에 결석, 공결 되는지 여쭤보기]");
+    return;
+  }
+  const beforeRange = document.createRange();
+  beforeRange.setStart(rich, 0);
+  beforeRange.setEnd(prompt.startContainer, prompt.startOffset);
+  const afterRange = document.createRange();
+  afterRange.setStart(prompt.endContainer, prompt.endOffset);
+  afterRange.setEnd(rich, rich.childNodes.length);
+  const before = rangeText(beforeRange, true).replaceAll(FLOW_MARK, "");
+  const after = rangeText(afterRange, false).replaceAll(FLOW_MARK, "");
+  // 지시 글을 지우고(되돌리기 한 단계) 그 자리에 '쓰는 중' 칸을 둔다
+  rich.focus();
+  sel.removeAllRanges();
+  sel.addRange(prompt);
+  document.execCommand("delete");
+  const spot = window.getSelection().getRangeAt(0).cloneRange();
+  const box = document.createElement("span");
+  box.className = "ai-typing waiting";
+  box.dataset.ghost = "ai";
+  box.contentEditable = "false";
+  // 쓰는 동안 그 회사 로고가 움직인다 (Claude 별꽃은 돌며 숨 쉬고, Gemini 는 반짝, OpenAI 는 천천히 돈다)
+  const who = cmd.choice || { provider: currentAiModel().provider, label: providerLabel() };
+  box.innerHTML = `${aiLogo(who.provider, "busy")}<span>${escapeHtml(tr(`${who.label} 가 쓰는 중`))}</span>`;
+  spot.insertNode(box);
+  const at = document.createRange();
+  at.setStartBefore(box);
+  at.collapse(true);
+  window.getSelection().removeAllRanges();
+  window.getSelection().addRange(at);
+  const seq = ++aiJob.seq;
+  Object.assign(aiJob, { box, typing: false, text: "", prompt: raw.trim() });
+  try {
+    const res = await api("/api/ai/continue", {
+      method: "POST",
+      body: JSON.stringify({
+        instruction, before: before.slice(-6000), after: after.slice(0, 3000), lang: flow.lang || "ko", flow: { to: aiFlowTo() },
+        // '/ai with opus5.5 [ … ]' 로 고른 모델은 이번 한 번만 (평소 모델은 쓰기 창의 모델 단추)
+        provider: cmd.choice?.provider || "", model: cmd.choice?.id || "",
+      }),
+    });
+    if (seq !== aiJob.seq || aiJob.box !== box) return; // 그사이 취소됨
+    let text = String(res.text || "").trim();
+    if (!text) throw new Error("AI 가 빈 답을 줬어요. 다시 눌러 주세요.");
+    // 'I am writing to' 처럼 띄어쓰기 없이 끝난 앞 글에 붙일 때는 한 칸 띄운다
+    const prev = before.slice(-1);
+    if (prev && !/[\s (\[“"']/.test(prev)) text = " " + text;
+    aiJob.text = text;
+    typeOutAi(seq);
+  } catch (error) {
+    if (seq !== aiJob.seq) return;
+    cancelAiContinue();
+    showToast(humanError(error));
+  }
+}
+
+// 받은 글을 한 글자씩 (짧으면 천천히, 길어도 4초 안에 끝나게)
+function typeOutAi(seq) {
+  const box = aiJob.box;
+  const text = aiJob.text;
+  if (!box) return;
+  box.classList.remove("waiting");
+  box.textContent = "";
+  aiJob.typing = true;
+  const duration = Math.min(4000, Math.max(700, text.length * 22));
+  const started = performance.now();
+  const step = (now) => {
+    if (seq !== aiJob.seq || aiJob.box !== box || !aiJob.typing) return;
+    const n = Math.min(text.length, Math.ceil(((now - started) / duration) * text.length));
+    box.textContent = text.slice(0, n);
+    if (n >= text.length) finishAiTyping();
+    else window.requestAnimationFrame(step);
+  };
+  window.requestAnimationFrame(step);
+  // 창이 뒤에 있으면 그림 틀(rAF)이 멈춘다(실측: 미리보기 창에서 글이 반쯤에서 서 있었다). 시간이 지나면 마저 넣는다
+  window.setTimeout(() => {
+    if (seq === aiJob.seq && aiJob.box === box) finishAiTyping();
+  }, duration + 600);
+}
+
+// 흘리던 칸을 진짜 글로 바꾼다 (한 번에 넣어야 Ctrl+Z 한 번으로 빠진다)
+function finishAiTyping() {
+  const rich = $("#composeRich");
+  const box = aiJob.box;
+  const text = aiJob.text;
+  Object.assign(aiJob, { box: null, typing: false, text: "" });
+  aiJob.seq += 1;
+  if (!box) return;
+  if (!rich?.contains(box) || !text) {
+    box.remove();
+    return;
+  }
+  const back = document.activeElement !== rich ? document.activeElement : null;
+  const at = document.createRange();
+  at.setStartBefore(box);
+  at.collapse(true);
+  box.remove();
+  rich.focus();
+  const sel = window.getSelection();
+  sel.removeAllRanges();
+  sel.addRange(at);
+  document.execCommand("insertText", false, text);
+  if (back && back !== document.body) back.focus();
+  else scheduleGhost(0);
+}
+
+// 기다리다 취소·실패: 지운 지시 글을 그 자리에 되돌린다
+function cancelAiContinue() {
+  const rich = $("#composeRich");
+  const box = aiJob.box;
+  const prompt = aiJob.prompt;
+  Object.assign(aiJob, { box: null, typing: false, text: "" });
+  aiJob.seq += 1;
+  if (!box) return;
+  if (!rich?.contains(box)) return;
+  const at = document.createRange();
+  at.setStartBefore(box);
+  at.collapse(true);
+  box.remove();
+  rich.focus();
+  const sel = window.getSelection();
+  sel.removeAllRanges();
+  sel.addRange(at);
+  if (prompt) document.execCommand("insertText", false, prompt);
+}
+
+["input", "change"].forEach((type) =>
+  $("#composeTo")?.addEventListener(type, () => {
+    window.clearTimeout(flow.toTimer);
+    flow.toTimer = window.setTimeout(() => loadMailFlow(), type === "change" ? 0 : 500);
+  }),
+);
+
+// 흐름 줄의 단추는 누르는 동안 본문 포커스를 뺏지 않는다(커서 자리를 지켜야 회색 글씨가 그 자리에 다시 뜬다)
+$("#mailFlowBar")?.addEventListener("mousedown", (event) => {
+  if (event.target.closest("button")) event.preventDefault();
+});
+$("#mailFlowBar")?.addEventListener("click", (event) => {
+  const b = event.target.closest("[data-flow-lang]");
+  if (!b) return;
+  flow.lang = b.dataset.flowLang;
+  flow.muted = false;
+  paintFlowBar();
+  scheduleGhost(0);
+});
+$("#mailFlowCourse")?.addEventListener("change", (event) => {
+  flow.course = Number(event.target.value) || 0;
+  loadMailFlow(true);
+});
+
+window.setTimeout(() => loadMailMe(), 4500);
+
+/* ===== /ai 명령: '/ai [할 말]', '/ai with opus5.5 [할 말]' (2026-10-20 사용자) =====
+   '명령어 치듯이 [ ] 안에 쓰게, 모델은 /ai with ____ 로 — 예: /ai with opus5.5'. [ ] 없이 '/ai 할 말' 도 예전처럼 된다.
+   with 를 치면 커서 아래에 쓸 수 있는 모델 목록이 뜨고(설치된 CLI 만), 고르면 'opus5.5 []' 가 들어가 [ ] 안에 커서가 선다.
+   고른 모델은 이번 한 번만 쓰고, 평소 모델은 쓰기 창 위의 모델 단추에서 바꾼다. */
+const aiAlias = (label) => String(label || "").toLowerCase().replace(/\s+/g, "");
+
+function aiModelChoices() {
+  const models = state.ai.status?.models || {};
+  const out = [];
+  Object.entries(models).forEach(([provider, info]) =>
+    (info.models || []).forEach((m) => out.push({ provider, id: m.id, label: m.label, alias: aiAlias(m.label) })),
+  );
+  return out;
+}
+
+function resolveAiModel(token) {
+  const t = aiAlias(token);
+  if (!t) return null;
+  const list = aiModelChoices();
+  return list.find((c) => c.alias === t || c.id.toLowerCase() === t) || list.find((c) => c.alias.startsWith(t)) || null;
+}
+
+// '/ai with opus5.5 [할 말]' → { token: 'opus5.5', choice, instruction: '할 말', bracket: true }
+function parseAiCommand(raw) {
+  let rest = String(raw || "").replace(/^\s*\/ai/i, "");
+  let token = "";
+  const w = rest.match(/^\s+with\s+([^\s[\]]+)/i);
+  if (w) {
+    token = w[1];
+    rest = rest.slice(w[0].length);
+  }
+  const open = rest.indexOf("[");
+  let instruction = rest;
+  if (open >= 0) {
+    const close = rest.lastIndexOf("]");
+    instruction = rest.slice(open + 1, close > open ? close : undefined);
+  }
+  return { token, choice: token ? resolveAiModel(token) : null, instruction: instruction.trim(), bracket: open >= 0 };
+}
+
+// 줄 끝 회색 안내: 막 '/ai' 만 쳤으면 쓰는 법, 'with ' 뒤 모델을 고르는 중이면 안내 없이 목록만
+function aiHintText(rich, caret) {
+  const prompt = findAiPrompt(rich, caret);
+  if (!prompt) return "";
+  const raw = rangeText(prompt, true).replaceAll(FLOW_MARK, "");
+  if (/^\s*\/ai\s+with(\s+[^\s[\]]*)?$/i.test(raw)) return "";
+  const cmd = parseAiCommand(raw);
+  if (!cmd.bracket && !cmd.instruction && !cmd.token) return keyLabel(tr("  [prompt]  ·  with 모델  ·  Ctrl+Enter"));
+  const who = cmd.choice?.label || providerLabel();
+  return keyLabel(tr(`  Ctrl+Enter — ${who} 가 이어 써요`));
+}
+
+/* --- with 뒤 모델 고르기 목록 --- */
+const aiPop = { el: null, items: [], index: 0, partial: "" };
+
+function closeAiModelPop() {
+  if (aiPop.el) aiPop.el.hidden = true;
+  aiPop.items = [];
+}
+
+// 커서가 '/ai with ' 바로 뒤(또는 모델 이름을 치는 중)인가
+function aiWithContext() {
+  const rich = $("#composeRich");
+  const sel = window.getSelection();
+  if (!rich || !sel?.rangeCount || !sel.isCollapsed) return null;
+  const caret = sel.getRangeAt(0);
+  const prompt = findAiPrompt(rich, caret);
+  if (!prompt) return null;
+  const raw = rangeText(prompt, true).replaceAll(FLOW_MARK, "");
+  const m = raw.match(/^\s*\/ai\s+with\s+([^\s[\]]*)$/i);
+  return m ? { caret, partial: m[1] } : null;
+}
+
+function paintAiModelPop() {
+  const ctx = aiWithContext();
+  if (ctx && !state.ai.status) {
+    loadAiStatus().then(paintAiModelPop); // 처음이면 모델 목록부터 받아 온다
+    return;
+  }
+  if (!ctx || !aiReady()) return closeAiModelPop();
+  const want = aiAlias(ctx.partial);
+  const items = aiModelChoices().filter((c) => !want || c.alias.includes(want) || c.id.toLowerCase().includes(want));
+  if (!items.length) return closeAiModelPop();
+  if (!aiPop.el) {
+    aiPop.el = document.createElement("div");
+    aiPop.el.className = "ai-model-pop";
+    aiPop.el.setAttribute("role", "listbox");
+    document.body.appendChild(aiPop.el);
+    // 누를 때 글 칸의 커서를 잃지 않게 mousedown 에서 고른다
+    aiPop.el.addEventListener("mousedown", (event) => {
+      const row = event.target.closest("[data-i]");
+      if (!row) return;
+      event.preventDefault();
+      chooseAiModel(Number(row.dataset.i));
+    });
+  }
+  if (aiPop.partial !== ctx.partial) aiPop.index = 0;
+  aiPop.partial = ctx.partial;
+  aiPop.items = items;
+  aiPop.index = Math.min(aiPop.index, items.length - 1);
+  const names = { claude: "Claude", gemini: "Gemini", codex: "Codex" };
+  aiPop.el.innerHTML =
+    items
+      .map(
+        (c, i) => `<div class="ai-model-opt${i === aiPop.index ? " on" : ""}" data-i="${i}" role="option" aria-selected="${i === aiPop.index}">
+          ${aiLogo(c.provider)}<code>${escapeHtml(c.alias)}</code><span>${escapeHtml(c.label)}</span></div>`,
+      )
+      .join("") + `<div class="ai-model-foot">${escapeHtml(keyLabel(tr("↑↓ 고르기 · Tab 넣기 · 그다음 [ ] 안에 쓰고 Ctrl+Enter")))}</div>`;
+  const rect = ctx.caret.getBoundingClientRect();
+  const fallback = $("#composeRich").getBoundingClientRect();
+  const top = (rect.bottom || fallback.top + 24) + 6;
+  const left = Math.min(rect.left || fallback.left, window.innerWidth - 320);
+  Object.assign(aiPop.el.style, { top: `${Math.round(top)}px`, left: `${Math.round(Math.max(8, left))}px` });
+  aiPop.el.hidden = false;
+}
+
+function chooseAiModel(i) {
+  const c = aiPop.items[i];
+  if (!c) return;
+  const rich = $("#composeRich");
+  const sel = window.getSelection();
+  rich.focus();
+  // 치던 모델 이름을 지우고 'opus5.5 []' 를 넣은 뒤 커서를 [ ] 안에 둔다 (되돌리기 한 번에 빠진다)
+  for (let k = 0; k < aiPop.partial.length; k += 1) sel.modify("extend", "backward", "character");
+  document.execCommand("insertText", false, `${c.alias} []`);
+  sel.modify("move", "backward", "character");
+  closeAiModelPop();
+  scheduleGhost(0);
+}
+
+(() => {
+  const rich = $("#composeRich");
+  if (!rich) return;
+  // 목록이 떠 있을 때는 화살표·Tab·Enter·Esc 를 먼저 받는다 (다른 키 처리보다 앞서게 capture)
+  rich.addEventListener(
+    "keydown",
+    (event) => {
+      if (!aiPop.items.length || aiPop.el?.hidden || event.isComposing) return;
+      const n = aiPop.items.length;
+      let handled = true;
+      if (event.key === "ArrowDown") aiPop.index = (aiPop.index + 1) % n;
+      else if (event.key === "ArrowUp") aiPop.index = (aiPop.index - 1 + n) % n;
+      else if (event.key === "Tab" || (event.key === "Enter" && !event.ctrlKey && !event.metaKey)) chooseAiModel(aiPop.index);
+      else if (event.key === "Escape") closeAiModelPop();
+      else handled = false;
+      if (!handled) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      if (aiPop.items.length && !aiPop.el.hidden) paintAiModelPop();
+    },
+    true,
+  );
+  rich.addEventListener("input", () => window.requestAnimationFrame(paintAiModelPop));
+  rich.addEventListener("click", () => window.requestAnimationFrame(paintAiModelPop));
+  rich.addEventListener("blur", () => window.setTimeout(closeAiModelPop, 120));
+})();
+
+/* ===== AI 모델 고르기 (2026-10-21 사용자: '채팅 창처럼 말고 명령어처럼, 모델은 회사 → 세부 모델로 고르게,
+   각 회사 실제 로고로 — Claude 는 더 역동적이잖아') =====
+   - 'AI 초안' 입력 칸(채팅처럼 한 줄 적고 누르던 것)은 없앴다. AI 는 본문에서 '/ai [할 말]' 로만 부른다.
+   - 쓰기 창 위 모델 단추 → 회사 목록(설치됨 초록 점·지금 쓰는 것 ✓) → 옆으로 세부 모델(설명·꼬리표, CLI 기본, 직접 입력).
+   - 로고: Simple Icons(CC0)의 Claude·Google Gemini·OpenAI 그림(web/img/ai/). 색·움직임을 주려고 경로를 여기 넣었다.
+     AI 가 쓰는 동안 Claude 는 별꽃이 돌며 숨 쉬고, Gemini 는 반짝이고, OpenAI 는 천천히 돈다. */
+const AI_LOGO_PATHS = {"claude": "m4.7144 15.9555 4.7174-2.6471.079-.2307-.079-.1275h-.2307l-.7893-.0486-2.6956-.0729-2.3375-.0971-2.2646-.1214-.5707-.1215-.5343-.7042.0546-.3522.4797-.3218.686.0608 1.5179.1032 2.2767.1578 1.6514.0972 2.4468.255h.3886l.0546-.1579-.1336-.0971-.1032-.0972L6.973 9.8356l-2.55-1.6879-1.3356-.9714-.7225-.4918-.3643-.4614-.1578-1.0078.6557-.7225.8803.0607.2246.0607.8925.686 1.9064 1.4754 2.4893 1.8336.3643.3035.1457-.1032.0182-.0728-.164-.2733-1.3539-2.4467-1.445-2.4893-.6435-1.032-.17-.6194c-.0607-.255-.1032-.4674-.1032-.7285L6.287.1335 6.6997 0l.9957.1336.419.3642.6192 1.4147 1.0018 2.2282 1.5543 3.0296.4553.8985.2429.8318.091.255h.1579v-.1457l.1275-1.706.2368-2.0947.2307-2.6957.0789-.7589.3764-.9107.7468-.4918.5828.2793.4797.686-.0668.4433-.2853 1.8517-.5586 2.9021-.3643 1.9429h.2125l.2429-.2429.9835-1.3053 1.6514-2.0643.7286-.8196.85-.9046.5464-.4311h1.0321l.759 1.1293-.34 1.1657-1.0625 1.3478-.8804 1.1414-1.2628 1.7-.7893 1.36.0729.1093.1882-.0183 2.8535-.607 1.5421-.2794 1.8396-.3157.8318.3886.091.3946-.3278.8075-1.967.4857-2.3072.4614-3.4364.8136-.0425.0304.0486.0607 1.5482.1457.6618.0364h1.621l3.0175.2247.7892.522.4736.6376-.079.4857-1.2142.6193-1.6393-.3886-3.825-.9107-1.3113-.3279h-.1822v.1093l1.0929 1.0686 2.0035 1.8092 2.5075 2.3314.1275.5768-.3218.4554-.34-.0486-2.2039-1.6575-.85-.7468-1.9246-1.621h-.1275v.17l.4432.6496 2.3436 3.5214.1214 1.0807-.17.3521-.6071.2125-.6679-.1214-1.3721-1.9246L14.38 17.959l-1.1414-1.9428-.1397.079-.674 7.2552-.3156.3703-.7286.2793-.6071-.4614-.3218-.7468.3218-1.4753.3886-1.9246.3157-1.53.2853-1.9004.17-.6314-.0121-.0425-.1397.0182-1.4328 1.9672-2.1796 2.9446-1.7243 1.8456-.4128.164-.7164-.3704.0667-.6618.4008-.5889 2.386-3.0357 1.4389-1.882.929-1.0868-.0062-.1579h-.0546l-6.3385 4.1164-1.1293.1457-.4857-.4554.0608-.7467.2307-.2429 1.9064-1.3114Z", "gemini": "M11.04 19.32Q12 21.51 12 24q0-2.49.93-4.68.96-2.19 2.58-3.81t3.81-2.55Q21.51 12 24 12q-2.49 0-4.68-.93a12.3 12.3 0 0 1-3.81-2.58 12.3 12.3 0 0 1-2.58-3.81Q12 2.49 12 0q0 2.49-.96 4.68-.93 2.19-2.55 3.81a12.3 12.3 0 0 1-3.81 2.58Q2.49 12 0 12q2.49 0 4.68.96 2.19.93 3.81 2.55t2.55 3.81", "codex": "M22.2819 9.8211a5.9847 5.9847 0 0 0-.5157-4.9108 6.0462 6.0462 0 0 0-6.5098-2.9A6.0651 6.0651 0 0 0 4.9807 4.1818a5.9847 5.9847 0 0 0-3.9977 2.9 6.0462 6.0462 0 0 0 .7427 7.0966 5.98 5.98 0 0 0 .511 4.9107 6.051 6.051 0 0 0 6.5146 2.9001A5.9847 5.9847 0 0 0 13.2599 24a6.0557 6.0557 0 0 0 5.7718-4.2058 5.9894 5.9894 0 0 0 3.9977-2.9001 6.0557 6.0557 0 0 0-.7475-7.0729zm-9.022 12.6081a4.4755 4.4755 0 0 1-2.8764-1.0408l.1419-.0804 4.7783-2.7582a.7948.7948 0 0 0 .3927-.6813v-6.7369l2.02 1.1686a.071.071 0 0 1 .038.052v5.5826a4.504 4.504 0 0 1-4.4945 4.4944zm-9.6607-4.1254a4.4708 4.4708 0 0 1-.5346-3.0137l.142.0852 4.783 2.7582a.7712.7712 0 0 0 .7806 0l5.8428-3.3685v2.3324a.0804.0804 0 0 1-.0332.0615L9.74 19.9502a4.4992 4.4992 0 0 1-6.1408-1.6464zM2.3408 7.8956a4.485 4.485 0 0 1 2.3655-1.9728V11.6a.7664.7664 0 0 0 .3879.6765l5.8144 3.3543-2.0201 1.1685a.0757.0757 0 0 1-.071 0l-4.8303-2.7865A4.504 4.504 0 0 1 2.3408 7.872zm16.5963 3.8558L13.1038 8.364 15.1192 7.2a.0757.0757 0 0 1 .071 0l4.8303 2.7913a4.4944 4.4944 0 0 1-.6765 8.1042v-5.6772a.79.79 0 0 0-.407-.667zm2.0107-3.0231l-.142-.0852-4.7735-2.7818a.7759.7759 0 0 0-.7854 0L9.409 9.2297V6.8974a.0662.0662 0 0 1 .0284-.0615l4.8303-2.7866a4.4992 4.4992 0 0 1 6.6802 4.66zM8.3065 12.863l-2.02-1.1638a.0804.0804 0 0 1-.038-.0567V6.0742a4.4992 4.4992 0 0 1 7.3757-3.4537l-.142.0805L8.704 5.459a.7948.7948 0 0 0-.3927.6813zm1.0976-2.3654l2.602-1.4998 2.6069 1.4998v2.9994l-2.5974 1.4997-2.6067-1.4997Z"};
+const AI_BRAND = {
+  claude: { name: "Claude", cli: "Claude Code" },
+  gemini: { name: "Gemini", cli: "Gemini CLI" },
+  codex: { name: "ChatGPT", cli: "Codex CLI" },
+};
+// 세부 모델 설명·꼬리표 (모르는 모델은 이름만)
+const AI_MODEL_NOTES = {
+  fable: ["가장 뛰어난 최신 모델", "최고 성능", "hot"],
+  opus: ["깊은 추론 · 긴 글", "", ""],
+  sonnet: ["성능과 속도의 균형", "추천", "pick"],
+  haiku: ["가장 빠르고 가벼움", "빠름", "fast"],
+  "gemini-3.1-pro-preview": ["최신 · 깊은 추론", "최고 성능", "hot"],
+  "gemini-2.5-pro": ["안정적인 깊은 추론", "추천", "pick"],
+  "gemini-3.5-flash": ["빠른 최신 모델", "빠름", "fast"],
+  "gemini-2.5-flash": ["빠르고 가벼움", "빠름", "fast"],
+};
+
+function aiLogo(provider, cls = "") {
+  const d = AI_LOGO_PATHS[provider];
+  if (!d) return `<span class="ai-logo ${cls}" aria-hidden="true"></span>`;
+  return `<svg class="ai-logo ai-logo-${provider} ${cls}" viewBox="0 0 24 24" aria-hidden="true"><path d="${d}"/></svg>`;
+}
+
+const aiMenu = { el: null, provider: "" };
+
+function closeAiMenu() {
+  if (aiMenu.el) aiMenu.el.hidden = true;
+  $("#aiDraftToggle")?.setAttribute("aria-expanded", "false");
+}
+
+function aiModelRow(id, title, note, tag, tone, chosenId) {
+  const on = chosenId === id;
+  const tagHtml = tag ? `<em class="ai-tag ${tone}">${escapeHtml(tag)}</em>` : "";
+  const noteHtml = note ? `<span>${escapeHtml(note)}</span>` : "";
+  return `<button type="button" class="ai-model${on ? " on" : ""}" data-model="${escapeHtml(id)}">
+      <span class="ai-model-text"><strong>${escapeHtml(title)}${tagHtml}</strong>${noteHtml}</span>
+      ${on ? '<span class="ai-check">✓</span>' : ""}</button>`;
+}
+
+function paintAiMenu() {
+  const st = state.ai.status || {};
+  const now = currentAiModel();
+  const models = st.models || {};
+  const order = ["codex", "gemini", "claude"];
+  if (!aiMenu.provider) aiMenu.provider = now.provider || order.find((p) => st.available?.[p]) || "claude";
+  const providers = order
+    .map((p) => {
+      const has = Boolean(st.available?.[p]);
+      const current = p === now.provider;
+      const brand = AI_BRAND[p];
+      const sub = !has ? tr("설치 안 됨") : current ? now.label : brand.cli;
+      const mark = current ? '<span class="ai-check">✓</span>' : '<span class="ai-chev">›</span>';
+      const cls = `ai-prov${current ? " current" : ""}${p === aiMenu.provider ? " open" : ""}${has ? "" : " missing"}`;
+      return `<button type="button" class="${cls}" data-prov="${p}">
+        <span class="ai-prov-dot${has ? " on" : ""}"></span>${aiLogo(p)}
+        <span class="ai-prov-text"><strong>${escapeHtml(brand.name)}</strong><span>${escapeHtml(sub)}</span></span>${mark}
+      </button>`;
+    })
+    .join("");
+  const p = aiMenu.provider;
+  const brand = AI_BRAND[p];
+  const list = models[p]?.models || [];
+  const chosenId = now.provider === p ? st.profile?.model || "" : null;
+  let modelRows;
+  if (st.available?.[p]) {
+    const defaultTitle = tr("기본 ({0} 설정)").replace("{0}", brand.cli);
+    const rows = [aiModelRow("", defaultTitle, tr("CLI 에 설정된 기본 모델을 그대로 써요"), "", "", chosenId)];
+    list.forEach((m) => {
+      const [note, tag, tone] = AI_MODEL_NOTES[m.id] || ["", "", ""];
+      const title = p === "claude" && !/^claude/i.test(m.label) ? `Claude ${m.label}` : m.label;
+      rows.push(aiModelRow(m.id, title, note ? tr(note) : "", tag ? tr(tag) : "", tone, chosenId));
+    });
+    const ph = escapeHtml(tr("직접 입력… (예: claude-opus-5-5)"));
+    rows.push(`<form class="ai-model-custom" data-custom><input type="text" placeholder="${ph}" maxlength="64" spellcheck="false" /></form>`);
+    modelRows = rows.join("");
+  } else {
+    modelRows = `<p class="ai-model-missing">${escapeHtml(tr("이 컴퓨터에 없어요. 설치하고 터미널에서 한 번 로그인해 주세요."))}</p>`;
+  }
+  aiMenu.el.innerHTML = `
+    <div class="ai-menu-models">
+      <div class="ai-menu-head">${aiLogo(p)}<span>${escapeHtml(brand.name)} · ${escapeHtml(brand.cli)}</span></div>
+      ${modelRows}
+    </div>
+    <div class="ai-menu-provs">
+      <div class="ai-menu-head"><span>${escapeHtml(tr("AI 모델"))}</span></div>
+      ${providers}
+      <p class="ai-menu-foot">${escapeHtml(tr("본문에 /ai [prompt] · 한 번만 바꾸려면 /ai with 모델 [prompt]"))}</p>
+    </div>`;
+}
+
+function openAiMenu() {
+  if (!aiMenu.el) {
+    aiMenu.el = document.createElement("div");
+    aiMenu.el.className = "ai-menu";
+    aiMenu.el.hidden = true;
+    aiMenu.el.setAttribute("role", "menu");
+    document.body.appendChild(aiMenu.el);
+    aiMenu.el.addEventListener("mouseover", (event) => {
+      const prov = event.target.closest("[data-prov]");
+      if (prov && prov.dataset.prov !== aiMenu.provider) {
+        aiMenu.provider = prov.dataset.prov;
+        paintAiMenu();
+      }
+    });
+    aiMenu.el.addEventListener("click", async (event) => {
+      const prov = event.target.closest("[data-prov]");
+      if (prov) {
+        aiMenu.provider = prov.dataset.prov;
+        paintAiMenu();
+        return;
+      }
+      const m = event.target.closest("[data-model]");
+      if (m) await pickAiModel(aiMenu.provider, m.dataset.model);
+    });
+    aiMenu.el.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const v = event.target.querySelector("input")?.value.trim() || "";
+      if (!/^[A-Za-z0-9._:-]{1,64}$/.test(v)) {
+        showToast("모델 이름은 영문·숫자·.-_: 만 64자까지 쓸 수 있어요");
+        return;
+      }
+      await pickAiModel(aiMenu.provider, v);
+    });
+    document.addEventListener("mousedown", (event) => {
+      if (aiMenu.el.hidden) return;
+      if (aiMenu.el.contains(event.target) || event.target.closest("#aiDraftToggle")) return;
+      closeAiMenu();
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && !aiMenu.el.hidden) closeAiMenu();
+    });
+  }
+  aiMenu.provider = "";
+  paintAiMenu();
+  const btn = $("#aiDraftToggle").getBoundingClientRect();
+  aiMenu.el.hidden = false;
+  const w = aiMenu.el.offsetWidth;
+  Object.assign(aiMenu.el.style, {
+    top: `${Math.round(btn.bottom + 8)}px`,
+    left: `${Math.round(Math.max(8, Math.min(btn.left, window.innerWidth - w - 8)))}px`,
+  });
+  $("#aiDraftToggle").setAttribute("aria-expanded", "true");
+}
+
+async function pickAiModel(provider, model) {
+  if (!state.ai.status?.available?.[provider]) {
+    showToast(tr("이 컴퓨터에 없어요. 설치하고 터미널에서 한 번 로그인해 주세요."));
+    return;
+  }
+  try {
+    await saveAiProfile({ provider, model });
+    paintAiModelButton();
+    paintAiMenu();
+    showToast(`${currentAiModel().label} 로 쓸게요`);
+    window.setTimeout(closeAiMenu, 250);
+  } catch (error) {
+    showToast(humanError(error));
+  }
+}
+
+// 쓰기 창 위 단추: [로고] 모델 이름 ▾
+function paintAiModelButton() {
+  const btn = $("#aiDraftToggle");
+  if (!btn) return;
+  const now = currentAiModel();
+  btn.innerHTML = `${aiLogo(now.provider || "claude")}<span id="aiDraftModelName">${escapeHtml(now.label)}</span><span class="ai-btn-chev" aria-hidden="true">▾</span>`;
+  btn.title = tr("AI 모델 바꾸기 · 본문에 /ai [prompt]");
+  btn.setAttribute("aria-haspopup", "menu");
+}
+
+// Gemini 로고의 파랑→보라 그라데이션 (CSS fill:url(#aiGeminiGrad) 가 쓴다)
+(() => {
+  const defs = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  defs.setAttribute("width", "0");
+  defs.setAttribute("height", "0");
+  defs.setAttribute("aria-hidden", "true");
+  defs.style.position = "absolute";
+  defs.innerHTML = '<defs><linearGradient id="aiGeminiGrad" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#1c7dff"/><stop offset=".55" stop-color="#6e6bf0"/><stop offset="1" stop-color="#c26be8"/></linearGradient></defs>';
+  document.body.appendChild(defs);
+})();

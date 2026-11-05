@@ -56,13 +56,23 @@ def atomic_write_json(path: Any, data: Any, **dump_kwargs: Any) -> None:
     atomic_write_text(path, json.dumps(data, **dump_kwargs))
 
 
-def _default_root() -> Path:
+def default_data_root() -> Path:
+    """설정이 따로 없을 때의 데이터 폴더. web_ui·작업 프로세스가 모두 이것을 따른다 (둘이 어긋나면 다른 폴더를 본다).
+
+    맥: 새로 까는 맥은 애플 표준 위치(~/Library/Application Support/Daling, 2026-10-20~). 예전 판을 쓰던 맥은
+    ~/.lms-autosaver 가 이미 있으므로 그대로 쓴다 — 옮기지 않는다. 설정·메타데이터에 절대 경로가 들어 있고
+    맥에서 직접 확인할 수 없어서, 옮기다 꼬이면 받은 자료·메일이 안 보이게 된다.
+    그래서 어디에서도 ~/.lms-autosaver 를 새로 만들면 안 된다 (만들면 다음 실행부터 옛 자리로 돌아간다).
+    """
     if os.name == "nt":
         return Path(r"C:\lms-autosaver")
-    return Path.home() / ".lms-autosaver"
+    legacy = Path.home() / ".lms-autosaver"
+    if sys.platform == "darwin" and not legacy.exists():
+        return Path.home() / "Library" / "Application Support" / "Daling"
+    return legacy
 
 
-AUTOSAVER_DATA_ROOT = Path(os.environ.get("AUTOSAVER_DATA_ROOT", str(_default_root())))
+AUTOSAVER_DATA_ROOT = Path(os.environ.get("AUTOSAVER_DATA_ROOT", str(default_data_root())))
 CONFIG_JSON_PATH = Path(
     os.environ.get("AUTOSAVER_CONFIG_PATH", str(AUTOSAVER_DATA_ROOT / "config.json"))
 )
@@ -164,6 +174,52 @@ def _keychain_unprotect(text: str) -> str:
         return ""
 
 
+# 작업 프로세스(--autosaver-job)가 키체인을 직접 읽지 않게, 앱 본체(web_ui.run_process)가 풀어 둔 비밀 값을
+# 표준 입력 한 줄(JSON)로 넘겨준다. 맥은 업데이트마다 키체인이 다시 묻는데(FEATURES '서명 인증서'), 작업 프로세스가
+# 읽으면 60분·180분마다 뒤에서 암호 창이 뜨고, '거부' 하면 빈 비밀번호로 로그인 실패가 되어 자동 재시도가 멈췄다
+# (2026-10-21 맥·리눅스 점검 4번). 파이프는 두 프로세스 사이에만 있어 환경 변수·파일처럼 남이 볼 수 없다.
+SECRETS_STDIN_FLAG = "AUTOSAVER_SECRETS_STDIN"
+
+
+# 앱 본체가 못 읽어 빈 값으로 넘긴 비밀 설정의 까닭 {키: 사람 말} (web_ui._secret_handover 의 "_secret_errors")
+_HANDED_ERRORS: dict[str, str] = {}
+
+
+def _read_handed_secrets() -> dict[str, str] | None:
+    """앱 본체가 넘긴 비밀 값. 넘겨받는 작업이 아니면 None (예전처럼 저장소에서 직접 읽는다)."""
+    if os.environ.pop(SECRETS_STDIN_FLAG, "") != "1":  # 손주 프로세스(node 등)에 물려주지 않게 바로 뺀다
+        return None
+    try:
+        line = sys.stdin.readline() if sys.stdin else ""
+        data = json.loads(line) if line.strip() else {}
+    except Exception:
+        data = {}
+    if not isinstance(data, dict):
+        return {}
+    # 까닭은 따로 꺼낸다 — 비밀 값 개수(점검의 handed=)에 들지 않게
+    errors = data.pop("_secret_errors", None)
+    if isinstance(errors, dict):
+        _HANDED_ERRORS.update({str(k): str(v) for k, v in errors.items()})
+    return {str(k): str(v) for k, v in data.items()}
+
+
+_HANDED_SECRETS = _read_handed_secrets()
+
+# 표시('keychain:<키>' 등)는 있는데 값을 못 꺼낸 비밀 설정과 그 까닭 {키: 사람 말}. _load_config 가 채운다.
+# email_reader·lms_crawler 가 '계정을 먼저 입력해 주세요'·'ID/비밀번호를 확인해 주세요' 대신 이 까닭을 보인다
+# (2026-10-22 맥 신고: 업데이트 뒤 키체인을 못 읽어 LMS·메일이 함께 실패했는데 화면은 계정을 넣으라고만 했다).
+SECRET_READ_ERRORS: dict[str, str] = {}
+
+
+def _store_error() -> str:
+    try:
+        import secret_store
+
+        return secret_store.last_error() or "까닭을 알 수 없음"
+    except Exception:
+        return "까닭을 알 수 없음"
+
+
 def _load_config() -> dict[str, Any]:
     if CONFIG_JSON_PATH.exists():
         data = _read_json(CONFIG_JSON_PATH)
@@ -173,12 +229,23 @@ def _load_config() -> dict[str, Any]:
         data = {}
     else:
         data = _read_legacy_config()
+    errors: dict[str, str] = {}
     for key in SECRET_KEYS:
         value = data.get(key)
         if isinstance(value, str) and value.startswith(DPAPI_PREFIX):
             data[key] = _dpapi_unprotect(value)
         elif _is_store_marker(value):  # 맥: 'keychain:' 만, 리눅스: 'keychain:'·'secretfile:', Windows: 없음
-            data[key] = _keychain_unprotect(value)
+            # 넘겨받은 작업은 저장소를 아예 열지 않는다 — 본체가 못 읽은 값(빈 문자열)도 여기서 묻지 않는다
+            if _HANDED_SECRETS is not None:
+                data[key] = _HANDED_SECRETS.get(key, "")
+                if not data[key]:
+                    errors[key] = _HANDED_ERRORS.get(key) or "앱이 키체인에서 이 값을 넘겨주지 못함"
+            else:
+                data[key] = _keychain_unprotect(value)
+                if not data[key]:
+                    errors[key] = _store_error()
+    SECRET_READ_ERRORS.clear()
+    SECRET_READ_ERRORS.update(errors)
     return data
 
 
@@ -197,6 +264,19 @@ SCHOOL_EMAIL = str(_CONFIG.get("SCHOOL_EMAIL", ""))
 SCHOOL_EMAIL_PASSWORD = str(_CONFIG.get("SCHOOL_EMAIL_PASSWORD", ""))
 SCHOOL_IMAP_HOST = str(_CONFIG.get("SCHOOL_IMAP_HOST", "mail.dgist.ac.kr"))
 SCHOOL_IMAP_PORT = int(_CONFIG.get("SCHOOL_IMAP_PORT", 993))
+
+
+def refresh_secrets() -> None:
+    """맥 화면 프로세스: 켤 때는 키체인을 묻지 않고 읽어(mac_keychain.quiet_startup) 비밀 상수가 비어 있을 수 있다.
+    창이 뜬 뒤 허락을 받으면(app.py) 다시 채운다. 함수 안에서 `from runtime_config import X` 로 꺼내 쓰는 곳
+    (translator·timetable_import·dgist_api)은 새 값을 본다."""
+    global _CONFIG, LMS_PASSWORD, GEMINI_API_KEY, DGIST_API_KEY, EMAIL_PASSWORD, SCHOOL_EMAIL_PASSWORD
+    _CONFIG = _load_config()
+    LMS_PASSWORD = str(_CONFIG.get("LMS_PASSWORD", ""))
+    GEMINI_API_KEY = str(_CONFIG.get("GEMINI_API_KEY", ""))
+    DGIST_API_KEY = str(_CONFIG.get("DGIST_API_KEY", ""))
+    EMAIL_PASSWORD = str(_CONFIG.get("EMAIL_PASSWORD", ""))
+    SCHOOL_EMAIL_PASSWORD = str(_CONFIG.get("SCHOOL_EMAIL_PASSWORD", ""))
 SCHOOL_SMTP_HOST = str(_CONFIG.get("SCHOOL_SMTP_HOST", "smtp.dgist.ac.kr"))
 SCHOOL_SMTP_PORT = int(_CONFIG.get("SCHOOL_SMTP_PORT", 465))
 EMAIL_INTERESTS = str(_CONFIG.get("EMAIL_INTERESTS", "전공 탐색, 취업, 음악, 세미나"))
@@ -234,6 +314,8 @@ LAST_SYNC_PATH = str(AUTOSAVER_DATA_ROOT / "last_sync.json")
 COURSES_STATE_PATH = str(AUTOSAVER_DATA_ROOT / "courses_state.json")
 # 과목별 교수·조교 (LMS 코스 사용자에서 학생을 뺀 것). 메일 받는 사람 찾기와 강의 카드에 쓴다.
 COURSE_STAFF_PATH = str(AUTOSAVER_DATA_ROOT / "course_staff.json")
+# 내 이름·학번·학교 메일 (LMS /users/me). 메일 쓰기의 자기소개·서명에 쓴다. 전화번호 등은 받지 않는다.
+LMS_PROFILE_PATH = str(AUTOSAVER_DATA_ROOT / "lms_profile.json")
 
 SYNC_MODE = os.environ.get("AUTOSAVER_SYNC_MODE", "fast").strip().lower()
 
@@ -266,7 +348,7 @@ GOOGLE_CLIENT_SECRETS_PATH = str(
     Path(
         os.environ.get(
             "AUTOSAVER_GOOGLE_CLIENT_SECRETS",
-            str(_default_root() / "credentials.json"),
+            str(default_data_root() / "credentials.json"),
         )
     )
 )
@@ -286,7 +368,32 @@ GOOGLE_CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar.app.created"
 GOOGLE_CALENDAR_LIST_SCOPE = "https://www.googleapis.com/auth/calendar.calendarlist.readonly"
 # 예전에 연결한 사람의 token.json 에는 이 권한이 남아 있다. 그대로 계속 쓸 수 있다.
 GOOGLE_LEGACY_CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar"
+# Drive 전체 읽기. 1.12.38 에서 메일 'Drive에서 첨부' 가 내 Drive 전체·공유 문서함을 보려고 요청했으나 1.12.40 에서 다시 뺐다.
+# 구글은 이것을 '제한된 범위' 로 분류한다: 심사(시연 영상·보안 평가) 전엔 연결할 때 '확인되지 않은 앱' 경고가 뜨고,
+# 이 권한을 받은 사람이 평생 100명을 넘을 수 없다(2026-10-25 콘솔 '대상': 100명 중 3명). 예전 토큰은 drive.file 뿐이라
+# 업데이트하자마자 '다시 연결' 을 요구한 것도 문제였다. Drive 전체에서 고르는 일은 구글 고르기 창(Picker, web_ui.create_drive_pick_url)
+# 이 맡는다 — 고른 파일에만 drive.file 권한이 생기고, 민감하지 않은 범위라 심사가 필요 없다.
+# 이미 이 권한을 허락한 토큰은 그대로 쓴다(Drive 창이 전체를 보여 준다). 새로 요청하지만 않는다.
+GOOGLE_DRIVE_READ_SCOPE = "https://www.googleapis.com/auth/drive.readonly"
 GOOGLE_SCOPES = [GOOGLE_DRIVE_SCOPE, GOOGLE_CALENDAR_SCOPE, GOOGLE_CALENDAR_LIST_SCOPE]
+
+
+def granted_token_json(creds) -> str:
+    """연결을 마친 토큰을 token.json 으로. 'scopes' 에는 사용자가 실제로 허락한 권한만 적는다.
+
+    구글 동의 화면은 권한을 하나씩 끌 수 있다(예: 경고가 뜨는 Drive 전체 읽기만 끄기). google-auth 의 to_json 은
+    '요청한' 권한을 적어, 앱이 없는 권한을 있는 줄 알고(Drive 창이 조용히 일부만 보임) 갱신 때 그 권한까지 달라고 했다.
+    부르는 쪽은 OAUTHLIB_RELAX_TOKEN_SCOPE 를 켜 둔다 — 안 켜면 하나만 꺼도 'Scope has changed' 로 연결 전체가 실패한다.
+    """
+    import json
+
+    data = json.loads(creds.to_json())
+    granted = getattr(creds, "granted_scopes", None)
+    if isinstance(granted, str):
+        granted = granted.split()
+    if granted:
+        data["scopes"] = list(granted)
+    return json.dumps(data)
 
 
 def calendar_scope_granted(granted: set[str] | list[str]) -> bool:
@@ -305,7 +412,7 @@ PLAYWRIGHT_HEADLESS = os.environ.get("AUTOSAVER_HEADLESS", "1").lower() not in {
 
 # ===== 하위 작업(새로고침·동기화) 실행 방식 =====
 # 소스로 돌 때는 `python -c "..."` 로 하위 프로세스를 띄우면 된다.
-# 그런데 EXE 로 묶이면 sys.executable 이 '붕어빵.exe' 라서, 같은 방식으로 부르면
+# 그런데 EXE 로 묶이면 sys.executable 이 'Daling.exe' 라서, 같은 방식으로 부르면
 # -c 가 무시된 채 앱이 통째로 다시 켜진다. (새로고침할 때마다 창이 하나씩 더 뜨고,
 #  정작 크롤링은 돌지 않는다) 그래서 EXE 일 때는 이 인자를 붙여
 # app.py 가 창을 띄우지 않고 작업만 하고 끝나도록 한다.

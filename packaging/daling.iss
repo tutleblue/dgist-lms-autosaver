@@ -1,0 +1,225 @@
+﻿; Daling - DGIST LMS AutoSaver
+; Inno Setup 설치 스크립트
+;
+; 이 설치 프로그램이 해결하는 것:
+;  - zip 배포 시 모든 파일에 붙던 MOTW(차단 표시) → 설치된 파일에는 붙지 않음
+;  - WebView2 런타임 미설치 환경 → 부트스트래퍼 자동 실행
+;  - .NET Framework 4.7.2 미만 → 설치 전에 명확한 안내로 중단
+
+; 이름은 Daling. 1.12.53 부터 설치 폴더·실행 파일·설치 파일 이름도 Daling 이다(예전 이름은 붕어빵).
+; AppId 는 그대로라 예전 판 위에 설치하면 업데이트로 알아보고, 예전 폴더(Programs\붕어빵)는
+; 앱을 닫은 뒤 지운다(아래 PrepareToInstall·[InstallDelete]). 사용자 데이터는 다른 폴더라 건드리지 않는다.
+#define AppName "Daling"
+#define AppFolder "Daling"
+#define OldFolder "붕어빵"
+; 버전은 build_installer.ps1 이 VERSION 파일에서 읽어 /DAppVersion 으로 넘긴다
+#ifndef AppVersion
+  #define AppVersion "1.11.0"
+#endif
+#define AppPublisher "Daling"
+#define AppURL "https://github.com/tutleblue/dgist-lms-autosaver"
+#define AppExe "Daling.exe"
+
+[Setup]
+AppId={{8F3A6C21-4D9B-4E77-9C1A-5B2E7F0A9D64}
+AppName={#AppName}
+AppVersion={#AppVersion}
+AppVerName={#AppName} {#AppVersion}
+AppPublisher={#AppPublisher}
+AppPublisherURL={#AppURL}
+AppSupportURL={#AppURL}/issues
+AppUpdatesURL={#AppURL}/releases
+VersionInfoVersion={#AppVersion}
+VersionInfoDescription={#AppName} - DGIST LMS AutoSaver
+VersionInfoCompany={#AppPublisher}
+
+; 코드 서명: build_installer.ps1 이 서명 인증서가 있으면 /DSign /Sbpsign=... 으로 넘긴다.
+; 설치 파일과 제거 프로그램(unins000.exe)도 서명한다 (Defender 오탐 대비, packaging\sign_tools.ps1 참고)
+#ifdef Sign
+SignTool=bpsign
+SignedUninstaller=yes
+#endif
+
+; 관리자 권한 없이 사용자 폴더에 설치 → 공용/제한 PC에서도 UAC 없이 설치됨
+PrivilegesRequired=lowest
+DefaultDirName={localappdata}\Programs\{#AppFolder}
+; 예전 판이 기억한 폴더(Programs\붕어빵)를 다시 쓰지 않고 새 폴더로 옮긴다
+UsePreviousAppDir=no
+DefaultGroupName={#AppName}
+DisableProgramGroupPage=yes
+; 이름을 바꾼 뒤 업데이트하면 Inno 가 예전 시작 메뉴 폴더(붕어빵)를 다시 써서 '붕어빵' 폴더 안에 Daling 이 생겼다
+UsePreviousGroup=no
+; 단계는 앱처럼 짧게: 환영(달구) → 추가 옵션 → 설치 → 완료.
+; 설치 위치·'모든 사용자' 고르기·'준비됨' 확인은 학생에게 필요 없어 뺐다 (사용자 폴더에 설치)
+DisableDirPage=yes
+DisableWelcomePage=no
+DisableReadyPage=yes
+AllowNoIcons=yes
+
+; x64 전용 빌드 (arm64에서는 에뮬레이션으로 동작)
+ArchitecturesAllowed=x64compatible
+ArchitecturesInstallIn64BitMode=x64compatible
+
+OutputDir=out
+OutputBaseFilename=daling-{#AppVersion}-win-x64-setup
+SetupIconFile=payload\_internal\web\app.ico
+UninstallDisplayIcon={app}\{#AppExe}
+UninstallDisplayName={#AppName} {#AppVersion}
+
+Compression=lzma2/max
+SolidCompression=yes
+; 앱과 같은 모양으로: 크림색 바탕(--bg #faf9f5), 왼쪽은 사이드바 색(--bg-deep)에 달구,
+; 어두운 모드는 윈도우 설정을 따라 앱의 다크 색(--bg #262624)으로. 구분선은 뺀다.
+; 그림은 scripts/make_installer_art.py 가 만든다 (배율별 4벌, Inno 가 맞는 크기를 고른다)
+WizardStyle=modern dynamic windows11 hidebevels
+; 언어 고르기 창을 건너뛴다 (윈도우 언어가 한국어면 한국어, 아니면 영어)
+ShowLanguageDialog=no
+WizardBackColor=#faf9f5
+WizardBackColorDynamicDark=#262624
+WizardImageFile=art\wizard-100.png,art\wizard-125.png,art\wizard-150.png,art\wizard-200.png
+WizardImageBackColor=#f0eee6
+WizardImageBackColorDynamicDark=#1f1e1d
+WizardSmallImageFile=art\small-100.png,art\small-125.png,art\small-150.png,art\small-200.png
+; 어두운 모드는 따로 적지 않으면 Inno 기본 상자 그림이 나온다 (그림은 배경이 투명해 두 모드에 같이 쓴다)
+WizardImageFileDynamicDark=art\wizard-100.png,art\wizard-125.png,art\wizard-150.png,art\wizard-200.png
+WizardSmallImageFileDynamicDark=art\small-100.png,art\small-125.png,art\small-150.png,art\small-200.png
+
+; 실행 중이면 닫도록 유도 (재부팅 요구 없이)
+CloseApplications=yes
+CloseApplicationsFilter=*.exe
+RestartApplications=no
+
+[Languages]
+Name: "korean"; MessagesFile: "compiler:Languages\Korean.isl"
+Name: "english"; MessagesFile: "compiler:Default.isl"
+
+[Messages]
+; 앱 말투로 짧게 (기본 문구는 '마법사' 같은 딱딱한 말이 많다)
+korean.WelcomeLabel1=Daling을 설치할게요
+; 개인정보 안내: SignPath Foundation 서명 조건(설치 중 개인정보 처리 고지). 자세한 것은 PRIVACY.md
+korean.WelcomeLabel2=LMS 강의자료, 과제 마감, 학교 메일을 한 화면에 모아 주는 앱이에요.%n%n개인정보: 로그인 정보와 받은 자료는 이 PC에만 저장되고, 개발자에게 보내지 않아요. 직접 연결한 Google Drive·Calendar로만 보냅니다.%n자세히: github.com/tutleblue/dgist-lms-autosaver/blob/main/PRIVACY.md
+english.WelcomeLabel2=Collects your LMS materials, deadlines and school mail in one place.%n%nPrivacy: your sign-in details and files stay on this PC and are never sent to the developer — only to the Google Drive/Calendar you connect.%nDetails: github.com/tutleblue/dgist-lms-autosaver/blob/main/PRIVACY.md
+korean.ClickNext=[다음] 을 누르면 바로 설치해요. 1분이면 끝나요.
+korean.FinishedHeadingLabel=설치를 마쳤어요
+korean.FinishedLabel=이제 Daling을 쓸 수 있어요.%n처음 켜면 달구가 앱을 짧게 소개해 줄 거예요.
+korean.FinishedLabelNoIcons=이제 Daling을 쓸 수 있어요.
+korean.ClickFinish=[마침] 을 누르면 창이 닫힙니다.
+korean.SelectTasksLabel2=원하는 것만 켜고 [다음] 을 눌러 주세요.
+
+[Tasks]
+Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
+Name: "startupicon"; Description: "Windows 시작 시 자동 실행"; GroupDescription: "추가 옵션:"; Flags: unchecked
+
+[Files]
+Source: "payload\{#AppExe}"; DestDir: "{app}"; Flags: ignoreversion
+Source: "payload\_internal\*"; DestDir: "{app}\_internal"; Flags: ignoreversion recursesubdirs createallsubdirs
+; WebView2 런타임이 없는 PC에서만 실행됨
+Source: "MicrosoftEdgeWebview2Setup.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall; Check: NeedsWebView2
+
+[Icons]
+; 아이콘은 daling.ico: Windows 가 아이콘을 파일 경로로 기억해, 같은 app.ico 를 가리키면 옛 물고기가 남았다
+Name: "{group}\{#AppName}"; Filename: "{app}\{#AppExe}"; WorkingDir: "{app}"; IconFilename: "{app}\_internal\web\daling.ico"
+Name: "{group}\{cm:UninstallProgram,{#AppName}}"; Filename: "{uninstallexe}"
+Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; WorkingDir: "{app}"; IconFilename: "{app}\_internal\web\daling.ico"; Tasks: desktopicon
+Name: "{userstartup}\{#AppName}"; Filename: "{app}\{#AppExe}"; WorkingDir: "{app}"; Tasks: startupicon
+
+[Run]
+; 아이콘 캐시 새로 고침: 실행 파일 경로가 그대로라 작업 표시줄·프로그램 목록이 옛 아이콘을 기억했다(로고 교체 2026-10-11)
+Filename: "{sys}\ie4uinit.exe"; Parameters: "-show"; Flags: runhidden nowait
+Filename: "{tmp}\MicrosoftEdgeWebview2Setup.exe"; Parameters: "/silent /install"; StatusMsg: "WebView2 런타임을 설치하는 중입니다..."; Check: NeedsWebView2; Flags: waituntilterminated
+Filename: "{app}\{#AppExe}"; Description: "{cm:LaunchProgram,{#AppName}}"; WorkingDir: "{app}"; Flags: nowait postinstall skipifsilent
+; 앱 안 '지금 업데이트' 는 /SILENT /RELAUNCH=1 로 부른다. 조용히 설치한 뒤 앱을 다시 켠다 (updater.py)
+Filename: "{app}\{#AppExe}"; WorkingDir: "{app}"; Flags: nowait runasoriginaluser; Check: ShouldRelaunch
+
+[InstallDelete]
+; 이름을 Daling 으로 바꾸기 전에 만든 '붕어빵' 바로가기 (그대로 두면 바탕화면·시작 메뉴에 둘이 생긴다)
+Type: files; Name: "{autodesktop}\붕어빵.lnk"
+Type: files; Name: "{userstartup}\붕어빵.lnk"
+Type: files; Name: "{group}\붕어빵.lnk"
+Type: files; Name: "{userprograms}\붕어빵\붕어빵.lnk"
+Type: files; Name: "{userprograms}\붕어빵\붕어빵 제거.lnk"
+Type: files; Name: "{userprograms}\붕어빵\Daling.lnk"
+Type: files; Name: "{userprograms}\붕어빵\Daling 제거.lnk"
+Type: dirifempty; Name: "{userprograms}\붕어빵"
+; 예전 설치 폴더(붕어빵.exe). 그 안의 앱은 PrepareToInstall 에서 먼저 닫는다. 프로그램 파일만 있는 곳이다
+; (데이터는 C:\lms-autosaver, 받은 자료는 문서 폴더)
+Type: filesandordirs; Name: "{localappdata}\Programs\{#OldFolder}"
+
+[UninstallRun]
+; 삭제할 때는 설치와 달리 켜져 있는 앱을 닫아 주지 않는다. 창을 닫아도 알림 영역에서 돌고 있으면
+; 쓰이는 파일 48개를 못 지우고 '삭제 완료' 라고 끝나 반쯤 남은 폴더가 된다(2026-09-28 재현).
+; 앱과 뒤에서 도는 작업을 먼저 닫는다. 이름(/IM Daling.exe)으로 닫으면 같은 exe 이름을 쓰는 Store 판(MSIX)까지
+; 동기화·삼성 노트 가져오기 도중에 끊겼다. 이 설치 폴더에서 돈 프로세스만(자식 브라우저까지 /T) 닫는다.
+; unins*.exe 는 빼야 삭제 프로그램이 스스로를 닫지 않는다.
+Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Command ""Get-CimInstance Win32_Process | Where-Object {{ $_.ExecutablePath -and $_.ExecutablePath.StartsWith('{app}\', [StringComparison]::OrdinalIgnoreCase) -and $_.Name -notlike 'unins*' }} | ForEach-Object {{ taskkill.exe /F /T /PID $_.ProcessId }}"""; Flags: runhidden waituntilterminated; RunOnceId: "CloseDaling"
+
+[UninstallDelete]
+; 앱이 설치 폴더 안에 만든 런타임 파일 정리 (사용자 문서는 건드리지 않음)
+Type: filesandordirs; Name: "{app}\_internal"
+Type: dirifempty; Name: "{app}"
+
+[Code]
+const
+  WV2_HKLM = 'SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}';
+  WV2_HKCU = 'SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}';
+  NET472_RELEASE = 461808;
+
+function WebView2Installed: Boolean;
+var
+  V: String;
+begin
+  Result := False;
+  if RegQueryStringValue(HKEY_LOCAL_MACHINE, WV2_HKLM, 'pv', V) then
+    if (V <> '') and (V <> '0.0.0.0') then Result := True;
+  if not Result then
+    if RegQueryStringValue(HKEY_CURRENT_USER, WV2_HKCU, 'pv', V) then
+      if (V <> '') and (V <> '0.0.0.0') then Result := True;
+end;
+
+// 예전 설치 폴더(Programs\붕어빵)에서 도는 앱·작업을 닫는다. CloseApplications 는 새 폴더({app}) 파일만 보므로
+// 예전 앱이 켜진 채로 남아 그 폴더를 지우지 못한다. 앱 안 업데이트도 예전 앱이 이 설치 파일을 띄운다(updater.py).
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+var
+  Code: Integer;
+  OldDir: String;
+begin
+  OldDir := ExpandConstant('{localappdata}\Programs\{#OldFolder}\');
+  if DirExists(OldDir) then
+    Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
+      '-NoProfile -ExecutionPolicy Bypass -Command "Get-CimInstance Win32_Process | Where-Object { $_.ExecutablePath -and $_.ExecutablePath.StartsWith(''' + OldDir + ''', [StringComparison]::OrdinalIgnoreCase) } | ForEach-Object { taskkill.exe /F /T /PID $_.ProcessId }"',
+      '', SW_HIDE, ewWaitUntilTerminated, Code);
+  Result := '';
+end;
+
+function ShouldRelaunch: Boolean;
+begin
+  Result := WizardSilent and (ExpandConstant('{param:relaunch|0}') = '1');
+end;
+
+function NeedsWebView2: Boolean;
+begin
+  Result := not WebView2Installed;
+end;
+
+function DotNetOK: Boolean;
+var
+  Rel: Cardinal;
+begin
+  Result := False;
+  if RegQueryDWordValue(HKEY_LOCAL_MACHINE,
+       'SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full', 'Release', Rel) then
+    Result := Rel >= NET472_RELEASE;
+end;
+
+function InitializeSetup: Boolean;
+begin
+  Result := True;
+  if not DotNetOK then
+  begin
+    MsgBox('Daling을 실행하려면 .NET Framework 4.7.2 이상이 필요합니다.' + #13#10#13#10 +
+           'Windows Update를 먼저 실행하거나 아래 주소에서 설치한 뒤 다시 시도해 주세요.' + #13#10 +
+           'https://dotnet.microsoft.com/download/dotnet-framework',
+           mbCriticalError, MB_OK);
+    Result := False;
+  end;
+end;

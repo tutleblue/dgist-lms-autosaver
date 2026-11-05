@@ -20,6 +20,15 @@
     (SecKeychain* 함수는 deprecated 지만 macOS 15 에서도 로그인 키체인에 그대로 동작한다.
      새 SecItem + Data Protection 키체인은 팀 ID 서명이 있어야 해서 ad-hoc 앱은 못 쓴다.)
 
+앱 안 업데이트 넘겨주기 (2026-10-15)
+    위 partition 때문에 새 판은 옛 항목을 못 읽고, 사용자는 업데이트마다 '키체인 암호 입력' 창을 본다. 고칠 길은 CI 로
+    다 재 봤고(mac_keychain_lab) 되는 것은 '새 판이 못 읽는 옛 항목을 묻지 않고 지우기' 하나뿐이었다. 그래서 앱 안
+    업데이트(updater._run_update)는 옛 판이 기억한 {키: 값} 을 데이터 폴더의 keychain-handoff.json(0600)에 적고
+    (write_handoff), 새 판은 처음 키체인을 읽을 때 그 파일이 있으면 묻는 창을 막고 읽어 본다(_restore_handoff).
+    못 읽으면(-25293) 옛 항목을 지우고 파일 값으로 제 항목을 다시 만든 뒤 파일을 지운다. 읽히면(업데이트가 실패해
+    옛 판이 다시 켜짐) 파일만 지운다. 하루 지났거나 깨진 파일은 쓰지 않고 지운다. 대가: 업데이트하는 몇 초 동안
+    같은 사용자의 프로세스가 그 파일을 읽을 수 있다. DMG 끌어 놓기·한 줄 설치는 넘겨줄 틈이 없어 예전처럼 한 번 묻는다.
+
 읽기 빈도
     web_ui.read_config 는 요청마다 불린다. 매번 키체인을 열면 느리고, 사용자가 '거부' 를
     누른 뒤에는 묻는 창이 끝없이 뜬다. 그래서 한 번 읽은 내용은 프로세스 안에 기억하고
@@ -27,10 +36,14 @@
 """
 from __future__ import annotations
 
+import contextlib
 import json
+import os
+import stat
 import sys
 import threading
 import time
+from pathlib import Path
 
 PREFIX = "keychain:"
 SERVICE = "Daling"
@@ -39,24 +52,54 @@ RETRY_SECONDS = 300
 
 _ERR_SUCCESS = 0
 _ERR_NOT_FOUND = -25300  # errSecItemNotFound
+# 묻는 창을 막고 읽었는데 이 빌드에 허락이 없을 때 (CI 실측은 -25293, 잠긴 키체인 등은 -25308)
+_ERR_SILENT_DENIED = (-25293, -25308)
+
+HANDOFF_NAME = "keychain-handoff.json"
+HANDOFF_MAX_AGE = 24 * 3600  # 이보다 오래된 넘겨주기 파일은 쓰지 않고 지운다
+# 우리끼리 쓰는 상태 값: 창이 뜬 뒤 묻는 중(unlock_interactive)이라 기다리지 않고 비워 둔다
+_ERR_WAITING = -99001
 _STATUS_TEXT = {
-    -128: "사용자가 키체인 접근을 거부했습니다",          # errSecUserCanceled
-    -25293: "키체인 암호가 맞지 않습니다",               # errSecAuthFailed
+    -128: "키체인 접근을 거부했습니다",                  # errSecUserCanceled
+    -25293: "이 판에 키체인 허락이 없습니다",            # errSecAuthFailed (업데이트 뒤 옛 항목, CI 실측)
     -25308: "키체인 접근을 물어볼 수 없는 상태입니다",     # errSecInteractionNotAllowed
     -25307: "기본 키체인이 없습니다",                    # errSecNoDefaultKeychain
+    _ERR_WAITING: "키체인 허락을 기다리는 중입니다",
 }
 
 _lock = threading.Lock()
 _cache: dict[str, str] | None = None
 _retry_at = 0.0
 _api = None
+last_handoff = ""  # 넘겨주기 결과 (값은 담지 않는다, 점검·기록용)
+# 켤 때 멈추지 않게 (2026-10-22 맥 신고 → CI 실측: 업데이트한 새 판은 창도 서버도 뜨기 전에 키체인 암호 창에서 멈췄다.
+# app.py 의 `import web_ui` → runtime_config 가 모듈 맨 위에서 비밀값을 풀며 키체인을 열었기 때문).
+# 켤 때는 묻는 창 없이만 읽고(quiet_startup), 허락이 필요하면 표시만 해 둔 뒤 창이 뜨고 나서 묻는다(unlock_interactive).
+_quiet = False
+# ok: 읽었거나 물을 것이 없음 · need: 켤 때 조용히 못 읽어 창이 뜬 뒤 물어야 함 · asking: 묻는 창이 떠 있음
+# (그동안 화면 요청은 기다리지 않고 빈 값) · denied: 물었는데 못 받음(거부 등) — 이 실행에서는 다시 묻지 않는다.
+# 예전에는 거부 뒤 RETRY_SECONDS 가 지나면 아무 요청이나 다시 키체인을 열어 창이 또 떴다(그동안 그 요청은 멈춤).
+# 앱을 다시 켜면 다시 묻고, 설정에서 비밀번호를 다시 저장하면 protect 가 이 판의 항목을 새로 만든다.
+_state = "ok"
+_denied_reason = [""]  # denied 가 된 까닭 (사람 말). 그 뒤 조용히 읽다 나는 '허락 없음' 으로 덮이지 않게
+# 묻는 창이 떠 있는 동안(asking) 저장한 비밀 값. 그동안 이 프로세스에서 키체인을 부르면 그 창이 닫힐 때까지 막힌다
+# (2026-10-22 CI 실행 39712261129: 창이 떠 있는 채 저장하자 옛 항목 지우기가 30초 넘게 멈췄고, _lock 을 쥐고 있어
+# 건강 확인·설정 요청까지 줄줄이 멈췄다). 그래서 잡아 두었다가 창이 닫히면(unlock_interactive) 키체인에 넣는다.
+_pending: dict[str, str] = {}
+# 표시('keychain:<키>')를 풀지 못한 마지막 까닭(사람 말). 비면 마지막 풀기는 됐다.
+# unprotect 는 못 읽으면 빈 문자열을 돌려주는데(DPAPI 실패와 같게), 그 빈 값이 '설정에서 계정을 먼저 입력해 주세요'·
+# 'LMS ID/비밀번호를 확인해 주세요' 로 보여 진짜 까닭(키체인 거부·다시 묻기)이 가려졌다.
+_last_error = ""
 
 
 class KeychainError(RuntimeError):
     def __init__(self, status: int, what: str = "") -> None:
         self.status = status
         text = _STATUS_TEXT.get(status, "키체인 오류")
-        super().__init__(f"{text} (OSStatus {status}{', ' + what if what else ''})")
+        if status == _ERR_WAITING:  # 우리끼리 쓰는 값이라 숫자는 보이지 않는다
+            super().__init__(text)
+        else:
+            super().__init__(f"{text} (OSStatus {status}{', ' + what if what else ''})")
 
 
 def is_marker(value: object) -> bool:
@@ -86,17 +129,22 @@ def _load_api():
         sec.SecKeychainItemFreeContent.restype = ctypes.c_int32
         sec.SecKeychainItemDelete.argtypes = [vp]
         sec.SecKeychainItemDelete.restype = ctypes.c_int32
+        sec.SecKeychainSetUserInteractionAllowed.argtypes = [ctypes.c_ubyte]  # Boolean
+        sec.SecKeychainSetUserInteractionAllowed.restype = ctypes.c_int32
+        sec.SecKeychainGetUserInteractionAllowed.argtypes = [ctypes.POINTER(ctypes.c_ubyte)]
+        sec.SecKeychainGetUserInteractionAllowed.restype = ctypes.c_int32
         cf.CFRelease.argtypes = [vp]
         cf.CFRelease.restype = None
         _api = (ctypes, sec, cf)
     return _api
 
 
-def _names(account: str) -> tuple[bytes, bytes]:
-    return SERVICE.encode("utf-8"), account.encode("utf-8")
+def _names(account: str | None = None) -> tuple[bytes, bytes]:
+    # 기본값을 ACCOUNT 로 묶지 않고 부를 때 읽는다: 점검(smoke_test 넘겨주기)이 ACCOUNT 를 바꿔 실제 설정 항목을 피한다
+    return SERVICE.encode("utf-8"), (account or ACCOUNT).encode("utf-8")
 
 
-def _read_item(account: str = ACCOUNT) -> str | None:
+def _read_item(account: str | None = None) -> str | None:
     """항목 내용. 항목이 없으면 None, 못 읽으면 KeychainError."""
     ctypes, sec, _cf = _load_api()
     service, acct = _names(account)
@@ -117,7 +165,7 @@ def _read_item(account: str = ACCOUNT) -> str | None:
         sec.SecKeychainItemFreeContent(None, data)
 
 
-def _write_item(text: str, account: str = ACCOUNT) -> None:
+def _write_item(text: str, account: str | None = None) -> None:
     """있으면 내용만 바꾸고, 없으면 새로 만든다."""
     ctypes, sec, cf = _load_api()
     service, acct = _names(account)
@@ -140,7 +188,7 @@ def _write_item(text: str, account: str = ACCOUNT) -> None:
         raise KeychainError(status, "쓰기")
 
 
-def _delete_item(account: str = ACCOUNT) -> bool:
+def _delete_item(account: str | None = None) -> bool:
     ctypes, sec, cf = _load_api()
     service, acct = _names(account)
     item = ctypes.c_void_p()
@@ -160,18 +208,7 @@ def _delete_item(account: str = ACCOUNT) -> bool:
     return True
 
 
-def _load(fresh: bool = False) -> dict[str, str]:
-    """{키: 값}. _lock 을 잡은 채로 부른다."""
-    global _cache, _retry_at
-    if _cache is not None and not fresh:
-        return _cache
-    if not fresh and time.monotonic() < _retry_at:
-        raise KeychainError(-25308, "방금 읽지 못해 잠시 쉼")
-    try:
-        raw = _read_item()
-    except KeychainError:
-        _retry_at = time.monotonic() + RETRY_SECONDS
-        raise
+def _parse(raw: str | None) -> dict[str, str]:
     data: dict[str, str] = {}
     if raw:
         try:
@@ -180,33 +217,379 @@ def _load(fresh: bool = False) -> dict[str, str]:
             parsed = {}
         if isinstance(parsed, dict):
             data = {str(k): str(v) for k, v in parsed.items() if isinstance(v, str)}
-    _cache = data
     return data
 
 
-def protect(key: str, value: str) -> str:
-    """값을 키체인에 넣고 config.json 에 적을 표시('keychain:<키>')를 돌려준다. 실패하면 KeychainError."""
-    global _cache
+@contextlib.contextmanager
+def _no_prompt():
+    """이 안에서 키체인은 묻는 창을 띄우지 않고 실패한다. 끝나면 원래대로 (점검이 막아 둔 것을 풀지 않게)."""
+    ctypes, sec, _cf = _load_api()
+    before = ctypes.c_ubyte(1)
+    known = sec.SecKeychainGetUserInteractionAllowed(ctypes.byref(before)) == _ERR_SUCCESS
+    sec.SecKeychainSetUserInteractionAllowed(0)
+    try:
+        yield
+    finally:
+        sec.SecKeychainSetUserInteractionAllowed(before.value if known else 1)
+
+
+def handoff_path() -> Path:
+    """넘겨주기 파일. 데이터 폴더(runtime_config.default_data_root) 에 둔다 — 옛 판과 새 판이 같이 보는 곳."""
+    try:
+        # runtime_config 를 불러오는 중(_load_config → 여기)이어도 AUTOSAVER_DATA_ROOT 는 이미 정해져 있다
+        from runtime_config import AUTOSAVER_DATA_ROOT
+
+        root = Path(AUTOSAVER_DATA_ROOT)
+    except Exception:
+        # runtime_config 를 못 부르는 드문 경우도 default_data_root 와 같은 규칙으로. ~/.lms-autosaver 로 고정하면
+        # write_handoff 가 그 폴더를 새로 만들어 새로 깐 맥이 다음 실행부터 옛 자리로 돌아간다 (CLAUDE.md 29)
+        env = os.environ.get("AUTOSAVER_DATA_ROOT")
+        legacy = Path.home() / ".lms-autosaver"
+        root = Path(env) if env else legacy if legacy.exists() else Path.home() / "Library" / "Application Support" / "Daling"
+    return root / HANDOFF_NAME
+
+
+def _note(text: str) -> None:
+    """넘겨주기 결과를 업데이트 기록(update-mac.log)에 한 줄 남긴다. 값은 절대 적지 않는다."""
+    global last_handoff
+    last_handoff = text
+    try:
+        with open(handoff_path().with_name("update-mac.log"), "a", encoding="utf-8") as log:
+            log.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} 키체인 넘겨주기: {text}\n")
+    except OSError:
+        pass
+
+
+def _unlink(path: Path) -> None:
+    try:
+        path.unlink()
+    except OSError:
+        pass
+
+
+def write_handoff() -> bool:
+    """앱 안 업데이트 직전(updater._run_update): 이 프로세스가 키체인에서 읽어 기억한 {키: 값} 을 새 판에 넘길
+    0600 파일로 적는다. 키체인을 아직 못 읽었으면(_cache None) 적지 않는다 — 새 판은 예전처럼 한 번 묻는다.
+    값이 없어도({}) 적는다: 빈 항목이 남아 있으면 새 판이 비밀도 없는데 암호를 묻게 된다."""
+    if sys.platform != "darwin":
+        return False
     with _lock:
-        data = dict(_load(fresh=_cache is None))
+        if _cache is None:
+            _note("이 판이 키체인을 읽지 않아 넘기지 않음")
+            return False
+        values = dict(_cache)
+        path = handoff_path()
+        payload = json.dumps({"v": 1, "created": time.time(), "values": values}, ensure_ascii=False).encode("utf-8")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        # 다 쓴 뒤 이름만 바꾼다: 반쯤 쓴 파일을 새 판이 읽지 않게. 처음부터 0600 으로 만든다(umask 는 줄이기만 한다)
+        tmp = path.with_name(f".{HANDOFF_NAME}.{os.getpid()}.tmp")
+        _unlink(tmp)
+        fd = os.open(tmp, os.O_CREAT | os.O_EXCL | os.O_WRONLY | getattr(os, "O_NOFOLLOW", 0), 0o600)
+        try:
+            with os.fdopen(fd, "wb") as out:
+                out.write(payload)
+                out.flush()
+                os.fsync(out.fileno())
+            os.replace(tmp, path)
+        except BaseException:
+            _unlink(tmp)
+            raise
+        _note(f"새 판에 넘길 값 {len(values)}개를 적음")
+    return True
+
+
+def drop_handoff() -> None:
+    """업데이트를 시작하지 못했을 때 넘겨주기 파일을 지운다 (옛 판은 키체인을 그대로 읽는다)."""
+    _unlink(handoff_path())
+
+
+def _flock(fd: int, timeout: float = 10.0) -> bool:
+    """넘겨주기 파일을 한 프로세스만 처리하게 (화면 서버와 작업 프로세스가 같이 켜질 수 있다)."""
+    import fcntl
+
+    deadline = time.monotonic() + timeout
+    while True:
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return True
+        except BlockingIOError:
+            if time.monotonic() >= deadline:
+                return False
+            time.sleep(0.05)
+
+
+def _read_handoff(fd: int, st: os.stat_result) -> dict[str, str] | None:
+    """넘겨주기 파일의 {키: 값}. 이 사용자의 0600 파일이 아니거나, 깨졌거나, 하루 지났으면 None."""
+    if not stat.S_ISREG(st.st_mode) or st.st_mode & 0o077 or st.st_uid != os.getuid() or st.st_size > 1 << 20:
+        return None
+    try:
+        chunks = []
+        while chunk := os.read(fd, 1 << 16):
+            chunks.append(chunk)
+        doc = json.loads(b"".join(chunks).decode("utf-8"))
+        age = time.time() - float(doc["created"])
+        values = doc["values"]
+        version = doc.get("v")
+    except Exception:
+        return None
+    # 시계가 조금 뒤로 간 것(몇 분)은 봐준다
+    if version != 1 or not -300 <= age <= HANDOFF_MAX_AGE or not isinstance(values, dict):
+        return None
+    if not all(isinstance(k, str) and isinstance(v, str) for k, v in values.items()):
+        return None
+    return dict(values)
+
+
+def _replace_item(path: Path, values: dict[str, str], delete: bool = True) -> dict[str, str] | None:
+    """못 읽는 옛 항목을 지우고 넘겨받은 값으로 이 판의 항목을 새로 만든다. _no_prompt 안에서 부른다."""
+    if delete:
+        try:
+            _delete_item()
+        except KeychainError as exc:
+            # 옛 항목에 값이 그대로 있다: 파일만 지우고 예전처럼 묻는다
+            _unlink(path)
+            _note(f"옛 항목을 지우지 못해 넘겨받지 않음 (OSStatus {exc.status})")
+            return None
+    try:
+        _write_item(json.dumps(values, ensure_ascii=False))
+        back = _read_item()
+    except KeychainError as exc:
+        # 옛 항목은 지웠고 값은 이 파일에만 있다: 파일을 남겨 다음 실행에서 다시 하고, 이번에는 넘겨받은 값을 쓴다
+        _note(f"새 항목을 만들지 못해 파일을 남김 (OSStatus {exc.status})")
+        return values
+    if _parse(back) != values:
+        _note("새 항목을 다시 읽은 값이 달라 파일을 남김")
+        return values
+    _unlink(path)
+    _note(f"넘겨받아 이 판의 키체인 항목으로 다시 만듦 (값 {len(values)}개)")
+    return values
+
+
+def _restore_handoff() -> dict[str, str] | None:
+    """옛 판이 넘겨준 값이 있으면 묻는 창 없이 이 판의 항목으로 옮긴다. _lock 을 잡은 채로 부른다.
+
+    돌려주는 값은 기억할 {키: 값}. None 이면 넘겨받을 것이 없거나 못 했다 — 부르는 쪽이 예전처럼 읽는다(묻는다).
+    """
+    path = handoff_path()
+    try:
+        fd = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+    except FileNotFoundError:
+        return None
+    except OSError:
+        _unlink(path)  # 링크 같은 이상한 것
+        _note("넘겨주기 파일이 이상해 지움")
+        return None
+    try:
+        if not _flock(fd):
+            return None
+        st = os.fstat(fd)
+        if st.st_nlink == 0:
+            # 기다리는 동안 다른 프로세스가 마쳤다. 새 항목은 같은 실행 파일이 만들어 예전 길로 묻지 않고 읽힌다
+            return None
+        values = _read_handoff(fd, st)
+        if values is None:
+            _unlink(path)
+            _note("하루 지났거나 깨진 넘겨주기 파일을 쓰지 않고 지움")
+            return None
+        with _no_prompt():
+            try:
+                raw = _read_item()
+            except KeychainError as exc:
+                if exc.status not in _ERR_SILENT_DENIED:
+                    _unlink(path)
+                    _note(f"키체인을 읽지 못해 넘겨받지 않음 (OSStatus {exc.status})")
+                    return None
+                # 새 판: partition_id 가 옛 빌드라 못 읽는다 (CI 실측 -25293)
+                return _replace_item(path, values)
+            if raw is None and values:
+                # 항목이 없다 (지난번에 지운 뒤 만들지 못함 등): 넘겨받은 값으로 만든다
+                return _replace_item(path, values, delete=False)
+            # 묻지 않고 읽힌다: 업데이트가 실패해 옛 판이 다시 켜졌다. 키체인이 그대로 맞다
+            _unlink(path)
+            _note("키체인을 그대로 읽어 넘겨주기 파일만 지움")
+            return _parse(raw)
+    finally:
+        os.close(fd)
+
+
+def _load(fresh: bool = False) -> dict[str, str]:
+    """{키: 값}. _lock 을 잡은 채로 부른다."""
+    global _cache, _retry_at, _state
+    if _cache is not None and not fresh:
+        return _cache
+    if _state == "asking":
+        raise KeychainError(_ERR_WAITING)
+    if not fresh and time.monotonic() < _retry_at:
+        raise KeychainError(-25308, "방금 읽지 못해 잠시 쉼")
+    try:
+        handed = _restore_handoff()
+    except Exception:  # 넘겨주기가 어떻게 틀려도 예전 길(묻기)은 남긴다
+        handed = None
+    if handed is not None:
+        _cache = handed
+        _state = "ok"
+        return handed
+    try:
+        if _quiet:
+            with _no_prompt():
+                raw = _read_item()
+        else:
+            raw = _read_item()
+    except KeychainError as exc:
+        if _quiet and exc.status in _ERR_SILENT_DENIED:
+            # 조용히 읽는 중이면 쉬는 시간을 두지 않는다(묻지 않으니 싸다). 켜는 중이면 창이 뜬 뒤 묻는다
+            if _state != "denied":
+                _state = "need"
+        else:
+            _retry_at = time.monotonic() + RETRY_SECONDS
+        raise
+    _cache = _parse(raw)
+    _state = "ok"
+    return _cache
+
+
+def quiet_startup(on: bool = True) -> None:
+    """켤 때(app.py 가 web_ui 를 불러오기 전에): 키체인을 묻는 창 없이만 읽는다. 창이 뜬 뒤 unlock_interactive."""
+    global _quiet
+    _quiet = on
+
+
+def needs_prompt() -> bool:
+    """켜는 동안 조용히 못 읽어 사용자에게 물어야 하는지."""
+    return _state == "need"
+
+
+def waiting() -> bool:
+    """키체인 허락을 기다리는 중인지 (곧 묻거나, 묻는 창이 떠 있다) — 화면이 '허락해 주세요' 로 알린다."""
+    return _state in ("need", "asking")
+
+
+def unlock_interactive() -> bool:
+    """창이 뜬 뒤(app.py, 뒤 스레드): 켤 때 조용히 못 읽었으면 이제 묻는다. 읽었으면(또는 물을 것이 없으면) True.
+
+    묻는 동안 _lock 을 잡지 않는다 — 잡으면 화면의 요청(read_config)이 창이 닫힐 때까지 모두 멈춘다.
+    그동안 _load 는 '허락을 기다리는 중' 으로 곧바로 실패해 unprotect 가 빈 값을 준다(묻는 창 막기 설정이
+    프로세스 전체에 걸리므로, 다른 스레드가 같은 때 조용히 읽으면 이 창이 안 뜨고 실패한다 — 그래서 아예 읽지 않는다).
+    거부하면 denied: 이 실행에서는 다시 묻지 않고 조용히만 읽는다.
+    """
+    global _quiet, _state, _cache, _last_error
+    with _lock:
+        if _state != "need":
+            if _state == "ok":
+                _quiet = False  # 이미 읽었거나 물을 것이 없다: 이제부터는 예전처럼
+            return _state == "ok"
+        _state = "asking"
+    try:
+        raw = _read_item()  # 여기서 'Daling 이 키체인의 "Daling" 키에 접근하려고 함' 창이 뜬다
+    except KeychainError as exc:
+        with _lock:
+            if _pending:
+                # 창이 떠 있는 동안 비밀번호를 다시 저장했다: 못 읽는 옛 항목을 묻지 않고 지우고 그 값으로 새로 만든다
+                try:
+                    _replace_with({}, dict(_pending))
+                    return True
+                except KeychainError:
+                    pass
+            _state = "denied"
+            _quiet = True
+            _last_error = _denied_reason[0] = str(exc)
+        return False
+    with _lock:
+        data = _parse(raw)
+        if _pending:
+            try:
+                _replace_with(data, dict(_pending))
+                return True
+            except KeychainError as exc:
+                _last_error = str(exc)  # 읽기는 됐다: 잡아 둔 값은 기억으로 쓰고 다음 저장 때 다시 넣는다
+                data.update(_pending)
+                _pending.clear()
+        _cache = data
+        _state = "ok"
+        _quiet = False
+        _last_error = ""
+    return True
+
+
+def _replace_with(data: dict[str, str], updates: dict[str, str]) -> None:
+    """_lock 을 잡은 채로: data 에 updates 를 더해 키체인에 넣는다. 그냥 고쳐 쓰지 못하면(이 판에 허락 없음) 옛 항목을
+    묻지 않고 지우고 새로 만든다. 되면 기억·상태를 맞추고 잡아 둔 값을 비운다. 안 되면 KeychainError."""
+    global _cache, _state, _quiet, _last_error
+    merged = dict(data)
+    merged.update(updates)
+    text = json.dumps(merged, ensure_ascii=False)
+    with _no_prompt():
+        try:
+            _write_item(text)
+        except KeychainError:
+            _delete_item()
+            _write_item(text)
+    _cache = merged
+    _pending.clear()
+    _state = "ok"
+    _quiet = False
+    _last_error = ""
+
+
+def protect(key: str, value: str) -> str:
+    """값을 키체인에 넣고 config.json 에 적을 표시('keychain:<키>')를 돌려준다. 실패하면 KeychainError.
+
+    옛 항목을 못 읽으면(업데이트 뒤 거부·허락 없음) 사용자가 지금 비밀번호를 다시 넣는 중이므로, 묻는 창 없이 옛 항목을
+    지우고(CI 실측: 새 판은 못 읽는 옛 항목을 묻지 않고 지울 수 있다, FEATURES 'nextdel') 이 판의 항목을 새로 만든다.
+    예전에는 여기서 실패해 부르는 쪽이 비밀번호를 config.json 에 평문으로 남겼다. 옛 항목의 다른 값은 잃는다 —
+    그 값의 표시는 unprotect 가 '항목에 이 값이 없습니다' 로 알려 다시 넣게 한다.
+    """
+    global _cache, _state, _quiet, _retry_at, _last_error
+    with _lock:
+        if _state == "asking":
+            # 묻는 창이 떠 있다: 지금 키체인을 부르면 그 창이 닫힐 때까지 막힌다. 잡아 두었다가 창이 닫히면 넣는다.
+            # 표시를 돌려줘 config.json 에 평문이 남지 않게 한다 (창이 안 닫힌 채 앱을 끄면 다음에 다시 넣으라고 알린다)
+            _pending[key] = value
+            return PREFIX + key
+        try:
+            data = dict(_load(fresh=_cache is None))
+        except KeychainError as exc:
+            if exc.status not in (-128, *_ERR_SILENT_DENIED):
+                raise
+            with _no_prompt():
+                try:
+                    _delete_item()
+                except KeychainError:
+                    raise exc from None
+            data = {}
+            _retry_at = 0.0
         if data.get(key) != value:
             data[key] = value
             _write_item(json.dumps(data, ensure_ascii=False))
         _cache = data
+        _state = "ok"
+        _quiet = False
+        _last_error = ""
     return PREFIX + key
 
 
 def unprotect(value: str) -> str:
-    """'keychain:<키>' 면 키체인의 값, 아니면 그대로. 못 읽으면 빈 문자열 (DPAPI 실패와 같게)."""
+    """'keychain:<키>' 면 키체인의 값, 아니면 그대로. 못 읽으면 빈 문자열 (DPAPI 실패와 같게) — 까닭은 last_error()."""
+    global _last_error
     if not is_marker(value):
         return value
     key = value[len(PREFIX):]
     with _lock:
         try:
             data = _load()
-        except Exception:
+        except Exception as exc:
+            # KeychainError 는 '키체인 접근을 거부했습니다 (OSStatus -128, 읽기)' 처럼 사람 말을 담는다.
+            # 거부한 뒤에는 조용히 다시 읽다 나는 '허락 없음' 대신 거부했다는 까닭을 그대로 둔다
+            _last_error = (_denied_reason[0] if _state == "denied" and _denied_reason[0] else "") or str(exc) or type(exc).__name__
             return ""
-    return data.get(key, "")
+    found = data.get(key, "")
+    _last_error = "" if found else "키체인의 Daling 항목에 이 값이 없습니다"
+    return found
+
+
+def last_error() -> str:
+    """마지막으로 표시를 풀지 못한 까닭. 됐으면 빈 문자열."""
+    return _last_error
 
 
 def forget(key: str) -> None:

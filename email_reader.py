@@ -16,6 +16,10 @@ import quopri
 import re
 import socket
 import ssl
+import threading
+import time
+import unicodedata
+from contextlib import contextmanager
 from datetime import datetime, timedelta
 from email.header import decode_header
 from email.utils import parseaddr, parsedate_to_datetime
@@ -109,7 +113,52 @@ class MiniIMAP:
                 literal = self.file.read(int(match.group(1)))
             lines.append((line, literal))
 
+    def pipeline(self, commands: list[str]) -> list[tuple[str, list[tuple[bytes, bytes | None]]]]:
+        """여러 명령을 한 번에 보내고 차례대로 답을 읽는다 (IMAP 파이프라이닝, RFC 3501 5.5).
+
+        이 서버는 명령 하나에 왕복 약 0.1초다. 새로고침 때 폴더 5개 × (SELECT·검색 3번) 20번을
+        하나씩 주고받느라 새 메일이 없어도 2초 넘게 걸렸다(2026-10-21 실측 2.4초 / 전체 2.7초).
+        서버는 받은 순서대로 처리하므로, 앞 SELECT 가 바꾼 폴더에서 뒤 검색이 돈다.
+        """
+        tags = []
+        out = []
+        for command in commands:
+            self.tag_n += 1
+            tag = f"A{self.tag_n:03d}"
+            tags.append(tag)
+            out.append(f"{tag} {command}\r\n")
+        self.sock.sendall("".join(out).encode())
+        results = []
+        for tag in tags:
+            lines: list[tuple[bytes, bytes | None]] = []
+            while True:
+                line = self.file.readline()
+                if not line:
+                    raise ConnectionError("서버 연결이 끊겼습니다.")
+                if line.startswith(tag.encode() + b" "):
+                    results.append((line.split(b" ", 2)[1].decode("ascii", "replace"), lines))
+                    break
+                literal = None
+                match = re.search(rb"\{(\d+)\}\r?\n$", line)
+                if match:
+                    literal = self.file.read(int(match.group(1)))
+                lines.append((line, literal))
+        return results
+
+    @staticmethod
+    def search_ids(status: str, lines: list[tuple[bytes, bytes | None]]) -> list[int]:
+        if status != "OK":
+            return []
+        ids: list[int] = []
+        for line, _ in lines:
+            if line.upper().startswith(b"* SEARCH"):
+                ids += [int(n) for n in line.split()[2:] if n.isdigit()]
+        return sorted(ids)
+
+    logins = 0  # 이 프로세스에서 LOGIN 을 보낸 횟수 (session_login_count)
+
     def login(self, user: str, password: str) -> None:
+        MiniIMAP.logins += 1
         quoted_user = '"' + user.replace('\\', '\\\\').replace('"', '\\"') + '"'
         quoted_pw = '"' + password.replace('\\', '\\\\').replace('"', '\\"') + '"'
         status, _ = self.cmd(f"LOGIN {quoted_user} {quoted_pw}")
@@ -226,17 +275,24 @@ class MiniIMAP:
         """
         self.tag_n += 1
         tag = f"A{self.tag_n:03d}"
-        self.sock.sendall(f"{tag} APPEND {self._quote(raw_folder)} {flags} {{{len(data)}}}\r\n".encode())
-        line = self.file.readline()
-        if not line.startswith(b"+"):
-            return False  # 서버가 거절(NO/BAD)
-        self.sock.sendall(data + b"\r\n")
-        while True:
+        # 소켓 시간 제한(20초)은 sendall 전체에 걸린다(파이썬 3.5~). 34MB 메일(첨부 24MB)의 사본이 여기서 끊겨
+        # 보낸 편지함에 안 남았다(2026-10-27 실측). 크기에 맞춰 늘린다 — 초당 128KB 를 바닥으로.
+        old_timeout = self.sock.gettimeout()
+        self.sock.settimeout(max(old_timeout or 20, 20 + len(data) // (128 * 1024)))
+        try:
+            self.sock.sendall(f"{tag} APPEND {self._quote(raw_folder)} {flags} {{{len(data)}}}\r\n".encode())
             line = self.file.readline()
-            if not line:
-                raise ConnectionError("서버 연결이 끊겼습니다.")
-            if line.startswith(tag.encode() + b" "):
-                return line.split(b" ", 2)[1] == b"OK"
+            if not line.startswith(b"+"):
+                return False  # 서버가 거절(NO/BAD)
+            self.sock.sendall(data + b"\r\n")
+            while True:
+                line = self.file.readline()
+                if not line:
+                    raise ConnectionError("서버 연결이 끊겼습니다.")
+                if line.startswith(tag.encode() + b" "):
+                    return line.split(b" ", 2)[1] == b"OK"
+        finally:
+            self.sock.settimeout(old_timeout)
 
     def search_header(self, name: str, value: str, days: int = 60) -> list[int]:
         """헤더 값이 맞는 메일 UID.
@@ -339,6 +395,41 @@ class MiniIMAP:
                 out[match.group(1).decode("ascii")] = literal
         return out
 
+    NAME_PEEK_MAX = 2 * 1024 * 1024
+
+    def _fill_nameless(self, msg_id: int, parts: list[dict]) -> None:
+        """구조에 이름이 빠진 첨부는 메일 앞부분을 받아 그 파트 머리말에서 이름을 읽는다.
+
+        학교 서버는 RFC 2231 꼴(filename*=utf-8''…) 이름을 구조에서 버린다(2026-10-25 실측: ("ATTACHMENT" NIL)).
+        예전 앱이 보낸 첨부가 보낸 편지함에서 '첨부파일' 로만 보였던 까닭. 파트 머리말만 달라는 BODY[n.MIME] 은
+        이 서버가 무시하고 메일 전체를 준다(실측) → 그 첨부 머리말이 들어갈 만큼만 앞에서부터 자른다.
+        구조의 크기는 전송 인코딩 뒤 크기라 앞 파트들의 합 + 머리말 여유면 넉넉하다.
+        """
+        nameless = [i for i, p in enumerate(parts) if p["disposition"] == "attachment" and not p["filename"]]
+        if not nameless:
+            return
+        upto = sum(int(p.get("size") or 0) for p in parts[: nameless[-1]]) + 16000 + 2000 * len(parts)
+        if upto > self.NAME_PEEK_MAX:
+            return
+        try:
+            status, lines = self.cmd(f"UID FETCH {msg_id} (BODY.PEEK[]<0.{upto}>)")
+            head = max((lit for _l, lit in lines if lit), key=len, default=b"")
+            if status != "OK" or not head:
+                return
+            import email as email_lib
+            from email import policy
+
+            leaves = [m for m in email_lib.message_from_bytes(head, policy=policy.default).walk() if not m.is_multipart()]
+        except Exception:
+            return
+        if len(leaves) < nameless[-1] + 1:
+            return  # 잘린 곳이 머리말 앞이었다 — 어긋난 이름을 붙이느니 그대로 둔다
+        for i in nameless:
+            try:
+                parts[i]["filename"] = str(leaves[i].get_filename() or "").strip()
+            except Exception:
+                pass
+
     def fetch_message(self, msg_id: int) -> dict:
         """메일 한 통을 그 메일의 구조에 맞게 받는다.
 
@@ -367,6 +458,7 @@ class MiniIMAP:
         else:
             # 구조를 못 읽는 서버를 만나면 예전 방식으로 되돌아간다
             wanted = [("1", PLAIN_FETCH_LIMIT), ("2", HTML_FETCH_LIMIT)]
+        self._fill_nameless(msg_id, parts)
         return {
             "headers": headers,
             "seen": seen,
@@ -394,6 +486,26 @@ def decode_mime_words(value: str) -> str:
         else:
             parts.append(chunk)
     return "".join(parts).strip()
+
+
+def _encoded_filename(name: str) -> str:
+    """첨부 이름을 학교 웹메일과 같은 꼴(name="=?utf-8?b?…?=")로.
+
+    파이썬 기본(RFC 2231, filename*=utf-8''…)은 학교 메일 서버가 구조에서 이름을 버려
+    보낸 편지함·받는 사람 웹메일에서 이름 없는 '첨부파일' 로 보였다(2026-10-25 실측).
+    인코딩 낱말 하나가 75자를 넘지 않게 45바이트씩 끊는다(글자 중간에서 자르지 않음).
+    """
+    if name.isascii():
+        return name
+    words, chunk = [], ""
+    for ch in name:
+        if chunk and len((chunk + ch).encode("utf-8")) > 45:
+            words.append(chunk)
+            chunk = ch
+        else:
+            chunk += ch
+    words.append(chunk)
+    return " ".join(f"=?utf-8?b?{base64.b64encode(w.encode('utf-8')).decode('ascii')}?=" for w in words)
 
 
 def parse_headers(raw: bytes) -> dict[str, str]:
@@ -880,7 +992,10 @@ def attachment_parts(parts: list[dict]) -> list[dict]:
                 "part": part["part"],
                 "name": part["filename"] or "첨부파일",
                 "type": part["type"],
-                "size": part["size"],
+                "size": part["size"],  # 전송 인코딩 뒤 크기 (base64 면 실제의 약 4/3)
+                "encoding": part["encoding"],
+                # 이름을 파트 머리말까지 보고 정했다는 표시 (없는 예전 '첨부파일' 은 한 번 다시 받는다 — _fetch_with.stale)
+                "nameChecked": True,
             }
         )
     return out
@@ -969,11 +1084,9 @@ def fetch_inline_images(
     if not images:
         return {}
     if not SCHOOL_EMAIL or not SCHOOL_EMAIL_PASSWORD:
-        raise RuntimeError("설정에서 학교 이메일 계정을 먼저 입력해 주세요.")
+        raise RuntimeError(_missing_account_message(SCHOOL_EMAIL, SCHOOL_EMAIL_PASSWORD))
 
-    client = MiniIMAP(SCHOOL_IMAP_HOST, SCHOOL_IMAP_PORT)
-    try:
-        client.login(SCHOOL_EMAIL, SCHOOL_EMAIL_PASSWORD)
+    with imap_session() as client:
         raw_name = None
         for raw, decoded in client.list_folders():
             if classify_folder(decoded) == folder_key:
@@ -998,8 +1111,6 @@ def fetch_inline_images(
             if blob:
                 out[image["cid"]] = decode_part_bytes(blob, image.get("encoding", ""))
         return out
-    finally:
-        client.logout()
 
 
 # ===== 메일에서 행사 날짜 뽑기 (AI 없이) =====
@@ -1355,16 +1466,23 @@ def fetch_school_emails(days: int | None = None, max_count: int | None = None) -
     읽음 여부는 바뀔 수 있으므로 그 부분만 따로 맞춘다.
     """
     if not SCHOOL_EMAIL or not SCHOOL_EMAIL_PASSWORD:
-        raise RuntimeError("설정에서 학교 이메일 계정을 먼저 입력해 주세요.")
+        raise RuntimeError(_missing_account_message(SCHOOL_EMAIL, SCHOOL_EMAIL_PASSWORD))
     from runtime_config import MAIL_KEEP_DAYS, MAIL_KEEP_MAX
 
     days = int(days or MAIL_KEEP_DAYS)
     max_count = int(max_count or MAIL_KEEP_MAX)
 
     print(f"학교 메일 서버 접속 중... ({SCHOOL_IMAP_HOST}) · 최근 {days}일, 폴더마다 {max_count}통까지")
-    client = MiniIMAP(SCHOOL_IMAP_HOST, SCHOOL_IMAP_PORT)
-    client.login(SCHOOL_EMAIL, SCHOOL_EMAIL_PASSWORD)
+    global _ACTIVE_CLIENT
+    with imap_session() as client:
+        _ACTIVE_CLIENT = client  # 화면 서버 안에서 돌 때 '멈추기' 가 이 연결을 끊는다 (abort_refresh)
+        try:
+            return _fetch_with(client, days, max_count)
+        finally:
+            _ACTIVE_CLIENT = None
 
+
+def _fetch_with(client: "MiniIMAP", days: int, max_count: int) -> list[dict]:
     cached = _load_cached_emails()
 
     # 폴더 발견 및 분류
@@ -1382,19 +1500,35 @@ def fetch_school_emails(days: int | None = None, max_count: int | None = None) -
     emails = []
     reused_total = 0
     fetched_total = 0
+    # 모든 폴더의 SELECT·검색을 한 번에 보낸다 (MiniIMAP.pipeline 설명). 검색 조건은 search_* 와 같다.
+    # 휴지통은 받은 날짜가 아니라 버린 순서로 (search_all 설명 참고)
+    date_str = since.strftime("%d-%b-%Y")
+    batch = []
     for raw, key in targets:
-        if not client.select_folder(raw):
+        batch += [
+            f"SELECT {client._quote(raw)}",
+            "UID SEARCH NOT DELETED" if key == "trash" else f"UID SEARCH NOT DELETED SINCE {date_str}",
+            "UID SEARCH NOT DELETED UNSEEN",
+            "UID SEARCH NOT DELETED FLAGGED",
+        ]
+    answers = client.pipeline(batch)
+    # 지금 열려 있는 폴더: 마지막 SELECT 의 폴더 (실패한 SELECT 는 아무 폴더도 안 연 상태로 둔다)
+    selected = targets[-1][0] if targets and answers[-4][0] == "OK" else None
+    for n, (raw, key) in enumerate(targets):
+        (sel_status, _), found, unseen_ans, flagged_ans = answers[4 * n : 4 * n + 4]
+        if sel_status != "OK":
             continue
-        # 휴지통은 받은 날짜가 아니라 버린 순서로 (search_all 설명 참고)
-        ids = (client.search_all() if key == "trash" else client.search_since(since))[-max_count:]
-        unseen = set(client.search_unseen())
-        flagged = set(client.search_flagged())
+        ids = MiniIMAP.search_ids(*found)[-max_count:]
+        unseen = set(MiniIMAP.search_ids(*unseen_ans))
+        flagged = set(MiniIMAP.search_ids(*flagged_ans))
 
         def stale(msg_id: int) -> bool:
             """예전 방식으로 받아 둔 메일은 본문이 잘려 있어 한 번 다시 받는다."""
             mail = cached.get(f"{key}:{msg_id}")
             if not mail:
                 return True
+            if any(a.get("name") == "첨부파일" and not a.get("nameChecked") for a in mail.get("attachments") or []):
+                return True  # 이름을 못 읽었던 첨부(예전 앱이 보낸 것) — 이 메일만 다시 받는다
             return int(mail.get("bodyVersion", 1) or 1) < BODY_VERSION
 
         fresh = [i for i in ids if stale(i)]
@@ -1403,6 +1537,14 @@ def fetch_school_emails(days: int | None = None, max_count: int | None = None) -
         fetched_total += len(fresh)
         if fresh:
             print(f"  [{key}] 새 메일 {len(fresh)}건 받는 중 (이미 있는 {reused}건은 건너뜀)")
+            # 검색은 한꺼번에 했으니, 받을 것이 있는 폴더만 다시 연다
+            if selected != raw:
+                if not client.select_folder(raw):
+                    print(f"    [{key}] 폴더를 다시 열지 못해 새 메일을 건너뜁니다")
+                    fresh = []
+                    ids = [i for i in ids if not stale(i)]
+                else:
+                    selected = raw
         else:
             print(f"  [{key}] 새 메일 없음 ({reused}건 그대로)")
 
@@ -1423,7 +1565,6 @@ def fetch_school_emails(days: int | None = None, max_count: int | None = None) -
             except Exception as e:
                 print(f"    메일 {key}:{msg_id} 처리 실패: {e}")
 
-    client.logout()
     print(
         f"메일 {len(emails)}건 (새로 받은 것 {fetched_total}건, "
         f"그대로 쓴 것 {reused_total}건, 폴더 {len(targets)}개)"
@@ -1603,12 +1744,95 @@ JSON으로만 답하세요:
 FOLDER_RAW_CACHE: dict[str, str] = {}
 
 
-def _connect() -> "MiniIMAP":
-    if not SCHOOL_EMAIL or not SCHOOL_EMAIL_PASSWORD:
-        raise RuntimeError("설정에서 학교 이메일 계정을 먼저 입력해 주세요.")
-    client = MiniIMAP(SCHOOL_IMAP_HOST, SCHOOL_IMAP_PORT)
-    client.login(SCHOOL_EMAIL, SCHOOL_EMAIL_PASSWORD)
+# ===== 메일 서버 연결 하나를 같이 쓰기 =====
+# 예전에는 새로고침(5분마다)은 물론 메일을 열어 읽음 표시·별표·지우기·옮기기·그림 받기·보낸 편지함 사본까지
+# 할 때마다 새로 로그인했다. 맥 2대 + Windows 1대가 같은 계정으로 돌자 학교 서버가 맞는 비밀번호를
+# 'NO login failure: invalid auth or access denied' 로 거절하기 시작했다(2026-10-21: 이 PC 21:19 성공 →
+# 21:28 거절, 같은 비밀번호. 9/27·10/12 에도 같은 일). 이제 한 프로세스는 연결 하나를 열어 두고 같이 쓴다.
+#   - 한 번에 한 작업만 쓴다(_SESSION_LOCK). 새로고침이 1초 남짓이라 기다림은 짧다.
+#   - 5초 넘게 쉬었으면 NOOP 으로 살아 있는지 보고, 끊겼으면 그때만 다시 로그인한다. 학교 서버는 쉬는 연결을
+#     1분보다 짧게 끊는다(2026-10-22 실측: 14:26:23 그림 받기 → 1분 안의 .eml 받기가 4ms 만에 EOF, 14:27:12 다시
+#     로그인 → 69초 쉰 14:28:21 새로고침도 다시 로그인). 예전 기준(60초)이면 30초~1분 사이의 첫 동작이 죽은 연결로
+#     나가 한 번 실패했다 — 메일을 열면 본문 그림이 깨지고 읽음·별표가 '서버 연결이 끊겼습니다' 로 실패. NOOP 은 왕복 0.1초.
+#   - 20분 넘게 쉬었으면 새로 연다 (서버 자동 로그아웃은 보통 30분).
+#   - 계정·비밀번호가 바뀌면 새로 로그인한다. 로그인이 거절되면 연결을 남기지 않는다.
+#   - 연결 오류가 나면 버린다. 명령을 저절로 다시 보내지는 않는다(복사·넣기는 두 번 하면 두 벌이 된다).
+_SESSION: dict = {"client": None, "key": None, "used": 0.0}
+_SESSION_LOCK = threading.RLock()
+SESSION_CHECK_AFTER = 5
+SESSION_MAX_IDLE = 20 * 60
+_CONNECTION_ERRORS = (OSError, ConnectionError, ssl.SSLError, EOFError)
+
+
+def close_session(logout: bool = True) -> None:
+    """같이 쓰던 연결을 닫는다 (작업 프로세스가 끝날 때, 끊겼을 때)."""
+    with _SESSION_LOCK:
+        client, _SESSION["client"], _SESSION["key"] = _SESSION["client"], None, None
+    if client is None:
+        return
+    if logout:
+        client.logout()
+    for step in (lambda: client.sock.shutdown(socket.SHUT_RDWR), client.sock.close):
+        try:
+            step()
+        except OSError:
+            pass
+
+
+def _session_client(key: tuple) -> "MiniIMAP":
+    """_SESSION_LOCK 을 잡은 채로 부른다. 쓸 수 있는 연결을 돌려준다(필요할 때만 로그인)."""
+    client = _SESSION["client"]
+    idle = time.monotonic() - _SESSION["used"]
+    if client is not None and (_SESSION["key"] != key or idle > SESSION_MAX_IDLE):
+        close_session(logout=True)
+        client = None
+    if client is not None and idle > SESSION_CHECK_AFTER:
+        try:
+            status, _ = client.cmd("NOOP")
+            if status != "OK":
+                raise ConnectionError("NOOP 실패")
+        except Exception:
+            close_session(logout=False)
+            client = None
+    if client is None:
+        host, port, account, password = key
+        client = MiniIMAP(host, port)
+        try:
+            client.login(account, password)
+        except Exception:
+            try:
+                client.sock.close()
+            except OSError:
+                pass
+            raise
+        _SESSION["client"], _SESSION["key"] = client, key
+        print("메일 서버에 로그인했습니다 (이 연결을 계속 씁니다)")
     return client
+
+
+@contextmanager
+def imap_session(account: str | None = None, password: str | None = None,
+                 host: str | None = None, port: int | None = None):
+    """같이 쓰는 메일 서버 연결. `with imap_session() as client:` 안에서만 쓴다 (LOGOUT 하지 않는다)."""
+    account = account or SCHOOL_EMAIL
+    password = password or SCHOOL_EMAIL_PASSWORD
+    if not account or not password:
+        raise RuntimeError(_missing_account_message(account, password))
+    key = (host or SCHOOL_IMAP_HOST, int(port or SCHOOL_IMAP_PORT), account, password)
+    with _SESSION_LOCK:
+        client = _session_client(key)
+        try:
+            yield client
+        except _CONNECTION_ERRORS:
+            close_session(logout=False)
+            raise
+        finally:
+            _SESSION["used"] = time.monotonic()
+
+
+def session_login_count() -> int:
+    """점검용: 이 프로세스가 메일 서버에 로그인한 횟수."""
+    return MiniIMAP.logins
 
 
 def _folder_raw(client: "MiniIMAP", folder_key: str) -> str | None:
@@ -1626,27 +1850,21 @@ def _folder_raw(client: "MiniIMAP", folder_key: str) -> str | None:
 
 def mark_read(uid: int, folder_key: str = "inbox", seen: bool = True) -> dict:
     """메일 읽음/안읽음 표시."""
-    client = _connect()
-    try:
+    with imap_session() as client:
         raw = _folder_raw(client, folder_key) or "INBOX"
         client.select_folder(raw)
         ok = client.store_flag(int(uid), "\\Seen", add=seen)
-    finally:
-        client.logout()
     return {"ok": ok, "uid": uid, "seen": seen}
 
 
 def mark_all_read(folder_key: str = "inbox") -> dict:
     """폴더의 안읽은 메일 전부 읽음 처리."""
-    client = _connect()
-    try:
+    with imap_session() as client:
         raw = _folder_raw(client, folder_key) or "INBOX"
         client.select_folder(raw)
         uids = client.search_unseen()
         for uid in uids:
             client.store_flag(uid, "\\Seen", add=True)
-    finally:
-        client.logout()
     return {"ok": True, "count": len(uids)}
 
 
@@ -1755,13 +1973,10 @@ def build_reminder(mail: dict) -> dict:
 def star_message(uid: int, folder_key: str = "inbox", starred: bool = True) -> dict:
     """별표(\\Flagged). 예전에는 이 앱 안에만 기억해서 폰이나 웹메일에서는 안 보였다.
     서버 플래그로 붙이면 다른 기기에서도 똑같이 보인다. (서버 지원 확인함)"""
-    client = _connect()
-    try:
+    with imap_session() as client:
         raw = _folder_raw(client, folder_key) or "INBOX"
         client.select_folder(raw)
         ok = client.store_flag(int(uid), r"\Flagged", add=starred)
-    finally:
-        client.logout()
     return {"ok": ok, "uid": uid, "starred": starred}
 
 
@@ -1772,8 +1987,7 @@ def move_message(uid: int, folder_key: str, target_folder: str) -> dict:
     UIDPLUS 도 없어 원본을 실제로 지우지는 못한다(지우면 그 폴더의 지운 표시가
     붙은 메일이 전부 날아간다). 목록에서는 빠지고 서버에는 남는다.
     """
-    client = _connect()
-    try:
+    with imap_session() as client:
         raw = _folder_raw(client, folder_key) or "INBOX"
         if not client.select_folder(raw):
             raise RuntimeError("원래 폴더를 열지 못했습니다.")
@@ -1782,21 +1996,16 @@ def move_message(uid: int, folder_key: str, target_folder: str) -> dict:
             raise RuntimeError("옮길 폴더에 복사하지 못했습니다.")
         client.store_flag(int(uid), r"\Deleted", add=True)
         client.expunge_uid(int(uid))
-    finally:
-        client.logout()
     return {"ok": True, "uid": uid, "movedTo": target_folder}
 
 
 def list_mail_folders() -> dict:
     """화면에서 고를 수 있는 폴더 목록."""
-    client = _connect()
-    try:
+    with imap_session() as client:
         folders = [
             {"raw": raw, "name": decoded, "key": classify_folder(decoded) or ""}
             for raw, decoded in client.list_folders()
         ]
-    finally:
-        client.logout()
     return {"ok": True, "folders": folders}
 
 
@@ -1805,11 +2014,8 @@ def create_mail_folder(name: str) -> dict:
     clean = str(name or "").strip()
     if not clean or any(ch in clean for ch in '"\\/'):
         raise ValueError("폴더 이름에 쓸 수 없는 글자가 있습니다.")
-    client = _connect()
-    try:
+    with imap_session() as client:
         status, _ = client.cmd(f'CREATE "{clean}"')
-    finally:
-        client.logout()
     if status != "OK":
         raise RuntimeError("폴더를 만들지 못했습니다. 같은 이름이 이미 있을 수 있습니다.")
     return {"ok": True, "name": clean}
@@ -1817,19 +2023,114 @@ def create_mail_folder(name: str) -> dict:
 
 def fetch_raw_message(uid: int, folder_key: str = "inbox") -> bytes:
     """메일 원본(.eml). '이메일을 파일로 저장' 에 쓴다."""
-    client = _connect()
-    try:
+    with imap_session() as client:
         raw = _folder_raw(client, folder_key) or "INBOX"
         client.select_folder(raw)
         status, lines = client.cmd(f"UID FETCH {int(uid)} (BODY.PEEK[])")
         if status != "OK":
             raise RuntimeError("메일 원본을 받지 못했습니다.")
         chunks = [literal for _line, literal in lines if literal]
-    finally:
-        client.logout()
     if not chunks:
         raise RuntimeError("메일 원본이 비어 있습니다.")
     return max(chunks, key=len)
+
+
+ATTACH_DOWNLOAD_MAX = 40 * 1024 * 1024
+# 보내는 메일 첨부 합계 상한. 학교 SMTP 가 EHLO 에서 SIZE 36700160(35MB, 메일 한 통 전체)을 알린다(2026-10-27 실측).
+# 첨부는 base64 로 4/3 배 + 76자마다 줄바꿈이라 약 1.37배 → 원본 25MB 가 약 34.3MB. 그보다 큰 파일은 화면이
+# Google Drive 에 올려 링크로 보낸다(web_ui.start_big_upload). 예전엔 화면 10MB · 서버 20MB 로 따로 놀았다.
+SEND_ATTACH_MAX = 25 * 1024 * 1024
+
+
+def fetch_attachment(uid: int, folder_key: str, part: str) -> tuple[str, str, bytes]:
+    """첨부 한 개를 (이름, 형식, 내용) 으로. 읽기만(BODY.PEEK).
+
+    예전엔 읽기 화면에 첨부 칸이 없어 받은·보낸 메일의 첨부를 앱에서 볼 수도 받을 수도 없었다(2026-10-25 사용자).
+    """
+    if not re.fullmatch(r"\d+(?:\.\d+)*", str(part or "")):
+        raise ValueError("첨부 번호가 올바르지 않습니다.")
+    with imap_session() as client:
+        raw = _folder_raw(client, folder_key) or "INBOX"
+        if not client.select_folder(raw):
+            raise RuntimeError("메일함을 열지 못했습니다.")
+        _headers, _seen, parts = client.fetch_structure(int(uid))
+        info = next((p for p in parts if p["part"] == part), None)
+        if not info:
+            raise RuntimeError("첨부를 찾지 못했습니다. 메일을 다시 받은 뒤 해 주세요.")
+        if info["size"] > ATTACH_DOWNLOAD_MAX:
+            raise RuntimeError("첨부가 너무 커서 앱에서 받을 수 없어요. 학교 웹메일에서 받아 주세요.")
+        client._fill_nameless(int(uid), parts)
+        data = client.fetch_parts(int(uid), [(part, info["size"] + 4096)]).get(part, b"")
+    if not data and info["size"]:
+        raise RuntimeError("첨부를 받지 못했습니다.")
+    return info["filename"] or "첨부파일", info["type"], decode_part_bytes(data, info["encoding"])
+
+
+def load_draft(uid: int, folder_key: str = "draft", max_attach: int = 0) -> dict:
+    """임시 보관함의 메일을 '메일 쓰기' 에 다시 채울 모양으로 (받는 사람·참조·숨은참조·제목·본문·첨부·번호).
+
+    예전엔 임시 보관함의 메일을 받은 메일처럼 읽기 화면에 띄워 이어 쓸 수 없었다(2026-10-22 사용자).
+    목록에 저장한 본문만으로는 숨은참조·첨부 내용·우리 번호 머리말이 없어 서버 원본을 읽는다(BODY.PEEK, 읽기만).
+    """
+    import email as email_lib
+    import html as html_lib
+    from email import policy
+
+    msg = email_lib.message_from_bytes(fetch_raw_message(uid, folder_key), policy=policy.default)
+    draft_id = str(msg.get(DRAFT_HEADER, "") or msg.get(LEGACY_DRAFT_HEADER, "") or "").strip()
+    subject = str(msg.get("Subject", "") or "")
+    if draft_id and subject == "(제목 없음)":
+        subject = ""  # 우리 앱이 빈 제목 대신 넣은 글자 (build_message)
+    html_body, text_body = "", ""
+    attachments, inline = [], {}
+    total = 0
+    for part in msg.walk():
+        if part.is_multipart():
+            continue
+        ctype = part.get_content_type()
+        filename = part.get_filename()
+        disposition = (part.get_content_disposition() or "").lower()
+        if not filename and disposition != "attachment" and ctype in ("text/html", "text/plain"):
+            try:
+                content = part.get_content()
+            except Exception:
+                content = (part.get_payload(decode=True) or b"").decode("utf-8", "replace")
+            if ctype == "text/html" and not html_body:
+                html_body = content
+            elif ctype == "text/plain" and not text_body:
+                text_body = content
+            continue
+        data = part.get_payload(decode=True) or b""
+        cid = str(part.get("Content-ID", "") or "").strip("<> ")
+        if cid and ctype.startswith("image/") and disposition != "attachment":
+            inline[cid] = (ctype, data)  # 본문 그림은 편집기에서 보이게 data: 로 넣는다
+            continue
+        total += len(data)
+        if total > (max_attach or SEND_ATTACH_MAX):
+            raise ValueError("첨부파일이 25MB 를 넘어 이어 쓸 수 없어요. 웹메일에서 열어 주세요.")
+        attachments.append({
+            "filename": unicodedata.normalize("NFC", str(filename or "첨부파일")),
+            "size": len(data),
+            "content": base64.b64encode(data).decode("ascii"),
+        })
+    if html_body:
+        match = re.search(r"<body[^>]*>(.*)</body>", html_body, flags=re.I | re.S)
+        body = match.group(1) if match else html_body
+        for cid, (ctype, data) in inline.items():
+            body = body.replace(f"cid:{cid}", f"data:{ctype};base64,{base64.b64encode(data).decode('ascii')}")
+    else:
+        body = html_lib.escape(text_body).replace("\r\n", "\n").replace("\n", "<br>")
+    return {
+        "ok": True,
+        "uid": int(uid),
+        "draftId": draft_id,
+        "to": str(msg.get("To", "") or ""),
+        "cc": str(msg.get("Cc", "") or ""),
+        "bcc": str(msg.get("Bcc", "") or ""),
+        "subject": subject,
+        "body": body.strip(),
+        "attachments": attachments,
+    }
 
 
 def delete_message(uid: int, folder_key: str = "inbox", permanent: bool = False) -> dict:
@@ -1838,8 +2139,7 @@ def delete_message(uid: int, folder_key: str = "inbox", permanent: bool = False)
     이미 휴지통에 있는 메일은 옮길 곳이 없다. 그대로 지우면 영영 사라지므로
     permanent=True 로 분명히 말했을 때만 지운다.
     """
-    client = _connect()
-    try:
+    with imap_session() as client:
         raw = _folder_raw(client, folder_key) or "INBOX"
         client.select_folder(raw)
         trash = client.find_folder("지운") or client.find_folder("Trash")
@@ -1862,23 +2162,18 @@ def delete_message(uid: int, folder_key: str = "inbox", permanent: bool = False)
                 raise RuntimeError("휴지통으로 옮기지 못해 지우지 않았습니다.")
         client.store_flag(int(uid), r"\Deleted", add=True)
         client.expunge_uid(int(uid))
-    finally:
-        client.logout()
     return {"ok": True, "uid": uid, "permanent": bool(permanent)}
 
 
 def restore_message(uid: int, folder_key: str = "trash") -> dict:
     """휴지통에 있는 메일을 받은 편지함으로 되돌린다."""
-    client = _connect()
-    try:
+    with imap_session() as client:
         raw = _folder_raw(client, folder_key) or "INBOX"
         if not client.select_folder(raw):
             raise RuntimeError("휴지통을 찾지 못했습니다.")
         client.copy_to(int(uid), "INBOX")
         client.store_flag(int(uid), r"\Deleted", add=True)
         client.expunge_uid(int(uid))
-    finally:
-        client.logout()
     return {"ok": True, "uid": uid}
 
 
@@ -1924,20 +2219,22 @@ def build_message(account: str, to_list: list[str], subject: str, body: str,
         msg.attach(MIMEText(body or "", subtype, "utf-8"))
         total = 0
         for att in attachments:
-            filename = str(att.get("filename", "attachment"))
+            # 맥에서 고른 파일은 한글 이름이 풀어 쓴 자모(NFD)로 올 수 있다 — 받는 쪽에서 글자가 갈라지지 않게 모은다
+            filename = unicodedata.normalize("NFC", str(att.get("filename", "attachment")))
             try:
                 raw = base64.b64decode(att.get("content", ""))
             except Exception:
                 continue
             total += len(raw)
-            if total > 20 * 1024 * 1024:  # 20MB 상한
-                raise ValueError("첨부파일 총 용량은 20MB를 넘을 수 없습니다.")
+            if total > SEND_ATTACH_MAX:
+                raise ValueError("첨부파일 총 용량은 25MB를 넘을 수 없어요. 큰 파일은 Drive 링크로 보내 주세요.")
             guessed, _ = mimetypes.guess_type(filename)
             maintype, subtype2 = (guessed.split("/", 1) if guessed else ("application", "octet-stream"))
-            part = MIMEBase(maintype, subtype2)
+            encoded = _encoded_filename(filename)
+            part = MIMEBase(maintype, subtype2, name=encoded)
             part.set_payload(raw)
             encoders.encode_base64(part)
-            part.add_header("Content-Disposition", "attachment", filename=("utf-8", "", filename))
+            part.add_header("Content-Disposition", "attachment", filename=encoded)
             msg.attach(part)
     else:
         msg = MIMEText(body or "", subtype, "utf-8")
@@ -1959,32 +2256,39 @@ def build_message(account: str, to_list: list[str], subject: str, body: str,
 
 
 def _message_bytes(msg) -> bytes:
-    """IMAP 에 넣을 모양 (줄끝 CRLF)."""
+    """IMAP 에 넣을 모양 (줄끝 CRLF).
+
+    받는 사람에게 간 것(msg.as_string, compat32)과 같은 글자로 넣는다. policy.SMTP 는 긴 머리말을 다시 접으며
+    첨부 이름을 RFC 2231 꼴로 바꿔 놓아 서버가 이름을 버렸다.
+    """
     from email import policy
 
-    return msg.as_bytes(policy=policy.SMTP)
+    return msg.as_bytes(policy=policy.compat32.clone(linesep="\r\n"))
 
 
-def _imap_for(account: str, password: str, imap_host: str | None = None):
-    client = MiniIMAP(imap_host or SCHOOL_IMAP_HOST, SCHOOL_IMAP_PORT)
-    client.login(account, password)
-    return client
+# 1.12.52 까지는 X-Bungeoppang-Draft 로 적었다. 그때 저장한 임시 메일도 이어 쓰고 지울 수 있게 둘 다 읽는다
+DRAFT_HEADER = "X-Daling-Draft"
+LEGACY_DRAFT_HEADER = "X-Bungeoppang-Draft"
 
 
-DRAFT_HEADER = "X-Bungeoppang-Draft"
-
-
-def _drop_old_drafts(client, draft_id: str) -> int:
+def _drop_old_drafts(client, draft_id: str, replace_uid: int = 0) -> int:
     """우리가 넣었던 같은 임시저장본에 지운 표시만 한다.
 
     EXPUNGE 는 절대 보내지 않는다(임시 보관함의 지운 표시 전부가 영구 삭제된다).
     앱은 NOT DELETED 로 찾으니 지운 표시만으로 안 보인다.
+    replace_uid: 임시 보관함에서 열어 이어 쓰던 메일(웹메일에서 만든 것은 우리 번호 머리말이 없다).
+    임시 보관함 안의 번호만 본다(다른 폴더의 같은 번호를 건드리지 않게 이 폴더를 고른 뒤에 표시한다).
     """
     raw = client.find_folder("임시")
-    if not raw or not draft_id or not client.select_folder(raw):
+    if not raw or not (draft_id or replace_uid) or not client.select_folder(raw):
         return 0
+    uids = set(client.search_header(DRAFT_HEADER, draft_id)) if draft_id else set()
+    if draft_id:
+        uids |= set(client.search_header(LEGACY_DRAFT_HEADER, draft_id))
+    if replace_uid and int(replace_uid) > 0:
+        uids.add(int(replace_uid))
     n = 0
-    for uid in client.search_header(DRAFT_HEADER, draft_id):
+    for uid in sorted(uids):
         if client.store_flag(uid, "\\Deleted", True):
             n += 1
     return n
@@ -1996,7 +2300,7 @@ def send_email(to_addr: str, subject: str, body: str,
                attachments: list | None = None,
                account: str | None = None, password: str | None = None,
                host: str | None = None, port: int | None = None,
-               imap_host: str | None = None, draft_id: str = "") -> dict:
+               imap_host: str | None = None, draft_id: str = "", replace_uid: int = 0) -> dict:
     """SMTP(SSL)로 메일 발송. 참조(cc)/숨은참조(bcc)/첨부파일/HTML 지원.
 
     보낸 뒤 서버의 '보낸 편지함'에 사본을 넣는다. 예전에는 넣지 않아서
@@ -2011,7 +2315,7 @@ def send_email(to_addr: str, subject: str, body: str,
     port = int(port or SCHOOL_SMTP_PORT)
 
     if not account or not password:
-        raise RuntimeError("설정에서 학교 이메일 계정을 먼저 입력해 주세요.")
+        raise RuntimeError(_missing_account_message(account, password))
     to_list = _split_addrs(to_addr)
     cc_list = _split_addrs(cc)
     bcc_list = _split_addrs(bcc)
@@ -2022,22 +2326,25 @@ def send_email(to_addr: str, subject: str, body: str,
     recipients = _bare(to_list + cc_list + bcc_list)  # bcc는 헤더에 안 넣고 수신자에만 포함
     print(f"메일 발송 중... → {len(recipients)}명, 첨부 {len(attachments or [])}개 ({host}:{port})")
     context = ssl.create_default_context()
+    text = msg.as_string()
+    # 시간 제한은 큰 메일을 다 올리는 시간에도 걸린다(sendall 전체). 첨부 25MB 면 메일이 34MB 라 40초로는
+    # 느린 망에서 끊긴다 — 크기에 맞춰 늘린다(초당 128KB 바닥). MiniIMAP.append 도 같은 까닭으로 늘린다.
+    timeout = 40 + len(text) // (128 * 1024)
     # local_hostname을 ASCII로 고정 (Windows PC 이름에 한글이 있으면 EHLO 인코딩 오류)
-    with smtplib.SMTP_SSL(host, port, timeout=40, context=context, local_hostname="localhost") as server:
+    with smtplib.SMTP_SSL(host, port, timeout=timeout, context=context, local_hostname="localhost") as server:
         server.login(account, password)
-        refused = server.sendmail(account, recipients, msg.as_string())
+        refused = server.sendmail(account, recipients, text)
     print(f"메일 발송 완료 (거절 {len(refused)}명)")
 
     # 보낸 편지함에 사본 + 이 메일의 임시저장본 정리. 실패해도 보내기는 이미 끝났다.
     saved = False
     try:
-        client = _imap_for(account, password, imap_host)
-        raw = client.find_folder("보낸")
-        if raw:
-            saved = client.append(raw, _message_bytes(msg), "(\\Seen)")
-        if draft_id:
-            _drop_old_drafts(client, draft_id)
-        client.cmd("LOGOUT")
+        with imap_session(account, password, imap_host) as client:
+            raw = client.find_folder("보낸")
+            if raw:
+                saved = client.append(raw, _message_bytes(msg), "(\\Seen)")
+            if draft_id or replace_uid:
+                _drop_old_drafts(client, draft_id, replace_uid)
     except Exception as exc:
         print(f"보낸 편지함에 사본을 넣지 못했습니다: {exc}")
     return {
@@ -2051,31 +2358,25 @@ def send_email(to_addr: str, subject: str, body: str,
 
 
 def discard_draft(draft_id: str, account: str | None = None, password: str | None = None,
-                  imap_host: str | None = None) -> int:
+                  imap_host: str | None = None, replace_uid: int = 0) -> int:
     """'작성 취소' 한 메일의 서버 임시저장본(자동 저장 포함)에 지운 표시를 한다. EXPUNGE 안 함."""
     account = account or SCHOOL_EMAIL
     password = password or SCHOOL_EMAIL_PASSWORD
-    if not draft_id or not account or not password:
+    if not (draft_id or replace_uid) or not account or not password:
         return 0
-    client = _imap_for(account, password, imap_host)
-    try:
-        return _drop_old_drafts(client, draft_id)
-    finally:
-        try:
-            client.cmd("LOGOUT")
-        except Exception:
-            pass
+    with imap_session(account, password, imap_host) as client:
+        return _drop_old_drafts(client, draft_id, replace_uid)
 
 
 def save_draft(to_addr: str, subject: str, body: str, cc: str = "", bcc: str = "",
                html: bool = False, attachments: list | None = None,
                account: str | None = None, password: str | None = None,
-               imap_host: str | None = None, draft_id: str = "") -> dict:
-    """서버의 '임시 보관함'에 넣는다. 같은 draft_id 로 넣었던 예전 판은 지운 표시."""
+               imap_host: str | None = None, draft_id: str = "", replace_uid: int = 0) -> dict:
+    """서버의 '임시 보관함'에 넣는다. 같은 draft_id 로 넣었던 예전 판(과 이어 쓰던 replace_uid)은 지운 표시."""
     account = account or SCHOOL_EMAIL
     password = password or SCHOOL_EMAIL_PASSWORD
     if not account or not password:
-        raise RuntimeError("설정에서 학교 이메일 계정을 먼저 입력해 주세요.")
+        raise RuntimeError(_missing_account_message(account, password))
     msg = build_message(
         account, _split_addrs(to_addr), subject, body, _split_addrs(cc), html,
         attachments=attachments, extra_headers={DRAFT_HEADER: draft_id} if draft_id else None,
@@ -2083,25 +2384,84 @@ def save_draft(to_addr: str, subject: str, body: str, cc: str = "", bcc: str = "
     bcc_list = _split_addrs(bcc)
     if bcc_list:
         msg["Bcc"] = ", ".join(bcc_list)  # 임시저장에서는 숨은참조도 남겨 둔다
-    client = _imap_for(account, password, imap_host)
-    try:
+    with imap_session(account, password, imap_host) as client:
         raw = client.find_folder("임시")
         if not raw:
             raise RuntimeError("메일 서버에서 임시 보관함을 찾지 못했습니다.")
-        replaced = _drop_old_drafts(client, draft_id) if draft_id else 0
+        replaced = _drop_old_drafts(client, draft_id, replace_uid) if (draft_id or replace_uid) else 0
         ok = client.append(raw, _message_bytes(msg), "(\\Seen \\Draft)")
         if not ok:
             raise RuntimeError("메일 서버가 임시저장을 받아 주지 않았습니다.")
-    finally:
-        try:
-            client.cmd("LOGOUT")
-        except Exception:
-            pass
     return {"ok": True, "replaced": replaced}
 
 
-def refresh_emails() -> dict:
-    emails = fetch_school_emails()
+# 지금 새로고침에 쓰는 연결 (같이 쓰는 연결과 같다). '멈추기'(abort_refresh) 만 이것을 끊는다.
+_ACTIVE_CLIENT: "MiniIMAP | None" = None
+
+
+def close_active() -> None:
+    """예전 이름 (web_ui 가 새로고침 끝에 부른다). 같이 쓰는 연결은 닫지 않는다."""
+    global _ACTIVE_CLIENT
+    _ACTIVE_CLIENT = None
+
+def abort_refresh() -> bool:
+    """돌고 있는 새로고침의 연결을 끊는다. 읽던 쪽은 ConnectionError·OSError 로 멈춘다."""
+    client = _ACTIVE_CLIENT
+    if client is None:
+        return False
+    # 읽던 쪽은 연결 오류로 멈추고, imap_session 이 이 연결을 버린다 (다음엔 새로 로그인)
+    for step in (lambda: client.sock.shutdown(socket.SHUT_RDWR), client.sock.close):
+        try:
+            step()
+        except OSError:
+            pass
+    return True
+
+
+def _missing_account_message(account: str, password: str) -> str:
+    """메일 계정이 비었을 때 할 말. 비밀번호를 넣어 뒀는데 맥 키체인(리눅스 키링)에서 못 꺼냈으면 '계정을 먼저 입력'
+    대신 그 까닭을 말한다 — 2026-10-22 맥: 업데이트 뒤 키체인을 못 읽었는데 화면은 계정을 넣으라고만 했다."""
+    if account and not password:
+        try:
+            import runtime_config
+            import secret_store
+
+            reason = runtime_config.SECRET_READ_ERRORS.get("SCHOOL_EMAIL_PASSWORD") or secret_store.last_error()
+            if reason:
+                return secret_store.read_problem("학교 메일 비밀번호", reason)
+        except Exception:
+            pass
+    return "설정에서 학교 이메일 계정을 먼저 입력해 주세요."
+
+
+def reload_settings() -> tuple[int, int]:
+    """설정 파일을 지금 다시 읽어 계정·서버·보관 기간을 맞춘다. (보관 일수, 폴더당 통수) 를 돌려준다.
+
+    작업을 따로 된 프로세스로 띄우면 켤 때마다 새로 읽었지만, 화면 서버 안에서 돌리면 이 모듈은 한 번만
+    불러와지므로 설정에서 비밀번호·보관 기간을 바꿔도 옛 값을 쓴다. 그래서 돌 때마다 부른다.
+    """
+    global SCHOOL_EMAIL, SCHOOL_EMAIL_PASSWORD, SCHOOL_IMAP_HOST, SCHOOL_IMAP_PORT, GEMINI_API_KEY, EMAIL_INTERESTS
+    import runtime_config
+
+    cfg = runtime_config._load_config()
+    SCHOOL_EMAIL = str(cfg.get("SCHOOL_EMAIL", ""))
+    SCHOOL_EMAIL_PASSWORD = str(cfg.get("SCHOOL_EMAIL_PASSWORD", ""))
+    SCHOOL_IMAP_HOST = str(cfg.get("SCHOOL_IMAP_HOST", "mail.dgist.ac.kr"))
+    SCHOOL_IMAP_PORT = int(cfg.get("SCHOOL_IMAP_PORT", 993) or 993)
+    GEMINI_API_KEY = str(cfg.get("GEMINI_API_KEY", ""))
+    EMAIL_INTERESTS = str(cfg.get("EMAIL_INTERESTS", "전공 탐색, 취업, 음악, 세미나"))
+
+    def clamp(key: str, default: int, low: int, high: int) -> int:  # runtime_config._int_setting 과 같은 규칙
+        try:
+            return min(high, max(low, int(cfg.get(key, default))))
+        except (TypeError, ValueError):
+            return default
+
+    return clamp("MAIL_KEEP_DAYS", 21, 7, 730), clamp("MAIL_KEEP_MAX", 60, 30, 2000)
+
+
+def refresh_emails(days: int | None = None, max_count: int | None = None) -> dict:
+    emails = fetch_school_emails(days, max_count)
     interests = EMAIL_INTERESTS or "전공 탐색, 취업, 음악, 세미나"
 
     # 브리핑/AI 분류는 받은편지함 중심 (보낸·광고는 규칙 기반만)

@@ -1,6 +1,6 @@
-# 붕어빵 기능 지도 (FEATURES.md)
+# Daling 기능 지도 (FEATURES.md)
 
-DGIST 학생용 데스크톱 앱 "붕어빵"(저장소 이름 dgist-lms-autosaver)의 기능을 화면·백엔드·데이터 단위로 정리한 문서입니다.
+DGIST 학생용 데스크톱 앱 "Daling"(저장소 이름 dgist-lms-autosaver)의 기능을 화면·백엔드·데이터 단위로 정리한 문서입니다.
 작업 규칙과 명령어는 `CLAUDE.md`에 있습니다. 이 문서는 "무엇이 어디에 있는가"를 찾을 때 씁니다.
 
 - 기준 버전: `VERSION` 1.11.0 (2026-09-22 기준 코드)
@@ -21,7 +21,7 @@ DGIST 학생용 데스크톱 앱 "붕어빵"(저장소 이름 dgist-lms-autosave
 | 개설강좌·학점 | data.go.kr API + DGIST 조회 | `timetable_import.py`, `dgist_api.py` |
 | 학교 공지 | DGIST 홈페이지 게시판 | `notice_board.py` |
 | 셔틀 시간표 | DGIST 홈페이지 | `shuttle.py` |
-| 조직도(주소록) | 사용자가 넣은 파일 | `directory.py` |
+| 조직도(주소록) | 사용자가 넣은 파일 + 설치 파일의 교원 주소록(`data/seed_directory_faculty.json`) | `directory.py`, `web_ui.directory_people` |
 | FGLP 파견 대학 | 내장 데이터 | `fglp.py` |
 
 모은 것을 보내는 곳은 Google Drive, Google Calendar, 삼성 노트, 내 컴퓨터(문서 폴더)입니다.
@@ -31,15 +31,15 @@ DGIST 학생용 데스크톱 앱 "붕어빵"(저장소 이름 dgist-lms-autosave
 ## 2. 실행 구조
 
 ```
-붕어빵.exe (PyInstaller onedir, Python 3.14)
+Daling.exe (PyInstaller onedir, Python 3.14)
 ├─ 메인 스레드: pywebview 창 (WebView2) ─ http://127.0.0.1:<포트>
 ├─ 서버 스레드: ExclusiveHTTPServer + web_ui.DashboardHandler (API + 정적 파일)
 ├─ 스케줄러 스레드: app.scheduler_loop (30초마다 할 일 확인)
 ├─ 삼성 노트 스레드: web_ui.start_notes_job (요청 시)
-└─ 작업 프로세스: 붕어빵.exe --autosaver-job <sync|deadlines|emails|verify|google-oauth>
+└─ 작업 프로세스: Daling.exe --autosaver-job <sync|deadlines|emails|verify|google-oauth>
 ```
 
-- **포트**: 기본 8765. 다른 프로그램이 쓰고 있으면 8766~8785 중 빈 곳을 씁니다 (`app.start_server`). 이미 켜진 붕어빵은 `/healthz` 응답 모양(`ok`, `mode`)으로 알아보고 창만 엽니다.
+- **포트**: 기본 8765. 다른 프로그램이 쓰고 있으면 8766~8785 중 빈 곳을 씁니다 (`app.start_server`). 이미 켜진 Daling 은 `/healthz` 응답 모양(`ok`, `mode`)으로 알아보고 창만 엽니다.
 - **작업 프로세스**: 무거운 일(LMS 크롤, 메일 수집)은 별도 프로세스로 돌립니다. EXE에서는 `sys.executable -c`를 쓰면 창이 새로 뜨므로 반드시 `--autosaver-job` 플래그(`runtime_config.WORKER_FLAG`)로 부릅니다. 진행 로그는 `task_states`에 쌓이고 `/api/task`로 화면에 갑니다.
 - **공유 웹 모드**: `AUTOSAVER_MULTI_USER=1`이면 쿠키별 작업공간을 나눕니다 (`DEPLOYMENT.md`, Render). 데스크톱 앱은 단일 사용자 모드입니다.
 
@@ -80,6 +80,10 @@ DGIST 학생용 데스크톱 앱 "붕어빵"(저장소 이름 dgist-lms-autosave
 - 다가오는 마감, 다가오는 일정, 학교 공지, 학교 사이트 바로가기
 - 시험 기간 응원(`examSeason`, `EXAM_CHEERS`): 학사일정의 학부 중간·기말 시험 기준으로 7일 전(before)·시험 중(during)·마지막 날(last)·끝난 뒤 2일(after). 나우바 아래 줄에 짧은 문장(수업 중·직전 제외). 대시보드 인사 아래 줄(`#heroCheer`)은 1.12.13 에 뺐다(사용자: 거기엔 없어도 됨). 문장은 날짜로 골라 하루 동안 그대로. 나우바를 펼치면(수업이 없을 때) 달구 카드(`nowDalguCard`, `EXAM_DALGU`): 시기별 포즈·움직임(전 study/book 흔들림, 중 fight 주먹, 후 yay/lounge 폴짝)과 위 두 줄과 겹치지 않는 '달구가 하는 말'. 달구를 누르면 폴짝 뛰며 다음 말. 예전엔 펼친 칸이 나우바 아래 줄을 그대로 되풀이했다
 - 화면 편집(블록 순서 끌어 옮기기), 모두 접기
+  - 편집 화면(1.12.48): 켜도 카드가 움직이지 않는다. 테두리는 `outline`, 조작 알약(`.dash-bar`: 손잡이·이름·위·아래·반 폭/전체·보이기/숨기기, 앱 아이콘 `grip`·`chevronUp/Down`·`colHalf/colFull`·`eye/eyeOff`)은 카드 오른쪽 위 모서리에 걸쳐 띄운다. 켜진 상태(반 폭·숨김)는 `aria-pressed` 강조색. 접기 단추는 `visibility: hidden` 으로 자리만 남긴다. '화면 편집'↔'✓ 완료', Esc 로도 끝낸다. 숨긴 블록은 편집 중에 원래 display 그대로 알약 밖만 흐리게
+  - 예전 편집 화면 실측(2026-10-27, 같은 창): 카드마다 위에 22px 를 비워 모든 카드가 9~37px 밀렸고, 카드 크기·그림자 애니메이션이 한꺼번에 돌아 켤 때 33ms 프레임(120Hz 에서 4프레임 빠짐)이 났다. 지금은 밀림 0px·최대 8.7ms. '편집 끝내기' 글자가 길어 '모두 접기' 위에 겹치던 것도 두 단추를 `.dash-tools` 한 줄로 묶어 없앴다
+  - 끄는 카드는 `translateY` 만(`scale` 을 걸면 글자가 다시 그려지며 흐려졌다). 자리를 바꿀 때 카드를 다시 붙이면 포인터 붙잡기가 풀려, 창 밖에서 손을 놓으면 카드가 떠 있는 채로 남았다 → 다시 붙인 뒤 `setPointerCapture` 를 다시 건다
+  - 배치(`dashLayout`)·접힘(`dashFold`)은 `ui_prefs.json`(`/api/ui-prefs`, `restoreDashPrefs`)에도 둔다. 앱 창 저장소는 끌 때마다 지워져(pywebview 사생활 모드, 재시작 뒤 localStorage 비어 있음 실측) 예전에는 편집한 배치가 다시 켜면 기본으로 돌아갔다
 - 과목 변경 감지 배너 → "확인했어요" (`/api/acknowledge-courses`)
 
 ### 3.3 과제 마감 (`deadlines`)
@@ -94,6 +98,8 @@ DGIST 학생용 데스크톱 앱 "붕어빵"(저장소 이름 dgist-lms-autosave
 - 여러 날 행사(1.12.18): 행사일 바로 뒤 '부터 …까지'·'~' 의 끝날을 `email_reader.guess_event_end` 가 `eventEnd` 로(2주 이내만, 그보다 길면 신청 기간으로 봄). 본문에 그 사이 날짜를 셋 이상 따로 적었으면 `guess_event_days` → `eventDays`(주말 쉬는 일정). 캘린더는 날마다 'n/N일째' 로, 구글 캘린더는 끝날까지 이어진 종일 일정. 날짜 이름표('개최' 등)가 문장 끝에 있으면 같은 줄 200자 앞까지 본다(비즈니스 모델 세미나가 10/19 로 잡혔던 원인)
 - 세미나 연사·발표 제목·장소(`email_reader.guess_seminar_info`, AI 없음): '연사/Speaker/발표자', '제목/Title/주제', '장소/Venue' 이름표 줄(깨진 'Spe a k'·'Venu' 도), 이름표만 있고 값은 다음 줄, 이름표 없는 숫자 번호 줄(사람·강의실·긴 제목으로 짐작, 제목에 세미나류 말이 있을 때만)을 읽는다. 세미나류 말(`_TALK_WORDS`)이 없는 메일은 뽑지 않는다(공모전 상금·강의성찰 목록을 제목으로 읽었었다). `_mark_events` 가 `mail.seminar` 에 넣고, 캘린더 상세(`seminarInfoHtml`)·목록·구글 캘린더(location·description)가 쓴다. 2026-10 메일로 연사까지 뽑힌 것 8건
 - 메일 행사: 공식 학사일정에는 달빛제 같은 행사가 없다. 메일 본문·제목에서 날짜를 규칙으로 뽑고(`email_reader.guess_event_date`, AI 불필요), 관심 분야와 맞는 세미나와 학교 전체 행사만 `calendar` 로 표시(`web_ui._mark_events`). 같은 날 같은 행사의 재공지는 하나로 합침. 구글 캘린더 동기화도 이 표시가 붙은 것만 보냄
+- 세미나는 분야로만(1.12.51): 제목에 세미나류 말(`email_reader._TALK_WORDS`)이 있는 메일은 설정 관심사 중 '세미나·특강' 낱말(`_GENERIC_TALK_WORDS`)을 뺀 분야·주제 낱말이 제목·보낸 곳과 맞을 때만 `calendar`(학교 전체 행사는 그대로, Gemini 점수는 안 봄). 분야를 하나도 안 골랐으면 예전처럼 '세미나' 로도 올린다. 이유: '세미나·특강' 이 모든 세미나 제목에 걸려 학과와 상관없이 다 올라갔다(2026-10-28 실측: 캘린더 메일 행사 12건 중 세미나 10건 → 고친 뒤 5건, 뇌과학 4·컴퓨터·AI 1). 캘린더에서 따로 고르는 칸은 넣었다가 뺐다(설정에서 이미 고르는데 두 번 고르게 한다는 사용자 지적). 같은 때 짧은 영어 낱말은 낱말 경계로만 맞추게 함(`_word_hit`): 'ai' 가 'Brain' 에 걸려 뇌과학 메일이 컴퓨터·AI 관심으로 잡혔다. 구글 캘린더에 이미 보낸 일정은 지우지 않는다
+- 답장은 캘린더에서 뺀다(1.12.52): 제목이 `RE:`·답장·회신으로 시작하거나 `isReply` 인 메일(분류 '답신' 과 같은 기준)은 날짜가 있어도 `calendar` 를 끈다. '[특별근로장학] 근로시간 변경 요청' 답장이 관심사 '장학' 으로 올라갔었다(2026-10-28)
 - 색: 과제 마감 빨강(`cal-deadline`), 학교 행사 노랑(`cal-school`, `schoolEvent`), 관심 세미나 보라(`cal-event`), 제출 완료 초록, 내 일정 파랑, 학사일정 회색 띠. 칸 이름은 `app.js eventShortTitle` 이 날짜·연도·"개최 안내"를 떼고 영어 제목이면 [학과] 꼬리표로 만든다. 오른쪽 상세는 짧은 이름 + 메일 원래 제목 전체(`it.full`)를 줄바꿈해 보여 준다
 - 상세에서 메일 일정을 누르면 메일함으로 가지 않고 그 칸이 펼쳐지며(`toggleDayMail`, `.day-item.open`) 본문 글(`mailPlainText`, 주소는 `linkifyText` → `/api/mail/open-link`)을 보여 준다. 읽는 동안 패널이 넓어짐(`.calendar-stage.reading`). '메일함에서 열기'는 보조 버튼
 - 학사일정: 대학/대학원 구분, "학부만" 필터
@@ -104,7 +110,7 @@ DGIST 학생용 데스크톱 앱 "붕어빵"(저장소 이름 dgist-lms-autosave
 
 - 수강 과목 카드 (자료가 없는 과목도 `courses_state.json`에서 깔아 둠)
 - 과목마다 학년·학기, 학점(개설강좌에서 채움, `_fill_missing_credits`), 강의계획서 바로가기
-- 편집 모드로 과목 숨기기/복원
+- 편집 모드로 과목 숨기기/복원. 편집 중 카드는 흔들지 않고 점선 테두리만, 숨기기 단추는 빨간 ✕ 대신 앱 단추 모양의 `eyeOff`(1.12.48 — 흔들림은 카드 수만큼 애니메이션 19개가 쉬지 않고 돌았다)
 - 개설강좌 목록 (`/api/course-catalog`, `/api/course-terms`)
 
 ### 3.6 자료 (`files`)
@@ -126,7 +132,7 @@ DGIST 학생용 데스크톱 앱 "붕어빵"(저장소 이름 dgist-lms-autosave
 
 | 버튼 | action | 동작 |
 |---|---|---|
-| 내 컴퓨터에 저장 | (별도) `/api/save-local` | `문서\붕어빵 파일 정리\<과목>\`에 복사 |
+| 내 컴퓨터에 저장 | (별도) `/api/save-local` | `문서\Daling 파일 정리\<과목>\`에 복사 |
 | Drive에 올리기 | `drive` | 과목 폴더로 업로드, 이미 있으면 건너뜀 |
 | 삼성 노트로 | `notes` | 뒤에서 넣기 시작, 즉시 응답 (4.4절) |
 | 목록에서 빼기 | `hide` | 파일은 두고 목록에서만 뺌 (`hiddenFiles`) |
@@ -164,6 +170,15 @@ DGIST 학생용 데스크톱 앱 "붕어빵"(저장소 이름 dgist-lms-autosave
 
 - FGLP 파견 지도: 세계지도(`web/img/world.png`) 위 대학 핀, 대륙별 확대, FGLP/학점교류 탭 (`/api/fglp`)
   - 자료: `fglp.py`. 2027 국제학부 입학안내서(2026.6) 13·15쪽 기준. FGLP 28곳(TYPE 1 25, TYPE 2 3), 학점교류는 이름 나온 11곳. 안내서는 그림 PDF라 눈으로 옮겨 적음.
+  - 학교 상세 보강(2026-10-21): 사진 여러 장(가로로 넘김, ‹ › 단추), 한국어 이름, 현지 시각·한국과의 시차(브라우저 Intl, 서머타임 반영, `fglp._TZ`), 설립 연도·국공립/사립·학생 수(위키데이터), DGIST에서의 거리(대원거리, 100km 단위), 링크 단추(홈페이지·여름학기 안내·위키백과·OpenStreetMap 지도)와 사진 출처.
+    - 자료는 `tools/fetch_uni_info.py` → `uni_info.json`(설치 파일에 묶음, 세 spec 모두) + `web/img/uni/<학교>-<n>.jpg`(640px, 110장 7MB). 시스템 파이썬으로 돌린다(사진 줄이기에 Pillow).
+    - 사진은 사람이 고른다(`PICKS`). 커먼스 분류 자동 선택은 고무도장·나무·백신 상자처럼 엉뚱한 게 대부분이었고, 예전 한 장짜리(`uni_photos.json`, 하버드는 시위 사진)도 지웠다.
+    - 여름학기 주소는 후보를 열어 보고 제목·주소에 summer 가 있는 것만, 봇 차단(JHU 403)·인증서 문제는 웹 검색으로 확인한 공식 도메인 주소(`SUMMER_SEARCHED`). INSA Lyon·Calgary·RMIT 는 방문 학생용 여름 정규 수업 안내를 못 찾아 비움.
+    - 위키데이터 학생 수가 10만을 넘으면(UW–Madison 137,123 = UW 체계 전체) 비운다. 한 줄 소개는 넣지 않았다(한국어 위키백과 첫 문장이 '최상위권 명문' 같은 자랑이거나 비어 있음).
+    - 바깥 링크는 `/api/open-url` 로 기본 브라우저에서 연다. 학교 도메인 말고는 막혀 있어서 `fglp.known_links()`(앱에 든 주소와 똑같은 것)만 더 허락한다.
+  - 지도 움직임(2026-10-21): 그림과 핀이 한 판(`.wm-stage`)에 붙어 함께 미끄러진다(0.55초). 예전엔 핀을 보는 칸 기준으로 다시 그려 점이 먼저 새 자리에 뜨고 지도가 뒤따랐다. 핀은 세계 좌표(%)라 대륙을 바꿔도 다시 그리지 않고, 탭이 바뀔 때만 차례로 피어난다. 큰 지도 그림이 풀린 뒤에 판째로 나타난다.
+    - 목록이나 지도에서 학교를 고르면 지도가 그 학교를 가운데에 두고 가로 36도로 다가간다(`state.fglpFocus`, `FGLP_FOCUS_SPAN`). 상세를 닫으면 보던 대륙으로 돌아간다.
+    - 창 크기 감시(ResizeObserver)는 판 자리만 다시 맞춘다. 예전엔 `renderFglpAll` 까지 불러, 상세를 열어 스크롤 막대가 생기며 지도 폭이 2px 줄면 상세가 도로 닫혔다.
   - 핀의 기준점은 점 한가운데(`.wm-pin`은 점 크기, 이름표는 절대 위치). 덩어리 가운데를 맞추면 점이 이름표 폭 절반만큼 밀린다.
   - 대학 사진: `tools/fetch_uni_photos.py` (위키미디어, 작성자·라이선스 기록). 엉뚱한 사진이 골라진 곳은 `SKIP`.
 - 셔틀버스 시간표 (`/api/shuttle`): 출근·퇴근·원내순환·원외순환·주말순환. 하루 캐시, 못 받으면 예전 시간표라고 표시. 해석은 `shuttle._routes_from_table`이 표 머리줄의 칸 이름을 읽어 정함
@@ -177,13 +192,14 @@ DGIST 학생용 데스크톱 앱 "붕어빵"(저장소 이름 dgist-lms-autosave
 | 카드 | 내용 |
 |---|---|
 | 연결된 계정 | LMS·학교 메일·Google 줄마다 로고와 상태 알약(`renderAccountPills`, `renderGoogleSection`). 비밀번호는 DPAPI 암호화, 바꿀 때만 입력. 맨 아래 '체험 모드' 줄(`#demoRow`, 체험해 보기/체험 끝내기) |
+| 앱 잠금 | 스위치(켜면 네 자리를 두 번), 자동 잠금 시간(끄기·1·5·10·30분·1시간, 기본 10분), 비밀번호 바꾸기, 지금 잠그기(Ctrl+L). 바꾸는 즉시 적용되고 `config.json` 과 따로다. 아래 '앱 잠금' 절 |
 | 강의자료 저장 | 저장 위치 카드 두 개: 구글 드라이브(`AUTO_DRIVE_UPLOAD`, 구글 미연결이면 '로그인 필요'), 내 컴퓨터(스위치 + 이번 학기/모든 과목 → `AUTO_LOCAL_SAVE`, 폴더 바꾸기, 지금 맞추기). `renderSaveDestinations` |
-| └ 다른 클라우드 | OneDrive·Dropbox·iCloud Drive·네이버 MYBOX. 로그인 없이 PC 동기화 폴더 안 `붕어빵 강의자료\<과목>`에 넣는다 (`detect_cloud_roots`, `cloud_targets`, 설정 `CLOUD_SAVE`). 못 찾으면 '폴더 고르기'(`/api/pick-folder`)로 `path` 지정. '넣을 과목'(`SAVE_SCOPE`)과 '지금 맞추기'는 내 컴퓨터·클라우드 공통. 복사는 `autosave_local` → 위치마다 `_mirror_rows` (필기한 파일 보호 규칙 동일). 과목 아래는 LMS 하위 폴더(`lms_subfolders`) 그대로, 1.11.3까지 펼쳐 넣은 사본은 옮겨 놓는다 |
+| └ 다른 클라우드 | OneDrive·Dropbox·iCloud Drive·네이버 MYBOX. 로그인 없이 PC 동기화 폴더 안 `Daling 강의자료\<과목>`에 넣는다(예전 판이 만든 `붕어빵 강의자료` 가 있으면 그곳, `web_ui.cloud_folder`) (`detect_cloud_roots`, `cloud_targets`, 설정 `CLOUD_SAVE`). 못 찾으면 '폴더 고르기'(`/api/pick-folder`)로 `path` 지정. '넣을 과목'(`SAVE_SCOPE`)과 '지금 맞추기'는 내 컴퓨터·클라우드 공통. 복사는 `autosave_local` → 위치마다 `_mirror_rows` (필기한 파일 보호 규칙 동일). 과목 아래는 LMS 하위 폴더(`lms_subfolders`) 그대로, 1.11.3까지 펼쳐 넣은 사본은 옮겨 놓는다 |
 | └ 차지하는 공간 | 같은 카드 아래. 앱(프로그램 + LMS 로그인용 브라우저 + 메일·설정 데이터) / 강의자료 / 내 컴퓨터 사본을 한 막대로(`/api/storage`의 `app`·`localSave`). Edge 를 쓰는 PC 에 예전 셸이 남았으면 막대 아래 '예전에 받은 LMS 브라우저' 줄과 '휴지통으로 보내기'(`/api/storage/trash-browser`). 접힌 '강의자료 정리하기'에서 학기·과목별 삭제(`/api/storage/cleanup`, 앱 보관함에서만) |
 | 자동으로 가져오기 | 메일(기본 5분)·과제 마감(60분)·강의자료(180분) 주기, 하루 한 번 전체 확인 시각(`SCHEDULE_TIME`) |
 | 구글 캘린더 | 머리의 스위치로 메일 일정 자동 등록, 캘린더 이름, 지금 넣기, 학사일정도 넣기 |
 | 관심 있는 메일 | 관심 분야·활동 태그, 직접 적기, 끝난 행사 메일 숨기기 |
-| 추가 기능 켜기 (접힘) | Gemini 키(번역·요약·시간표 사진), DGIST 공공데이터 키 |
+| ~~추가 기능 켜기~~ | 뺐음(2026-10-21, 사용자: API 키를 직접 요청하는 설정 지우기). 이미 저장된 Gemini·DGIST 키는 `write_config` 가 그대로 두고 계속 쓴다(빈 칸 = 기존 값 유지). 공공데이터 키는 앱에 묶인 기본 키. 시간표 이미지 가져오기 단추는 저장된 Gemini 키가 있을 때만 보인다(`renderSecretBadges`). |
 | 앱 | 버전, 업데이트 내용, 전체 다시 확인, 설정 내보내기/불러오기(비밀번호 포함 여부) |
 
 앱 크기에서 브라우저는 `chromium_headless_shell-*` 만 센다(`browser_setup.shell_dirs`). 같은 `ms-playwright` 폴더의 일반 `chromium-*`(약 430MB)은 개발용이라 앱 몫이 아니고 정리할 때도 건드리지 않는다. Windows 는 Edge 를 쓰므로(4.1) 새로 깐 PC 에는 이 칸이 없다. 예전에 받아 둔 셸(약 270MB)이 남은 PC 에서는 이름을 '예전에 받은 브라우저 (지금은 안 씀)'으로 바꿔 세고(`unused`), 막대 아래 줄의 '휴지통으로 보내기'로 정리한다(2026-10-15).
@@ -228,7 +244,12 @@ LMS 브라우저를 Edge 로 바꾼 까닭 (2026-10-15): Playwright 가 받는 `
 - 증분 수집: 서버에는 UID 목록만 묻고, 이미 가진 메일은 재사용. 읽음·별표만 서버 기준으로 맞춤.
 - **구조 기반 수신**: `BODYSTRUCTURE`를 먼저 읽어(`parse_paren_list`, `bodystructure_parts`) text/plain·text/html 파트 번호를 찾아 그것만 받음. HTML은 40만 바이트까지 받고 30만 자까지 저장.
 - 본문 그림: `inlineImages` 메타만 저장 → 메일을 열 때 `fetch_inline_images`가 한 번의 접속으로 받아 `mail_images\`에 저장.
-- 첨부: `attachments` 메타(이름·형식·크기), `hasAttachment`. 내려받기 기능은 아직 없음.
+  - 받기가 연결 오류로 실패하면 한 번만 다시 받는다(읽기만 해서 두 번 해도 됨, `web_ui.ensure_mail_images`). 실패하면 `cid:` 가 그대로 남아 그림이 깨져 보인다.
+  - 같이 쓰는 메일 연결(1.12.34~, `email_reader.imap_session`)은 5초 넘게 쉬었으면 NOOP 으로 살아 있는지 본다(`SESSION_CHECK_AFTER`). 학교 서버는 쉬는 연결을 1분보다 짧게 끊는다(2026-10-22 실측: 1분 안의 두 번째 요청이 4ms 만에 EOF, 69초 쉰 새로고침도 다시 로그인). 예전 기준 60초에서는 30초~1분 사이의 첫 동작(본문 그림·읽음·별표·.eml)이 한 번 실패했다. 쓰기 명령은 저절로 다시 보내지 않는다.
+  - 주소(src) 없는 `<img>` 는 메일 화면에서 숨긴다(`mailFrameDoc`). 보낸 쪽 편집기에서 그림이 빠진 자리라 빈 네모만 남았다(2026-10-22 총학생회 카드뉴스 — 원본 .eml 에도 그림 조각이 없었다).
+- 메일 자동 확인 주기 자동 조절 (2026-10-22, 1.12.37, 사용자 결정): 앱을 보고 있으면 설정한 주기(기본 5분), 안 보면 15분(`web_ui.effective_minutes`·`AWAY_EMAIL_MINUTES`, 설정이 더 길거나 꺼져 있으면 그대로). '보고 있음' 은 화면(`app.js reportPresence`)이 `/api/presence` 로 알린다: 화면이 보이고 (앱에 초점이 있고 10분 안에 손댔거나) 2분 안에 손댔을 때. 보는 동안 1분마다, 바뀌면 바로 보내고, 서버는 3분 소식이 없으면 안 보는 것으로 친다(`PRESENCE_FRESH_SECONDS`). 다시 손대면 곧바로 알려 밀린 확인을 당긴다. 실패 뒤 간격 두 배·로그인 거절 뒤 2시간 쉬기(`app.next_due_job`)는 그대로.
+  - 까닭(2026-10-22 실측, 시험 로그인 2번): 학교 메일 서버는 로그인 뒤 20~40초면 연결을 끊거나 멈춘다 — 5초마다 NOOP 을 보내도 응답이 4ms·289ms·745ms·15.9초로 흔들리다 42초에 20초 동안 답이 없었다. 그래서 5분마다 확인할 때마다 새로 로그인한다(컴퓨터 1대에 시간당 12번). 같은 계정 로그인이 잦으면 맞는 비밀번호도 'NO login failure: invalid auth or access denied' 로 거절한다(9/27·10/12·10/21 21:28·10/22 12:18, 10/21 은 맥 2대 + Windows 가 함께 돌 때 시작). 서버 기록이 없어 거절 규칙은 확인하지 못했다. 연결을 살려 두기(NOOP 유지)는 위 실측대로 소용없다.
+- 첨부: `attachments` 메타(이름·형식·크기(전송 인코딩 뒤)·인코딩·`nameChecked`), `hasAttachment`. 읽기 화면 받는 사람 줄 아래 칩(`renderReadAttachments`)을 누르면 `/api/mail/attachment?uid=&folder=&part=` → `email_reader.fetch_attachment` 가 그 파트만 받아(BODY.PEEK, 40MB 까지) 내려받기로 연다(1.12.41, 예전엔 첨부 칸이 없었다).
 - `BODY_VERSION`(현재 3)이 올라가면 예전에 받은 메일을 한 번 다시 받음.
 - quoted-printable 판별(`_looks_quoted_printable`), HTML→평문 정리(`clean_html_to_text`, 역추적 폭발 없는 정규식).
 - 분류: 규칙 기반(`rule_based_category`), Gemini 키가 있으면 관심도·요약 추가.
@@ -253,20 +274,29 @@ LMS 브라우저를 Edge 로 바꾼 까닭 (2026-10-15): Playwright 가 받는 `
 ### 4.5 Google 연동
 
 - OAuth: 앱에 들어 있는 데스크톱 클라이언트(`google_client.json`), 토큰은 `token.json`. 설치형 클라이언트라 루프백 포트가 바뀌어도 됩니다.
-- Drive (`drive_uploader.py`): 루트 폴더 아래 과목 폴더, 업로드 선택(`upload_selection.json`의 `courses`)을 따름. 권한은 `drive.file`.
+- Drive (`drive_uploader.py`): 내 드라이브 `Daling` 폴더 아래 과목 폴더, 업로드 선택(`upload_selection.json`의 `courses`)을 따름. 권한은 `drive.file`.
 - Calendar (`calendar_sync.py`): 메일에서 뽑은 일정, 학사일정을 지정한 캘린더로. 권한은 `calendar.app.created`(앱이 만든 보조 캘린더와 그 일정) + `calendar.calendarlist.readonly`(이름으로 찾기), 둘 다 민감하지 않은 범위라 데이터 액세스 인증이 필요 없다(1.12.23, 2026-10-13).
   - 예전 토큰(전체 `calendar`)도 그대로 쓴다(`runtime_config.calendar_scope_granted`). 그래서 토큰을 읽을 때 권한 목록을 넘기지 않는다 — 넘기면 갱신 때 없는 좁은 권한을 달라고 해 `invalid_scope` 로 실패한다.
-  - 실측(jykim5215 계정): 전체 `calendar` 로 예전에 만든 'DGIST 메일 일정'도 `app.created` 로 열리고 일정 넣기·고치기·키로 찾기·지우기가 된다 → 다시 연결해도 캘린더가 두 개로 갈라지지 않는다.
+  - 실측(개발자 계정): 전체 `calendar` 로 예전에 만든 'DGIST 메일 일정'도 `app.created` 로 열리고 일정 넣기·고치기·키로 찾기·지우기가 된다 → 다시 연결해도 캘린더가 두 개로 갈라지지 않는다.
   - 찾은 캘린더 ID 는 토큰 옆 `gcal_calendars.json` 에 적어 두고 먼저 쓴다. 같은 이름의 캘린더가 여럿이거나 이 토큰으로 못 여는 것(사용자가 직접 만든 같은 이름)이면 건너뛴다.
   - 연결 URL 에 `include_granted_scopes` 를 넣지 않는다. 넣으면 예전에 허락한 전체 `calendar` 가 새 토큰에 다시 묶인다.
 - **OAuth 동의 화면 브랜딩** (2026-10-12): 데스크톱 앱이 쓰는 클라이언트는 Cloud 프로젝트 `dgist-lms-autosaver-2`, 예전 웹판(Render) 클라이언트는 `dgist-lms-sync`. 두 프로젝트 모두 앱 이름 Daling, 로고 `docs/logo-120.png`(= `web/app-logo-120.png`), 홈 `https://gudaling.dev/`, 개인정보처리방침 `/privacy`, 약관 `/terms`, 승인된 도메인 `gudaling.dev`.
   - 2026-10-12 `daling-app.pages.dev` 로 낸 재인증은 "웹사이트가 나에게 등록되어 있지 않음"으로 남아, 같은 날 개인 도메인 `gudaling.dev`(Cloudflare Registrar, 같은 계정)를 사서 Pages 프로젝트 `daling-app` 에 붙였다(DNS: `@` CNAME → `daling-app.pages.dev`, 프록시). `daling-app.pages.dev` 도 같은 내용을 내보내지만 페이지마다 canonical 은 `gudaling.dev`.
-  - 이전 반려 사유 4가지: 홈페이지(`jykim5215.github.io/…`)가 내 소유로 확인 안 됨(GitHub 이름이 tutleblue로 바뀌어 404, 게다가 Search Console 확인이 하위 경로라 도메인 소유로 안 침), 개인정보처리방침 내용 부족, 홈에 앱 목적 설명 없음, 동의 화면 이름(Daling)과 홈 이름(붕어빵) 불일치.
+  - 이전 반려 사유 4가지: 홈페이지(`<옛 GitHub 이름>.github.io/…`)가 내 소유로 확인 안 됨(GitHub 이름이 tutleblue로 바뀌어 404, 게다가 Search Console 확인이 하위 경로라 도메인 소유로 안 침), 개인정보처리방침 내용 부족, 홈에 앱 목적 설명 없음, 동의 화면 이름(Daling)과 홈 이름(붕어빵) 불일치.
   - 사이트 원본은 `docs/`(한국어 + 심사관용 영어). 배포: `npx wrangler pages deploy docs --project-name daling-app --branch main`. Pages 가 `.html`을 떼는 308 리디렉트를 하므로 동의 화면에는 `/privacy`처럼 확장자 없는 주소를 넣습니다.
-  - Search Console: '도메인' 속성 `gudaling.dev` 를 DNS TXT(`google-site-verification=…`, Cloudflare DNS 의 `@` TXT)로 jykim5215@gmail.com 소유 확인. 이 TXT 를 지우면 소유 확인이 풀립니다. 예전 URL 접두어 속성 `https://daling-app.pages.dev/` 는 `docs/googlee81e6dcdac788920.html` 로 확인해 두었다.
+  - Search Console: '도메인' 속성 `gudaling.dev` 를 DNS TXT(`google-site-verification=…`, Cloudflare DNS 의 `@` TXT)로 개발자 Google 계정 소유 확인. 이 TXT 를 지우면 소유 확인이 풀립니다. 예전 URL 접두어 속성 `https://daling-app.pages.dev/` 는 `docs/googlee81e6dcdac788920.html` 로 확인해 두었다.
   - Google 은 github.io 같은 공용 호스팅 하위 도메인을 "소유 확인 불가"로 반려한 사례가 있습니다(2026-06 포럼 답변). 그래서 개인 도메인을 쓴다.
   - **결과**: 2026-10-13 0시경 `gudaling.dev` 로 낸 재인증이 두 프로젝트 모두 몇 분 만에 통과했고 '브랜딩 게시'까지 마쳐, 인증 센터에 "브랜딩이 인증되었으며 사용자에게 표시되고 있습니다". 이름·로고·주소를 바꾸면 다시 인증받아야 하고, 통과한 결과는 7일 안에 게시하지 않으면 만료됩니다.
   - **데이터 액세스** (2026-10-13): 두 프로젝트 모두 데이터 액세스에 `drive.file`·`calendar.app.created`·`calendar.calendarlist.readonly` 만 등록(전부 '민감하지 않은 범위'), `dgist-lms-sync` 에 있던 민감 범위 `calendar` 는 지움. 인증 센터: "앱이 민감하거나 제한된 범위를 요청하지 않으므로 인증이 필요하지 않습니다". 동의 화면은 '확인되지 않은 앱' 경고 없이 Daling 이름·로고로 바로 권한 선택이 나온다. 민감 범위를 다시 넣으면 시연 영상까지 내는 데이터 액세스 인증을 받아야 한다.
+  - **Drive 전체 읽기** (2026-10-22, 1.12.38, 사용자 결정): 메일 'Drive에서 첨부' 가 내 Drive 전체·공유 문서함을 보려고 `drive.readonly` 를 더 요청한다(`runtime_config.GOOGLE_DRIVE_READ_SCOPE`). 구글은 이것을 **제한된 범위** 로 분류한다 → 위의 '인증 필요 없음' 이 깨진다: 심사(보안 평가 포함)를 받기 전까지 연결할 때 '확인되지 않은 앱' 경고('고급 → 이동')가 뜨고, 확인되지 않은 앱은 새 사용자 수에 상한이 있다. Cloud 콘솔 데이터 액세스에 이 범위를 더하는 일과 심사 신청은 사용자가 한다. 쓰기는 여전히 `drive.file` 만.
+    - 예전 토큰(drive.file 만)은 그대로 쓴다: Drive 창은 앱이 올린 파일만 보이고 '다시 연결' 안내를 띄웠다(`/api/drive/list` 의 `fullAccess`, 1.12.40 부터는 고르기 창 단추). 다시 연결하면 전체가 보인다. 맨 위에 '공유 문서함'(`parent=shared` → `sharedWithMe`), 목록·받기는 `supportsAllDrives`.
+    - 권한을 하나씩 끄고 허락해도 연결되게 `OAUTHLIB_RELAX_TOKEN_SCOPE` 를 켜고, token.json 의 `scopes` 에는 실제로 허락한 것만 적는다(`runtime_config.granted_token_json`). google-auth 의 to_json 은 '요청한' 권한을 적어, 끈 권한도 있는 줄 알고 갱신 때 그 권한까지 달라고 했을 것이다.
+    - 다시 연결하면 그 자리에서 반영: 화면 서버가 예전 토큰으로 만들어 둔 Drive 접속(`drive_uploader._service`)을 `finish_google_oauth`·'google-oauth' 작업 끝에 버린다. 2026-10-22 실제로 다시 연결했을 때 새 토큰에 drive.readonly 가 있는데도 Drive 창은 앱 폴더 2개뿐이었다(새로 만든 접속으로는 내 드라이브 46개·공유 문서함 61개).
+  - **Drive 전체 읽기를 거두고 구글 고르기 창으로** (2026-10-25, 1.12.40): `GOOGLE_SCOPES` 에서 `drive.readonly` 를 뺐다. 까닭: (1) 1.12.38 로 올린 사람은 토큰에 이 권한이 없어 Drive 창이 '다시 연결' 을 요구했고(사용자: "기존 인증이 풀렸다"), 다시 연결하면 '확인되지 않은 앱' 경고가 떴다. (2) 콘솔 '대상' 에 "사용자 한도 100명 중 3명" — 확인되지 않은 제한된 범위는 평생 100명까지다. (3) 제한된 범위 심사는 시연 영상·사유서에 더해, 데이터가 서버를 거치면 외부 보안 평가(CASA, 유료·매년)까지 든다. 구글 Drive 문서도 자체 파일 목록 대신 Picker + `drive.file` 을 권한다. 인증 센터는 그대로 "브랜딩 인증됨 / 데이터 액세스 인증 필요 없음"(drive.readonly 는 콘솔에 등록한 적이 없다).
+    - 고르기 창: `/api/drive/pick` → `create_drive_pick_url` 이 `scope=drive.file&prompt=consent&trigger_onepick=true&allow_multiple=true&access_type=online` 주소를 기본 브라우저로 연다(구글 문서 'desktop-mobile-picker'). 돌아오는 `/oauth2callback?picked_file_ids=…&code=…` 는 state 의 `purpose="drive-pick"` 로 가려 `finish_drive_pick` 이 받는다 — **token.json 에 쓰지 않는다**(drive.file 하나뿐이라 쓰면 캘린더 권한이 사라짐). 고른 파일 이름·크기는 `drive_picks[state]`, 그 파일을 받을 토큰은 `drive_pick_tokens[id]`(50분)에 두고 `/api/drive/get` 이 `drive_service_for_file` 로 쓴다. 화면은 `/api/drive/picked?state=` 를 1.5초마다 묻는다(10분).
+    - `access_type=online`: 구글은 한 계정·한 앱의 갱신 토큰을 100개까지만 두고 넘치면 가장 오래된 것을 끊는다. 고를 때마다 갱신 토큰이 생기면 늘 쓰는 token.json 이 끊길 수 있다.
+    - 콘솔: `dgist-lms-autosaver-2` 에 Google Picker API(`picker.googleapis.com`)를 켰다. 2026-10-25 실측(Chrome, 개발자 계정): 동의 화면이 경고 없이 "선택하려는 파일의 경우 Daling에서 다음 작업을 할 수 있습니다", 고르기 창에 최근·업로드·내 드라이브·공유 문서함·중요 문서함·컴퓨터 탭이 보였다.
+    - 1.12.38~39 에 drive.readonly 를 허락한 토큰은 그대로 둔다(Drive 창이 전체를 보여 줌, `fullAccess`). 다시 연결하면 세 권한만 남는다.
 
 ### 4.6 DGIST 공공데이터 (`dgist_api.py`)
 
@@ -278,7 +308,7 @@ LMS 브라우저를 Edge 로 바꾼 까닭 (2026-10-15): Playwright 가 받는 `
 
 - 30초마다 확인. 켜고 45초는 쉼, 매일 동기화는 켜고 2분 뒤부터.
 - **매일 예약 동기화**: `SCHEDULE_TIME`(기본 08:00)이 지났고 `last_sync.json`의 날짜가 오늘이 아니면 실행. 끝나면 Windows 알림.
-- **주기 실행** (`next_due_job`): `health.json`의 마지막 성공 시각 기준으로 메일 → 마감 → 자료 순서로 하나만. 실패 직후에는 주기의 절반(최소 5분) 쉼.
+- **주기 실행** (`next_due_job`): `health.json`의 마지막 성공 시각 기준으로 메일 → 마감 → 자료 순서로 하나만. 실패 뒤에는 그 작업의 마지막 실패 시각(`failures.<kind>.at`)부터 주기의 절반(최소 5분), 잇달아 실패하면 두 배씩(최대 6시간) 쉼.
 - 결과는 `record_task_result`가 `health.json`에 기록 → 화면의 마지막 동기화 표시와 경고 배너.
 
 ### 4.8 내 컴퓨터에도 자동 저장 (`web_ui.autosave_local`)
@@ -336,8 +366,8 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 | `setup.py`, `check_courses.py` | 옛 CLI 도구 |
 | `scripts/dev_server.py` | 소스 그대로 8794 포트에 대시보드 |
 | `scripts/build_seed.py` | 씨앗 데이터 만들기 |
-| `scripts/make_icons.py`, `scripts/extract_logo.py` | 아이콘 만들기 |
-| `bungeoppang.spec` | PyInstaller 설정 |
+| `scripts/make_icons.py` | 아이콘 만들기 |
+| `daling.spec` | PyInstaller 설정 |
 | `packaging/` | Inno Setup 스크립트와 빌드 스크립트 |
 | `web/index.html`, `web/app.js`, `web/styles.css` | 화면 전부 (프레임워크 없음) |
 
@@ -371,18 +401,26 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 | `/api/place-search?q=` | OpenStreetMap 장소 검색 |
 | `/api/emails` | 메일 목록 (본문 없음) |
 | `/api/email-body?id=` | 본문, HTML(cid 주소 치환), 첨부 메타 |
+| `/api/mail/attachment?uid=&folder=&part=` | 첨부 한 개 내려받기 (이름은 서버에서 다시 읽음) |
+| `/api/mail/big-upload` (POST 파일 그대로 `?name=` · GET `?job=`) | 25MB 넘는 첨부를 Drive 'Daling 메일 첨부' 에 올려 링크로 (진행률) |
+| `/api/mail/big-cancel` (POST `{job}`), `/api/drive/share` (POST `{id}`) | 뺀 큰 첨부 멈춤·Drive 휴지통 / Drive 에서 고른 큰 파일을 링크 공유 |
 | `/api/mail-image?id=&n=` | 본문 그림 한 장 |
 | `/api/mail/folders`, `/api/mail/pending`, `/api/mail/eml` | 메일함 목록, 답장 대기, eml |
 | `/api/drive/list`, `/api/drive/get` | Drive 파일 (첨부용) |
+| `/api/drive/pick` (POST), `/api/drive/picked?state=` | 구글 고르기 창으로 Drive 전체에서 첨부할 파일 고르기 |
 | `/api/samsung-notes/status`, `/api/samsung-notes/job` | 설치 여부, 넣기 진행 |
 | `/api/local-autosave/job` | 내 컴퓨터 자동 저장 진행 |
 | `/api/dgist-api/status` | 공공데이터 키 확인 |
 | `/api/update/check` | 업데이트 확인 |
+| `/api/lock` | 앱 잠금 상태 `{available, enabled, locked, idleMinutes, waitSeconds, canReset}` (잠긴 동안에도 열림) |
+| `/api/mail/me` | 메일에 쓰는 내 정보: `manual`(직접 적은 값)·`auto`(LMS·조직도)·`me`(합친 값, 학년·영문 소속 포함) |
 
 ### POST
 
 | 경로 | 내용 |
 |---|---|
+| `/api/lock/unlock` `{pin}`, `/api/lock/reset` `{password}`, `/api/lock/lock` | 잠금 풀기, 저장된 학교 계정 비밀번호로 잠금 끄기, 지금 잠그기 (잠긴 동안에도 받음) |
+| `/api/lock/check` `{pin}`, `/api/lock/set` `{pin, current}`, `/api/lock/off` `{current}`, `/api/lock/idle` `{minutes}` | 지금 비밀번호 확인, 새로 정하기·바꾸기, 끄기, 자동 잠금 시간 (풀려 있을 때만) |
 | `/api/demo` | 체험 모드 켜기·끄기 `{on, lang}` (GET 은 상태: active·blocked 수·available) |
 | `/api/run` | 자료 동기화 (`mode`: fast/full) |
 | `/api/refresh-deadlines`, `/api/refresh-emails`, `/api/verify`, `/api/stop` | 작업 시작·중지 |
@@ -402,6 +440,10 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 | `/api/mail/star`, `/api/mail/move`, `/api/mail/folder-create`, `/api/mail/reminder`, `/api/mail/translate` | 메일 기능 |
 | `/api/mail/open-link` | 메일 본문 링크를 기본 브라우저로 (http·https 만) |
 | `/api/send-email` | 메일 보내기 |
+| `/api/mail/flow` | 메일 쓰기 흐름 `{to, courseIndex}` → 받는 사람(교수·조교·외국인·과목)과 한국어·영어 글 조각 |
+| `/api/mail/me` | 메일에 쓰는 내 정보 저장 `{name, nameEn, studentId, dept, flow}` (보낸 키만) |
+| `/api/ai/polish` | 메일 가운데 용건만 AI 로 다듬기 `{text, lang, flow}` (실험실 스위치를 따른다) |
+| `/api/ai/continue` | 메일 쓰기 칸의 `/ai` 지시 자리에 들어갈 글 `{instruction, before, after, lang, flow}` (실험실 스위치, 체험 모드에선 막음) |
 | `/api/directory/import` | 조직도 넣기 |
 | `/api/assignment/open`, `/api/open-url` | 외부 페이지 열기 |
 | `/api/update/apply`, `/api/restart` | 업데이트, 재시작 |
@@ -431,12 +473,15 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 | `last_sync.json` | 마지막 자료 동기화 시각 |
 | `health.json` | 종류별 마지막 성공·실패 |
 | `local_autosave.json` | 내 컴퓨터에 자동 복사한 파일의 크기·수정 시각 (사용자가 고쳤는지 판단용) |
+| `lms_profile.json` | 내 이름·학번·학교 메일·LMS 소속 (LMS `/users/me`, 전화번호 등은 받지 않음) |
+| `app_lock.json` | 앱 잠금: 비밀번호 PBKDF2 해시·소금, 자동 잠금 시간, 틀린 횟수·막힌 시각. 없으면 잠금 꺼짐 |
+| `ai_profile.json` | 직접 적은 내 정보(이름·영문 이름·학번·소속), 흐름 끄기, AI 고르기·실험실 스위치 |
 
 그 밖의 위치:
-- 설치 폴더: `%LOCALAPPDATA%\Programs\붕어빵`
+- 설치 폴더: `%LOCALAPPDATA%\Programs\Daling` (1.12.52 까지 `Programs\붕어빵`)
 - LMS 브라우저: 시스템 Edge(`C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe`). Edge 가 안 될 때만 Playwright headless shell 을 `%LOCALAPPDATA%\ms-playwright` 에 받음
-- 로컬 저장: `문서\붕어빵 파일 정리\<과목>\` (OneDrive 문서 폴더일 수 있음, `SHGetKnownFolderPath`로 찾음)
-- 삼성 노트 DB: `%LOCALAPPDATA%\Packages\SAMSUNGELECTRONICSCoLtd.SamsungNotes_wyx1vj98g3asy\LocalState\Storage.sqlite` (백업은 같은 폴더의 `Storage.sqlite.붕어빵백업-*`)
+- 로컬 저장: `문서\Daling 파일 정리\<과목>\` (예전 판이 만든 `문서\붕어빵 파일 정리` 가 있으면 그곳) (OneDrive 문서 폴더일 수 있음, `SHGetKnownFolderPath`로 찾음)
+- 삼성 노트 DB: `%LOCALAPPDATA%\Packages\SAMSUNGELECTRONICSCoLtd.SamsungNotes_wyx1vj98g3asy\LocalState\Storage.sqlite` (백업은 같은 폴더의 `Storage.sqlite.Daling백업-*`, 1.12.52 까지는 `…붕어빵백업-*`)
 
 ---
 
@@ -449,7 +494,7 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 | `EMAIL_ADDRESS`, `EMAIL_PASSWORD`*, `EMAIL_TO` | 동기화 결과 알림 메일 (선택) | |
 | `GEMINI_API_KEY`* | 번역·분류·시간표 이미지 | |
 | `DGIST_API_KEY`* | 공공데이터 인증키 | |
-| `DOWNLOAD_PATH`, `LOCAL_SAVE_PATH` | 받는 곳, 내 컴퓨터 저장 위치 | 데이터 폴더\downloads, 문서\붕어빵 파일 정리 |
+| `DOWNLOAD_PATH`, `LOCAL_SAVE_PATH` | 받는 곳, 내 컴퓨터 저장 위치 | 데이터 폴더\downloads, 문서\Daling 파일 정리 |
 | `AUTO_LOCAL_SAVE` | 내 컴퓨터에도 자동 저장: off / current / all | off |
 | `CLOUD_SAVE` | 클라우드 폴더 자동 저장 `{onedrive|dropbox|icloud|mybox: {on, path}}` (path 비면 자동으로 찾은 폴더) | 모두 꺼짐 |
 | `SAVE_SCOPE` | 내 컴퓨터·클라우드에 넣을 과목: current / all (`AUTO_LOCAL_SAVE`가 켜져 있으면 그 값이 우선) | current |
@@ -470,10 +515,10 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 
 | 단계 | 방법 |
 |---|---|
-| EXE | `.venv\Scripts\python.exe -m PyInstaller bungeoppang.spec --noconfirm` → `dist\붕어빵\` |
-| 설치 파일 | `packaging\build_installer.ps1` → `packaging\out\bungeoppang-<버전>-win-x64-setup.exe` (약 54MB) |
+| EXE | `.venv\Scripts\python.exe -m PyInstaller daling.spec --noconfirm` → `dist\Daling\` |
+| 설치 파일 | `packaging\build_installer.ps1` → `packaging\out\daling-<버전>-win-x64-setup.exe` (약 57MB) + 같은 파일의 예전 이름 사본 `bungeoppang-<버전>-…` |
 | 이 PC에 설치 | `packaging\build_installer.ps1 -Install` |
-| 맥 앱 (DMG) | GitHub Actions `.github/workflows/mac.yml` → `daling-<버전>-mac-arm64.dmg` 아티팩트 (아래 'macOS 판') |
+| 맥 앱 (DMG) | GitHub Actions `.github/workflows/mac.yml` → `daling-<버전>-mac-arm64.dmg`(M칩)·`daling-<버전>-mac-x86_64.dmg`(인텔) 아티팩트 (아래 'macOS 판') |
 | 리눅스 앱 (AppImage·tar.gz) | GitHub Actions `.github/workflows/linux.yml` → `daling-<버전>-linux-x86_64.AppImage`·`.tar.gz` 아티팩트 (아래 '리눅스 판') |
 | Microsoft Store 판 (MSIX) | `packaging\msix\build_msix.ps1` → `packaging\out\daling-<버전>-win-x64.msix`(시험판)·`-store.msix`(제출판) (아래 'Microsoft Store 판') |
 | 설치본 점검 | `<실행 파일> --autosaver-smoke` (창 없이, 빈 임시 데이터 폴더로. `smoke_test.py`). Store 판은 `daling.exe --autosaver-smoke` |
@@ -486,7 +531,6 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 
 ## 10. 알려진 한계·남은 일
 
-- 메일 첨부 파일은 이름·아이콘까지만 나오고 내려받기는 아직 없음
 - 지난 학기 과목은 LMS가 403을 줘서 LMS 순서를 못 채움 (이름순)
 - 학교 메일서버에 IDLE이 없어 새 메일은 주기 확인으로만 앎
 - 삼성 노트 넣기는 PDF만, 파일당 약 5.5초 (삼성 노트 자체 저장 시간)
@@ -516,6 +560,7 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
   - 부서 사람: `POST /mail/org/dgist.ac.kr/groups/{id}/entries` 본문 `_method=GET&perPage=500&currentPage=N`. 155개 부서, 약 160초, 4,824명.
   - 필드: `cn`(이름) `mail` `department` `title`/`jobname`(교원·직원·연구원) `identity`(학부생·대학원생…). 값은 모두 배열.
 - `/api/directory?q=&limit=` 는 `limit`(최대 50)을 따르고, 조직도는 파일 도장이 바뀔 때만 다시 읽는다(`_directory_cache`).
+- 교원 주소록 (2026-10-15): 새 사용자는 조직도를 넣을 길이 없어 교수·조교 주소가 비어 있었다. `web_ui.directory_people` 이 내 `directory.json` 에 설치 파일의 `data/seed_directory_faculty.json`(교원 247명: 이름·메일·소속·직위)을 메일 주소 기준으로 겹치지 않게 더한다. 교수 주소는 학교 홈페이지에 공개된 정보라 공개 배포물에 넣고, 학생·직원까지 든 전체 조직도(4,824명, 학생 3,518)는 포탈 로그인 뒤에만 보이는 정보라 넣지 않는다(사용자 결정). 체험 중에는 섞지 않는다(가짜 데이터에 실명 금지). 새로 만들기: `python scripts/build_faculty_seed.py [조직도 파일]`. `/api/directory` 의 `imported` 는 내가 넣은 인원(0 이면 설정에 '교수 247명').
 
 ## 화면 전환 성능 (2026-09-27)
 - 메일함 진입 비용은 JS 가 아니라 배치(layout)였다: 메일 41통 = 요소 1,200개, 배치 한 번 24ms × 여러 번. `.email-list-row { content-visibility: auto; contain-intrinsic-size: auto 88px }` 로 163ms → 44ms(중앙값, 9회).
@@ -528,18 +573,26 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 - 빠른 동기화(`fast`)는 `last_sync - 2일` 이후 바뀐 파일만 본다. 과목이 하나라도 실패하면(`_course_failures`) `last_sync` 를 앞당기지 않는다.
 - 매일 전체 검사: `app.run_scheduled_sync` 가 `sync_mode="full"` 로 돌고, 오늘 했는지는 `last_full_sync.json`(전체 검사가 성공했을 때만 씀)으로 본다. 자료 화면 새로고침 버튼도 `mode: "full"`.
 - 2026-09-28 실측: 이번 학기 파일 중 Drive 에 옛 판 13개, 없는 파일 3개, 같은 파일 269개.
+- **맨 위 폴더 이름 Daling·실패 알리기** (2026-11-04, 1.12.54). 사용자: 다른 PC 에서 구글로 연결했는데 Drive 에 제대로 안 올라간다, Daling 폴더로 생기는지 봐 달라.
+  - 맨 위 폴더가 `AutoSaver` 였다(`folder_layout.DRIVE_ROOT_FOLDER`) — Daling 폴더를 찾던 사람은 올라간 자료를 못 찾는다. 이제 `Daling`. `drive_uploader.get_root_folder` 가 앱이 만든 `AutoSaver`(`LEGACY_DRIVE_ROOT_FOLDERS`)를 찾으면 새로 만들지 않고 **이름만 바꾼다**(같은 id, 안의 과목 폴더·파일·공유 링크 그대로). 위치는 따지지 않는다(옮겨 둔 폴더도 계속 씀). 실측(개발자 Drive): `AutoSaver`(1k8G…, 과목 21개) → `Daling` 같은 id, 이미 있는 파일은 `'exists'`.
+  - 구글 동의 화면은 권한마다 체크 칸이 있어 Drive 칸을 빼고도 연결된다. 그러면 Drive 요청은 모두 `403 insufficient authentication scopes`(같은 refresh token 을 캘린더 권한만으로 새로 고쳐 실측). 예전엔 화면이 'Drive · 연결됨' 이었고 동기화도 '성공'. 이제 `drive_scope_granted`(token.json `scopes`, 없으면 있다고 봄)·`/api/status googleOAuth.driveGranted` 로 보고, 설정 Drive 카드 '권한 필요' + 다시 연결 안내, 상단 Drive 불빛 빨강.
+  - 올리기 실패를 센다: `upload_to_drive_with_path` 는 실패하면 여전히 `''` 이지만 `drive_uploader.last_error`(사람 말, `explain_error`: 권한·저장 공간·사용량 한도·연결 끊김·서버·인터넷)를 남긴다. `main.run_job` 요약에 '실패 N개 (까닭)', 결과는 `drive_status.json`(데이터 폴더) → `/api/status driveResult` → 상단 Drive 불빛 노랑 '`Drive 실패 N개`'. 폴더 만들기에서 난 오류도 동기화 전체를 실패로 만들지 않고 Drive 만 멈춘다(뒤의 폴더 정리·내 컴퓨터 저장은 그대로).
+  - 자료 화면 'Drive에 올리기'(`/api/files/bulk drive`)는 `''` 를 성공으로 셌다 → 이제 실패로 세고 까닭을 붙인다. 모두 실패면 오류로 돌려준다. 화면 서버에서 부를 때 로그인 창을 띄우지 않는다(`get_drive_service(interactive=False)`).
+  - 구글 요청은 `execute(num_retries=4)` — googleapiclient 가 429·5xx·사용량 한도 403(`rateLimitExceeded`)을 기다렸다 다시 보낸다. 처음 연결한 PC 는 수백 개를 한꺼번에 올린다.
+  - Drive 접속을 새로 만들 때(다시 연결 = 다른 계정일 수 있음) 폴더 id 캐시를 비운다.
+  - 개발자 Drive 의 옛 `붕어빵` 폴더(2026-08-13, 2개)는 손대지 않았다.
 - 큰 파일: `content-length` 가 300MB 를 넘거나 Playwright 가 'string longer than 0x1fffffe8' 로 실패하면 `_stream_to_file`(requests, 로그인 쿠키, 1MB 조각, `.part` → 교체)로 받는다. 예전 코드는 파일을 먼저 열어 실패 시 0바이트 파일을 남겼다.
 
 ## 사이드바 상태판 (2026-09-28)
 - 예전 '설정 필요 / 매일 08:00 실행' 은 `requiredConfig`(lms·gemini·drive·gmail) 가 모두 참이어야 '완료' 였는데, Gemini(선택)·Gmail 알림(안 씀) 때문에 늘 '설정 필요' 였다.
 - 지금은 `app.js renderStatusCard`: 불빛 `statusLights()`(LMS·메일·Drive: ok/warn/bad/off), 제목은 첫 문제(없으면 '모두 정상'), 둘째 줄은 진행 중인 작업 또는 `nextAutoJob()`(마지막 성공 + 주기). 누르면 문제 있으면 설정 계정(`#stAccounts`), 없으면 자동 가져오기(`#stAuto`).
-- `/api/health` 에 `authFailed`, `failStreak`, `lastFullSync` 를 더 싣는다.
+- `/api/health` 에 `authFailed`, `failStreak`, `failures`·`failing`(작업별 실패와 까닭 갈래, '실패 까닭 진단' 절), `lastFullSync` 를 더 싣는다.
 
 ## 테마 (2026-09-28)
 - `THEMES` 맨 앞 `auto`(기본값): `prefers-color-scheme` 이 어두우면 `dark`, 밝으면 `claude`. `resolveTheme` 로 실제 테마를 정한다.
 - 시스템 설정이 바뀌면 `followSystemTheme`: change 이벤트 + 창 focus + 3초마다 비교 (이벤트가 안 오는 경우가 있었음).
 - 고른 테마는 `ui_prefs.json`(`GET/POST /api/ui-prefs`)에 둔다. 앱 창 저장소는 끌 때마다 지워져 예전에는 켤 때마다 '기본' 으로 돌아갔다. localStorage 키는 `autosaver-theme-v2`(옛 키는 고르지 않아도 '기본' 이 적혀 있어 무시).
-- 설정의 '조직도 파일 넣기' 줄은 사용자 요청으로 뺐다(2026-09-28). 조직도(`directory.json`)와 자동완성은 그대로. 다시 넣으려면 `index.html` 에 `#directoryImportButton`·`#directoryFileInput`·`#directoryStatus` 를 두면 `bindDirectory` 가 붙는다.
+- 설정의 '조직도 파일 넣기' 줄은 사용자 요청으로 뺐다가(2026-09-28) 다시 넣었다(2026-10-15, 설정 › 연결된 계정의 학교 메일 아래 '주소록' 줄 `#directoryRow`). 교원 주소록만으로는 조교·학생 주소를 못 찾아서다.
 - 대시보드 첫 줄(`setHeroGreeting`)은 인사말 대신 '9월 28일 월요일' (쉬는 날은 ' · 추석' 처럼 이름). 사용자가 인사 문구를 오글거린다고 해서 뺐다(2026-09-28). 둘째 줄 `heroSummary` 는 그대로.
 - 저장 위치 스위치(드라이브·내 컴퓨터·범위·클라우드)는 바꾸는 즉시 `/api/config` 에 저장한다(`saveSavePlaceSoon`, 250ms 묶음). 예전에는 '설정 저장' 을 눌러야 해서, 설정 화면을 다시 열 때 `populateSettings` 가 저장된 값(off)으로 되돌려 '켰다 꺼졌다' 했다(2026-09-28).
 
@@ -561,9 +614,9 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 ### 앱 업데이트 (`updater.py`, GitHub 릴리스)
 
 - 확인: `/api/update/check` → api.github.com `releases/latest` 의 태그(v1.2.3)와 `VERSION` 비교. 켤 때 4초 뒤, 그 뒤 6시간마다 (`checkForUpdate`).
-- 설치: `/api/update/apply` → 첨부 `bungeoppang-<버전>-win-x64-setup.exe` 를 %TEMP%\bungeoppang-update 에 받고, GitHub 자산 digest(SHA-256)와 맞을 때만
+- 설치: `/api/update/apply` → 첨부 `daling-<버전>-win-x64-setup.exe` 를 %TEMP%\daling-update 에 받고, GitHub 자산 digest(SHA-256)와 맞을 때만
   `/SILENT /CLOSEAPPLICATIONS /RELAUNCH=1` 로 실행, 앱은 2초 뒤 스스로 끈다. 설치 스크립트 `ShouldRelaunch` 가 끝나고 앱을 다시 켠다. 진행은 `/api/update/job`.
-- 새 버전 내기: VERSION·changelog 올리고 빌드 → `gh release create v<버전> packaging/out/bungeoppang-<버전>-win-x64-setup.exe` (본문은 '- ' 줄로 짧게).
+- 새 버전 내기: VERSION·changelog 올리고 빌드 → `gh release create v<버전> packaging/out/daling-<버전>-win-x64-setup.exe packaging/out/bungeoppang-<버전>-win-x64-setup.exe` (각 `.sha256` 도) (본문은 '- ' 줄로 짧게).
 - 예전 방식(저장소 main 의 VERSION·raw 파일 교체)은 설치형에서 동작하지 않았고, main 이 1.8.6 에 멈춰 늘 '최신' 이었다.
 - 화면 전환(2026-09-28): 옛 화면을 먼저 지우고 0.1초 뒤 새 화면을 들이던 방식은 한 번 비어 보여 '깜빡임'으로 느껴졌다. 이제 `appview`·`sidebar`·`topbar` 모두 옛/새를 동시에 0.26~0.3초 겹쳐 바꾸고 `mix-blend-mode: plus-lighter` + `isolation` 으로 같은 부분의 밝기가 꺼지지 않게 한다(`vt-soft-*`). 실측: 모든 옛/새 애니메이션 delay 0.
 
@@ -574,7 +627,7 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 - 설정 키 `NOTIFY_DEADLINES`, `NOTIFY_NEW_FILES`(기본 켜짐, 화면 `notifyDeadlines`/`notifyNewFiles`, 누르는 즉시 저장). 예전의 '자동 동기화 완료/새 자료가 없습니다' 와 켤 때 48시간 요약 알림은 없앴다.
 - 메일함 ↔ 다른 화면 전환은 `html.vt-quick` 로 0.15초, 크기 변화 없이(`view-transition-group` 0초).
 
-- 설치 창 디자인: `bungeoppang.iss` 의 WizardStyle(modern dynamic windows11 hidebevels)·WizardBackColor(앱 --bg)·WizardImageFile(+DynamicDark). 그림은 `scripts/make_installer_art.py` (시스템 파이썬 Pillow, Noto Serif KR 제목 + 달구) → `packaging/art/`. 단계는 환영 → 추가 옵션 → 설치 → 완료 (언어·위치·준비됨 창은 뺐다). 문구는 [Messages] 에 앱 말투로.
+- 설치 창 디자인: `daling.iss` 의 WizardStyle(modern dynamic windows11 hidebevels)·WizardBackColor(앱 --bg)·WizardImageFile(+DynamicDark). 그림은 `scripts/make_installer_art.py` (시스템 파이썬 Pillow, Noto Serif KR 제목 + 달구) → `packaging/art/`. 단계는 환영 → 추가 옵션 → 설치 → 완료 (언어·위치·준비됨 창은 뺐다). 문구는 [Messages] 에 앱 말투로.
 - 앱 안 업데이트 화면: `#updateDialog` 카드(`setUpdateStep`, 확인→내려받기→검사→설치). 설치는 /VERYSILENT 라 윈도우 설치 창이 안 뜬다. 설치 직전 `update_done.json`(데이터 폴더)에 from/to 를 적고, 다시 켜진 앱은 `/api/whats-new` 의 `justUpdated` 로 '업데이트를 마쳤어요' 카드를 연다(본 뒤 지운다).
 
 
@@ -612,7 +665,7 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 
 ### 메일 첨부: Drive 창 (`openDrivePicker`)
 
-- `/api/drive/list?parent=<id>` (폴더 안) / `?q=<이름>` (검색) → folders·files. 권한이 `drive.file` 이라 앱이 올린 파일만 보인다.
+- `/api/drive/list?parent=<id>` (폴더 안) / `?q=<이름>` (검색) → folders·files. 권한이 `drive.file` 이라 앱이 올린 파일만 보인다(`fullAccess=false`). 그때 'Drive 전체에서 고르기' 단추가 구글 고르기 창을 띄운다(`pickFromGoogleDrive` → `/api/drive/pick`·`/api/drive/picked`, §4.5). 이 창에서 고른 파일도 함께 붙인다.
 - `/api/drive/get?id=` 로 받아 붙인다. 구글 문서·시트·슬라이드는 PDF 로 내보내 붙인다. 20MB 넘는 파일은 고를 수 없게 흐리게 표시.
 - 작성창의 '내 자료'(강의자료 목록) 칸은 없앴다. 강의자료는 Drive 창의 AutoSaver 폴더에 있다.
 
@@ -620,14 +673,32 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 ### 메일 보내기·임시저장 (`email_reader.send_email`, `save_draft`)
 
 - SMTP 로 보낸 뒤 IMAP `APPEND` 로 '보낸 편지함'에 사본을 넣는다. 예전엔 안 넣어서 앱·웹메일 어디에도 보낸 기록이 없었다.
-- 임시저장은 '임시 보관함'에 `(\Seen \Draft)` 로 넣고 `X-Bungeoppang-Draft: <draftId>` 헤더를 붙인다. 다시 저장하거나 보내면 같은 번호의 예전 판에 `\Deleted` 표시만 한다(EXPUNGE 금지).
+- 임시저장은 '임시 보관함'에 `(\Seen \Draft)` 로 넣고 `X-Daling-Draft: <draftId>` 헤더를 붙인다(1.12.52 까지 저장한 `X-Bungeoppang-Draft` 도 읽고 지운다). 다시 저장하거나 보내면 같은 번호의 예전 판에 `\Deleted` 표시만 한다(EXPUNGE 금지).
 - 이 서버는 `SEARCH HEADER` 를 받아도 빈 결과를 준다(실측). 그래서 `search_header` 는 최근 60일 메일의 그 헤더만 FETCH 해서 직접 비교한다.
 - 보내기 결과에 `refused`(서버가 거절한 주소)·`savedToSent` 를 돌려주고 화면 토스트에 붙인다.
+- **첨부 이름은 학교 웹메일과 같은 꼴**(`name="=?utf-8?b?…?="`, `_encoded_filename`, 1.12.41). 1.12.40 까지는 파이썬 기본 RFC 2231 꼴(`filename*=utf-8''…`)이었는데, 학교 서버가 이것을 구조(BODYSTRUCTURE)에서 버려 `("ATTACHMENT" NIL)` 이 됐다(2026-10-25 실측). 그래서 보낸 편지함에서 '첨부파일' 로만 보였다(파일 내용은 들어 있었음). 받는 사람이 학교 웹메일이면 같은 일이 났을 수 있다. 보낸 편지함 사본(`_message_bytes`)도 받는 사람에게 간 것과 같은 compat32 글자로 넣는다(policy.SMTP 는 머리말을 다시 접으며 RFC 2231 로 바꿨다).
+- 이미 그렇게 간 메일: 구조에 이름이 없는 첨부는 메일 앞부분(`BODY.PEEK[]<0.n>`, 앞 파트 크기 합 + 여유, 2MB 까지)을 받아 파트 머리말에서 이름을 읽는다(`MiniIMAP._fill_nameless`). 파트 머리말만 주는 `BODY[n.MIME]` 은 이 서버가 무시하고 메일 전체를 준다(실측). 예전에 받아 둔 '첨부파일' 은 `nameChecked` 가 없어 그 메일만 한 번 다시 받는다.
+- 보내기 직전 `settleAutosave`: 예약된 자동 저장을 멈추고 서버로 가는 중인 저장은 끝날 때까지 기다린다. 예전엔 보낸 1초 뒤 같은 메일이 임시 보관함에 다시 생겼다(22:25:17 보냄 · 22:25:18 임시).
 - 받는 사람·참조·숨은참조는 칩(`setupRecipientChips`). 서버로 보내는 값은 숨긴 원래 칸에 `이름 <주소>, …`. 그 칸의 `value` 를 가로채서 코드가 값을 넣으면 칩을 다시 그린다. 주소 나누기는 따옴표·꺾쇠 안 쉼표를 자르지 않는다(`parseRecipients`, 서버는 `email.utils.getaddresses`).
 - 요청 처리 중 잡히지 않은 오류는 `DashboardHandler._guarded` 가 `C:\lms-autosaver\server_errors.log` 에 남기고 화면에 오류 문구를 돌려준다. 창 없는 EXE 에서는 예전에 연결만 끊겨 원인을 알 수 없었다.
 - 시험할 때 주의: Git Bash 의 curl 에 한글 JSON 을 그대로 넣으면 UTF-8 이 아닌 코드페이지로 나가 `read_body_json` 에서 깨진다. 본문은 UTF-8 파일로 만들어 `--data-binary @파일` 로 보낸다.
 
 - 자동 저장(`scheduleAutosave`): 쓰다 멈추면 1.5초 뒤 이 컴퓨터(`localStorage` autosaver-mail-draft), 15초 뒤 서버 임시 보관함. 내용 서명이 같으면 다시 안 넣는다. 자동 저장은 첨부 3MB 넘으면 첨부를 뺀다('임시저장' 단추는 다 넣음). '←' 는 손댄 게 있으면 저장하고 닫기, 휴지통은 확인 뒤 `/api/mail/discard-draft` 로 서버 저장본까지 버린다. 메일 쓰기를 새로 열면 `restoreDraftIfAny` 가 이어 쓸지 묻고 같은 draftId 로 이어 저장한다.
+- **첨부가 받는 사람에게 안 가던 일** (2026-10-27, 1.12.46). 보내기(SMTP·MIME)는 멀쩡했다 — `/api/send-email` 로 보낸 시험 메일은 Gmail 에 두 첨부가 원본과 바이트까지 같게 도착. 빠진 곳은 화면이었다.
+  - 이어 쓰기: 이 컴퓨터 저장본(`saveLocalDraft`)에 첨부가 없어 '이어서 쓰기' 하면 본문만 돌아왔다(재현: 첨부 1개 → 화면 떠났다 돌아와 이어 쓰기 → 0개). 사용자가 앱에서 보낸 메일(보낸 편지함)에도 첨부 파트가 없었다. 이제 같은 실행 안에서는 메모리(`autosave.memAtts`, draftId 로 맞춤)에서 전부, 껐다 켜면 저장본에서 앞에서부터 합계 1.5MB(`LOCAL_ATTACH_MAX`)까지 내용째 되살린다. 못 담은 파일은 이름만 남겨 '첨부 N개는 다시 넣어 주세요' 로 알린다. 저장소가 꽉 차면 이름만 저장.
+  - 전달: 본문만 옮기고 원래 첨부는 버렸다. 이제 `attachOriginalFiles` 가 `/api/mail/attachment` 로 받아 붙인다(출처 '원래 메일', 합계 `ATTACH_LIMIT` 넘는 것은 빼고 알림, 받는 사이 다른 메일을 열면 `composeGen` 이 달라 붙이지 않음). 학과 공지 PDF 2개 실측 1.2초.
+  - 보내기 전 확인: 내가 쓴 부분(인용·전달 원문 앞)이나 새 메일 제목에 '첨부/attach' 가 있는데 첨부가 0개면 묻는다. 내용이 빈 첨부가 있으면 막는다(서버 `build_message` 는 base64 가 깨진 첨부를 조용히 건너뛴다).
+  - 답장·전달 인용(`quotableText`): 평문 파트에 `<img src="data:…">` 를 그대로 넣어 보내는 메일이 있고, `strip_css_text` 가 `data:image/png;` 를 CSS 선언으로 보고 지워 `<img src=" base64,iVBOR…` 가 남는다. 인용할 때 그림 태그와 200자 넘는 base64 줄을 뺀다(학과 공지 4,000 → 396자). 읽기 화면 평문 보기는 그대로다.
+  - 확인(Gmail 받은편지함): '[Daling 첨부 시험 2]' 첨부 2개 → 떠났다 새로고침 → 이어 쓰기 → 보내기, 원본과 바이트 같음. '[Daling 첨부 시험 3]' 학과 공지 전달, PDF 2개 도착.
+- **첨부 한도와 큰 파일** (2026-10-27, 1.12.47). 학교 SMTP 는 EHLO 에서 `SIZE 36700160`(메일 한 통 35MB)을 알린다. 첨부는 base64(4/3)+줄바꿈이라 약 1.37배 → 원본 합계 **25MB**(`email_reader.SEND_ATTACH_MAX`, 화면 `ATTACH_LIMIT`, `/api/drive/get`, 임시 메일 이어 쓰기 같은 값). 예전엔 화면 10MB · 서버 20MB 로 따로였고, 끌어 놓기는 크기를 안 봤다.
+  - 그대로 붙일 자리가 없는 파일(합계 25MB 초과, 2GB 까지 `BIG_ATTACH_MAX`)은 Gmail 처럼 Drive 링크로(`addAttachmentFiles` → `uploadBigAttachment`). 화면이 파일을 그대로(`application/octet-stream`, JSON·base64 아님) `/api/mail/big-upload?name=` 로 보내면 서버가 1MB 씩 임시 폴더에 받고(`receive_big_upload`), 스레드가 내 Drive 'Daling 메일 첨부' 폴더에 이어 올리기(8MB 조각)로 올린 뒤 '링크가 있는 사람 보기' 권한을 연다(`_run_big_upload`, 앱이 만든 파일이라 drive.file 로 된다). 화면은 0.8초마다 `GET /api/mail/big-upload?job=` 으로 % 를 그린다. 30MB 실측 약 34초.
+  - 이 POST 만 JSON 이 아니다. `application/octet-stream` 은 교차 출처에서 미리 묻기(preflight) 없이 못 보내므로 `csrf_ok` 와 같은 막이가 된다. 체험 중·2GB 초과는 본문을 읽지 않고 연결을 닫으며 거절.
+  - Drive 접속은 이 스레드에서 따로 만든다(`_big_drive_service`, 로그인 창 없음). httplib2 접속은 스레드에 안전하지 않아 `drive_uploader._service` 를 나눠 쓰지 않는다. 구글 연결이 없으면 '설정에서 Google 연결' 안내.
+  - 보낼 때 링크 묶음을 본문 끝에 붙인다(`bigLinksBlock`, HTML 이면 'Google Drive 로 보낸 파일' 칸). 올리는 중이면 보내기를 막는다. 쓰는 중에 빼면 `/api/mail/big-cancel` → 올리는 중이면 멈추고, 다 올라갔으면 Drive 휴지통(지우지 않음). 보낸 뒤의 파일은 그대로 둔다.
+  - 'Drive에서 첨부' 로 고른 25MB 넘는 파일은 내려받지 않고 `/api/drive/share` 로 '링크가 있는 사람 보기' 를 열어 링크로 붙인다(고르기 창에 '링크로 보냄' 표시, 예전엔 못 골랐다).
+  - 링크 첨부는 서버 임시저장(파일이 아니라 뺀다)에는 안 들어가고, 이 컴퓨터 저장본(`link`)에는 남아 이어 쓰기에서 돌아온다.
+  - **큰 메일의 보낸 편지함 사본**: 34MB 메일의 사본이 안 남았다. `MiniIMAP` 소켓 시간 제한 20초가 sendall 전체에 걸려(파이썬 3.5~) 끊겼다 — 32.8MB APPEND 실측 30.2초. `append` 는 크기에 맞춰 늘리고(20초 + 초당 128KB), SMTP 도 같은 까닭으로 40초 고정에서 크기에 맞춰 늘렸다. 사본 넣기가 실패하면 같은 try 의 임시저장본 정리도 건너뛰어 '(제목 없음)' 임시 메일이 남았다(같이 고쳐짐).
+  - 확인: '[Daling 첨부 시험 5]' 24MB 첨부 + 30MB Drive 링크 → Gmail 도착(메일 34.4MB), 링크는 로그인 없이 열림. 뺀 2MB 파일은 Drive 휴지통(trashed=True) 확인.
 
 ### 문의 · 오류 제보 · 아이디어 (`app.js` openFeedback)
 
@@ -638,7 +709,7 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 
 - 마감 확인 작업(1시간마다)에서 `GET /learn/api/public/v1/courses/{id}/users?fields=courseRoleId,user.name,user.userName` 로 학생을 뺀 사람(Instructor→교수, TeachingAssistant·CourseBuilder→조교, Grader→채점 조교)을 받아 `course_staff.json` 에 둔다. 지난 학기 일부 과목은 403(전에 받은 것 유지).
 - LMS 는 이메일을 주지 않는다(이름·학번만). 이 학교는 이름 전체를 `name.given` 에 넣고 `family` 는 '.' 이다.
-- `/api/course-staff`: 조직도에서 이름으로 이메일을 붙인다. 동명이인이면 교수는 교원, 조교는 대학원생 → 그래도 여럿이면 주고받은 메일에 나온 사람. 그래도 모르면 `email` 을 비우고 `candidates` 를 준다(화면에서 골라 씀). 실측 44명 중 35명 자동, 7명 후보, 2명 조직도에 없음.
+- `/api/course-staff`: 조직도에서 이름으로 이메일을 붙인다. 동명이인이면 교수는 교원, 조교는 대학원생 → 그래도 여럿이면 주고받은 메일에 나온 사람. 그래도 모르면 `email` 을 비우고 `candidates` 를 준다(화면에서 골라 씀). 실측 44명 중 35명 자동, 7명 후보, 2명 조직도에 없음. 조직도에 이름이 없으면(새 사용자는 교원만 있음) 주고받은 메일에서 이름이 같은 `@dgist.ac.kr` 주소가 하나뿐일 때 그 주소를 쓴다(2026-10-15 실측: 조직도 없이 이번 학기 교수 6/6, 조교 1/6, 조직도와 다른 주소 0).
 - 화면: 강의 카드 `courseStaffLine` (누르면 `mailCourseStaff` → 받는 사람 '이름/과목 조교', 제목 '[과목] '). 받는 사람 자동완성은 `staffContacts` 를 연락처에 더하고 '일반물리Ⅱ 조교' 꼬리표(`.ac-tag`)를 붙인다. 여러 낱말 검색은 낱말마다 맞아야 한다.
 
 ## 메일 미리보기 CSS (2026-10-02)
@@ -661,7 +732,7 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 - 첫 창 크기 `app.initial_window_size`: 1320×880 을 바라되 작업 영역 −40 을 넘지 않게. 최소 크기 360×560(휴대폰 비율로 줄여 보기 가능).
 
 ## 학교 행사/세미나 + 기본 공공데이터 키 (2026-10-09)
-- `dgist_api.service_key`: 환경변수 → 설정(config.json) → config.py → `public_data_key.txt`(설치 파일에 묶은 기본 키). 키 파일은 `.gitignore`, `bungeoppang.spec` 이 있으면 묶고, CI 는 `secrets.DGIST_API_KEY` 로 만든다.
+- `dgist_api.service_key`: 환경변수 → 설정(config.json) → config.py → `public_data_key.txt`(설치 파일에 묶은 기본 키). 키 파일은 `.gitignore`, `daling.spec` 이 있으면 묶고, CI 는 `secrets.DGIST_API_KEY` 로 만든다.
 - 행사/세미나 서비스(`EvtntcListService01/getNtcList01`)는 성공을 `resultCode 100 / Success` 로 준다. 예전 `_raise_for_error` 는 이를 오류로 봤다. 항목: `seq, title, sdate(시작~끝), stime, place, tel, link, photo`. `fetch_notices` 가 `start/end/time/place/host/link` 로 바꾼다.
 - `web_ui.get_school_events`: `school_events.json` 6시간 캐시(모두가 한 키를 나눠 쓰므로). `GET /api/school-events[?force=1]`. 화면은 `loadSchoolEvents` → 캘린더 '학교 행사'(노랑).
 - 메일 행사 중복(`_mark_events`): 같은 날짜에서 앞 28자가 같거나, 괄호 꼬리표(`[(D-6!)…]`)·흔한 낱말을 뺀 낱말이 60% 이상 겹치면 하나만 남긴다(`_event_tokens`, `_same_event`). 학교 공식 행사와 같은 날 같은 행사면 메일 쪽을 빼고 `schoolEventId` 를 붙인다.
@@ -683,6 +754,13 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 - 실측(81통): 일반화학Ⅱ 0→5, 일반화학II·일반화학2·General Chemistry 0→5, 다변수 1→10, 학술 글쓰기 0→5.
 - 첫 실행 소개 27단계: '과목으로 메일 찾기'(#emailSearchInput), '누가 보낸 메일이야?'(.person-course, 꼬리표가 있을 때만), '창을 줄여도 괜찮아' 추가, 캘린더·강의·공지·메일 쓰기 tips 갱신.
 
+## 임시 보관함에서 이어 쓰기 (2026-10-22, 1.12.38)
+- 예전엔 임시 보관함의 메일을 받은 메일처럼 읽기 화면에 띄워 이어 쓸 수 없었다(사용자 신고). 이제 `openEmailDetail` 이 임시 보관함 메일이면 `resumeDraft` 로 '메일 쓰기' 를 연다.
+- `/api/mail/draft?uid=` → `email_reader.load_draft`: 서버 원본(BODY.PEEK, 읽기만)에서 받는 사람·참조·숨은참조·제목·HTML 본문(본문 그림은 data: 로)·첨부(20MB 까지)·우리 번호(`X-Bungeoppang-Draft`)를 채운다. 우리 앱이 빈 제목 대신 넣은 '(제목 없음)' 은 빈칸으로. 서버에서 못 읽으면 목록에 있는 내용으로 연다(숨은참조·첨부는 빠질 수 있다고 알림). 체험 모드에서는 막힘(목록 내용으로 열림).
+- 이어 쓴 메일을 저장·보내기·작성 취소하면 `replaceUid`(그 임시 메일 번호)도 보내 `_drop_old_drafts` 가 지운 표시를 한다 — 웹메일에서 만든 임시 메일은 우리 번호 머리말이 없어서. 임시 보관함 폴더 안에서만, EXPUNGE 없이. 이 컴퓨터 저장본에도 `replaceUid` 를 남겨 껐다 켜서 이어 써도 같은 메일을 바꾼다.
+- 열기만 하고 손대지 않으면 다시 저장하지 않는다. 커서는 본문 끝.
+- 2026-10-22 22:11 '(본문을 불러오지 못했습니다)' 의 원인: 그 임시 메일은 서버 원본도 본문 0바이트였다(받는 사람만 넣은 채 자동 저장 — 받는 사람만 있어도 내용이 있는 것으로 친다). 불러온 뒤에도 비면 이제 '(본문 없음)'.
+
 ## 메일 지우기·휴지통·보관 설정 (2026-10-09)
 - 원인(실측): 메일 받기가 '최근 21일(받은 날짜 기준)·폴더당 60통'으로 못 박혀 있었다. 휴지통으로 옮겨도 받은 날짜는 그대로라, 3주 넘은 메일을 지우면 서버 휴지통에는 있지만 앱 휴지통에는 안 보였다(서버 휴지통 10통 중 앱에 4통). 지운 직후에도 목록에서 빼기만 해서 다음 메일 받기(최대 5분)까지 휴지통이 비어 보였다.
 - `email_reader.delete_message`: 휴지통 복사가 성공한 것을 확인한 뒤에만 원본에 `\Deleted`. 휴지통을 못 찾거나 복사가 실패하면 지우지 않고 오류(예전엔 복사 결과를 보지 않았다). EXPUNGE 는 여전히 보내지 않는다(`expunge_uid` 는 UIDPLUS 없으면 아무것도 안 함).
@@ -702,15 +780,52 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 - `stop_task(workspace, lane)`: 메일은 따로 도는 칸(`task_key(user, "emails")`)이라 예전처럼 `user_id` 칸만 보면 멈춘 메일 가져오기를 끌 수 없었다. `lane` 'mail'·'main'·빈 값(둘 다). `/api/stop` 본문 `{lane}`. 실패 알림도 그 작업의 칸(`key`)에 적는다.
 - 화면: '작업 중지'(`#runButton`)는 메일 칸이 직접 시킨 것이거나 30초 넘게 돌 때도 보인다. 메일함 새로고침 단추는 가져오는 동안 '가져오는 중 · 누르면 멈춤' 이고 누르면 메일만 멈춘다.
 
-## 이름·로고: Daling (2026-10-11)
-- 보이는 이름만 Daling: 창 제목·알림(`app.WINDOW_TITLE`), 화면 제목·설정 '앱' 카드, EXE 이름표(`FileDescription`·`ProductName`), 설치 화면·제어판·바로가기(`.iss` `AppName`), 설치 그림(`make_installer_art.py`), 첫 실행 소개·문의 메일 제목·설정 내보내기 파일 이름, 영어 번역.
-- 그대로 둔 것(기존 설치본이 앱 안 업데이트로 넘어오게): 실행 파일 `붕어빵.exe`, 설치 폴더(`.iss` `AppFolder` → `Programs\붕어빵`), AppId, 업데이트 파일 이름, 데이터 폴더, 사용자 자료 폴더 이름, 설정 백업의 `"app": "붕어빵"` 표시(불러오기 호환), 달구 말풍선의 붕어빵(간식) 농담.
+## 이름·로고: Daling (2026-10-11, 실행 파일·폴더까지 1.12.53)
+- 2026-10-11 보이는 이름을 Daling 으로: 창 제목·알림(`app.WINDOW_TITLE`), 화면 제목·설정 '앱' 카드, EXE 이름표(`FileDescription`·`ProductName`), 설치 화면·제어판·바로가기(`.iss` `AppName`), 설치 그림(`make_installer_art.py`), 첫 실행 소개·문의 메일 제목·설정 내보내기 파일 이름, 영어 번역.
+- 1.12.53 에 나머지도 바꿨다(사용자: "붕어빵이라는 이름은 모두 지우고"): 실행 파일 `Daling.exe`, 설치 폴더 `Programs\Daling`, 설치 파일 `daling-<버전>-win-x64-setup.exe`, 작업 표시줄 앱 ID `DGIST.Daling.App`, 사용자 자료 폴더 `Daling 파일 정리`·`Daling 강의자료`, 임시 메일 헤더 `X-Daling-Draft`, 달구 말풍선(간식).
+- 옛 설치본 넘겨받기: AppId 는 그대로라 옛 판 위에 설치하면 업데이트로 알아본다. `UsePreviousAppDir=no` 로 새 폴더에 깔고, `PrepareToInstall` 이 옛 폴더(`Programs\붕어빵`)에서 도는 앱·작업을 닫고 `[InstallDelete]` 가 그 폴더를 지운다(프로그램 파일만 있는 곳. 데이터는 `C:\lms-autosaver`).
+- 남겨 둔 예전 이름(지우면 옛 판·옛 자료가 끊긴다): ① 릴리스에 같은 설치 파일을 `bungeoppang-<버전>-…` 이름으로도 올린다 — 1.12.52 이하의 `updater.ASSET_PATTERN`·옛 한 줄 설치는 그 이름만 찾는다(`build_installer.ps1`·`release.yml` 이 사본을 만든다). ② 이미 있는 `붕어빵 파일 정리`·`붕어빵 강의자료` 는 계속 쓴다(옮기면 받은 기록 경로가 어긋나고 클라우드가 전부 다시 올린다). ③ `X-Bungeoppang-Draft` 도 읽는다. ④ 사설 인증서 주체 `CN=붕어빵 (…)` 는 만들 때 정해져 바꿀 수 없다. ⑤ 옛 바로가기·옛 시작 메뉴 폴더 지우기.
+- 작업 표시줄에 고정한 옛 아이콘은 `붕어빵.exe` 를 가리키므로 업데이트 뒤 다시 고정해야 한다.
 - 예전 '붕어빵' 바로가기는 설치 때 `[InstallDelete]` 로 지운다(바탕화면·시작 메뉴·시작 프로그램에 둘이 생기지 않게).
 - 로고: `design/logo/daling-source.webp`(흰 바탕 붓선) → `scripts/make_icons.py` 가 밝기를 불투명도로 바꿔 크림색 둥근 네모(`BG`) 위에 먹색으로 얹어 app.png·app.ico(16~256)·app-logo-120.png·favicon.svg·img/daling-mark.png 를 만든다. 16·24·32px 은 선을 굵게(MaxFilter). 화면의 로고 주소에는 `?v=daling` 을 붙였다(WebView2 캐시에 옛 물고기 그림이 남아 있었다).
 
 ## 메일 로그인 거절 (2026-10-12)
 - 10/12 13:44~16:02 학교 메일 서버가 맞는 비밀번호를 거절했다가 저절로 풀렸다(21:5x 에 같은 비밀번호로 `OK LOGIN complete`, 19:00 자동 확인도 성공). 9/27 에도 같은 일이 있었다.
 - 이제 `MiniIMAP.login` 이 서버의 끝맺음 말(`last_reply`)을 오류에 붙이고, `run_process` 가 이를 `health.json` 의 `authFailed.<kind>.reason` 에 적는다. 경고(`get_health`)는 '서버가 거절 (서버: …) · 2시간 뒤 다시 · 비밀번호를 바꿨다면 설정에서' 순서로 말한다.
+
+## 새 기기에서 '메일 동기화가 계속 실패' (2026-10-25, 1.12.39)
+- 신고: 배포판을 다른 기기(맥·Windows 둘 다)에 깔아 쓰면 메일 동기화가 계속 실패. 그 기기의 로그는 없어(작업 로그는 메모리에만) 이 PC 에서 새 기기를 흉내 내 쟀다.
+- 원인이 아니었던 것: 빈 데이터 폴더 + 이 PC 설정으로 첫 받기 성공(112통 39.8초). 서버가 긴 연결을 끊는지 — 로그인 한 번으로 240초 동안 명령 346번(0.4초 간격) 모두 성공. 인증서 — 서버가 사슬 3장을 다 보내고 certifi 만으로도 된다.
+- 원인 ①(두 운영체제 공통): 자동 확인이 계정이 비었는지 보지 않았다. `app.next_due_job` 그대로 시계만 감아 재현: 계정을 넣기 전 0.8분·17.2분에 '계정을 먼저 입력' 으로 실패 → '동기화가 계속 실패하고 있어요 — emails이(가) 2번 연속 실패' 띠. 32분에 계정을 넣어도 실패마다 두 배로 느는 간격 때문에 47.2분에야 첫 성공(늦게 넣을수록 최대 6시간). 계정이 오래전부터 있던 이 PC 에서는 안 났다.
+  - 이제 계정 칸이 빈 작업은 자동으로 안 돈다(`app.scheduler_loop` 의 `ready`, `web_ui.TASK_ACCOUNT_KEYS`·`account_ready`, 매일 예약 동기화도). 상태판은 '계정을 넣으면 자동으로 가져와요'(`nextAutoJob` 도 같은 셈).
+  - 계정을 넣거나 바꾸면 그 작업의 `failStreak`·`authFailed`·`lastFailure` 를 지운다(`save_config_dict` → `reset_task_failures`, 비교는 비밀 값을 푼 것끼리). 고친 뒤 같은 재현: 32.0분 저장 → 32.5분 첫 자동 확인 성공, 그 전 실패 0번.
+- 원인 ②(맥·리눅스): 키체인을 못 읽는 동안(업데이트 직후 허락 전·거부) 아무 설정이나 저장하면 빈 값으로 읽힌 비밀번호가 키체인에서 지워졌다(`save_config_dict` 의 `forget`). 흉내(Windows 에서 `secret_store` 를 바꿔 끼움): 예약 시각만 바꿔 저장 → 비밀 항목 5개 forget, LMS·메일 비밀번호가 빈 값. 이제 빈 값으로 온 비밀번호는 표시(`keychain:…`)를 그대로 두고, '지우기' 를 누른 것(`cleared`)만 지운다. 백업 불러오기도 같다. 실제 맥 확인은 CI·맥 사용자.
+- 띠에 까닭: `run_process` 가 '작업이 실패했습니다: …' 를 `lastFailure.reason` 에 적고(`_failure_reason`, 소스 위치는 뺌) `get_health` 가 작업별 문장(`FAIL_WARNINGS`)과 그 작업의 연속 횟수로 말한다(예전엔 작업 이름 'emails' 와 모든 작업을 합친 횟수). 영어 화면은 경고와 '(마지막 성공: …)' 을 따로 옮긴다(붙어 있으면 번역표에 안 맞아 한국어로 남았다).
+- 시험할 때: `web_ui` 의 데이터 폴더는 `AUTOSAVER_ROOT` 를 본다. `AUTOSAVER_DATA_ROOT` 만 바꾸면 `web_ui` 는 그대로 `C:\lms-autosaver` 를 쓴다(이번 시험 2번이 실제 폴더에서 메일 새로고침을 했다 — 새 메일 없음). 또 개발 폴더에는 git 에 없는 옛 `config.py` 가 있어 `config.json` 이 없으면 `web_ui.read_config` 가 그걸 읽는다(설치본에는 안 들어감).
+
+## 실패 까닭 진단 (2026-11-03, 1.12.54)
+- 신고: '동기화가 계속 실패하고 있어요 — deadlines이(가) 7번 연속 실패' 만 떠서 비밀번호 탓인지, 학교 서버가 막은 건지, 사이트가 바뀐 건지 알 수 없고, 횟수가 실제보다 커 보였다. 그때 돌던 것은 Store 시험판 1.12.28 이고 작업 로그는 메모리에만 있어 그 7번의 까닭은 남지 않았다(21:49 수동 마감 확인은 62초 만에 성공).
+- 횟수가 불어난 까닭(코드로 재현): `next_due_job` 이 쉬는 시간을 하나뿐인 `lastFailure` 로 쟀다. 메일이 5분마다 성공하면 `record_task_result` 가 `lastFailure` 를 지워, 마감 확인은 몇 시간 전 성공 시각부터 재게 되어 쉬지 않고 곧바로 다시 하고 또 실패했다. 재현: 마감 3번 실패(2분 전) + 메일 성공 → 옛 셈은 곧바로 `deadlines`, 새 셈은 `None`(240분 쉼). 또 `consecutiveFailures` 는 모든 작업을 합친 수였다.
+- 이제 `health.json` 의 `failures.<kind>` = `{since, at, count, code, category, title, hint, reason, tail}`. 작업마다 따로 세고, 그 작업이 성공하면 그것만 지운다(`reset_task_failures` 도). `tail` 은 실패 때 로그 마지막 30줄 — 앱을 다시 켜도 띠의 '실패할 때 남은 기록' 에서 본다.
+- 갈래는 `web_ui.classify_failure` (`FAILURE_KINDS`, 위에서부터 먼저 맞는 것): 계정 없음 · 로그인 거절 · 브라우저 · 학교 서버 거절(HTTP 403/429/5xx) · 인터넷·학교 서버에 닿지 않음(net::ERR_, getaddrinfo, timed out) · 사이트에서 필요한 것을 못 찾음(로그인 칸 기다리다 시간 초과, JSON 못 읽음) · 느림(Timeout) · Drive · 파일 저장 · 알 수 없음. 로그 전체가 아니라 마지막 Traceback·실패 줄부터 본다 — 지난 학기 과목의 '콘텐츠 API 실패 (403)' 는 정상이라 '서버 거절' 로 고르면 안 된다.
+- LMS 로그인(`lms_crawler.login_lms`): 학교 로그인 화면에 머물면 그 화면의 거절하는 말(경고창 포함, `_login_page_message`)을 '(서버: …)' 로 붙인다. `users/me` 가 5xx·429 로만 답하면 '로그인에 실패' 대신 'LMS 서버가 로그인 확인에 답하지 않았어요 (HTTP …)' — 비밀번호 탓이 아니므로 2시간 자동 멈춤(`authFailed`)을 걸지 않는다.
+- 브라우저를 못 띄우면 예전엔 조용히 끝나 '성공' 으로 적혔다(`crawl_deadlines_only`·`crawl_lms`). 이제 실패로 끝낸다.
+- 띠(`renderHealth`): 제목은 갈래, 둘째 줄 '마감 확인이 21:10부터 안 되고 있어요 (3번 시도).', 셋째 줄 할 일·다음 자동 시도(`nextAutoJob(kind)`)·오류 내용. 두 번 넘게 잇달아 실패한 작업만 띄운다(`get_health` 의 `failing`). 옛 기록(`failures` 없음)은 `lastFailure`+`failStreak` 으로 '알 수 없음' 갈래.
+
+## 메일 AI·오류 알림 (2026-11-04, 1.12.54)
+- 신고: 메일의 회색 글씨 자동완성·AI 가 안 된다. 그때 켜진 것은 Store 시험판 1.12.28 이라 회색 글씨(1.12.29)·`/ai` 이어 쓰기(1.12.30)가 아예 없었다. 최신 소스에서는 회색 글씨·Tab 넣기가 정상(교수님 주소 → 영어 인사·자기소개).
+- `/ai` 는 이 PC 의 Claude CLI 로그인이 만료돼 실패했다: CLI 출력 'Failed to authenticate: OAuth session expired and could not be refreshed'(7초). Gemini 도 로그인 필요, Codex 는 정상(13초). `ai_cli._explain_failure` 가 이 말을 몰라 'Claude 가 답하지 못했어요' 만 냈다 → authenticate·oauth·session expired·credentials 도 로그인 만료로 보고 CLI 마다 다시 로그인하는 법(`LOGIN_HOW`)을 말한다. 그 밖의 실패는 CLI 가 한 말 첫 줄을 붙인다('Denying Bash…' 경고 줄은 뺌).
+- 그런데 화면에는 그 말도 안 보였다: `humanError` 가 표에 없는 말을 모두 '문제가 생겼어요. 앱을 다시 켜 보고…' 로 바꿨다(1.9.5 부터, 33곳). 이제 서버가 보낸 한국어 설명(400자 이하, Traceback 없음)은 그대로 보인다. 알림(`showToast`)은 글 길이 × 70ms(2.6~9초) 동안 둔다.
+- 쓰던 메일 '이어서 쓰기' 가 늘 HTML 원문으로 열렸다: `collectDraft` 의 `html: true` 는 '본문이 HTML' 이라는 뜻인데 `restoreDraftIfAny` 가 이걸 'HTML 칸을 켰음' 으로 읽었다. 모드는 `htmlMode` 로 따로 적는다(옛 저장본은 서식 화면으로).
+- 시험 때 주의: 메일 쓰기 창은 15초 뒤 학교 메일 서버 임시 보관함에 자동 저장한다. 시험 초안은 `email_reader.discard_draft(<X-Daling-Draft>)` 로 지운 표시만 한다(EXPUNGE 금지).
+
+## 설정 'AI 연결' (2026-11-04, 1.12.54)
+- 사용자: '터미널로 안내하지 말고 CLI 연결하는 설정을 설정창에'. 설정의 `#stAi` 카드가 세 CLI 의 상태를 보이고(`GET /api/ai/connections` → `ai_cli.auth_status`, 세 개를 스레드로 함께, 이 PC 0.9초), '연결' 은 `POST /api/ai/login` → `ai_cli.open_login`.
+- 상태 명령(실측): Claude `claude auth status --json` 의 `loggedIn`, Codex `codex login status` 의 'Logged in using ChatGPT'/'Not logged in'. 둘 다 네트워크를 안 쓴다.
+- 로그인 창: Windows 는 `cmd.exe /c title … & "<exe>" auth login & pause` 를 보이는 콘솔(CREATE_NEW_CONSOLE)로 — 목록으로 넘기면 파이썬이 안쪽 따옴표를 `\"` 로 바꿔 cmd 가 못 읽으므로 한 줄 문자열로 넘긴다. 맥은 터미널.app 에 `osascript` 인자로, 리눅스는 x-terminal-emulator·gnome-terminal·konsole·xterm. CLI 가 브라우저를 열고 사용자가 직접 로그인한다. 화면은 4초마다 다시 물어(최대 3분) '연결됨' 이 되면 멈추고 메일 쓰기의 모델 단추도 다시 칠한다.
+- Gemini: 0.62 에 로그인 명령이 없고, 구글 개인 계정 로그인은 'This client is no longer supported for Gemini Code Assist for individuals'(IneligibleTierError)로 막혔다 → API 키로만 된다. 하지만 **API 키 칸은 두지 않는다** — 처음엔 카드에 Gemini 키 칸을 넣었다가 사용자가 'API 넣기는 다 빼라'고 해서 뺐다(2026-10-21 에도 같은 말로 Gemini·공공데이터 키 칸을 뺐었다). 카드는 '지금은 못 씀' 만 보이고 단추가 없다. 운영체제 환경 변수에 `GEMINI_API_KEY` 를 둔 사람만 '연결됨'. 창 없이 돌릴 때 폴더 신뢰 질문을 넘기려고 `GEMINI_CLI_TRUST_WORKSPACE=true`.
+- 오류 문구: Gemini 인증 실패·IneligibleTier → '구글이 막아 지금은 못 써요, Claude 나 Codex 를', Claude·Codex 로그인 만료 → '설정 → AI 연결에서 다시 연결'(`LOGIN_HOW`).
+- 체험 모드: `/api/ai/connections` 는 GET 차단, `/api/ai/login` 은 POST 차단. 설치 안내는 `web_ui.AI_HELP_LINKS` 와 똑같은 주소만 `/api/open-url` 로 연다(맥 앱).
 
 ## 메일 분류 규칙 (2026-10-12)
 - `email_reader.rule_based_category` 순서: 답신 → 계정·알림(인증번호·패스키·계정 생성) → 수업·LMS(Blackboard 발신, 제목의 `[2026_2학기]`, 일일 통지·제출물 수신함·강의성찰) → 학생회 → 교수님(발신자 이름에 교수) → 세미나·행사(한·영 낱말: Seminar·Colloquium·Symposium·Lecture Series·Workshop·Forum·투어·마라톤…) → 취업·진로(창업·공모전·해커톤·트랙…) → 행정·학생팀(보낸 부서) → 동아리·문화 → 기타.
@@ -719,16 +834,46 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 - 'LMS·공지' 탭(`isLmsMail`)은 수업·LMS 분류도 포함한다.
 
 ## macOS 판 (2026-10-12)
-- 빌드는 GitHub Actions 에서만(개발 PC 가 Windows): `.github/workflows/mac.yml` — `build/mac` 브랜치 푸시 또는 수동 실행, macos-latest(arm64)·Python 3.13·`requirements-mac.txt` → `packaging/mac/daling-mac.spec` → `dist/Daling.app` → 서명(사설 인증서, 비밀이 없으면 ad-hoc — 아래 '서명 인증서') → `--autosaver-smoke` → 실제 앱 25초 띄워 `/healthz`·스크린샷 → `daling-<버전>-mac-arm64.dmg`(+ `.sha256`). 릴리스는 만들지 않는다.
+- 빌드는 GitHub Actions 에서만(개발 PC 가 Windows): `.github/workflows/mac.yml` — `build/mac` 브랜치 푸시·수동 실행·`build.yml` 이 부름, 칩마다 한 번씩(macos-latest = M칩 arm64, macos-15-intel = 인텔 x86_64)·Python 3.13·`requirements-mac.txt` → `packaging/mac/daling-mac.spec` → `dist/Daling.app` → 서명(사설 인증서, 비밀이 없으면 ad-hoc — 아래 '서명 인증서') → `--autosaver-smoke` → 실제 앱 25초 띄워 `/healthz`·스크린샷 → `daling-<버전>-mac-<arm64|x86_64>.dmg`(+ `.sha256`). 릴리스는 만들지 않는다 — 릴리스에는 두 DMG 와 각 `.sha256` 을 모두 올린다.
 - 공증 없음(유료 Apple Developer 계정 필요). 브라우저로 받은 DMG 는 처음 한 번 '시스템 설정 → 개인정보 보호 및 보안 → 그래도 열기'(macOS 15 부터 Control-클릭 → 열기 는 안 통함). 한 줄 설치(`curl -fsSL https://gudaling.dev/install.sh | sh`)는 격리 표시가 안 붙어 이 창이 없다 ('서명·한 줄 설치').
-- 비밀 설정: 맥은 DPAPI 가 없어 예전엔 config.json 에 평문이었다. 이제 로그인 키체인(서비스 `Daling`, 계정 `settings`, {키: 값} JSON 한 항목)에 두고 config.json 에는 `keychain:<키>` 만. `mac_keychain.py`(Security.framework 를 ctypes 로, 비밀번호가 명령줄에 안 실림). `web_ui.dpapi_protect/unprotect` 와 `runtime_config._load_config` 둘 다 푼다. 항목을 하나로 둔 까닭: ad-hoc 서명은 새 버전마다 서명 해시가 바뀌어 키체인 접근을 다시 묻는데, 항목이 다섯이면 다섯 번 묻는다(사설 인증서로 서명해도 키체인은 다시 묻는다 — 아래 '서명 인증서'). 키체인이 거절하면 DPAPI 실패와 같이 평문을 남기고 다음 저장 때 다시 넣는다.
+- 비밀 설정: 맥은 DPAPI 가 없어 예전엔 config.json 에 평문이었다. 이제 로그인 키체인(서비스 `Daling`, 계정 `settings`, {키: 값} JSON 한 항목)에 두고 config.json 에는 `keychain:<키>` 만. `mac_keychain.py`(Security.framework 를 ctypes 로, 비밀번호가 명령줄에 안 실림). `web_ui.dpapi_protect/unprotect` 와 `runtime_config._load_config` 둘 다 푼다. 항목을 하나로 둔 까닭: ad-hoc 서명은 새 버전마다 서명 해시가 바뀌어 키체인 접근을 다시 묻는데, 항목이 다섯이면 다섯 번 묻는다(사설 인증서로 서명해도 키체인은 다시 묻는다 — 아래 '서명 인증서'). 키체인이 거절하면 DPAPI 실패와 같이 평문을 남기고 다음 저장 때 다시 넣는다. 앱 안 업데이트 뒤에는 옛 판이 넘긴 값으로 새 판이 항목을 다시 만든다(아래 '키체인 넘겨주기').
 - 알림·오류 상자: `osascript`(`app.notify`, `_osascript`). 글은 스크립트에 끼우지 않고 `on run argv` 인자로 넘긴다. 알림 센터에는 '스크립트 편집기' 로 보여 제목 줄에 Daling 을 넣는다.
 - SSL: 묶은 파이썬의 OpenSSL 은 빌드한 맥의 인증서 경로를 본다 → `app.py` 가 `SSL_CERT_FILE` 을 certifi 로(작업 프로세스도 물려받음). Windows 는 시스템 저장소를 읽어 필요 없다.
-- 경로: 데이터 `~/.lms-autosaver`, LMS 브라우저 `~/Library/Caches/ms-playwright`(`browser_ready` 가 맥 실행 파일 이름도 본다), Playwright `node` 는 `Contents/Resources` 에 데이터로 묶여 실행 권한을 확인한다.
+- 경로: 데이터 `~/Library/Application Support/Daling`(2026-10-20~ 새 설치. 예전 판을 쓰던 맥은 `~/.lms-autosaver` 가 있으면 그대로 쓰고 옮기지 않는다 — 설정·메타데이터에 절대 경로가 있고 맥에서 직접 확인할 수 없어서. `runtime_config.default_data_root()` 하나를 web_ui 도 따른다. `mac.yml` '실제 앱 띄워 보기' 가 깨끗한 러너에서 새 자리에 생기고 옛 자리는 안 생기는지 본다), LMS 브라우저 `~/Library/Caches/ms-playwright`(`browser_ready` 가 맥 실행 파일 이름도 본다), Playwright `node` 는 `Contents/Resources` 에 데이터로 묶여 실행 권한을 확인한다.
+- 크로스플랫폼 점검 (2026-10-20, 전체 코드 검사): Windows 전용 API 약 45곳은 모두 OS 분기 안이었다. 맥에서 실제로 틀린 것만 고쳤다.
+  - AI 도우미(`ai_cli`): Finder 로 켠 앱은 PATH 가 `/usr/bin:/bin` 뿐이라 터미널에서 되는 claude·gemini·codex 를 '없음' 으로 봤다 → `~/.local/bin`·`/opt/homebrew/bin`·`/usr/local/bin`·npm 전역·nvm 자리도 보고, 돌릴 때 그 폴더들을 PATH 에 넣는다(npm CLI 는 `#!/usr/bin/env node`).
+  - 클라우드 폴더 찾기(`detect_cloud_roots`): 맥의 `~/Library/CloudStorage/<앱>-<계정>`(OneDrive·Dropbox·MYBOX), `~/.dropbox/info.json`, iCloud Drive(`~/Library/Mobile Documents/com~apple~CloudDocs`). 맥에서 직접 확인하지 못했다.
+  - 화면: '저장 폴더가 클라우드 안' 경고가 `root + "\\"` 로 비교해 맥에서 안 떴다 → `/` 로 맞춰 비교. 경로 줄여 보이기(`friendlyPath`)가 `/Users/<이름>/` 도 줄인다.
+  - 단축키: 처리는 원래 Ctrl·Cmd 를 함께 받았다. 안내 문구만 맥에서 ⌘ 로(`keyLabel`·`macKeyLabels`, 번역 뒤에 입혀 en.json 은 그대로). 뒤로·앞으로는 맥에서 ⌘[ / ⌘] — Option+←/→ 는 맥 글자 칸의 단어 이동인데 가로채서 메일을 쓰다가 화면이 넘어갔다.
+  - 글꼴: Windows 글꼴 뒤에 `-apple-system`·Apple SD Gothic Neo·AppleMyungjo·SF Mono. 화면 문구의 'Windows 알림'·'윈도우의 밝은·어두운 모드' 를 운영체제와 상관없는 말로.
+  - Info.plist: 외장 디스크·네트워크 드라이브·클라우드(File Provider) 폴더에 쓸 때 보일 설명을 더했다. 마이크·카메라·화면 기록은 쓰지 않는다.
+  - universal2 는 하지 않는다: `pydantic_core`·`cryptography`·`cffi` 에 universal2 휠이 없다(2026-10-20 `pip download --platform macosx_11_0_universal2` 실측). 대신 칩마다 따로 묶는다.
+- 맥·리눅스 점검 2차 (2026-10-21, 1.12.34, 읽기 전용 전체 검사 17건 → 아래를 고침):
+  - 맥 앱 창(WKWebView)은 `window.open` 을 무시한다(pywebview cocoa 는 링크를 '눌렀을 때' 만 바깥 브라우저로 넘김) → 강의자료 열기·강의계획서·메일 .eml 저장·인쇄가 맥에서 아무 반응이 없었다. `app.js openOutside` 가 맥 앱에서만 서버(`/api/open-app-url`, `/api/file?`·`/api/mail/eml?`·`/api/deadlines.ics` 만)에 기본 브라우저로 열게 하고, 인쇄는 숨은 iframe 에 그린다.
+  - LMS 브라우저 준비(`browser_setup.shell_ready`)가 판 번호를 안 봐서, Playwright 판이 바뀐 업데이트 뒤 옛 판 폴더를 보고 새 판을 안 받았다 → 묶인 드라이버의 `browsers.json` revision 폴더만 '있다' 로 본다(못 읽으면 예전처럼).
+  - 파일 이름: 맥·리눅스는 255 **바이트**(한글 약 80자)라 180자로만 자르면 긴 한글 자료가 'File name too long' → `folder_layout.fit_file_name`(확장자 두고 240바이트, Windows 는 그대로)을 크롤러·정리에 쓴다.
+  - 두 번 켜기 막기(`app._startup_lock`)가 Windows 뮤텍스뿐이었다 → 맥·리눅스는 데이터 폴더 `.start.lock` 에 `flock`.
+  - 맥에서 고른 첨부 파일 이름은 NFD(풀어 쓴 자모) → 화면(`nfcName`)·보내기(`email_reader`) 두 곳에서 NFC 로.
+  - 리눅스 묶음 앱의 AI CLI(node)는 `linux_support.system_env()` 로 띄운다(묶음의 LD_LIBRARY_PATH 를 물려받지 않게). 앱 크기의 '프로그램' 은 맥 `Contents` 전체·AppImage 파일 크기로. 소개의 삼성 노트 줄은 맥·리눅스에서 뺀다. 리눅스 업데이트 안내에 'Daling 을 끈 뒤'.
+  - CI: `build.yml` 이 `linux.yml` 도 부른다(예전엔 수동만). `docs/install.sh` 만 바뀐 커밋도 빌드한다(`paths` 에서 뒤 패턴이 앞을 이김). `--autosaver-smoke` 에 '화면 API 전부 (체험 모드)': `_do_GET` 의 길 51개를 체험 모드로 다 불러 500·연결 끊김이 없고 `server_errors.log` 가 늘지 않는지 본다(소스에서는 빠진 길이 없는지도).
+  - 1.12.34 에서 남긴 셋은 1.12.35 에서 마무리했다 (아래).
+- 맥·리눅스 마무리 (2026-10-22, 1.12.35):
+  - 작업 프로세스와 키체인: sync·deadlines·verify 작업(`--autosaver-job`)이 저장소(키체인·키링)를 직접 읽지 않는다. 앱 본체(`web_ui._secret_handover`)가 풀어 둔 값을 표준 입력 한 줄(JSON 사전)로 넘기고, 작업은 `AUTOSAVER_SECRETS_STDIN=1` 이면 그 값만 쓴다(`runtime_config._HANDED_SECRETS`, 넘겨받지 못한 키는 빈 값 — 묻는 창을 띄우지 않는다). 예전엔 업데이트 뒤 '허용'(항상 허용 아님)을 누르면 60·180분마다 뒤에서 암호 창이 떴고, '거부' 하면 빈 비밀번호로 로그인 실패가 되어 자동 재시도가 멈췄다. 파이프는 두 프로세스 사이에만 있어 환경 변수·파일과 달리 남이 볼 수 없다. 메일은 원래 본체 안에서 돈다. Windows 는 DPAPI 라 그대로. 점검: `--autosaver-smoke` 작업 프로세스 줄의 `handed=1`(맥·리눅스).
+  - 자동 시작: 설정 › 자동으로 가져오기 › '컴퓨터 켤 때 실행'(맥·리눅스만, `/api/autostart`, `autostart.py`). 맥 `~/Library/LaunchAgents/app.daling.desktop.autostart.plist`(RunAtLoad, `Contents/MacOS/Daling` 을 바로, `AssociatedBundleIdentifiers` 로 로그인 항목에 Daling 이름), 리눅스 `~/.config/autostart/daling.desktop`(AppImage 면 그 파일). DMG 안·AppTranslocation 에서 켠 앱은 거절(다음 로그인 때 그 자리가 없다). 켤 때마다 `autostart.refresh` 가 옮긴 AppImage 자리로 고친다. 체험 모드에서는 막힘(409). Windows 는 설치 파일의 '시작 시 자동 실행'·Store 판 startupTask. 점검: 임시 HOME 에 만들고 `plutil -lint`·가리키는 실행 파일이 있는지 본 뒤 지운다.
+  - 옛 WebKit(업데이트 안 한 macOS 12 = Safari 15): `color-mix()` 36곳·`@container` 23곳을 모른다. `var()` 가 든 color-mix 는 읽을 때 통과했다가 그릴 때 값이 사라져(배경·테두리 없음) CSS 앞줄 단색으로는 못 막는다 → `app.js polyfillColorMix` 가 `CSS.supports` 로 모를 때만 지금 테마 값으로 섞어(CSS Color 5 srgb, 알파 곱) 규칙에 넣고, 테마를 바꾸면 원래 값에서 다시 섞는다. 글자 그대로의 색만 쓰는 9곳은 `styles.css` 에 rgba 앞줄. 크롬에서 강제로 돌려 원래 색과 비교: 34개 선언 모두 채널 차이 0.5 이하(기본·다크). `@container` 는 대신할 길이 없어 맥에서 한 번 'Safari 업데이트' 안내(`warnOldWebKit`) — Monterey 는 Safari 17.6 까지 올라가 둘 다 된다.
+  - POST 점검: `--autosaver-smoke` '화면 API 전부 POST (체험 모드)' 가 POST 길 60개를 빈 본문으로 부른다(빼는 것 8개: 체험 모드 켜고 끄기·다시 켜기·창·폴더 고르기 창·파일 관리자·브라우저 여는 길). 소스에서는 빠진 길이 없는지도 본다. 처음 돌리자마자 찾은 것: 체험 모드에서 막는 길처럼 본문을 안 읽고 답하면 연결을 닫을 때 운영체제가 끊어(RST, WinError 10053) 화면이 답을 못 받았다 → `_do_POST` 가 처음에 본문을 다 읽는다.
+- 인텔 맥 (2026-10-21, 사용자 요청): `mac.yml` 매트릭스에 인텔 러너 `macos-15-intel`(GitHub 공식 표에 macos-15-intel·macos-26-intel). `daling-mac.spec` 이 `DALING_MAC_ARCH` 로 `target_arch` 를 고르고, CI 가 묶은 실행 파일과 Playwright node 의 칩을 `lipo -archs` 로 확인한다.
+  - 휠: 2026-10-21 `pip download --platform macosx_12_0_<칩> --python-version 3.13` 로 55개 모두 두 칩 휠이 있음을 확인. 단 **cryptography 는 49.0.0 부터 인텔 맥 휠이 없다**(49·50 은 arm64 뿐, 48.0.0 은 universal2) → `requirements-mac.txt` 에서 `platform_machine` 으로 인텔만 48.0.0(쓰는 곳은 google-auth, `>=38.0.3`).
+  - Playwright 의 universal2 휠에 든 node 는 x86_64 하나뿐이다(Mach-O 헤더 실측). 인텔 러너의 pip 는 그 휠을(macosx_11_0 이 10_13_x86_64 보다 앞섬), M칩 러너는 arm64 휠을 고르므로 둘 다 맞다.
+  - 칩 판별: `sysctl -n hw.optional.arm64` 가 1 이면 M칩(로제타로 도는 터미널·인텔 판에서도), 인텔 맥에는 이 항목이 없다 → `updater._mac_arch`·`docs/install.sh mac_arch`. 인텔 맥에 M칩 판을 권하지 않는다(릴리스에 인텔 DMG 가 없으면 '새 버전 없음', 한 줄 설치는 '아직 인텔용이 없음').
+  - `install.sh` 는 macOS 12 미만이면 깔기 전에 멈춘다(LSMinimumSystemVersion). 판을 못 읽으면 막지 않는다.
+  - 사이트 내려받기: 릴리스에 `mac-x86_64.dmg` 가 있을 때만 '인텔 Mac 은 인텔용 DMG' 줄이 보이고 요구 사항이 'M1 이상·인텔 Mac' 으로 바뀐다(`data-dl-wrap`·`data-req-intel`).
+  - CI '한 줄 설치·앱 안 업데이트 점검': 지금 릴리스에 이 칩의 DMG 가 없으면(인텔 첫 릴리스 전) 이번 빌드 DMG 로 새로 깔고 같은 DMG 로 업데이트를 흉내 낸다. 키체인 점검·실험은 칩과 상관없어 M칩 러너에서만.
+- CI: `build.yml`(main 푸시·수동)이 Windows(windows-latest, 서명 없는 설치 파일 + `--autosaver-smoke`)와 맥(`mac.yml` 을 `workflow_call` 로)·리눅스(`linux.yml`, 2026-10-21~)를 함께 돌린다. 공증 자리는 `mac.yml` 주석과 `packaging/mac/entitlements.plist`(강화 런타임 예외 allow-jit·allow-unsigned-executable-memory, 아직 안 씀).
 - 창: 첫 크기는 `NSScreen.visibleFrame`(메뉴 막대·Dock 제외)에 맞추고 자리는 pywebview 가 가운데로. 삼성 노트는 없음(`is_available` False → 버튼 숨김).
-- 업데이트: 릴리스의 `daling-<버전>-mac-arm64.dmg` 만 본다. (2026-10-15~) '지금 업데이트' 는 Windows 처럼 앱이 직접 받아 GitHub digest 로 확인하고, 앱에 묶은 `install.sh`(= `docs/install.sh`)를 따로 띄운 뒤 앱이 꺼진다. install.sh 는 앱이 다 꺼지기를 기다려 DMG 의 앱을 지금 앱이 있는 폴더에 바꿔 끼우고(새 판 복사 → 서명 확인 → 이름만 바꾸기) 다시 켠다. 기록은 `~/.lms-autosaver/update-mac.log`. 예전처럼 브라우저로 받으면 업데이트마다 격리 표시 때문에 '그래도 열기' 를 또 눌러야 했다. 앱이 urllib 로 받은 파일에는 격리 표시가 없다(Info.plist 에 `LSFileQuarantineEnabled` 없음, 샌드박스 아님 — `--autosaver-smoke` 가 확인). DMG 안에서 켰거나(/Volumes) 옮기지 않고 켠(AppTranslocation) 앱은 /Applications(못 쓰면 ~/Applications)에 깐다.
+- 업데이트: 릴리스의 이 칩용 `daling-<버전>-mac-<arm64|x86_64>.dmg` 만 본다. (2026-10-15~) '지금 업데이트' 는 Windows 처럼 앱이 직접 받아 GitHub digest 로 확인하고, 앱에 묶은 `install.sh`(= `docs/install.sh`)를 따로 띄운 뒤 앱이 꺼진다. install.sh 는 앱이 다 꺼지기를 기다려 DMG 의 앱을 지금 앱이 있는 폴더에 바꿔 끼우고(새 판 복사 → 서명 확인 → 이름만 바꾸기) 다시 켠다. install.sh 를 띄우기 직전에 키체인 값을 넘긴다(아래 '키체인 넘겨주기'). 기록은 데이터 폴더의 `update-mac.log`. 예전처럼 브라우저로 받으면 업데이트마다 격리 표시 때문에 '그래도 열기' 를 또 눌러야 했다. 앱이 urllib 로 받은 파일에는 격리 표시가 없다(Info.plist 에 `LSFileQuarantineEnabled` 없음, 샌드박스 아님 — `--autosaver-smoke` 가 확인). DMG 안에서 켰거나(/Volumes) 옮기지 않고 켠(AppTranslocation) 앱은 /Applications(못 쓰면 ~/Applications)에 깐다.
 - 아이콘: `packaging/mac/Daling.icns` ← `python scripts/make_icons.py --mac` (애플 격자: 1024 안 824 네모).
-- 점검 `--autosaver-smoke`: 빈 임시 데이터 폴더로 화면 서버(빈 포트)·화면 파일·가벼운 /api·작업 프로세스(`--autosaver-job smoke`)·node·(맥) Cocoa 모듈·인증서, `AUTOSAVER_SMOKE_KEYCHAIN=1` 이면 점검용 계정으로 키체인 왕복, `=write`/`=read` 면 그것만(다음 빌드가 묻지 않고 읽는지, 아래), `=droppart`/`addpart`/`delete`/`readui` 는 '키체인 실험' 용. Windows 소스에서도 돈다(13개 통과).
+- 점검 `--autosaver-smoke`: 빈 임시 데이터 폴더로 화면 서버(빈 포트)·화면 파일·가벼운 /api·작업 프로세스(`--autosaver-job smoke`)·node·(맥) Cocoa 모듈·인증서, `AUTOSAVER_SMOKE_KEYCHAIN=1` 이면 점검용 계정으로 키체인 왕복, `=write`/`=read` 면 그것만(다음 빌드가 묻지 않고 읽는지, 아래), `=droppart`/`addpart`/`delete`/`readui` 는 '키체인 실험' 용, `=handoff-write`/`handoff-read` 는 '키체인 넘겨주기 점검' 용(`AUTOSAVER_SMOKE_DATA_ROOT` 로 두 빌드가 같은 데이터 폴더). Windows 소스에서도 돈다(13개 통과).
 - 서명 인증서 (2026-10-15): ad-hoc 서명의 서명 요구 조건(designated requirement, DR)은 `cdhash H"…"` 라 빌드마다 바뀌고, macOS 는 개인정보 보호 권한(TCC: 문서 폴더 접근 등)과 키체인 '믿는 앱' 을 이 조건에 묶는다 → 업데이트마다 다시 묻는다. 오래 쓰는 사설 코드 서명 인증서 하나로 서명하면 DR 이 `identifier "app.daling.desktop" and certificate root = H"<인증서 SHA-1>"` 로 고정된다. **키체인 재질문은 이걸로 안 없어진다**(아래 실측). Gatekeeper 경고와는 상관없다(공증이 필요, 한 줄 설치가 피함). 알림은 osascript 라 앱 신원과 무관.
   - 만들기(한 번, 사용자 PC): `sh packaging/mac/make_sign_cert.sh [폴더]` (Windows 는 Git Bash, 기본 `~/daling-mac-sign`). CN `Daling Mac Signing`, RSA 2048, 20년, `CA:FALSE`·`digitalSignature`·`codeSigning`. .p12 는 3DES·SHA-1 MAC 으로 만든다 — macOS `security import` 가 OpenSSL 3 기본(AES-256·PBKDF2) .p12 를 못 읽는다. `-subj`·`file:` 인자는 Git Bash 경로 변환에 깨져 설정 파일·`env:` 로 넘긴다.
   - 비밀: `MAC_SIGN_P12_BASE64`(.base64.txt)·`MAC_SIGN_P12_PASSWORD`(.password.txt) 를 **사용자가 직접** 저장소 Settings → Secrets → Actions 에 넣는다. 개인 키는 저장소·커밋·채팅에 두지 않는다. 폴더를 잃거나 새로 만들면 SHA-1 이 바뀌어 그 판에서 모두 한 번 다시 허락한다.
@@ -741,17 +886,33 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
     - 되는 것 하나: **새 판은 못 읽는 옛 항목을 묻지 않고 지울 수 있다**(nextdel: 지우기 → 새로 만들기 → 읽기, 2·3판 모두 됨). 값은 꺼내지 못한다.
     - 사용자가 보는 창(ui, 화면 찍음): 'Daling 이(가) 키체인의 "Daling" 키에 접근하려고 함 — 허용하려면 키체인 암호 입력' + 항상 허용·거부·허용. **업데이트마다 로그인 암호를 쳐야 한다**(클릭 한 번이 아님). '항상 허용' 이면 그 판에서는 다시 안 묻는다.
     - CI 주의: 묻는 창이 한 번 뜨면 프로세스를 죽이고 SecurityAgent 를 꺼도 뒤의 codesign·dump-keychain 이 멈췄다 → 창을 띄우는 경우는 맨 끝에, 한 실행에 하나만.
-  - 고를 길 (지금 저장 방식은 그대로, 사용자가 정한다):
-    1. 지금대로(키체인, 업데이트마다 한 번 암호): 다른 앱·같은 사용자의 다른 프로세스는 값을 못 꺼낸다(DR + partition). 대가는 위 창.
-    2. 넘겨주기: 앱 안 업데이트 때 옛 판이 비밀 값을 데이터 폴더의 0600 파일에 잠깐 적고 → 새 판이 처음 켤 때 옛 항목을 지우고(묻지 않음, nextdel 실측) 새 항목에 넣은 뒤 파일을 지운다. 앱 안 업데이트에서는 안 묻는다. 대가: 업데이트하는 몇 초(실패하면 다음 실행까지) 같은 사용자의 프로세스가 그 파일을 읽을 수 있다. DMG 끌어 놓기·한 줄 설치로 바꾸면 넘겨줄 틈이 없어 1과 같다.
-    3. 0600 파일만(리눅스 `secretfile:` 길): 안 묻지만 암호화가 없다 — 같은 사용자의 모든 프로세스·Time Machine 백업·동기화 폴더에 평문. 키체인 '모든 앱 허용' 은 partition 때문에 소용없어(allowall) 중간 길도 없다. `/usr/bin/security` 를 거쳐 읽는 길(항목을 `apple-tool:` partition 으로)도 아무 프로세스나 같은 명령으로 꺼낼 수 있어 이 수준이다(재지 않음).
-    4. Developer ID(연 99달러): partition 이 `teamid:` 라 안 묻고, 공증으로 Gatekeeper 창도 없어진다. 근본 해결.
-  - 권고: Developer ID 전까지 1 을 유지하고, 업데이트마다 암호를 치는 것이 불편하다는 말이 나오면 2 를 앱 안 업데이트에만 더한다. 3 은 보호가 평문 파일 수준으로 떨어져 권하지 않는다.
+  - 고를 길 (2026-10-15 사용자가 2 를 골랐다):
+    1. 키체인만(예전): 다른 앱·같은 사용자의 다른 프로세스는 값을 못 꺼낸다(DR + partition). 대가는 업데이트마다 위 창. DMG 끌어 놓기·한 줄 설치는 지금도 이렇다.
+    2. **넘겨주기 (앱 안 업데이트에 넣음)** — 아래 '키체인 넘겨주기'.
+    3. 0600 파일만(리눅스 `secretfile:` 길): 안 묻지만 암호화가 없다 — 같은 사용자의 모든 프로세스·Time Machine 백업·동기화 폴더에 평문. 키체인 '모든 앱 허용' 은 partition 때문에 소용없어(allowall) 중간 길도 없다. `/usr/bin/security` 를 거쳐 읽는 길(항목을 `apple-tool:` partition 으로)도 아무 프로세스나 같은 명령으로 꺼낼 수 있어 이 수준이다(재지 않음). 권하지 않는다.
+    4. Developer ID(연 99달러): partition 이 `teamid:` 라 안 묻고, 공증으로 Gatekeeper 창도 없어진다. 근본 해결. 그때는 새 판이 옛 항목을 그대로 읽으므로 넘겨주기는 파일만 지우고 끝난다(아래 same 경우).
+  - 키체인 넘겨주기 (2026-10-15, `mac_keychain.write_handoff`·`_restore_handoff`, `updater._mac_hand_off_secrets`):
+    - 옛 판: '지금 업데이트' 에서 DMG 를 확인한 뒤 install.sh 를 띄우기 직전, 이 프로세스가 키체인에서 읽어 기억한 {키: 값} 을 `~/.lms-autosaver/keychain-handoff.json` 에 쓴다(`O_CREAT|O_EXCL`·0600 임시 파일 → fsync → 이름 바꾸기, 만든 시각 포함). 이번 실행에서 키체인을 못 읽었으면(`_cache` 없음) 쓰지 않는다 — 새 판이 예전처럼 한 번 묻는다. install.sh 를 못 띄우면 바로 지우고, install.sh 가 바꿔 끼우기 전에 끝나면(`DALING_HANDOFF`, EXIT trap) 지운다.
+    - 새 판: 처음 키체인을 읽을 때(`_load`, 화면 서버가 켜자마자 `read_config` 로) 파일이 있으면 `flock` 으로 한 프로세스만, 묻는 창을 막고(`SecKeychainSetUserInteractionAllowed(0)`, 끝나면 원래 상태로) 읽어 본다. -25293·-25308 이면 옛 항목을 지우고(묻지 않고 지워진다, nextdel) 파일 값으로 제 항목을 만들고 다시 읽어 같은지 본 뒤 파일을 지운다. 묻지 않고 읽히면(업데이트가 실패해 옛 판이 다시 켜짐) 파일만 지운다. 하루 지났거나 깨졌거나 이 사용자의 0600 파일이 아니면 쓰지 않고 지운다.
+    - 실패해도 값을 잃지 않게: 옛 항목을 못 지우면 파일만 지우고 예전처럼 묻는다(값은 옛 항목에). 지웠는데 새 항목을 못 만들면 파일을 남겨 다음 실행에서 다시 하고, 이번에는 넘겨받은 값을 쓴다. 넘겨주기가 어떻게 틀려도 예전 길(묻기)은 남는다.
+    - 결과는 `update-mac.log` 에 '키체인 넘겨주기: …' 한 줄(값은 안 적는다).
+    - 대가: 업데이트하는 몇 초(새 판이 켜져 읽을 때까지) 같은 사용자의 프로세스가 그 파일을 읽을 수 있다. 이 판(넘겨주기가 든 판)에서 다음 판으로 갈 때부터 안 묻는다 — 넘겨주기가 없는 옛 판에서 올라오는 첫 업데이트는 한 번 묻는다.
+    - CI '키체인 넘겨주기 점검'(매 빌드): 1판이 점검 계정에 값을 넣고 updater 함수로 넘김 → 같은 자리에 판 번호만 바꿔 다시 서명한 2판이 묻는 창을 프로세스 전체에서 막은 채 작업 프로세스와 같은 길(`runtime_config._load_config`)로 읽는다. next(대조군: 넘겨주기 없이는 못 읽어야 함)·same(업데이트 실패)·stale(하루 지난 파일)·adhoc, 파일이 남으면 실패. 기록 `logs/keychain-handoff.log`.
+    - 실측(2026-10-15, 실행 38694627946, 시험용 인증서): next — 대조군 -25293, 2판이 묻지 않고 넘겨받아 항목의 partition_id 가 2판 cdhash 로 바뀜 · same — 대조군 읽힘, 파일만 지우고 항목(1판 partition) 그대로 · stale — 쓰지 않고 지움, 옛 항목 그대로 · adhoc — next 와 같음. 네 경우 모두 파일 권한 `-rw-------`, 끝난 뒤 남은 파일 없음, 기록에 값 없음. 단계 전체 약 20초.
   - 그래도 남기는 까닭: TCC 는 DR(csreq)로 비교하므로 인증서 서명이면 이어진다(CI 로는 못 잼). 이미 ad-hoc 판을 쓰던 사람은 인증서로 바뀐 첫 판에서 TCC 를 한 번 더 묻는다.
 - 맥에서 HTTPServer 의 `getfqdn` 역조회를 건너뛴다(`ExclusiveHTTPServer.server_bind`). 첫 CI 실행에서 '로컬 네트워크의 기기 찾기 허용?' 창이 떴고 서버가 15초 늦게 떴다. 건너뛰고 나서 창이 없어지고 1초 만에 뜬다.
+- 업데이트 뒤 LMS·메일이 함께 안 되던 문제 (2026-10-22 사용자 신고 → 1.12.36):
+  - 진단 `mac-diagnose.yml`(가짜 서버만 — 계정은 가짜, 메일 127.0.0.1, LMS 는 러너 안 `fake_lms.py`, 부르기 전마다 `guard_fake_targets`). 릴리스 v1.12.34 그대로(실행 39707720717): **새로 깐 맥은 두 칩 모두 됐다**(키체인 저장, 메일이 비밀번호를 읽음, 크로미움 151 받기·띄우기, 작업 프로세스가 가짜 LMS 에 비밀번호 입력). **업데이트한 맥(1.12.33 → 1.12.34)은 새 판이 창·화면 서버가 뜨기 전에 '키체인 암호 입력' 창에서 멈췄다.** `app.py` 맨 위 `import web_ui` → `runtime_config` 가 모듈 맨 위에서 비밀값을 풀며 키체인을 열었고, 옛 판이 만든 항목은 새 판이 허락 없이 못 읽는다(partition_id, 위 '서명 인증서'). 거부하면 `mac_keychain.unprotect` 가 말없이 빈 값을 줘 '설정에서 학교 이메일 계정을 먼저 입력해 주세요'·'LMS ID/비밀번호를 확인해 주세요' 로만 보였다. Safari(기본 브라우저)·메일 서버 인증서는 원인이 아니었다(LMS 는 받은 크로미움을 쓰고, certifi 로도 `mail.dgist.ac.kr:993` 체인이 온전).
+  - 10-15 에 고르고도 합쳐지지 않았던 '키체인 넘겨주기'(브랜치 `claude/clever-williamson-3c13f8`)를 지금 코드에 옮겨 합쳤다. 예비 경로가 `~/.lms-autosaver` 고정이라 `default_data_root` 규칙으로 고쳤다(CLAUDE.md 29).
+  - 넘겨줄 틈이 없는 업데이트(DMG 끌어 놓기·한 줄 설치·넘겨주기가 없던 판에서 올라올 때)를 위해: 켤 때는 묻는 창 없이만 읽고(`mac_keychain.quiet_startup`, `app.py` 가 `import web_ui` 전에), 허락이 필요하면 창이 뜬 뒤 묻는다(`unlock_interactive`, 뒤 스레드 — 묻는 동안 `_lock` 을 잡지 않아 화면 요청이 멈추지 않는다). 허락하면 `runtime_config.refresh_secrets`. 상태 `ok`·`need`·`asking`·`denied` — 거부하면 그 실행에서는 다시 묻지 않는다(예전엔 5분마다 아무 요청이나 다시 열어 창이 또 떴다).
+  - 기다리는 동안(`secret_store.waiting`) LMS·메일 작업을 시작하지 않는다(`web_ui.start_task`, 빈 비밀번호 로그인 → '서버가 거절' 2시간 쉬기를 막으려고). 건강 알림이 '키체인 허락을 기다리고 있어요'·'키체인에서 비밀번호를 못 꺼냈어요' 와 할 일을 말한다(`get_health` 의 `keychain`, `KEYCHAIN_WAIT_MESSAGE`).
+  - 되살리기: 거부한 뒤 설정에서 비밀번호를 다시 저장하면 `protect` 가 못 읽는 옛 항목을 묻지 않고 지우고(nextdel 실측) 이 판의 항목을 만든다. 예전엔 이때 평문으로 남았다. 다시 넣지 않은 값은 '항목에 이 값이 없습니다' 로 알린다.
+  - 묻는 창이 떠 있는 동안(asking)에는 **같은 프로세스의 키체인 호출이 그 창이 닫힐 때까지 막힌다** (CI 실행 39712261129: 창을 둔 채 저장하자 요청이 30초 넘게 멈췄고, `_lock` 을 쥐고 있어 건강 확인·설정 요청까지 멈췄다). 그래서 그동안의 저장은 키체인을 부르지 않고 값을 잡아 두었다가(`_pending`, config.json 에는 표시만) 창이 닫히면 넣는다 — 허용이면 옛 값과 합쳐, 거부면 옛 항목을 지우고 잡아 둔 값으로. 다시 저장으로는 창을 못 닫으므로 안내는 '창이 안 보이면 Daling 을 껐다 켜 주세요'(껐다 켜면 창이 먼저 뜬 뒤 다시 묻는다).
+  - 까닭 전달: `mac_keychain.last_error` → `secret_store.last_error`·`read_problem`, `runtime_config.SECRET_READ_ERRORS`, 작업 프로세스에는 `_secret_handover` 의 `"_secret_errors"`(점검의 `handed=` 개수에는 안 듦). 메일(`email_reader._missing_account_message`)·LMS(`login_lms` — 빈 비밀번호로는 SSO 에 로그인하지 않는다)·`/api/refresh-emails` 가 이 까닭을 말한다.
+  - 검증: 단위 흉내 27개(켤 때 조용히 → 허락, 거부, 거부 뒤 다시 저장, 묻는 중 요청이 안 멈춤, 창을 둔 채 다시 저장·옛 창 답 버리기, 새 설치), 작업 프로세스 까닭 전달 5개, CI 넘겨주기 점검 두 칩 '모두 통과', mac-diagnose 로 고친 빌드: 업데이트 뒤에도 창·서버가 먼저 뜨고 키체인 창은 그 위(화면), 기다리는 동안 메일 안 함. '거부' 는 CI 로 흉내 낼 수 없었다(SecurityAgent 를 꺼도 창이 다시 뜸).
 
 ## 리눅스 판 (2026-10-12)
-- 빌드는 GitHub Actions `.github/workflows/linux.yml`(수동 실행 또는 `build/linux` 푸시). ubuntu-22.04(glibc 2.35 → Ubuntu 22.04·Debian 12·Fedora 36 이상)·Python 3.13·`requirements-linux.txt` → `packaging/linux/daling-linux.spec`(onedir, 실행 파일 `daling`) → Xvfb 로 실제 창 띄워 보기 → `--autosaver-smoke` → `daling-<버전>-linux-x86_64.AppImage`(appimagetool, 정적 런타임이라 libfuse2 불필요)·`.tar.gz`(`install.sh` 가 `~/.local/opt/daling`·`~/.local/bin/daling`·`.desktop`). 첫 실행: 19개 점검이 바이너리·AppImage·tar 설치본 모두 통과, 키링 왕복 20개 통과. 크기는 AppImage 262MB(QtWebEngine 이 크롬 하나를 통째로 든다).
+- 빌드는 GitHub Actions `.github/workflows/linux.yml`(main 푸시 때 `build.yml` 이 부름, 수동 실행 또는 `build/linux` 푸시). ubuntu-22.04(glibc 2.35 → Ubuntu 22.04·Debian 12·Fedora 36 이상)·Python 3.13·`requirements-linux.txt` → `packaging/linux/daling-linux.spec`(onedir, 실행 파일 `daling`) → Xvfb 로 실제 창 띄워 보기 → `--autosaver-smoke` → `daling-<버전>-linux-x86_64.AppImage`(appimagetool, 정적 런타임이라 libfuse2 불필요)·`.tar.gz`(`install.sh` 가 `~/.local/opt/daling`·`~/.local/bin/daling`·`.desktop`). 첫 실행: 19개 점검이 바이너리·AppImage·tar 설치본 모두 통과, 키링 왕복 20개 통과. 크기는 AppImage 262MB(QtWebEngine 이 크롬 하나를 통째로 든다).
 - 창: pywebview Qt(PyQt6·QtWebEngine). WebKitGTK 는 보조 프로세스 경로가 컴파일 때 박혀 묶을 수 없다. Ubuntu 23.10+ 처럼 AppArmor·커널이 사용자 네임스페이스를 막으면 크로미움 샌드박스가 죽으므로 그때만 `QTWEBENGINE_DISABLE_SANDBOX=1`(메일 HTML 은 스크립트 막은 iframe). 화면(DISPLAY·WAYLAND)이 없거나 Qt 를 못 띄우면 기본 브라우저로 열고 서버·스케줄러는 Ctrl+C 까지 돈다 (`linux_support.py`, `app.run_linux_window`).
 - 비밀 설정: `secret_store.py` 가 맥(`mac_keychain`)·리눅스(`linux_secrets`)를 고른다. 리눅스는 Secret Service(GNOME 키링·KWallet, `secretstorage`) 항목 하나(application=Daling, account=settings)에 JSON, config.json 에는 `keychain:<키>`. 쓸 수 없으면 `<데이터 폴더>/secrets.json`(0600)에 두고 `secretfile:<키>`. 잠긴 키링을 여는 창은 앱 본체만 띄운다(작업 프로세스는 안 띄움).
 - 시스템 프로그램(`xdg-open`·`notify-send`·브라우저)에는 묶음의 `LD_LIBRARY_PATH`·Qt 설정을 뺀 환경을 준다(PyInstaller 안내). 알림은 `notify-send`(인자로 넘김, 셸 없음). 인증서는 시스템 CA 묶음.
@@ -789,8 +950,8 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 
 ## Microsoft Store 판 (MSIX, 2026-10-15)
 무료로 지금 받을 수 있는 공인 서명은 Store 뿐이다(위 표). Store 에서 받은 MSIX 는 Microsoft 가 다시 서명하므로 SmartScreen('PC 보호')·스마트 앱 컨트롤(SAC)·S 모드(Store 앱만 허용)에 막히지 않는다. EXE·MSI 를 그대로 내는 길(정책 10.2.9)은 공인 인증서 서명이 있어야 해서 안 된다.
-- 만들기: `packaging\msix\build_msix.ps1` — [1/6] `dist\붕어빵`(없거나 `-Build` 면 `build_installer.ps1 -Stage exe`) → [2/6] `build\msix\layout` 에 복사 + 매니페스트 → [3/6] `resources.pri` → [4/6] MakeAppx → [5/6] 서명 → [6/6] `-Install`(·`-Smoke`). `-Uninstall` 은 시험판 지우기.
-  - 시험판 `packaging\out\daling-<버전>-win-x64.msix`: 이름 `jykim5215.Daling`, 게시자 = 사설 인증서 주체(`CN=붕어빵 (jykim5215), O=jykim5215`), 사설 서명. 73.8MB(Inno 설치 파일 57MB 보다 큼: MSIX 는 파일마다 따로 압축).
+- 만들기: `packaging\msix\build_msix.ps1` — [1/6] `dist\Daling`(없거나 `-Build` 면 `build_installer.ps1 -Stage exe`) → [2/6] `build\msix\layout` 에 복사 + 매니페스트 → [3/6] `resources.pri` → [4/6] MakeAppx → [5/6] 서명 → [6/6] `-Install`(·`-Smoke`). `-Uninstall` 은 시험판 지우기.
+  - 시험판 `packaging\out\daling-<버전>-win-x64.msix`: 이름 `<게시자>.Daling`, 게시자 = 사설 인증서 주체(`CN=붕어빵 (…), O=…`), 사설 서명. 73.8MB(Inno 설치 파일 57MB 보다 큼: MSIX 는 파일마다 따로 압축).
   - 제출판 `-Store -IdentityName … -Publisher … -PublisherDisplayName …` → `…-store.msix`: Partner Center 값으로, 서명 안 함(Store 가 서명). 가짜 값으로 묶기까지 확인.
   - 도구: Windows SDK 가 없으면 Microsoft 의 NuGet 패키지 `Microsoft.Windows.SDK.BuildTools` 10.0.26100.4654(22MB)를 `build\msix-tools` 에 한 번 받아 MakeAppx·MakePri·SignTool 을 쓴다. 셋 다 Microsoft 서명인지 확인한다(SDK 전체 설치는 관리자 권한이 든다).
   - 판 번호: `VERSION` 1.12.28 → 1.12.28.0 (Store 는 넷째 자리를 자기가 쓰므로 0).
@@ -799,25 +960,25 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 - 이 PC 시험 설치: MSIX 설치는 시스템 서비스가 서명을 보므로 '현재 사용자' 신뢰로는 안 되고(실측 0x800B0109 '루트 인증서는 신뢰할 수 있어야'), **사용자가 직접** 관리자 PowerShell 에서 한 번 `Import-Certificate -FilePath packaging\bungeoppang-codesign.cer -CertStoreLocation Cert:\LocalMachine\TrustedPeople`. (보안 설정이라 대신 하지 않는다. 되돌리기: 인증서 관리자에서 '신뢰할 수 있는 사람'의 붕어빵 인증서 삭제)
 
 ### MSIX 안에서 달라지는 것
-2026-10-15 이 PC 실측 (`jykim5215.Daling_1.12.28.0_x64__mm60x010zk88p`, 설치 위치 `C:\Program Files\WindowsApps\…`):
+2026-10-15 이 PC 실측 (`<게시자>.Daling_1.12.28.0_x64__mm60x010zk88p`, 설치 위치 `C:\Program Files\WindowsApps\…`):
 - `daling.exe --autosaver-smoke` **14개 통과**. 작업 프로세스가 같은 패키지 이름으로 돎(`package=` 일치), node 실행, 업데이트는 Store 로.
 - `%LOCALAPPDATA%` **바로 아래에 새로 만든 폴더**: 패키지 안에서 만들면 `…\Packages\<패밀리>\LocalCache\Local` 로 가고 밖에서 안 보인다. 반대로 **설치 뒤에 밖에서 만든 바로 아래 폴더는 패키지 안에서 아예 안 보인다**(폴더 2개로 확인. 같은 EXE 를 패키지 밖에서 돌리면 보임). 설치 전부터 있던 `ms-playwright` 는 보인다.
-- **이미 있던 하위 폴더**(`Programs\붕어빵`, 삼성 노트 `LocalState`, `Temp`): 밖에서 만든 파일이 보이고, 안에서 새로 만든 파일·고친 내용이 진짜 자리에 그대로 간다 → 삼성 노트 DB·백업·저널도 진짜 자리에 쓰인다(실제 DB 에는 쓰지 않고 같은 성격의 폴더로 확인). 홈 폴더·`Temp` 도 진짜 자리.
+- **이미 있던 하위 폴더**(`Programs\Daling`, 삼성 노트 `LocalState`, `Temp`): 밖에서 만든 파일이 보이고, 안에서 새로 만든 파일·고친 내용이 진짜 자리에 그대로 간다 → 삼성 노트 DB·백업·저널도 진짜 자리에 쓰인다(실제 DB 에는 쓰지 않고 같은 성격의 폴더로 확인). 홈 폴더·`Temp` 도 진짜 자리.
 - 알림: 패키지 안에서 앱 ID 'Daling' 과 패키지 앱 ID 둘 다 알림 기록에 남았다(둘 다 뜸). 패키지 앱 ID 를 쓰는 까닭은 시작 메뉴의 Daling 과 같은 앱으로 묶기 위해서.
-- 창: `daling.exe` 로 켜면 서버가 0.8초 만에 뜨고(`/healthz`), 패키지 안 `붕어빵.exe` 의 'Daling' 창(1320×812)에 WebView2 로 대시보드가 그려진다(제목 줄 없는 모양까지 같음).
+- 창: `daling.exe` 로 켜면 서버가 0.8초 만에 뜨고(`/healthz`), 패키지 안 `Daling.exe` 의 'Daling' 창(1320×812)에 WebView2 로 대시보드가 그려진다(제목 줄 없는 모양까지 같음).
 - 따로 된 데이터로 띄워 볼 때는 `AUTOSAVER_ROOT`(web_ui) 와 `AUTOSAVER_DATA_ROOT`·`AUTOSAVER_CONFIG_PATH`(작업 프로세스)를 **모두** 바꿔야 한다. `AUTOSAVER_DATA_ROOT` 만 바꿨더니 화면은 실제 `C:\lms-autosaver` 를 읽었다(41초 만에 껐고 `boot_times.json`·`notices.json` 만 쓰임. 예약 작업은 켜고 45초 쉰 뒤라 돌지 않음). 실행 별칭은 부른 쪽의 환경 변수를 물려준다.
 - 확인 못 한 것: 작업 표시줄·시작 메뉴 아이콘 모양, 알림 클릭, 시작 시 자동 실행 켜기, SAC 켠 PC, 실제 LMS 동기화(Store 판으로 로그인).
 
 | 무엇 | Inno 설치판 | Store 판(MSIX) | 대응 |
 |---|---|---|---|
-| 설치 폴더 | `%LOCALAPPDATA%\Programs\붕어빵` | `C:\Program Files\WindowsApps\<패키지>` 읽기 전용 | 앱이 설치 폴더에 쓰는 곳 없음(코드 확인: `PROJECT_ROOT` 는 읽기만) |
+| 설치 폴더 | `%LOCALAPPDATA%\Programs\Daling` | `C:\Program Files\WindowsApps\<패키지>` 읽기 전용 | 앱이 설치 폴더에 쓰는 곳 없음(코드 확인: `PROJECT_ROOT` 는 읽기만) |
 | 데이터 `C:\lms-autosaver` | 그대로 | 그대로 (AppData 밖은 가상화 안 함) | 두 판이 같은 데이터를 나눠 쓴다. 앱을 지워도 남음 |
 | `%LOCALAPPDATA%` 에 새로 만드는 파일·폴더 | 그대로 | 패키지 전용 자리(`…\Packages\<패밀리>\LocalCache\Local`)로 돌려지고, 앱과 그 자식 프로세스에게만 원래 자리로 보인다. 이미 있는 파일 고치기는 진짜 자리에 | LMS 브라우저(`ms-playwright`)는 설치 전부터 진짜 자리에 있었으면 그것을 쓰고, 없으면 패키지 안에 받는다(앱을 지우면 같이 지워짐). 설치 뒤 Inno 판이 받은 것은 Store 판이 못 본다(실측, 아래) |
 | HKCU 쓰기 | 그대로 | 앱 전용 사본 | 앱은 레지스트리에 쓰지 않는다(winreg 없음) |
 | 시작 시 자동 실행 | 설치 때 고르면 시작프로그램 폴더 바로 가기 | 바로 가기를 만들어도 가상화돼 탐색기가 못 본다 → `StartupTask`(기본 꺼짐) | 켜기: 설정 › 앱 › 시작 프로그램(또는 작업 관리자 › 시작 앱)에서 Daling |
-| 작업 프로세스 | `붕어빵.exe --autosaver-job` | 같음. 자식 프로세스(작업·node·크로미움·알림 PowerShell)가 패키지 신원을 물려받는다 | `--autosaver-smoke` 가 작업 프로세스의 패키지 이름이 같은지 본다 |
+| 작업 프로세스 | `Daling.exe --autosaver-job` | 같음. 자식 프로세스(작업·node·크로미움·알림 PowerShell)가 패키지 신원을 물려받는다 | `--autosaver-smoke` 가 작업 프로세스의 패키지 이름이 같은지 본다 |
 | 앱 안 업데이트 | GitHub 설치 파일을 받아 조용히 설치 | 끔. 돌리면 Store 판과 따로 노는 Inno 판이 하나 더 깔린다 | `runtime_config.is_msix()` → `updater` 가 GitHub 에 묻지 않고 'Microsoft Store가 새 버전을 알아서 설치해요'. 새 버전은 Store 가 깐다 |
-| 작업 표시줄 앱 ID | `DGIST.Bungeoppang.App` 을 붙임 | 패키지가 정함(`<패밀리>!Daling`) | 패키지 안이면 `SetCurrentProcessExplicitAppUserModelID` 를 부르지 않는다(붙이면 창이 시작 메뉴의 Daling 과 다른 앱으로 묶인다) |
+| 작업 표시줄 앱 ID | `DGIST.Daling.App` 을 붙임 | 패키지가 정함(`<패밀리>!Daling`) | 패키지 안이면 `SetCurrentProcessExplicitAppUserModelID` 를 부르지 않는다(붙이면 창이 시작 메뉴의 Daling 과 다른 앱으로 묶인다) |
 | 알림 | winotify 앱 ID 'Daling' | 패키지 앱 ID 로 | `app.notify` 가 `msix_app_user_model_id()` 를 쓴다 |
 | WebView2 | 없으면 설치 파일이 깔아 줌 | MSIX 는 설치 프로그램을 못 돌린다 | Windows 11 은 기본 포함, 10 도 Edge 업데이트로 대부분 있음. 없으면 창 대신 기본 브라우저로 연다(`app.run_in_browser`) |
 | 명령 줄 | 실행 파일 경로 | 실행 별칭 `daling.exe` (`%LOCALAPPDATA%\Microsoft\WindowsApps`) | 점검: `daling.exe --autosaver-smoke` |
@@ -840,7 +1001,7 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
      - 체험 표시(맨 위 줄무늬 띠·'체험 중 · 가짜 데이터' 알약·상태판 '체험 중')는 넣지 않는다(사용자 결정, 2026-10-15). 둘러보는 사람이 '체험 끝내기'를 기능으로 오해하지 않게. 첫 화면의 `<html data-demo>` 만 떼고 받아 보통 화면 코드로 그리므로 화면에 보이는 것은 모두 계정을 넣은 화면에도 있는 것이다. 체험 화면 그대로는 `--demo-badge`.
      - 구도: 캘린더는 메일에서 뽑은 세미나 날을 골라 상세에서 그 메일을 펼친 모습(연사·장소·본문), 자료는 '전체 목록'(과목 폴더 4개만으로는 화면이 빔), 메일함은 맨 위 메일을 연 모습. 가짜 데이터가 찍는 날 기준이라 날짜·'오늘 남은 수업' 수는 찍는 시각마다 다르다.
    - **제한된 기능 `runFullTrust` 사유** (영어로):
-     > Daling is a classic Win32 desktop app (Python, packaged with PyInstaller) that shows its UI in WebView2 served from a local 127.0.0.1 server. It starts its own helper processes (붕어빵.exe --autosaver-job) and Playwright's bundled Node.js driver to sign in to the university LMS with the system Microsoft Edge in headless mode (nothing is downloaded on Windows), saves course files to the user's own folders (C:\lms-autosaver, Documents) and can hand PDFs to Samsung Notes. These need full-trust desktop execution; the app cannot run in an AppContainer.
+     > Daling is a classic Win32 desktop app (Python, packaged with PyInstaller) that shows its UI in WebView2 served from a local 127.0.0.1 server. It starts its own helper processes (Daling.exe --autosaver-job) and Playwright's bundled Node.js driver to sign in to the university LMS with the system Microsoft Edge in headless mode (nothing is downloaded on Windows), saves course files to the user's own folders (C:\lms-autosaver, Documents) and can hand PDFs to Samsung Notes. These need full-trust desktop execution; the app cannot run in an AppContainer.
    - **인증 참고 사항(Notes for certification) — 정책 10.3.1** ('로그인이 필요하면 쓸 수 있는 시험 계정을 주라'): DGIST 계정은 학교가 재학생에게만 발급하는 SSO 계정이라 심사용으로 만들 수 없고, 이용자 계정을 넘기는 것은 학교 규정 위반이다. 대응은 앱 안 **체험 모드**(아래 '체험 모드' 절, 1.12.28~). 참고 사항 칸에 그대로 붙인다:
        > No test account is needed. DGIST LMS and school mail use SSO accounts that the university issues only to enrolled students, so we cannot create one for testers. Instead, the app has a built-in demo mode with sample data:
        > 1. Launch Daling. On the first intro card, click "Try without an account" (or, any time, the same button in the top bar, or Settings › Connected accounts › Demo mode › "Try the demo").
@@ -886,10 +1047,27 @@ Microsoft Store 정책 10.3.1(로그인 앱은 심사용 시험 계정을 줄 �
 ## 창 제목 줄 = 상단 바 (2026-10-14)
 
 - `window_chrome.py`: WinForms 테두리는 그대로 두고 `WM_NCCALCSIZE` 에서 제목 줄 높이만 클라이언트로 돌려 회색 제목 줄을 없앤다(크기 조절·Aero 스냅·그림자 유지). `frameless=True` 는 이것들이 다 사라져 쓰지 않았다.
-- 끌기: WebView2 `IsNonClientRegionSupportEnabled` 를 첫 페이지 전에 켜고 CSS `app-region: drag`(상단 바·사이드바 빈 곳). 두 번 누르면 최대화·화면 끝 스냅도 진짜 제목 줄처럼 된다.
+- 끌기: WebView2 `IsNonClientRegionSupportEnabled` 를 첫 페이지 전에 켜고 CSS `app-region: drag`. 두 번 누르면 최대화·화면 끝 스냅도 진짜 제목 줄처럼 된다.
+- 끌기 자리는 빈 곳의 사각형 몇 개뿐(1.12.42): 상단 바 위·아래 8px 띠(`.topbar::before/::after`), 왼쪽 메뉴 맨 위 여백(`.sidebar::before`), 같은 줄 단추 묶음 사이 24px 넘는 틈(`.drag-gap`, `app.js placeDragGaps` — ResizeObserver 로 재고 값이 같으면 안 건드림). no-drag 구멍은 쓰지 않는다.
+  - 틈은 상단 바 위아래 끝까지(1.12.43): 예전엔 이웃 단추 높이(40px)만큼만이었다. 줄바꿈된 다른 줄 단추가 위·아래에 있으면 그 4px 앞에서 자른다. 넓은 창의 검색칸은 520→440px(`flex: 0 1 440px`)로 줄여 오른쪽 틈을 넓혔다. 창 1307px(CSS) 대시보드: 오른쪽 틈 28×40 → 68×61px(진행 칩 없을 때 82×61), 메일함 81×40 → 81×61px. 끌기 조각 10개, 진행 칩을 띄운 채 20초 WM_NULL 0/40번 멈춤(최대 9ms).
+  - 좁은 창(1.12.44, 사용자: '앱 크기를 줄이면 끌어서 옮기기가 전혀 안 된다'): CSS 1100px 이하는 검색칸이 남는 자리를 다 채워 틈이 0개라, 옮길 수 있는 곳이 아래 8px 띠와 왼쪽 위 75×4px 뿐이었다(위 8px 띠는 HTTOP). 761~1100px: 검색칸 `flex: 0 1 280px` + 오른쪽 64px 여백, 단추 묶음은 한 줄(`flex: none`), 진행 칩 150px, 960px 이하 ←/→ 빼기, 860px 이하 시계 날짜 빼기 → 검색칸 오른쪽에 늘 72px 넘는 틈. 760px 이하(휴대폰 배치): 시계를 글자 폭만(`justify-self: start`) 써서 시계 옆이 틈, `placeDragGaps` 가 줄 끝(오른쪽 이웃 없음)도 틈으로 잡아 창 단추 아래 검색칸 오른쪽(146px)이 틈. 창 단추 칸 높이(`--winctl-h`)는 단추 묶음 줄 가운데에 맞춘다(64→56px, 둘째 줄을 가리지 않게).
+    - 시험 창 실측(앱과 같은 window_chrome·개발 서버, `Chrome_WidgetWin_0` 조각마다 WM_NCHITTEST): 옮기기(2) 넓이 1000px 6484→11139, 800px 4884→8412, 420px 2152→12074(px²). 조각 3~8개. 진행 칩을 띄워도 761~1100px 에서 단추가 창 단추 밑으로 밀리지 않음(전엔 761px 에서 39px). 소개 중(`body.tour-open`)에는 틈을 뺀다(말풍선 위를 누르면 창이 끌리지 않게).
+  - 왜: 예전엔 상단 바·사이드바 전체를 drag 로 두고 단추마다 no-drag 를 뚫었다. WebView2 는 그 모양의 사각형 조각마다 자식 창(`Chrome_WidgetWin_0`)을 만든다(67개). 끝없는 애니메이션(진행 칩 고리 `top-ring-spin`, 메일 새로고침 회전 등)이 있으면 매 프레임 그 창들을 UI 스레드에서 `SetWindowPos`·`ShowWindow` 로 다시 놓아 창이 '응답 없음'이 됐다. 메일을 보내면 새로고침 진행 칩이 떠서 늘 걸렸다(2026-10-26 사용자 신고).
+  - 실측(시험 앱, WM_NULL 3초 시간 제한으로 20초): 진행 칩만 띄워도 27/27번 멈춤 · 고리 회전을 끄면 1/30 · 끌기 기능을 끄면 0/39 · will-change 로는 그대로 27/27 · 끌기 조각 1개 0/32(최대 3ms) · 조각 15개 0/39 · 29개 26/26. 고친 뒤 4조각: 대시보드·메일함·보내기 흐름 모두 0/39(최대 59ms).
+  - 확인: 띠·틈·왼쪽 위에서 실제 마우스로 끌면 창이 옮겨지고, 검색칸 위에서는 안 옮겨짐, 틈 두 번 누르면 최대화/복원.
+  - 'x 약 1800px 오른쪽은 안 끌린다'(2026-10-26 오전 기록)는 다시 재 보니 없었다(같은 날 오후, 2880×1800·200%). 설치본 1.12.42·소스 1.12.42·1.12.38 모두 x 1813·1900·2000·2400·2700 에서 실제 마우스(SetCursorPos+mouse_event)로 끌면 옮겨지고 터치(InjectTouchInput)도 같다. 창 위치(120·800·1400)·폭(2000·2640)·최대화를 바꿔도 같다. 길: 끌기 조각 자식 창 `WM_NCHITTEST`=2(HTCAPTION) → `WM_NCLBUTTONDOWN` → WebView2 가 최상위 창에 `WM_SYSCOMMAND 0xF012`(SC_MOVE|HTCAPTION, 화면 좌표 그대로) → `ENTERSIZEMOVE`. 좌표가 잘리는 곳은 없다.
+    - 예전 측정이 틀린 까닭(추정): 시험 앱과 설치본이 같은 자리(120,40,2760,1664)에 겹쳐 뜨고, 다른 프로세스의 `SetForegroundWindow` 는 막힐 때가 있다. 그러면 누른 것이 설치본으로 가서 설치본 창이 옮겨지고 시험 앱은 `moved=(0,0)` 로 나온다(이번에 그대로 겪음). 시험 도구는 `WindowFromPoint` 의 `GetAncestor(…, GA_ROOT)` 가 시험 창인지 먼저 확인한다.
+    - 실제로 오른쪽이 잘 안 끌렸던 까닭은 배치였다: 상단 바 오른쪽은 검색칸·동기화 칩·테마 단추·창 단추로 차 있어 끌 곳이 검색칸과 동기화 칩 사이 28×40px 틈과 아래 8px 띠뿐이었다(1.12.43 에서 넓힘, 위 항목). 위 8px 띠는 WebView2 가 위쪽 크기 조절(HTTOP=12)로 돌려줘 끌면 높이가 바뀐다. 폭 760px 이하(휴대폰 배치)에 끌기 자리가 없던 것은 1.12.44 에서 고침(위 항목).
+- 화면 맨 위 몇 px 는 운영체제의 위쪽 크기 조절 자리라 끌면 창 높이가 바뀐다(원래 그렇다).
 - 단추: `#winControls`(Segoe Fluent 아이콘) → `GET/POST /api/window {action: minimize|maximize|close}`. 개발 서버는 `custom:false` 라 화면이 그대로다.
 - 최대화 뒤 복원하면 WinForms 가 없앤 제목 줄 높이를 다시 더해 창이 29px씩 길어졌다(820→849→878). `WM_SIZE` 로 최대화 직전 크기를 기억했다가 복원 직후 크기만 되돌린다.
 - 화면: `html.custom-frame` 에서 넓은 창은 검색창 가운데(Spotify), 상단 바·사이드바 바탕을 이어 붙이고 본문 왼쪽 위를 둥글게. 메일함에도 상단 바를 둔다(창 단추가 읽기 도구를 덮었다).
+- **맥(2026-10-26, `mac_window.py`)**: 사용자 맥 사진에서 밝은 앱 위에 검은 기본 제목 줄과 화면 이름('과제 마감')이 따로 떴다. pywebview 가 제목 줄 뷰를 `windowBackgroundColor` 로 칠해 다크 모드에서 검은 띠가 된다. `app.py` 가 `window.events.before_show` 에 `mac_window.install` 을 걸어:
+  - 제목 줄 투명·제목 숨김·`NSWindowStyleMaskFullSizeContentView`·구분선 없음, pywebview 가 칠한 바탕은 `clearColor`. `frameless` 는 크기 조절·신호등이 사라져 쓰지 않는다.
+  - 신호등(닫기·최소화·확대)은 운영체제 것을 그대로 두고 상단 바 첫 줄 가운데 높이(`cy`)·왼쪽 `lx`(메일함의 72px 메뉴에선 12)로 옮긴다(Tauri `trafficLightPosition` 방식: 제목 줄 컨테이너 높이를 늘리고 단추 자리를 바꿈). 창 크기·전체 화면·키 창 알림마다 다시 놓는다.
+  - 끌기: WKWebView 는 CSS `app-region` 을 모른다. `app.js macDragRegions` 가 상단 바·세로 메뉴(끌 곳)와 그 안의 단추·입력칸·덮개(안 끌 곳)를 사각형으로 재서 `POST /api/window {action:"regions"}` 로 보낸다(DOM 이 바뀔 때만, 같은 값이면 안 보냄). pywebview 의 `WebKitHost.mouseDown:` 을 `objc.classAddMethods` 로 바꿔 끼워 끌 곳이면 `performWindowDragWithEvent_`, 두 번 누르면 시스템 설정(`AppleActionOnDoubleClick`)대로. 하위 클래스로 바꾸면 pywebview 안의 `super(BrowserView.WebKitHost, self)` 가 끝없이 돈다.
+  - 화면: `html.mac-frame` — 넓은 창은 세로 메뉴 내용을 상단 바 높이(`--topbar-h`, ResizeObserver 로 따라감) 아래부터, 좁은 창(≤760px)은 상단 바 왼쪽 80px 를 비운다. 메일함 좁은 창은 상단 바 첫 줄을 남긴다(숨기면 신호등이 목록 머리에 겹침). 가장 낮은 창(560px)에서 메뉴 아래가 49px 잘려 메뉴 목록이 스크롤된다.
+  - 점검: 개발 PC 에 맥이 없어 `.github/workflows/mac-window.yml`(`diag/mac-window` 브랜치·수동) 이 M칩·인텔에서 `DALING_WINDOW_SELFTEST` 로 켜 신호등 자리·누른 자리 판정·가짜 클릭·스크린샷·실제 끌기(cliclick)를 잰다. 끌기 손맛·창 크기 바꿀 때 깜빡임은 맥 사용자 확인이 필요하다.
 
 ## 단추 교통정리 (2026-10-14)
 
@@ -988,11 +1166,105 @@ Apple HIG·WCAG 기준 검토(디자인 스튜디오 가짜 데이터에서 계�
 
 - `ai_cli.py`: 이 PC 에 로그인해 둔 CLI 를 그대로 부른다(앱은 키를 받지 않는다). 질문은 **표준입력**으로(배치 파일 인자 해석 위험 회피), 빈 임시 폴더에서, 창 없이, 180초 제한. claude `-p --disallowedTools …`, gemini `-p "Answer the request above."`, codex `exec --skip-git-repo-check --ephemeral -s read-only -o <파일> -`.
 - 실측: 한 줄 질문 claude 9초·codex 10초, 말로 찾기 13~15초(목록 799개), 초안 15초, codex 번역 11초. gemini 는 로그인 전이면 'Please set an Auth method' → '로그인 필요' 로 알린다.
-- 설정 'AI 도우미'(`#stAi`): 쓸 AI(자동·Claude·Gemini·Codex, 설치 여부 표시) + 내 정보(이름·학번·소속·소개·서명) → `ai_profile.json`. 설정 폼 저장과 따로 저장(입력칸에 name 속성 없음).
+- 설정 'AI 도우미'(`#stAi`): 쓸 AI(자동·Claude·Gemini·Codex, 설치 여부 표시) → `ai_profile.json`. 내 정보 칸은 2026-10-19 '메일에 쓰는 내 정보'(`#stMe`)로 옮겼다(AI 를 꺼도 메일 쓰기 흐름이 쓴다). 저장은 보낸 키만 바꾼다(`save_profile` 이 기존 값과 합침) — 예전처럼 한 카드가 다른 카드의 값을 비우지 않게.
 - 번역: `/api/mail/translate` 가 고른 AI CLI 를 먼저, 안 되면 예전 길(Ollama → Gemini 키).
 - 말로 찾기: 통합 검색 팝업 맨 아래 'AI 에게 물어보기'. `buildSearchResults(q, {all:true})` 로 모든 후보를 모아 순번 id 로 보내고, 돌아온 id 만 원래 결과로 연다(모델이 지어낸 id 는 버려짐). `keepOpen` 항목은 팝업을 닫지 않는다.
-- 메일 초안: 쓰기 화면 'AI 초안' → 한 줄 요청. 받는 사람 주소로 `state.coursePeople` 에서 과목·분반·역할(내 수업 먼저)을 찾아 함께 보낸다. 외국인 교수면 영어로 쓴다. 'AI 없이 내 소개 넣기' 단추도 있다.
+- 메일 초안: 쓰기 화면 'AI 초안' → 한 줄 요청. 받는 사람 주소로 `state.coursePeople` 에서 과목·분반·역할(내 수업 먼저)을 찾아 함께 보낸다. 이름이 로마자인 교수면 영어로 쓴다. 2026-10-19 부터 내 정보는 `mail_me`(LMS 이름·학번, 영문 이름·학년·영문 소속)로, 프롬프트에 메일 꼴(아래 '메일 쓰기 흐름'과 같은 첫머리·끝)·상황별로 넣을 것·21일 달력을 넣는다. 'AI 없이 내 소개 넣기' 단추는 흐름(Tab)이 대신해 뺐다.
 - 체험 모드에서는 `/api/ai/search`·`/api/ai/draft` 를 막는다. 자동 실행은 없다(누를 때만 바깥으로 나감). 상태 확인은 첫 화면 4초 뒤.
 - AI 모델 고르기·받는 사람 추천(2026-10-15 '밀착형 AI'): 메일 쓰기 단추에 'AI 초안' 대신 지금 모델 이름(Opus 5.5, GPT-6-Astra …). 초안 칸의 고르기에서 Claude(opus·sonnet·fable·haiku 별칭)·Gemini(2.5 Pro 등)·Codex(`~/.codex/models_cache.json` 의 visibility=list, 기본은 config.toml model) 모델을 바꾼다 → `ai_profile.json` 의 provider·model. 모델 이름은 `_SAFE_MODEL` 글자만(배치 파일 인자). 안 골랐으면 화면에 보이는 그 CLI 기본 모델을 서버도 똑같이 쓴다.
 - 초안이 받는 사람(to)·참조(cc)도 고른다. 후보는 내가 듣는 과목의 교수·조교 중 주소를 아는 사람(`aiDraftCandidates`, 최대 80명: 주소·이름·역할·과목·분반)이고, 후보 밖 주소는 버린다. 받는 사람 칸이 비면 바로 채우고, 나머지는 칩(누르면 넣기/빼기). 제목은 제목 칸에 바로. 실측: 받는 사람 빈칸 + '일반물리 교수님께 결석 양해' → 3분반 교수 자동, 조교 참조 추천, Opus 5.5 14.8초.
 - AI 도우미 실험실 스위치(2026-10-15): 설정 'AI 도우미' 카드 머리의 '실험실' 표시 옆 스위치(`#aiEnabled`) → `ai_profile.json` 의 `enabled`("1"/빈 값, 처음엔 꺼짐). 끄면 메일 쓰기의 모델 단추·초안 칸, 검색의 'AI 에게 물어보기', 카드 상세(`#aiBody`)가 숨고, 서버도 `/api/ai/search`·`/api/ai/draft` 를 거절하며 메일 번역은 AI CLI 를 건너뛰고 예전 길(Ollama → Gemini 키)로 간다.
+
+## 메일 쓰기 흐름: 회색 글씨 자동완성 (2026-10-19)
+
+사용자: 'AI 초안'을 채팅처럼 통째로 받아 붙이는 것보다, 교수님 메일의 처음(인사·자기소개)과 끝(감사·서명)은 늘 비슷하니
+그 흐름이 회색 글씨로 보이고 클릭하거나 Tab 을 치면 바로 써지게. AI 는 가운데 용건 정리에만. 외국인 교수님이면 영어,
+한국인 교수님이면 한국어. 이름·학번은 LMS 에서 받아 자동으로.
+
+- 내 정보: `lms_crawler.fetch_my_profile` 가 교수·조교 목록과 같은 로그인에서(마감 확인 1시간·자료 동기화 끝)
+  `GET /learn/api/public/v1/users/me?fields=userName,studentId,name,contact.email,job.department` → `lms_profile.json`.
+  실측: studentId 에 9자리 학번, name.given 한글 이름(family '.'), job.department '융복합대학'. 전화번호는 fields 로 아예 안 받는다.
+  `web_ui.mail_me` = 직접 적은 값(`ai_profile.json`) > LMS > 조직도(학교 메일 주소로 찾음, 소속 '기초학부(학생)'). 영문 이름은 LMS 에
+  없어 `mail_flow.romanize_name` 이 추정(이름은 음절별 로마자, 성은 흔한 표기: 홍길동 → Gildong Hong). 학년은 학번 앞 네 자리
+  (3월 전이면 지난 학년도). 영문 소속은 기초학부 → School of Undergraduate Studies.
+- 받는 사람(`mail_flow.recipient`): 받는 사람 칸 첫 주소 → 이번 학기 교수·조교(`get_course_staff`)에서 역할·과목·분반, 학수번호는
+  `timetable.json` 의 `courseNo`(과목명 또는 교수 이름이 같은 칸), 영어 과목명은 LMS 과목 이름의 괄호 속(General PhysicsⅡ → General
+  Physics II). 과목에 없으면 조직도 교원/직원. **외국인 판별 = 이름에 한글이 없고 로마자가 있음**(실측: 교원 247명 중 11명이 로마자,
+  예 'Carlos Scarinci', 'DEVECIOGLU DENIZ OLGU'). 영어 호칭은 성: 'Scarinci', 대문자로 시작하는 학교 명부 꼴은 앞 단어
+  ('Devecioglu'), 한국인 교수님께 영어로 쓰면 'Professor Kim'.
+- 글 조각(`mail_flow.segments`, 서버에서 만든다 — app.js 에 한국어 메일 글을 두면 영어 화면 번역표가 그것까지 번역하려 든다):
+  greeting → intro → leadin → (내 용건) → closing → signoff. 영어 꼴은 사용자가 실제로 보낸 메일 그대로
+  (Dear Professor … / I hope this email finds you well. My name is … (Student ID: …), a first-year student in the School of
+  Undergraduate Studies taking your … class (BS101, Section 04). / I am writing to … / Thank you for your time and understanding. /
+  Sincerely, 이름·소속·Student ID). 한국어: 안녕하세요, ○○○ 교수님. / 다변수 미적분학(BS101) 04분반을 수강 중인 기초학부 1학년
+  ○○○(학번)입니다. / 다름이 아니라 … / 바쁘신 와중에 메일 읽어 주셔서 감사합니다. / ○○○ 드림. 조교면 '조교님'·'Best regards,'.
+  모르는 값은 문장에서 빼고 만든다(빈 [ ] 를 남기지 않음).
+- 화면(app.js '메일 쓰기 흐름'): 본문 위 한 줄(`#mailFlowBar`: 받는 사람·과목, 한국어/English, 'Tab 회색 글씨 넣기', AI 켜졌으면
+  '용건 다듬기'). 회색 글씨는 본문 안 `<span data-ghost contenteditable=false>` 로, **빈 줄에서만** 뜬다. 이미 쓴 줄을 단계별
+  정규식(서버가 `match` 로 준다)으로 앞에서부터 읽어 다음 단계를 고른다 — 앞으로만 간다(용건 줄이 '…입니다.' 로 끝나도 자기소개로
+  되돌리지 않음), 자기소개 줄은 내 이름·학번으로도 알아본다, '-----'·'>' 로 시작하는 원본 메일 줄에서 멈춘다(답장).
+  Tab·클릭 = 넣기(`execCommand('insertText')` 한 번 — \n 은 문단이 되고 Ctrl+Z 한 번에 통째로 빠진다, 실측), Esc = 다시 칠 때까지 숨기기,
+  다른 키 = 떼고 그대로 입력. 클릭 직후 0.1초 안에 Tab 을 쳐도 그 자리에서 계산해 받는다(안 그러면 포커스가 옆 칸으로 갔다, 실측).
+  한글 조합 중(keyCode 229·compositionstart)엔 뗀다. 저장·보내기·HTML 전환은 `richHtml()` 이 `[data-ghost]` 를 한 번 더 거른다.
+- 빈 줄 판정: 커서 앞·뒤 범위를 복제해 화면 밖 상자(`.flow-measure`, opacity 0 — visibility:hidden 이면 innerText 가 글을 빼먹는다)
+  에서 innerText 로 읽는다. 끝에 붙은 빈 `<div><br></div>` 는 innerText 에서 줄바꿈을 안 만들어, 복제본 끝(뒤 범위는 앞)에
+  표시 글자(U+2063)를 넣고 읽는다.
+- 용건 다듬기(`ai_cli.polish`, `/api/ai/polish`): 고른 글, 없으면 자기소개 다음('I am writing to'·'다름이 아니라' 줄 포함)부터
+  감사 인사 앞까지를 보낸다(문단 안쪽만 골라 감사 인사 앞 빈 줄을 지킨다). 프롬프트: 용건만, 인사·소개·서명 금지, 메모의 사실 그대로,
+  모르면 [ ], 21일 달력(요일), 상황별로 넣을 것(결석·연장·성적 문의·질문·면담·자료). 결과는 한 번에 바꿔 Ctrl+Z 한 번이면 메모로 돌아간다.
+  실측(Opus 5.5): 한국어 메모 → 영어 3문단 9.5초, 한국어 3문단 11.6초 — 사용자가 직접 쓴 메일과 거의 같은 내용·순서.
+- 설정 '메일에 쓰는 내 정보'(`#stMe`): 이름·영문 이름·학번·소속(비우면 흐린 글씨로 LMS·조직도 값), '메일 쓸 때 인사·서명 미리 보이기'
+  (`ai_profile.json` 의 `flow`="off" 면 끔).
+- 시험 주의: 받는 사람이 찬 메일 쓰기를 열면 기존 자동 저장이 학교 메일 임시 보관함에 저장본을 만든다. 개발 서버에서 시험할 땐 그 탭에서
+  `window.saveDraftToServer = async () => {}` 로 막고, 생긴 것은 `/api/mail/discard-draft`(지운 표시만, EXPUNGE 없음)로 치운다.
+- 커서 뒤도 본다(1.12.30): 앞쪽 줄만 보고 다음 단계를 고르다 보니, 이미 쓴 'Thank you …' 위 빈 줄에 같은 문장을 또 띄웠다(사용자 화면).
+  이제 커서 뒤 내 글(원본 메일 인용 전까지)에 고른 단계와 같거나 앞선 단계(용건 포함)의 줄이 있으면 띄우지 않는다.
+
+### /ai: 그 자리에서 AI 가 이어 쓰기 (1.12.30)
+사용자: 본문도 자동완성 느낌으로 — '/ai' 로 시작해 하고 싶은 말을 쓰다가 Ctrl+Enter 를 치면 AI 가 그 자리에 자연스럽게 이어 붙이고,
+글이 한 글자씩 타자 치듯 나오게.
+- 커서 앞에서 가장 가까운 '/ai'(줄 처음이나 띄어쓰기 뒤)부터 커서까지가 지시(`findAiPrompt`, 여러 줄 가능). 그 줄 끝에 흐린 안내
+  ('Ctrl+Enter — AI 가 이어 써요', AI 가 꺼져 있으면 '설정 › 실험실에서 켜면…')가 `[data-ghost="hint"]` 로 뜬다(흐름 미리보기를 꺼도).
+  Ctrl+Enter, 안내에서 Tab·클릭 = 실행.
+- 실행: 지시 글을 지우고(되돌리기 한 단계) 그 자리에 `[data-ghost="ai"]` 칸('… 가 쓰는 중…', 점이 움직임)을 둔다 →
+  `/api/ai/continue {instruction, before(커서 앞 6000자), after(뒤 3000자), lang, flow}` → `ai_cli.continue_text`.
+  프롬프트: 커서 자리 글만, 앞 글에 바로 이어지게(문장 중간이면 그 문장을 끝맺음), 뒤에 있는 감사·서명·인사는 다시 쓰지 않기,
+  메일 언어로(지시가 한국어여도), 사실만·모르면 [ ], 달력·상황별 안내. 서버가 앞 줄 되풀이·뒤에 이미 있는 감사·서명을 한 번 더 뗀다.
+- 받은 글은 그 칸에 한 글자씩(짧으면 22ms/자, 길어도 4초 안) 흘리고, 끝나면 `execCommand('insertText')` 한 번으로 진짜 글이 된다
+  → Ctrl+Z 한 번에 AI 글이 빠지고, 한 번 더 누르면 지운 '/ai …' 지시가 돌아온다(실측). 흘리는 중 아무 키·클릭 = 바로 끝까지,
+  기다리는 중 Esc = 취소(지시 글 되돌림). 창이 뒤에 있으면 rAF 가 멈춰 글이 반쯤에서 섰다 → 시간이 지나면 마저 넣는 타이머를 함께 건다.
+  CLI 는 답을 한 번에 줘서 진짜 실시간 흘림은 아니다(기다리는 동안 '쓰는 중').
+- 실측(Opus 5.5): 'I am writing to ' 뒤 한국어 지시 → 'inform you that I will be unable to attend class tomorrow, Tuesday, October 20, …'
+  두 문단 9.5초. 한국어 메일은 같은 날 41초가 걸린 적도 있다(CLI 응답 편차).
+- 실험실 스위치를 따르고(`/api/ai/continue` 도 꺼져 있으면 거절), 체험 모드에서는 막는다.
+
+## /ai 명령과 모델 고르기 (2026-10-20)
+
+- 실험실 켜기 스위치와 설정의 'AI 도우미' 카드를 없앴다. AI CLI(Claude·Gemini·Codex)가 하나라도 있으면 메일 쓰기 창의 모델 단추·`/ai` 가 그대로 된다. AI 로 보내는 건 여전히 사용자가 `/ai`·단추를 눌렀을 때만이다(번역은 예전 저장값을 따른다).
+- 명령: `/ai [할 말]`, `/ai with opus5.5 [할 말]`. `[ ]` 없이 `/ai 할 말` 도 된다. `with` 뒤 이름은 모델 표시 이름에서 띄어쓰기를 뺀 소문자(opus5.5·sonnet5.5·gemini2.5pro·gpt-6-astra…)나 CLI 모델 id, 앞부분만 쳐도 된다(`parseAiCommand`, `resolveAiModel`).
+- `/ai with ` 를 치면 커서 아래에 설치된 모델 목록(`.ai-model-pop`)이 뜨고 ↑↓·Tab·클릭으로 고르면 `모델 []` 이 들어가 `[ ]` 안에 커서가 선다. 실행은 Ctrl+Enter, 커서 뒤의 `]` 까지 지시 글로 지운다.
+- with 로 고른 모델은 그 한 번만: `/api/ai/continue` 에 provider·model 을 실어 보내고, 서버는 아는 CLI·안전한 글자일 때만 받는다. 평소 모델은 쓰기 창의 모델 단추(`#aiModelSelect`)에서 바꾼다. 실측: `with haiku` 요청이 Haiku 4.5 로 13초.
+- AI 모델 메뉴·로고(2026-10-21): 채팅식 'AI 초안' 칸은 쓰지 않는다(늘 숨김). 쓰기 창 위 모델 단추(`#aiDraftToggle`, [로고] 모델 ▾) → `.ai-menu` 두 칸: 오른쪽 회사(ChatGPT·Gemini·Claude, 설치 초록 점·지금 ✓, 마우스를 올리면 바뀜) · 왼쪽 세부 모델(기본(CLI 설정)·설명·꼬리표 최고 성능/추천/빠름·직접 입력). 고르면 `ai_profile.json` 에 저장. 로고는 Simple Icons(CC0) 경로를 `AI_LOGO_PATHS` 에 넣고(`web/img/ai/` 원본), AI 가 쓰는 동안 Claude 는 돌며 숨 쉬고(aiClaudeSpin) Gemini 반짝·OpenAI 회전. Gemini 그라데이션은 `#aiGeminiGrad`.
+
+## 메일 쓰기 흐름 문장 다시 쓰기 (2026-10-21)
+
+- 한국어: 대학 공식 메일 순서로 — `○○○ 교수님께,` / `안녕하십니까.` → `저는 [과목(번호) 분반]을 수강하고 있는 [소속 학년 이름](학번 …)입니다.` → `다름이 아니라,` → `바쁘신 와중에 읽어 주셔서 감사합니다.` / `늘 건강하시고 좋은 하루 보내십시오.` → `[소속 학년 이름] 올림` / `학번 …`. 조교는 `안녕하세요`·`드림`, 부서는 `○○팀 담당자님께,`. 을/를은 과목 이름 끝 받침으로(`_eul`). 예전 꼴은 '안녕하세요, ○○ 교수님.' 으로 시작하고 '드림' 이었다.
+- 영어: 부서는 `office_en` 으로 영어 부서 이름(`Dear DGIST Scholarship Office,`, `Dear DGIST Counseling and Career Development Team,`), 한국인 직원·조교는 로마자 이름(`Dear Minsu Kim,`), 모르는 부서는 `Dear Sir or Madam,`. 예전엔 'Dear DGIST상담경력개발팀,' 처럼 한글이 그대로 들어갔다. 부서 낱말표는 `OFFICE_CORE_EN`·`OFFICE_SUFFIX_EN`, 모르는 낱말이 섞이면 지어내지 않는다.
+- 학과·전공 주소와 사람 이름 가리기(2026-10-21): '인공지능전공' 이 사람 이름으로 잡혀 'Dear Gongjineungjeongong In,' 이 나왔다. 이제 로마자 이름은 `looks_like_person`(띄어쓰기 없는 한글 2~4자, 흔한 성으로 시작, 부서·학과 아님)일 때만. 학과·전공·학부 주소는 `DEPT_FIELD_EN` 으로 `Dear DGIST Department of Artificial Intelligence,`(뇌과학과·에너지공학과는 '과', 화학물리학과는 '학과' 를 떼고 찾는다), 표에 없으면 `Dear Sir or Madam,`. 한국어는 `인공지능전공 담당자님께,`.
+
+## 앱 잠금 (2026-10-27, 1.12.50)
+
+사용자: '로그인 없이도 얻을 수 있는 정보가 앱에 너무 많다. 카카오톡처럼 네 자리 비밀번호로 잠그고, 설정에서 켜고 끌 수 있게.'
+**선택 기능**이다. 설정 › 앱 잠금(`#stLock`)에서 켠다(새 비밀번호 두 번). 끄기·바꾸기는 지금 비밀번호를 먼저 묻는다.
+
+- **저장**: `app_lock.json` 에 PBKDF2-HMAC-SHA256(20만 번, 소금 16바이트) 해시만 둔다. `config.json` 이 아니라 '설정 내보내기' 파일에 섞이지 않는다. 파일이 없으면 꺼진 것.
+- **잠기는 때**: 앱을 켤 때(서버가 처음 상태를 물을 때 파일을 보고 잠근다), 마우스·키보드를 정한 시간 동안 안 썼을 때(`idleMinutes`, 15초마다와 창으로 돌아올 때 확인), '지금 잠그기'·Ctrl+L(맥 ⌘L).
+- **서버가 막는다**: 화면만 덮으면 같은 PC 브라우저로 `http://127.0.0.1:<포트>/api/emails` 를 열어 볼 수 있으므로, 잠긴 동안 `/api/*` 는 423 `{locked:true}` 로 거절한다. 통과: `LOCK_OPEN_GET`(`/api/lock`·`/api/ui-prefs`·`/api/window`), `LOCK_OPEN_POST`(`/api/window`), `/api/lock/unlock|reset|lock`. 큰 첨부 올리기도 막는다. 잠긴 동안 `/` 는 `<html data-locked="1">` 과 테마를 미리 칠하는 한 줄을 넣어 보낸다 — 첫 화면이 번쩍이지 않고 잠금 판부터 뜬다.
+- **화면**(`app.js` 앱 잠금): `api()` 는 잠긴 동안 열린 경로가 아니면 풀릴 때까지 기다렸다 보낸다(같은 GET 은 하나로). 423 을 받으면 판을 띄우고 기다린다. 잠긴 동안 `pollLight`·`presence` 는 쉰다. 판은 `<dialog>.showModal` 이라 열려 있던 다른 창 위에 오고, Esc 를 거듭 눌러 브라우저가 닫아도(close watcher, `cancelable=false`) 바로 다시 띄운다. 늦게 온 `close` 가 그새 누른 숫자를 지우지 않게 이미 열려 있으면 그대로 둔다. Windows 창 단추(`#winControls`)는 그동안 판 안으로 옮겨 최소화·닫기를 그대로 쓴다. 숫자는 화면 숫자판·키보드 숫자·Backspace.
+- **틀리면**: 다섯 번마다 30초부터 두 배씩(최대 15분) 막는다. 서버가 `failures`·`waitUntil` 로 세므로 앱을 다시 켜도 이어진다. 막힌 동안은 맞는 숫자도 거절하고 판에 남은 시간을 보인다. 남은 기회가 두 번 이하면 '맞지 않아요 · N번 더 틀리면 잠시 막혀요'.
+- **잊었을 때**: '잊었어요' → 앱에 이미 저장된 학교 메일(또는 LMS) 비밀번호를 넣으면 잠금이 꺼진다(`/api/lock/reset`, 틀린 횟수는 같이 센다). 저장된 비밀번호가 없으면 여기서 풀 수 없다고만 알린다(그때는 데이터 폴더의 `app_lock.json` 을 지우면 꺼진다). 상태 확인(`canReset`)은 저장 여부만 보고 풀지 않는다 — 맥에서 키체인 창이 뜨지 않게.
+- **알림**: 잠긴 동안 마감·새 자료·공지 알림은 제목만 보이고 내용은 'Daling 잠금을 풀면 볼 수 있어요.' (`app.notify(..., private=True)`).
+- **켜는 시간 기록**: 잠금을 켜 두면 `boot_times.json` 의 `firstScreen` 에 비밀번호를 누르는 시간이 들어가므로 `unlocked`(푼 시각)를 함께 적는다.
+- **한계**: 앱 화면과 로컬 API 만 막는다. 데이터 폴더의 파일(`emails.json`, 받은 자료)은 그대로라 컴퓨터 계정 잠금을 대신하지 않는다. 여러 사람 모드(`MULTI_USER_MODE`)에는 없다(`available:false`, 카드 숨김). 체험 모드에서도 진짜 데이터 폴더의 `app_lock.json` 을 본다(잠금은 앱에 거는 것).
+- **점검**: `smoke_test.py` '앱 잠금' — 켜기(2580) → 잠그기 → `/api/emails` 423·`/api/ui-prefs` 200·`/` 에 `data-locked` → 틀린 숫자(남은 기회 4) → 풀기 → 끄기(파일 지워짐). `/api/lock` 은 GET 전수 점검(`SWEEP_GET`)에도 넣었다.
+- **실측**(개발 서버, 따로 둔 데이터 폴더): 잠긴 채 다시 열면 요청은 `/api/lock`·`ui-prefs`·`window` 뿐이고, 풀자마자 첫 화면 요청들이 이어 가고 `boot-done` 까지 간다. 1분 자동 잠금, 다섯 번 틀리면 30초 막힘(맞는 숫자도 거절), Esc 연타에도 판 유지, 켜기·바꾸기·끄기, 영어 화면, 높이 560px·폭 375px 에서 숫자판이 잘리지 않음.

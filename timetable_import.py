@@ -171,7 +171,7 @@ def import_timetable_image(image_base64: str, mime: str = "image/png") -> dict[s
     from runtime_config import GEMINI_API_KEY
 
     if not GEMINI_API_KEY:
-        raise ValueError("설정에서 Gemini API 키를 먼저 입력해 주세요. (이미지 인식에 사용합니다)")
+        raise ValueError("이미지로 가져오기를 쓸 수 없어요. '시간표 편집'에서 과목을 찾아 넣어 주세요.")
     if not image_base64:
         raise ValueError("이미지를 선택해 주세요.")
 

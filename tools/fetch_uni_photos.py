@@ -1,4 +1,7 @@
-"""대학 대표 사진을 위키백과에서 받아 앱 안에 넣어 둔다.
+"""(더는 쓰지 않음 — 2026-10-21 tools/fetch_uni_info.py 로 바뀜. 여기 있는 TITLES·UA·slug 만 그쪽이 가져다 쓴다.
+자동으로 고른 한 장짜리 사진이 엉뚱한 것이 많아(하버드는 시위 현장) 사람이 고른 여러 장으로 바꿨다.)
+
+대학 대표 사진을 위키백과에서 받아 앱 안에 넣어 둔다.
 
 왜 미리 받아 두는가
   화면에서 바로 외부 주소를 불러오면 인터넷이 없을 때 빈 칸이 되고,
@@ -33,7 +36,7 @@ ROOT = Path(__file__).resolve().parent.parent
 OUT_DIR = ROOT / "web" / "img" / "uni"
 META_PATH = ROOT / "uni_photos.json"
 
-UA = "bungeoppang-dgist-autosaver/1.0 (personal student app; contact: jykim5215@gmail.com)"
+UA = "daling-dgist-autosaver/1.0 (personal student app; contact: tutleblue12@gmail.com)"
 CTX = ssl.create_default_context()
 
 # fglp.py 의 이름 → 위키백과 문서 제목
