@@ -312,6 +312,13 @@ LMS 브라우저를 Edge 로 바꾼 까닭 (2026-10-15): Playwright 가 받는 `
 - **매일 예약 동기화**: `SCHEDULE_TIME`(기본 08:00)이 지났고 `last_sync.json`의 날짜가 오늘이 아니면 실행. 끝나면 Windows 알림.
 - **주기 실행** (`next_due_job`): `health.json`의 마지막 성공 시각 기준으로 메일 → 마감 → 자료 순서로 하나만. 실패 뒤에는 그 작업의 마지막 실패 시각(`failures.<kind>.at`)부터 주기의 절반(최소 5분), 잇달아 실패하면 두 배씩(최대 6시간) 쉼.
 - 결과는 `record_task_result`가 `health.json`에 기록 → 화면의 마지막 동기화 표시와 경고 배너.
+- **앱을 꺼 둬도 하루 한 번** (2026-11-09, 1.12.56, `background_sync.py`·`app.run_background`). 사용자: 백그라운드에서 하루에 한 번은 자동으로 동기화. 위 자동 실행은 앱이 켜져 있을 때만 돈다(창을 닫으면 앱이 끝난다).
+  - 운영체제 예약에 `Daling --autosaver-background` 를 `SCHEDULE_TIME` 에 매일 건다. Windows 작업 스케줄러 `Daling Daily Sync`(내 계정, 로그인해 있을 때만, `StartWhenAvailable` — 꺼져 있어 놓친 날은 켜진 뒤 곧, 배터리에서도, 2시간 제한), 맥 `~/Library/LaunchAgents/app.daling.desktop.background.plist`(`StartCalendarInterval`, `launchctl bootstrap` 으로 바로 적용), 리눅스 `~/.config/systemd/user/daling-background.{service,timer}`(`Persistent=true`, systemctl 이 없으면 줄을 숨김). Store 판(MSIX)·소스 실행·공유 웹사이트는 지원 안 함(설정 줄 숨김).
+  - 설정 `BACKGROUND_SYNC`(기본 켜짐) — 설정 › 자동으로 가져오기 '꺼 둬도 하루 한 번'(`/api/background-sync`). 앱을 켤 때마다 `background_sync.refresh` 가 설정·실행 파일 자리·시각대로 맞춘다(`background_sync.json` 의 `registered` 와 같고 예약이 있으면 아무것도 안 함). '하루 한 번 꼼꼼히' 시각을 바꾸면 예약 시각도 바뀐다. 삭제 프로그램이 예약을 지운다(`daling.iss` `[UninstallRun]`).
+  - 실행: 앱이 켜져 있으면(`existing_dashboard`) 바로 끝. 아니면 잠금 `background_sync.lock`(1분마다 고침, 5분 넘게 안 고쳐졌으면 죽은 것) 을 쥐고 앱 안과 같은 규칙으로 메일(주기가 지났으면) → 전체 동기화(오늘 안 했으면, `last_full_sync.json`) → 마감(주기가 지났으면). 계정이 빈 작업·로그인 거절 멈춤·실패 뒤 쉬기(`next_due_job`)를 지킨다. 작업 스레드(`run_process`)가 끝날 때까지 기다린다 — `running` 이 꺼진 뒤에도 폴더 정리·내 컴퓨터 저장·성공 기록·캘린더를 이어서 한다. 끝나면 마감·새 자료·공지 알림, 결과는 `background_sync.json` 의 `last`.
+  - 잠금이 살아 있는 동안 켠 앱은 LMS·메일 작업을 시작하지 않는다(`web_ui.start_task` → '뒤에서 하루 한 번 가져오기를 하는 중이에요', `scheduler_loop` 는 기다렸다 `last_full_sync.json` 을 다시 읽음).
+  - 맥: 켤 때처럼 키체인을 묻는 창 없이만 읽는다(`mac_keychain.quiet_startup`). 허락이 필요하면 `start_task` 가 거절하고 끝난다 — 아침에 갑자기 키체인 창이 뜨지 않게.
+  - 같이 고친 것: 알림 스위치 하나만 저장하면(누르는 즉시 저장) 다른 스위치 값이 설정에서 빠져 기본값(켜짐)으로 돌아갔다(`write_config`). 보내지 않은 스위치는 있던 값을 둔다.
 
 ### 4.8 내 컴퓨터에도 자동 저장 (`web_ui.autosave_local`)
 
@@ -447,8 +454,9 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 | `/api/send-email` | 메일 보내기 |
 | `/api/mail/flow` | 메일 쓰기 흐름 `{to, courseIndex}` → 받는 사람(교수·조교·외국인·과목)과 한국어·영어 글 조각 |
 | `/api/mail/me` | 메일에 쓰는 내 정보 저장 `{name, nameEn, studentId, dept, flow}` (보낸 키만) |
-| `/api/ai/polish` | 메일 가운데 용건만 AI 로 다듬기 `{text, lang, flow}` (실험실 스위치를 따른다) |
-| `/api/ai/continue` | 메일 쓰기 칸의 `/ai` 지시 자리에 들어갈 글 `{instruction, before, after, lang, flow}` (실험실 스위치, 체험 모드에선 막음) |
+| `/api/ai/compose` | AI 메일 옆 창: 부탁 → 받는 사람·참조·제목·본문, 모자라면 되묻기 `{request, answers, round, current, quote}` (체험 모드에선 막음) |
+| `/api/ai/revise` | 다 쓴 메일 고치기(옆 창의 이어지는 말·본문 `/ai`) `{instruction, to, cc, subject, body, noAsk}` (체험 모드에선 막음) |
+| `/api/ai/rewrite` | 끌어 고른 부분만 고치기 `{instruction, selection, before, after, flow}` (체험 모드에선 막음) |
 | `/api/directory/import` | 조직도 넣기 |
 | `/api/assignment/open`, `/api/open-url` | 외부 페이지 열기 |
 | `/api/update/apply`, `/api/restart` | 업데이트, 재시작 |
@@ -508,6 +516,7 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 | `SAVE_SCOPE` | 내 컴퓨터·클라우드에 넣을 과목: current / all (`AUTO_LOCAL_SAVE`가 켜져 있으면 그 값이 우선) | current |
 | `AUTO_DRIVE_UPLOAD` | 동기화 때 구글 드라이브에도 올리기 (`runtime_config.DRIVE_UPLOAD`, 끄면 `main.run_job`이 받기만 함) | true |
 | `SCHEDULE_TIME` | 매일 동기화 시각 | `08:00` |
+| `BACKGROUND_SYNC` | 앱을 꺼 둬도 하루 한 번 동기화 (운영체제 예약, `background_sync.py`) | `true` |
 | `AUTO_EMAIL_MINUTES`, `AUTO_DEADLINE_MINUTES`, `AUTO_SYNC_MINUTES` | 자동 주기(분), 0이면 끔 | 5, 60, 180 |
 | `GCAL_SYNC_ENABLED`, `GCAL_CALENDAR_NAME` | 구글 캘린더 | 꺼짐, `DGIST 메일 일정` |
 | `EMAIL_INTEREST_TAGS`, `EMAIL_INTERESTS_CUSTOM`, `EMAIL_HIDE_PAST` | 메일 관심사, 지난 일정 숨김 | |
@@ -1189,6 +1198,7 @@ Microsoft Store 정책 10.3.1(로그인 앱은 심사용 시험 계정을 줄 �
   이제 커서 뒤 내 글(원본 메일 인용 전까지)에 고른 단계와 같거나 앞선 단계(용건 포함)의 줄이 있으면 띄우지 않는다.
 
 ### /ai: 그 자리에서 AI 가 이어 쓰기 (1.12.30)
+(1.12.57 부터 `/api/ai/continue` 는 `/api/ai/revise` 로 바뀌었고, 새 메일 쓰기는 옆 창이 맡는다 — 아래 'AI 메일 옆 창·끌어 고치기'.)
 사용자: 본문도 자동완성 느낌으로 — '/ai' 로 시작해 하고 싶은 말을 쓰다가 Ctrl+Enter 를 치면 AI 가 그 자리에 자연스럽게 이어 붙이고,
 글이 한 글자씩 타자 치듯 나오게.
 - 커서 앞에서 가장 가까운 '/ai'(줄 처음이나 띄어쓰기 뒤)부터 커서까지가 지시(`findAiPrompt`, 여러 줄 가능). 그 줄 끝에 흐린 안내
@@ -1213,6 +1223,55 @@ Microsoft Store 정책 10.3.1(로그인 앱은 심사용 시험 계정을 줄 �
 - `/ai with ` 를 치면 커서 아래에 설치된 모델 목록(`.ai-model-pop`)이 뜨고 ↑↓·Tab·클릭으로 고르면 `모델 []` 이 들어가 `[ ]` 안에 커서가 선다. 실행은 Ctrl+Enter, 커서 뒤의 `]` 까지 지시 글로 지운다.
 - with 로 고른 모델은 그 한 번만: `/api/ai/continue` 에 provider·model 을 실어 보내고, 서버는 아는 CLI·안전한 글자일 때만 받는다. 평소 모델은 쓰기 창의 모델 단추(`#aiModelSelect`)에서 바꾼다. 실측: `with haiku` 요청이 Haiku 4.5 로 13초.
 - AI 모델 메뉴·로고(2026-10-21): 채팅식 'AI 초안' 칸은 쓰지 않는다(늘 숨김). 쓰기 창 위 모델 단추(`#aiDraftToggle`, [로고] 모델 ▾) → `.ai-menu` 두 칸: 오른쪽 회사(ChatGPT·Gemini·Claude, 설치 초록 점·지금 ✓, 마우스를 올리면 바뀜) · 왼쪽 세부 모델(기본(CLI 설정)·설명·꼬리표 최고 성능/추천/빠름·직접 입력). 고르면 `ai_profile.json` 에 저장. 로고는 Simple Icons(CC0) 경로를 `AI_LOGO_PATHS` 에 넣고(`web/img/ai/` 원본), AI 가 쓰는 동안 Claude 는 돌며 숨 쉬고(aiClaudeSpin) Gemini 반짝·OpenAI 회전. Gemini 그라데이션은 `#aiGeminiGrad`.
+
+## AI 메일 옆 창·끌어 고치기 (2026-11-09, 1.12.57)
+
+사용자: '프롬프트를 넣으면 누구에게 보낼지, 참조는 누구, 내용은 어떻게 — 빠진 게 있으면 Claude 대화창처럼 1·2·3안을 골라 받고,
+자동으로 메일을 다 써서 보내기만 누르면 되게. Claude in Chrome 처럼 메일 쓰는 데 옆 창에서. /ai 는 부가 기능으로 주로 고치는 데.
+글을 고칠 때 드래그해서 고르면 그 자리에서 댓글 달듯 프롬프트.' (2026-10-21 에 채팅식 'AI 초안' 칸을 뺐던 것을 사용자가 다시 정했다.)
+
+- **옆 창**(`#mailAiPanel`, app.js 'AI 메일 옆 창'): 메일 쓰기 위 막대 오른쪽 끝의 로고 단추(`#mailAiToggle`)로 열고 닫는다 — 크롬 확장 단추처럼 글자 없이 지금 AI 로고만
+  (처음엔 '✳ AI 로 쓰기' 글자 단추였는데 사용자가 '짜친다'고 해 바꿈). 연 상태는
+  `localStorage daling.mailAi.open`, 처음엔 AI CLI 가 있으면 열림. 새 메일마다 대화를 비운다(`openMailAiForCompose`). 쓰기 칸이
+  860px 보다 좁으면(`@container mailmain`) 본문 위에 겹쳐 뜬다. 열려 있으면 위 막대의 모델 단추는 숨고 옆 창 머리(`#mailAiModel`)에서 고른다.
+  AI 가 없으면 'AI 연결하러 가기'(설정 `#stAi`).
+- **첫 말** → `/api/ai/compose` → `web_ui.mail_ai_compose` → `ai_cli.compose_mail`.
+  - 받는 사람 후보는 서버가 모은다(`mail_ai_people`): 이번 학기 내 과목 교수·조교(주소 아는 사람), 최근 주고받은 사람, 부탁 글의 낱말
+    (조사·흔한 말을 뗀 것, `_mail_ai_tokens`)로 조직도에서 찾은 사람(특별계정·직원 먼저). 모델에는 `p1…` id 로만 보이고 id 만 받는다 —
+    지어낸 주소는 버린다(`_mail_ai_pick`). 학생이 부탁 글·답·메일 칸에 직접 적은 주소만 예외. 실측: 후보 0.62초(과목 11명 + 최근 24명).
+  - 프롬프트: 과목 일은 교수님께 + 그 과목 조교 참조, 과제 제출·채점은 조교에게. 로마자 이름이면 영어. 제목 꼴(한국어
+    '[과목 분반] 용건 (이름 학번)', 영어 '[학수번호-분반] 용건 - 영문 이름 (Student ID)'). 28일 달력·내 시간표·다가오는 마감
+    (-3~+35일, 15개)·내 정보·답장 원문·지금 메일 칸.
+  - 모자라면 `ask[]`(최대 3개, 보기 2~4개, 짧은 해요체). '기타·직접 입력' 보기는 서버가 떼고(`_clean_ask`) 화면이 붙인다. 두 번 물은
+    뒤에는(`round>=2`) 더 묻지 않고 [ ] 로 비운다. 물을 때도 이미 정한 받는 사람·참조는 칸에 먼저 넣는다.
+  - 본문은 모델이 용건 문단만 쓰고, 서버가 `mail_flow.segments`(학생의 인사·자기소개 / 감사·서명 꼴)로 앞뒤를 붙인다(`_mail_ai_body`).
+    모델이 인사·서명을 써 오면 `_content_only` 가 뗀다. 메모·질문·보기에 섞인 후보 id('(p1)')는 `_mail_ai_text` 가 뗀다
+    (실측: '담당 교수님(p1)께 보내며 …').
+- **되묻기 카드**: '1 / 2' 단계, 카드에 포커스가 있으면 숫자 키 1·2·3, 마지막 번호는 직접 입력 칸, '건너뛰기'. 입력 칸에 친 글도 지금 질문의
+  답이 된다. 다 고르면 그 답으로 다시 쓴다. 채운 뒤 카드에 받는 사람·참조(역할·과목)·제목·까닭, 본문의 [ ] 개수.
+- **고치기**: 메일이 채워진 뒤의 말(또는 본문에 20자 넘게 있고 '고쳐·짧게·영어로…' 같은 말) → `/api/ai/revise` → `ai_cli.revise_mail`.
+  지시와 관계없는 줄은 그대로, 받는 사람·참조·제목은 바뀔 때만 준다. 옆 창은 되물을 수 있고(한 번 답한 뒤엔 `noAsk`), 본문 `/ai` 는
+  `noAsk`(그래도 물으면 옆 창을 열어 거기서 고르게 한다, `mailAiAskFromInline`).
+- **넣기**: '내 글'(답장 원문 앞까지, `myPartRange`)만 바꾼다. 같은 앞·뒤 글은 바로 보이고 바뀐 가운데만 타자 치듯 흘린다
+  (`diffKeep` → `aiJob.keep`, 그 줄 처음부터). HTML 칸으로 쓰는 중이면 바로 넣는다. 첫 줄이 `<div>` 밖이면 innerText 가 문단 사이를
+  줄바꿈 셋으로 읽어 `plainMail` 이 빈 줄 하나로 맞춘다(안 맞추면 문단마다 다르다고 보고 전부 다시 흘렸다).
+- **되돌리기 한 번**: AI 가 다 쓰면 지웠던 글을 `execCommand('undo')` 로 되살리고(Chromium 은 되살린 글을 골라 둔다 — 실측 737자 그대로)
+  그 위에 `insertText` 한 번 → Ctrl+Z 한 번이면 고치기 전 글. 예전(지우기·넣기 두 단계)엔 메일 전체를 고친 뒤 Ctrl+Z 한 번에 본문이
+  비어 보였다. 그사이 학생이 본문에 글을 쳤으면(`aiJob.undoable=false`) 되살리기를 쓰지 않고 그 자리에 넣는다. 본문 `/ai` 는 Ctrl+Z 한 번에
+  '/ai …' 지시 글로 돌아간다.
+- **끌어 고르기**(`selAi`): 본문에서 2자 넘게 고르고 마우스를 놓으면 고른 끝 아래 'AI 로 고치기 Ctrl+/'(맥 ⌘/) 단추가 뜬다(포커스는 안
+  뺏어 복사·서식은 그대로). 누르면 그 자리에 '어떻게 고칠까요?' 칸 + 빠른 단추(더 공손하게·더 짧게·자연스럽게·영어로/한국어로).
+  고른 자리는 CSS Custom Highlight(`::highlight(ai-sel)`)로 칠해 둔다(글에는 손대지 않음). Enter → `/api/ai/rewrite` → `ai_cli.rewrite_part`
+  (고른 부분 대신 들어갈 글만) → 그 자리에 타자 치듯. Esc·바깥 클릭 = 닫기, 고치는 중 '취소'. 쓰기 창을 떠나면 `daling:compose-hidden` 으로 치운다.
+- 실측(codex GPT-6-Astra, 개발 서버):
+  - '일반물리Ⅱ 교수님께 다음 주 수업 결석 미리 말씀드리기' → 교수님 받는 사람·조교 참조 + 질문 2개(날짜 보기는 시간표에서) 13.7초 →
+    보기 1 + 직접 입력으로 답하고 영어 메일 전체 16.5초.
+  - 날짜·사유까지 적은 부탁은 묻지 않고 15.0초. '조교님은 참조에서 빼고 진단서 문장 더 짧게' → 참조 빠지고 한 문장만 바뀜 14.5초.
+  - '물리 조교님께 과제 파일 잘못 냈는데 다시 내도 되는지' → '어느 과제 파일을 잘못 냈나요?'(보기 = 다가오는 마감) → 실험 조교님께 한국어 메일
+    14.5초, 교수님은 참조에 안 넣음. 끌어 고르기 '더 짧게' 8.8초, 본문 `/ai` 한 문장 넣기 24초(CLI 편차).
+- AI 로 가는 것: 부탁 글·답·지금 메일 칸·답장 원문·후보 사람(이름·역할·과목·주소)·내 정보·시간표·마감 이름. 옆 창 아래에 '메일 내용은 고른
+  AI 로 가요 · 보내기는 직접 눌러요'. 자동으로 AI 를 부르지 않는다. 체험 모드에서는 세 API 를 `DEMO_BLOCKED_POST` 로 막는다.
+- 없앤 것: `/api/ai/draft`·`/api/ai/polish`·`/api/ai/continue`(`ai_cli.draft`·`polish`·`continue_text`).
 
 ## 메일 쓰기 흐름 문장 다시 쓰기 (2026-10-21)
 

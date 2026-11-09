@@ -1,4 +1,4 @@
-"""AI CLI(Claude Code · Gemini CLI · Codex)를 앱 안에서 부른다 — 번역·자연어 검색·메일 초안.
+"""AI CLI(Claude Code · Gemini CLI · Codex)를 앱 안에서 부른다 — 번역·자연어 검색·메일 쓰기·고치기.
 
 사용자가 'AI CLI 를 탑재해 번역·자연어 검색·메일 초안을 쓰자, Claude·Gemini·Codex 를 모두 고를 수 있게' 해서 넣었다
 (2026-10-15). API 키를 앱이 받지 않고, 각 CLI 에 사용자가 이미 로그인한 계정을 그대로 쓴다(키·비밀번호를 앱에
@@ -421,169 +421,266 @@ SITUATION_GUIDE = (
 )
 
 
-def polish(text: str, lang: str, flow: dict, provider: str | None = None, model: str = "") -> dict:
-    """메일 가운데 용건만 다듬는다 (2026-10-19 사용자: AI 는 내용 정리 같은 필요한 곳에만).
+def _json_from(text: str) -> dict | None:
+    """모델 답에서 JSON 한 덩어리를 꺼낸다. 문자열 안의 날 줄바꿈도 받는다(strict=False — 모델이 \\n 대신 그냥 줄을 바꿨다)."""
+    import json
 
-    text: 사용자가 대충 적은 용건(한국어 메모여도 된다). 인사·자기소개·마무리·서명은 이미 메일에 있어 쓰지 않는다.
-    flow: 받는 사람(이름·교수/조교·외국인)·과목(이름·학수번호·분반) — 화면이 /api/mail/flow 에서 받은 것.
-    """
-    lang = "en" if lang == "en" else "ko"
-    to = flow.get("to") if isinstance(flow.get("to"), dict) else {}
+    text = re.sub(r"^```[a-zA-Z]*\s*|\s*```$", "", (text or "").strip())
+    start, end = text.find("{"), text.rfind("}")
+    if start < 0 or end <= start:
+        return None
+    try:
+        data = json.loads(text[start:end + 1], strict=False)
+    except ValueError:
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def _clean_ask(raw) -> list[dict]:
+    """[{q, options[]}] — 질문은 3개까지, 보기는 4개까지. '기타·직접 입력' 은 화면이 붙이므로 뺀다."""
+    out = []
+    for item in raw if isinstance(raw, list) else []:
+        if not isinstance(item, dict):
+            continue
+        q = str(item.get("q") or item.get("question") or "").strip()[:160]
+        opts = []
+        for o in item.get("options") or []:
+            text = str(o.get("label") if isinstance(o, dict) else o or "").strip()[:90]
+            if text and not re.fullmatch(r"(기타|직접\s*입력|other|직접 쓰기).*", text, re.I) and text not in opts:
+                opts.append(text)
+        if q:
+            out.append({"q": q, "options": opts[:4]})
+    return out[:3]
+
+
+def _ids(raw) -> list[str]:
+    if isinstance(raw, str):
+        raw = [x for x in re.split(r"[,\s]+", raw) if x]
+    return [str(x).strip() for x in (raw or []) if str(x).strip()][:6] if isinstance(raw, list) else []
+
+
+def _people_lines(people: list[dict]) -> str:
+    return "\n".join(
+        " | ".join([p["id"], p.get("name") or "(이름 모름)", p.get("role") or "-",
+                    " ".join(x for x in (p.get("course"), p.get("dept")) if x) or "-",
+                    p.get("tag") or "-", p["email"]])
+        for p in people[:90]
+    )
+
+
+def _flow_facts(flow: dict) -> str:
+    """화면이 /api/mail/flow 에서 받은 받는 사람(이름·교수/조교)·과목(이름·학수번호·분반) → 질문에 넣을 줄."""
+    to = flow.get("to") if isinstance(flow, dict) and isinstance(flow.get("to"), dict) else {}
     courses = to.get("courses") if isinstance(to.get("courses"), list) else []
     course = courses[0] if courses and isinstance(courses[0], dict) else {}
     role = {"professor": "교수", "ta": "조교", "staff": "직원"}.get(str(to.get("kind") or ""), "")
-    facts = "\n".join(f"- {k}: {v}" for k, v in (
+    return "\n".join(f"- {k}: {v}" for k, v in (
         ("받는 사람", f"{to.get('name') or ''} {role}".strip()),
         ("과목", " / ".join(x for x in (course.get("title"), course.get("titleEn")) if x)),
         ("학수번호", course.get("courseNo")), ("분반", course.get("section")),
     ) if v)
-    if lang == "en":
-        rule = (
-            "Write in natural, polite academic English for a professor. Start with \"I am writing to \" "
-            "(if the notes already start that way, continue it). 2-4 short paragraphs, plain sentences, no bullet points. "
-            "Typical flow: what happens and when (weekday, date, time) and why -> relevant background "
-            "(e.g. already emailed the TA but no reply yet) -> the request (e.g. whether the absence can be excused, "
-            "and offer to prepare supporting documents if needed)."
-        )
-    else:
-        rule = (
-            "교수님께 보내는 정중한 한국어(합쇼체, 과하지 않게)로. '다름이 아니라 ' 로 시작(메모가 이미 그렇게 시작하면 이어서). "
-            "2~4문단, 목록 기호 없이 문장으로. 흐름: 무슨 일이 언제(요일·날짜·시간) 왜 → 관련 사정(예: 조교님께 먼저 메일을 "
-            "드렸지만 아직 답을 받지 못함) → 부탁(예: 출석 인정이 가능한지, 필요한 서류가 있으면 바로 준비하겠다)."
-        )
+
+
+# 모델이 시킨 대로 하지 않고 인사·서명을 붙였을 때 떼어 낼 줄 (인사·소개·서명은 앱이 학생의 꼴로 붙인다)
+_HEAD_LINE = re.compile(r"^\s*(dear|hello|hi|안녕하(세요|십니까)|.{0,24}(교수님|조교님|담당자님|선생님)\s*께?\s*[,.]?$"
+                        r"|i hope (this email|you)|my name is|저는 .{0,80}(학번|입니다))", re.I)
+_TAIL_LINE = re.compile(r"^\s*(sincerely|best regards|kind regards|regards|best wishes|respectfully|thank you|thanks"
+                        r"|.{0,30}(드림|올림)\s*$|바쁘신|읽어 주셔서|확인해 주셔서|감사합니다|감사드립니다|늘 건강|좋은 하루)", re.I)
+
+
+def _content_only(text: str) -> str:
+    """용건만 남긴다: 앞의 호칭·인사·자기소개 줄, 끝의 감사 인사·서명 덩어리를 뗀다.
+    끝 덩어리는 '맺음 줄 + 그 뒤 짧은 줄들(이름·소속·학번)' 일 때만 — 용건 문단(긴 줄)을 잘라 먹지 않게."""
+    lines = (text or "").strip().splitlines()
+    while lines and (not lines[0].strip() or _HEAD_LINE.match(lines[0])):
+        lines.pop(0)
+    for i in range(max(1, len(lines) - 8), len(lines)):
+        s = lines[i].strip()
+        if s and len(s) <= 70 and _TAIL_LINE.match(s) and all(len(x.strip()) <= 70 for x in lines[i:]):
+            lines = lines[:i]
+            break
+    return "\n".join(lines).strip()
+
+
+def compose_mail(request: str, answers: list[dict], people: list[dict], me: dict, extra: dict,
+                 force: bool = False, provider: str | None = None, model: str = "") -> dict:
+    """메일 쓰기 옆 창(2026-11-09 사용자): 한 마디 부탁 → 받는 사람·참조·제목·용건까지 정하고, 모자란 것은 되묻는다.
+
+    '누구에게 보낼지, 참조는 누구, 내용은 어떻게 — 빠진 게 있으면 Claude 처럼 1·2·3안을 골라 받고, 보내기만 누르면
+    되게'. 인사·자기소개·마무리·서명은 여기서 쓰지 않는다 — 화면 서버가 mail_flow(학생이 정한 꼴)로 앞뒤에 붙인다.
+    people: [{id, name, email, role, course, dept, tag}] — 받는 사람·참조는 이 id 로만 고른다(모델이 주소를 지어내지 않게).
+    extra: timetable·deadlines(줄 글), current{to,cc,subject}, quote(답장하는 메일)
+    답: {ask[], to[], cc[], course, lang, subject, content, note}
+    """
+    me_lines = "\n".join(f"- {k}: {v}" for k, v in (
+        ("이름", me.get("name")), ("영문 이름", me.get("nameEn")), ("학번", me.get("studentId")),
+        ("소속", me.get("dept")), ("소속(영문)", me.get("deptEn")),
+        ("학년", f"{me.get('year')}학년" if str(me.get("year") or "0") not in ("", "0") else ""),
+    ) if v)
+    cur = extra.get("current") if isinstance(extra.get("current"), dict) else {}
+    cur_lines = "\n".join(f"- {k}: {v}" for k, v in (
+        ("받는 사람", cur.get("to")), ("참조", cur.get("cc")), ("제목", cur.get("subject")),
+    ) if v)
+    got = "\n".join(f"- {a.get('q')} → {a.get('a')}" for a in answers if isinstance(a, dict) and a.get("a"))
+    ask_rule = ("- 이번에는 더 묻지 말고 바로 씁니다. 모르는 것은 본문에 [ ] 로 비웁니다." if force
+                else "- 다 알면 묻지 말고 바로 씁니다. 같은 것을 두 번 묻지 마세요.")
+    today = time.strftime("%Y-%m-%d")
     prompt = (
-        "당신은 대학생이 교수·조교에게 보내는 메일의 '용건 부분'만 다듬는 비서입니다.\n"
-        "인사, 자기소개, 마무리 인사, 서명은 이미 메일에 있으니 절대 쓰지 마세요. 용건 문단만 출력합니다(설명·따옴표 없이).\n"
-        f"{rule}\n"
-        "메모에 있는 사실(날짜·시간·장소·이름·행사명)은 그대로 쓰고, 없는 사실을 지어내지 마세요. "
-        "꼭 필요한데 모르는 것은 [ ] 로 비워 두세요. 요일은 아래 달력으로 맞추세요.\n\n"
+        "당신은 DGIST 대학생의 메일 비서입니다. 학생의 부탁을 보고 메일을 끝까지 준비해, 학생은 '보내기'만 누르면 되게 합니다.\n"
+        "정할 것: 받는 사람(to), 참조(cc), 메일 언어, 제목, 용건 본문.\n\n"
+        "[받는 사람·참조]\n"
+        "- [사람 목록]의 id 로만 고릅니다. 학생이 주소를 직접 적었으면 그 주소를 씁니다. 목록에 없는 주소를 지어내지 마세요.\n"
+        "- 과목 일(결석·시험·성적·수업 질문)은 그 과목 교수님께 보내고, 그 과목 조교가 목록에 있으면 참조에 넣습니다.\n"
+        "  과제 제출·실습·채점처럼 조교가 맡는 일은 조교에게 보내고, 필요할 때만 교수님을 참조로 넣습니다.\n"
+        "- 학생이 '참조 빼', '조교님께만' 처럼 정하면 그대로 따릅니다.\n"
+        "- [지금 메일 칸]에 받는 사람이 이미 있으면(답장 등) 학생이 바꾸라고 하지 않는 한 그 사람에게 보냅니다.\n"
+        "- 누구에게 보낼지 정말 모르겠으면 묻습니다(보기는 목록의 알맞은 사람 2~4명, '이름 (역할·과목)' 꼴).\n\n"
+        "[묻기]\n"
+        "- 메일을 쓰는 데 꼭 필요한데 학생 말·[이미 받은 답]에 없는 것만 묻습니다(예: 결석 날짜, 사유, 어느 과목·과제인지,\n"
+        "  면담 희망 시간). 사소한 것은 묻지 말고 본문에 [ ] 로 비웁니다. 한 번에 최대 3개.\n"
+        "- 보기는 2~4개, 학생이 그대로 고를 수 있게 구체적으로: 날짜는 [달력]·[내 시간표]를 보고 'M월 D일(요일)', 과제는 [다가오는 마감]의 이름.\n"
+        "  '기타·직접 입력' 보기는 넣지 마세요(앱이 붙입니다).\n"
+        "- 질문은 학생에게 하는 짧은 해요체로(예: '언제 빠지나요?', '사유는 뭔가요?'). 합쇼체·존댓말 과잉은 쓰지 않습니다.\n"
+        f"{ask_rule}\n\n"
+        "[언어] 받는 사람 이름이 로마자(외국인 교수님)면 영어, 아니면 한국어. 학생이 언어를 정하면 그 말대로.\n"
+        "[제목] 한국어: '[과목명 분반] 용건 (이름 학번)' — 예: '[일반물리학Ⅱ 01분반] 11월 11일(화) 결석 사유 말씀드립니다 (홍길동 20250000)'.\n"
+        "  영어: '[학수번호-분반] 용건 - 영문 이름 (Student ID)'. 과목과 관계없으면 [ ] 부분은 뺍니다.\n"
+        "[본문] 인사·자기소개·마무리 인사·서명은 앱이 학생의 꼴로 붙이니 절대 쓰지 말고 용건 문단만 씁니다.\n"
+        "- 한국어: '다름이 아니라, ' 로 시작, 정중한 합쇼체(과하지 않게), 2~4문단, 목록 기호 없이 문장으로.\n"
+        "- 영어: 'I am writing to ' 로 시작, polite academic English, 2-4 short paragraphs, no bullet points.\n"
+        "- 학생 말·답·아래 자료에 있는 사실만 씁니다. 요일은 [달력]으로 맞춥니다.\n"
         f"[상황별로 들어가면 좋은 것]\n{SITUATION_GUIDE}\n\n"
-        f"[달력] {_calendar()}\n\n[받는 사람·과목]\n{facts or '- (모름)'}\n\n"
-        f"[학생이 적은 메모]\n{text[:4000]}"
+        "출력은 JSON 하나만(설명·코드 블록 없이):\n"
+        '- 물어야 하면: {"ask": [{"q": "질문", "options": ["보기1", "보기2", "보기3"]}], "to": ["id"], "cc": ["id"]}  (to·cc 는 이미 정했으면)\n'
+        '- 쓸 수 있으면: {"to": ["id"], "cc": ["id"], "course": "과목 이름(과목 일이 아니면 빈칸)", "lang": "ko 또는 en", '
+        '"subject": "제목", "content": "용건 본문(문단 사이는 빈 줄)", "note": "누구에게 보내고 누구를 참조로 넣었는지와 까닭(한 줄, 해요체, id 는 적지 않음)"}\n\n'
+        f"[오늘] {today}\n[달력] {_calendar(28)}\n\n"
+        f"[내 정보]\n{me_lines or '- (모름)'}\n\n"
+        f"[내 시간표]\n{extra.get('timetable') or '- (없음)'}\n\n"
+        f"[다가오는 마감]\n{extra.get('deadlines') or '- (없음)'}\n\n"
+        f"[사람 목록: id | 이름 | 역할 | 과목·소속 | 어디서 | 주소]\n{_people_lines(people) or '- (없음)'}\n\n"
+        f"[지금 메일 칸]\n{cur_lines or '- (비어 있음)'}\n\n"
+        + (f"[답장하는 메일]\n<<<\n{str(extra.get('quote'))[:4000]}\n>>>\n\n" if extra.get("quote") else "")
+        + f"[학생의 부탁]\n{request[:3000]}\n\n"
+        + f"[이미 받은 답]\n{got or '- (없음)'}"
     )
     res = run(prompt, provider, model=model)
-    body = res["text"].strip().strip("`").strip()
-    # 모델이 그래도 인사·서명을 붙이면 떼어 낸다(이미 메일에 있다)
-    lines = body.splitlines()
-    while lines and re.match(r"^\s*(dear|hello|hi|안녕하세요)\b", lines[0], re.I):
-        lines.pop(0)
-    while lines and re.match(r"^\s*(sincerely|best regards|kind regards|regards|.{0,6}드림)\s*,?\s*$", lines[-1], re.I):
-        lines.pop()
-    return {**res, "text": "\n".join(lines).strip()}
+    data = _json_from(res["text"])
+    if data is None:
+        # JSON 이 아니면 글을 용건으로 본다(받는 사람은 못 정함)
+        return {**res, "ask": [], "to": [], "cc": [], "course": "", "lang": "", "subject": "",
+                "content": _content_only(res["text"]), "note": ""}
+    ask = [] if force else _clean_ask(data.get("ask"))
+    lang = str(data.get("lang") or "").strip().lower()
+    return {
+        **res,
+        "ask": ask,
+        "to": _ids(data.get("to")),
+        "cc": _ids(data.get("cc")),
+        "course": str(data.get("course") or "").strip()[:120],
+        "lang": lang if lang in ("ko", "en") else "",
+        "subject": str(data.get("subject") or "").strip().splitlines()[0][:200] if data.get("subject") else "",
+        "content": "" if ask else _content_only(str(data.get("content") or data.get("body") or "")),
+        "note": str(data.get("note") or "").strip()[:240],
+    }
 
 
-def continue_text(instruction: str, before: str, after: str, lang: str, flow: dict,
-                  provider: str | None = None, model: str = "") -> dict:
-    """메일 쓰기 칸의 '/ai 지시' 자리에 들어갈 글 (2026-10-19 사용자: /ai 로 시작해 쓰다가 Ctrl+Enter 하면
-    그 자리에 자연스럽게 이어 붙여 주기). 앞 글(before)에 바로 이어지고 뒤 글(after)과 겹치지 않게.
-    """
-    lang = "en" if lang == "en" else "ko"
-    to = flow.get("to") if isinstance(flow.get("to"), dict) else {}
-    courses = to.get("courses") if isinstance(to.get("courses"), list) else []
-    course = courses[0] if courses and isinstance(courses[0], dict) else {}
-    role = {"professor": "교수", "ta": "조교", "staff": "직원"}.get(str(to.get("kind") or ""), "")
-    facts = "\n".join(f"- {k}: {v}" for k, v in (
-        ("받는 사람", f"{to.get('name') or ''} {role}".strip()),
-        ("과목", " / ".join(x for x in (course.get("title"), course.get("titleEn")) if x)),
-        ("학수번호", course.get("courseNo")), ("분반", course.get("section")),
+AI_MARK = "⟦여기⟧"
+
+
+def revise_mail(instruction: str, mail: dict, people: list[dict], provider: str | None = None, model: str = "",
+                allow_ask: bool = True) -> dict:
+    """다 쓴 메일을 지시대로 고친다 — 옆 창의 두 번째 말부터, 그리고 본문의 '/ai 지시'(2026-11-09 사용자: /ai 는 부가 기능,
+    주로 고치는 데). 본문에 ⟦여기⟧(지시를 적은 자리)가 있으면 그 자리에 넣기만 할지(insert), 다른 데를 고칠지(body)를
+    모델이 고른다 — 넣기만 하는 지시에 메일 전체를 다시 받으면 느리고, 손대지 않은 줄까지 바뀔 수 있다.
+    답: {body | insert, subject?, to?, cc?, ask[], note}"""
+    body = str(mail.get("body") or "")[:8000]
+    marked = AI_MARK in body
+    mark_rule = (
+        f"- 메일 안의 {AI_MARK} 는 학생이 지시를 적은 자리입니다. 그 자리에 새 글을 넣기만 하면 되는 지시(예: '결석 사유 한 문장 추가',\n"
+        "  '여기에 면담 가능한 시간')면 body 대신 {\"insert\": \"그 자리에 넣을 글\", \"note\": \"…\"} 만 주세요. 앞뒤 글에 자연스럽게\n"
+        "  이어지게, 앞 글을 되풀이하지 말고. 다른 곳을 고쳐야 하는 지시(예: '위 문단 더 짧게', '전체적으로 더 공손하게')면\n"
+        f"  body 에 메일 전체를 주고 {AI_MARK} 는 지웁니다.\n"
+    ) if marked else ""
+    head = "\n".join(f"- {k}: {v}" for k, v in (
+        ("받는 사람", mail.get("to")), ("참조", mail.get("cc")), ("제목", mail.get("subject")),
     ) if v)
-    language = "English (polite academic English for a professor)" if lang == "en" else "한국어 (교수님께 쓰는 정중한 합쇼체, 과하지 않게)"
-    before = before[-6000:]
+    # 본문의 /ai 는 되묻지 않는다(쓰던 자리에서 바로 고친다). 옆 창은 모자라면 보기를 골라 받는다
+    ask_rule = (
+        "- 지시대로 하려면 꼭 알아야 하는데 모르는 것이 있으면 고치지 말고 묻습니다: "
+        '{"ask": [{"q": "질문", "options": ["보기1", "보기2"]}]} (보기 2~4개, 구체적으로, 질문은 짧은 해요체).\n'
+        if allow_ask else "- 되묻지 말고 바로 고칩니다. 모르는 것은 [ ] 로 비웁니다.\n"
+    )
     prompt = (
-        "당신은 메일 편집기 안의 자동완성입니다. 대학생이 교수·조교에게 쓰는 메일에서, 커서 자리에 들어갈 글만 씁니다.\n"
-        "- 학생의 지시를 메일 글로 바꿔 쓰세요(지시 문장을 그대로 옮기지 않음).\n"
-        "- [커서 앞 글]에 바로 이어지게 쓰고, 앞 글을 되풀이하지 마세요. 앞 글이 문장 중간(예: 'I am writing to ', "
-        "'다름이 아니라 ')에서 끝났으면 그 문장을 이어서 끝맺으세요.\n"
-        "- [커서 뒤 글]에 이미 있는 것(감사 인사·서명·다음 문단)은 쓰지 마세요. 인사·자기소개가 앞에 있으면 다시 쓰지 마세요.\n"
-        f"- 언어: {language}. 지시가 다른 언어여도 이 언어로 씁니다.\n"
-        "- 목록 기호 없이 문장으로, 문단은 빈 줄로 나눕니다. 지시가 짧으면 한두 문장으로 짧게.\n"
-        "- 지시와 메일에 있는 사실(날짜·시간·장소·이름·행사명)만 쓰고, 없는 사실은 지어내지 마세요. 꼭 필요한데 모르면 [ ].\n"
-        "- 출력은 넣을 글만(설명·따옴표·머리말 없이). 요일은 아래 달력으로 맞추세요.\n\n"
-        f"[상황별로 들어가면 좋은 것]\n{SITUATION_GUIDE}\n\n"
-        f"[달력] {_calendar()}\n\n[받는 사람·과목]\n{facts or '- (모름)'}\n\n"
-        f"[커서 앞 글]\n<<<\n{before}\n>>>\n\n[커서 뒤 글]\n<<<\n{after[:3000]}\n>>>\n\n"
+        "당신은 메일 편집기 안의 비서입니다. 대학생이 교수·조교·학교에 보낼 메일을 학생의 지시대로 고칩니다.\n"
+        "- 지시와 관계없는 줄은 한 글자도 바꾸지 말고 그대로 둡니다(인사·자기소개·서명 포함).\n"
+        "- 메일의 언어를 지킵니다. 지시가 번역을 바랄 때만 바꿉니다.\n"
+        "- 사실을 지어내지 마세요. 꼭 필요한데 모르면 [ ] 로 비웁니다. 요일은 [달력]으로 맞춥니다.\n"
+        f"{mark_rule}"
+        "- 받는 사람·참조를 바꾸라는 지시면 [사람 목록]의 id(또는 학생이 적은 주소)로 to·cc 를 줍니다(바뀐 뒤 전체). 아니면 넣지 마세요.\n"
+        "  받는 사람이 바뀌면 호칭·인사도 그 사람에 맞게 고칩니다.\n"
+        "- 내용이 바뀌어 제목이 맞지 않게 되거나 제목을 고치라는 지시면 subject 를 줍니다. 아니면 넣지 마세요.\n"
+        f"{ask_rule}"
+        "출력은 JSON 하나만(설명·코드 블록 없이): "
+        '{"body": "고친 메일 본문 전체", "subject": "…", "to": ["id"], "cc": ["id"], "note": "무엇을 고쳤는지 한 줄(해요체, id 는 적지 않음)"}\n\n'
+        f"[달력] {_calendar(28)}\n\n"
+        f"[사람 목록: id | 이름 | 역할 | 과목·소속 | 어디서 | 주소]\n{_people_lines(people) or '- (없음)'}\n\n"
+        f"[메일 머리]\n{head or '- (비어 있음)'}\n\n[메일 본문]\n<<<\n{body}\n>>>\n\n"
         f"[학생의 지시]\n{instruction[:3000]}"
     )
     res = run(prompt, provider, model=model)
-    text = res["text"].strip()
-    text = re.sub(r"^```[a-z]*\s*|\s*```$", "", text).strip()
-    if len(text) > 1 and text[0] == text[-1] and text[0] in "\"'“”":
-        text = text[1:-1].strip()
-    # 앞 줄을 되풀이해 시작하면(예: 'I am writing to let you know…') 겹친 부분을 뗀다
-    tail = before.rstrip().splitlines()[-1].strip() if before.strip() else ""
-    if tail and len(tail) >= 4 and text.lower().startswith(tail.lower()):
-        text = text[len(tail):].lstrip()
-    # 뒤에 이미 감사 인사·서명이 있으면 모델이 붙인 것을 뗀다
-    lines = text.splitlines()
-    if re.search(r"(thank you|감사)", after, re.I):
-        while lines and re.match(r"^\s*(sincerely|best regards|kind regards|regards|thank you|thanks|.{0,6}드림|감사합니다)\b", lines[-1], re.I):
-            lines.pop()
-            while lines and not lines[-1].strip():
-                lines.pop()
-    return {**res, "text": "\n".join(lines).strip()}
+    data = _json_from(res["text"])
+    if data is None:
+        raise AIError("AI 답을 읽지 못했어요. 한 번 더 해 주세요.")
+    out = {"ask": _clean_ask(data.get("ask")), "note": str(data.get("note") or "").strip()[:240]}
+    if out["ask"]:
+        return {**res, **out}
+    if marked and isinstance(data.get("insert"), str):
+        out["insert"] = data["insert"].strip().strip("`").strip()
+    else:
+        text = str(data.get("body") or "")
+        if not text.strip():
+            raise AIError("AI 가 빈 답을 줬어요. 한 번 더 해 주세요.")
+        out["body"] = text.replace(AI_MARK, "").strip("\n")
+    if isinstance(data.get("subject"), str) and data["subject"].strip():
+        out["subject"] = data["subject"].strip().splitlines()[0][:200]
+    for key in ("to", "cc"):
+        if isinstance(data.get(key), (list, str)):
+            out[key] = _ids(data.get(key))
+    return {**res, **out}
 
 
-def draft(request: str, profile: dict, context: dict, provider: str | None = None, model: str = "") -> dict:
-    """메일 초안 + 받는 사람·참조 추천 (밀착형: 글만 주는 게 아니라 누구에게 보낼지까지).
-
-    profile: 내 정보(이름·학번·소속·소개·서명)
-    context: 받는 사람·과목·분반·제목·이미 쓴 글, candidates=[{name,email,role,course,section}] (내 과목 교수·조교)
-    답: subject, body, to[], cc[], why — to/cc 는 candidates 안의 주소만 화면이 받아들인다."""
-    import json
-
-    me = "\n".join(f"- {k}: {v}" for k, v in (
-        ("이름", profile.get("name")), ("영문 이름", profile.get("nameEn")), ("학번", profile.get("studentId")),
-        ("소속", profile.get("dept")), ("소속(영문)", profile.get("deptEn")),
-        ("학년", f"{profile.get('year')}학년" if str(profile.get("year") or "0") != "0" else ""),
-        ("자기소개", profile.get("intro")), ("서명", profile.get("signature")),
-    ) if v)
-    ctx = "\n".join(f"- {k}: {v}" for k, v in (
-        ("지금 받는 사람 칸", context.get("to")), ("받는 사람의 역할", context.get("role")),
-        ("과목", context.get("course")), ("분반", context.get("section")),
-        ("지금 제목 칸", context.get("subject")), ("이미 쓴 내용(답장이면 원문 인용 포함)", context.get("body")),
-    ) if v)
-    cands = context.get("candidates") if isinstance(context.get("candidates"), list) else []
-    cand_lines = "\n".join(
-        f"- {c.get('email')} | {c.get('name')} | {c.get('role')} | {c.get('course')} {c.get('section') or ''}".rstrip()
-        for c in cands[:80] if isinstance(c, dict) and c.get("email")
-    )
+def rewrite_part(instruction: str, selection: str, before: str, after: str, flow: dict,
+                 provider: str | None = None, model: str = "") -> dict:
+    """본문에서 끌어 고른 부분만 지시대로 고친다 (2026-11-09 사용자: '드래그해서 고르면 그 자리에서 댓글 달듯 프롬프트').
+    답은 고른 부분을 대신할 글만."""
+    facts = _flow_facts(flow)
     prompt = (
-        "당신은 대학생의 메일 비서입니다. 아래 정보를 보고 교수·조교·학교 부서에 보낼 메일을 완성해 주세요.\n"
-        "1) 받는 사람(to)과 참조(cc)를 '후보' 목록에서 고르세요. 예: 과목 일로 교수님께 보내면 그 과목 조교를 참조로, "
-        "조교에게 보내면 필요할 때만 교수님을 참조로. 지금 받는 사람 칸이 이미 맞으면 그대로 두세요. 후보에 없는 주소는 쓰지 마세요.\n"
-        "2) 제목은 '[과목 분반] 학번 이름 용건' 꼴로 짧게.\n"
-        "3) 본문은 정중하고 간결하게: 인사 → 자기소개(소속·학년·이름·학번, 과목·학수번호·분반) → 용건 → 마무리 → 서명. "
-        "받는 사람 이름이 로마자(외국인 교수)면 영어로, 한글이면 한국어로 씁니다. 사실을 지어내지 말고 모르는 부분은 [ ] 로 비워 두세요.\n"
-        "   영어 꼴: 'Dear Professor <성>,' / 'I hope this email finds you well. My name is <영문 이름> (Student ID: <학번>), "
-        "a <first-year> student in the <소속(영문)> taking your <과목> class (<학수번호>, Section <분반>).' / "
-        "'I am writing to …' / 'Thank you for your time and understanding.' / 'Sincerely,' 다음 줄부터 영문 이름, 소속, Student ID.\n"
-        "   한국어 꼴: '안녕하세요, <이름> 교수님.' / '<과목>(<학수번호>) <분반>분반을 수강 중인 <소속> <학년> <이름>(<학번>)입니다.' / "
-        "'다름이 아니라 …' / '바쁘신 와중에 메일 읽어 주셔서 감사합니다.' / '<이름> 드림'.\n"
-        f"   상황별로 들어가면 좋은 것:\n{SITUATION_GUIDE}\n   요일은 이 달력으로 맞추세요: {_calendar()}\n"
-        '출력은 JSON 한 줄만: {"to": ["주소"], "cc": ["주소"], "why": "누구에게 왜(한 줄)", "subject": "제목", "body": "본문(줄바꿈 \n)"}\n\n'
-        f"[내 정보]\n{me or '- (입력 안 됨)'}\n\n[상황]\n{ctx or '- (없음)'}\n\n"
-        f"[후보: 주소 | 이름 | 역할 | 과목 분반]\n{cand_lines or '- (없음)'}\n\n"
-        f"[쓰고 싶은 내용]\n{request[:2000]}"
+        "당신은 메일 편집기 안의 비서입니다. 대학생이 메일에서 끌어 고른 한 부분만 학생의 지시대로 고쳐 씁니다.\n"
+        "- 출력은 [고른 부분]을 대신할 글만(설명·따옴표·머리말 없이).\n"
+        "- [앞 글]·[뒤 글]과 자연스럽게 이어지게 쓰고, 앞뒤 글을 되풀이하지 마세요. 고른 부분이 문장 중간에서 시작·끝나면 그 모양을 지킵니다.\n"
+        "- 고른 부분의 언어를 지킵니다. 지시가 번역을 바랄 때만 바꿉니다.\n"
+        "- 줄바꿈은 고른 부분에 있던 만큼만 둡니다(문단을 늘리라는 지시가 아니면).\n"
+        "- 사실을 지어내지 마세요. 꼭 필요한데 모르면 [ ] 로 비웁니다. 요일은 [달력]으로 맞춥니다.\n\n"
+        f"[달력] {_calendar(28)}\n\n[받는 사람·과목]\n{facts or '- (모름)'}\n\n"
+        f"[앞 글]\n<<<\n{before[-3000:]}\n>>>\n\n[고른 부분]\n<<<\n{selection[:4000]}\n>>>\n\n"
+        f"[뒤 글]\n<<<\n{after[:2000]}\n>>>\n\n[학생의 지시]\n{instruction[:2000]}"
     )
     res = run(prompt, provider, model=model)
-    text = res["text"]
-    out = {"subject": "", "body": text, "to": [], "cc": [], "why": ""}
-    start, end = text.find("{"), text.rfind("}")
-    if start >= 0 and end > start:
-        try:
-            data = json.loads(text[start:end + 1])
-            allowed = {str(c.get("email", "")).lower() for c in cands if isinstance(c, dict)}
-            pick_mails = lambda xs: [str(x).strip() for x in (xs or []) if str(x).strip().lower() in allowed][:5]
-            out = {
-                "subject": str(data.get("subject") or ""),
-                "body": str(data.get("body") or text),
-                "to": pick_mails(data.get("to")),
-                "cc": pick_mails(data.get("cc")),
-                "why": str(data.get("why") or "")[:200],
-            }
-        except ValueError:
-            pass
-    return {**res, **out}
+    text = re.sub(r"^```[a-zA-Z]*\s*|\s*```$", "", res["text"].strip()).strip()
+    if text.startswith("<<<"):
+        text = text[3:]
+    if text.endswith(">>>"):
+        text = text[:-3]
+    text = text.strip("\n")
+    if len(text) > 1 and text[0] == text[-1] and text[0] in "\"'“”" and not (selection.strip()[:1] in "\"'“”"):
+        text = text[1:-1]
+    # 고른 부분이 줄바꿈 없이 끝났으면 모델이 붙인 끝 줄바꿈을 뗀다(뒤 글과 붙어 있어야 한다)
+    if not selection.endswith("\n"):
+        text = text.rstrip("\n")
+    if not text.strip():
+        raise AIError("AI 가 빈 답을 줬어요. 한 번 더 해 주세요.")
+    return {**res, "text": text}
 
 
 # ===== 내 정보 (메일 초안에 매번 쓰는 학번·소개) =====

@@ -1002,25 +1002,15 @@
                         <button class="icon-button danger compose-discard" id="cancelComposeButton" type="button" aria-label="작성 취소" title="작성 취소">
                           <span class="icon" data-icon="trash"></span>
                         </button>
+                        <!-- AI 옆 창 열고 닫기: 크롬 확장 단추처럼 글자 없이 지금 AI 로고만, 옆 창이 열리는 오른쪽 끝에
+                             (2026-11-09 사용자: '✳ AI 로 쓰기' 글자 단추가 짜친다). 로고는 app.js paintAiModelButton 이 칠한다 -->
+                        <button class="mail-ai-toggle" id="mailAiToggle" type="button" aria-pressed="false" aria-controls="mailAiPanel" title="AI 로 쓰기" aria-label="AI 로 쓰기">
+                          <span class="ai-logo" aria-hidden="true"></span>
+                        </button>
                       </div>
 
                       <div class="compose-scroll">
-                        <!-- AI 초안 칸: '무엇을 쓸까요?' 한 줄 → 제목·본문을 채운다. 내 정보(학번·소개)와
-                             받는 사람이 맡은 과목·분반은 자동으로 넣는다 -->
-                        <div class="ai-draft" id="aiDraftBox" hidden>
-                          <textarea id="aiDraftRequest" rows="2" placeholder="예: 다음 주 화요일 기업탐방 때문에 수업에 빠진다고 양해를 구하고, 출결 처리를 어떻게 하면 되는지 여쭤봐 줘"></textarea>
-                          <div class="ai-draft-row">
-                            <span class="ai-draft-ctx" id="aiDraftContext"></span>
-                            <select id="aiModelSelect" class="ai-model-select" aria-label="쓸 모델"></select>
-                            <button type="button" class="button primary compact" id="aiDraftRun">
-                              <span class="icon" data-icon="sparkle"></span>
-                              초안 쓰기
-                            </button>
-                          </div>
-                          <p class="ai-draft-note" id="aiDraftNote" hidden></p>
-                          <!-- 누구에게·참조로 누구를: AI 추천을 눌러 바로 넣고 빼기 -->
-                          <div class="ai-suggest" id="aiDraftSuggest" hidden></div>
-                        </div>
+                        <!-- (예전 'AI 초안' 칸은 오른쪽 옆 창 #mailAiPanel 이 대신한다, 2026-11-09) -->
                         <!-- 받는사람 -->
                         <div class="cfield autocomplete-field">
                           <label class="cfield-label" for="composeTo">받는사람</label>
@@ -1135,8 +1125,9 @@
                             <button type="button" data-flow-lang="ko" aria-pressed="false">한국어</button>
                             <button type="button" data-flow-lang="en" aria-pressed="false">English</button>
                           </div>
-                          <!-- 회색 글씨는 본문 안 글씨 옆에 Tab 키를 띄워 알린다(flow-ghost). 여기는 /ai 쓰는 법만 (2026-10-21 사용자) -->
-                          <span class="mail-flow-hint" id="mailFlowAiHint" hidden><kbd>/ai</kbd> [prompt] + <kbd>Ctrl+Enter</kbd></span>
+                          <!-- 회색 글씨는 본문 안 글씨 옆에 Tab 키를 띄워 알린다(flow-ghost). 여기는 AI 로 고치는 법만.
+                               새로 쓰기는 옆 창, /ai 는 고치기용 보조 (2026-11-09 사용자) -->
+                          <span class="mail-flow-hint" id="mailFlowAiHint" hidden>고칠 곳을 끌어 고르기 · <kbd>/ai</kbd> 고칠 말 + <kbd>Ctrl+Enter</kbd></span>
                         </div>
 
                         <!-- 본문: 서식 모드면 편집 영역, HTML 모드면 textarea -->
@@ -1147,6 +1138,28 @@
                       </div>
                     </form>
 
+                    <!-- AI 메일 옆 창 (2026-11-09 사용자: 'Claude in Chrome 처럼 메일 쓰는 데 옆에 창을 열어').
+                         한 마디 부탁 → 받는 사람·참조·제목·본문을 채운다. 모자란 것은 1·2·3안을 골라 받는다.
+                         보내기는 사람이 누른다. 그린 내용은 app.js 'AI 메일 옆 창' -->
+                    <aside class="mail-ai" id="mailAiPanel" aria-label="AI 메일 도우미" hidden>
+                      <header class="mail-ai-head">
+                        <button type="button" class="mail-ai-model" id="mailAiModel" title="AI 모델 바꾸기" aria-haspopup="menu"></button>
+                        <button type="button" class="icon-button" id="mailAiReset" title="새로 시작" aria-label="새로 시작">
+                          <span class="icon" data-icon="undo"></span>
+                        </button>
+                        <button type="button" class="icon-button" id="mailAiClose" title="닫기" aria-label="AI 창 닫기">
+                          <span class="icon" data-icon="x"></span>
+                        </button>
+                      </header>
+                      <div class="mail-ai-log" id="mailAiLog" aria-live="polite"></div>
+                      <form class="mail-ai-form" id="mailAiForm">
+                        <textarea id="mailAiText" rows="1" placeholder="누구에게, 무슨 일로 보낼지 적어 주세요" aria-label="AI 에게 부탁"></textarea>
+                        <button type="submit" class="mail-ai-send" id="mailAiSend" aria-label="AI 에게 보내기" title="Enter">
+                          <span class="icon" data-icon="send"></span>
+                        </button>
+                      </form>
+                      <p class="mail-ai-foot" id="mailAiFoot">메일 내용은 고른 AI 로 가요 · 보내기는 직접 눌러요</p>
+                    </aside>
                   </div>
                 </div>
               </div>
@@ -1732,6 +1745,14 @@
                   <button type="button" class="hint" data-hint="이 시각이 지나면 LMS 전체를 한 번 더 훑어 빠진 자료가 없는지 봅니다.">?</button>
                 </span>
                 <input name="scheduleTime" type="time" aria-label="매일 전체 확인 시각" />
+              </label>
+              <!-- 앱을 꺼 둬도 하루 한 번 (/api/background-sync, 운영체제 예약 작업). 못 쓰는 판(Store 판·공유 사이트)에서는 숨긴다 -->
+              <label class="st-auto-item" id="backgroundSyncRow" hidden>
+                <span class="icon" data-icon="sync"></span>
+                <span class="st-auto-label">꺼 둬도 하루 한 번
+                  <button type="button" class="hint" data-hint="Daling 을 닫아 둬도 매일 위 시각에 뒤에서 한 번 자료·마감·메일을 가져옵니다. 그 시각에 컴퓨터가 꺼져 있었으면 켠 뒤 곧 가져와요.">?</button>
+                </span>
+                <span class="toggle"><input type="checkbox" id="backgroundSyncToggle" /><span class="track"></span></span>
               </label>
               <!-- 이 컴퓨터에 남길 메일 (예전엔 21일·폴더당 60통으로 못 박혀 있었다) -->
               <label class="st-auto-item">

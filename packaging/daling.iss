@@ -152,6 +152,8 @@ Type: filesandordirs; Name: "{localappdata}\Programs\{#OldFolder}"
 ; 동기화·삼성 노트 가져오기 도중에 끊겼다. 이 설치 폴더에서 돈 프로세스만(자식 브라우저까지 /T) 닫는다.
 ; unins*.exe 는 빼야 삭제 프로그램이 스스로를 닫지 않는다.
 Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Command ""Get-CimInstance Win32_Process | Where-Object {{ $_.ExecutablePath -and $_.ExecutablePath.StartsWith('{app}\', [StringComparison]::OrdinalIgnoreCase) -and $_.Name -notlike 'unins*' }} | ForEach-Object {{ taskkill.exe /F /T /PID $_.ProcessId }}"""; Flags: runhidden waituntilterminated; RunOnceId: "CloseDaling"
+; 앱을 꺼 둬도 하루 한 번 동기화(background_sync.py)의 작업 스케줄러 항목. 남겨 두면 지운 앱을 매일 켜려다 실패한다
+Filename: "{sys}\schtasks.exe"; Parameters: "/Delete /TN ""Daling Daily Sync"" /F"; Flags: runhidden waituntilterminated; RunOnceId: "DeleteDailySync"
 
 [UninstallDelete]
 ; 앱이 설치 폴더 안에 만든 런타임 파일 정리 (사용자 문서는 건드리지 않음)

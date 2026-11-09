@@ -32,6 +32,7 @@ from urllib.parse import parse_qs, quote, urlencode, urlparse
 
 import demo_mode
 import autostart
+import background_sync
 import secret_store
 
 
@@ -431,13 +432,20 @@ def write_config(workspace: UserWorkspace, payload: dict[str, Any]) -> dict[str,
     )
     if "hidePastEmails" in payload:
         values["EMAIL_HIDE_PAST"] = bool(payload.get("hidePastEmails"))
-    # 알림 스위치 (기본은 켜짐)
-    if "notifyDeadlines" in payload:
-        values["NOTIFY_DEADLINES"] = bool(payload.get("notifyDeadlines"))
-    if "notifyNewFiles" in payload:
-        values["NOTIFY_NEW_FILES"] = bool(payload.get("notifyNewFiles"))
     else:
         values["EMAIL_HIDE_PAST"] = bool(existing.get("EMAIL_HIDE_PAST", False))
+    # 알림 스위치 (기본은 켜짐). 스위치 하나만 보낸 저장(누르는 즉시 저장)이 다른 스위치를 기본값으로 되돌리지 않게
+    # 보내지 않은 것은 있던 값을 그대로 둔다 (예전엔 '새 자료 알림' 을 누르면 꺼 둔 '마감 알림' 이 다시 켜졌다)
+    for flag, key in (("notifyDeadlines", "NOTIFY_DEADLINES"), ("notifyNewFiles", "NOTIFY_NEW_FILES")):
+        if flag in payload:
+            values[key] = bool(payload.get(flag))
+        elif key in existing:
+            values[key] = existing.get(key) is not False
+    # 앱을 꺼 둬도 하루 한 번 동기화 (background_sync, 기본 켜짐)
+    if "backgroundSync" in payload:
+        values["BACKGROUND_SYNC"] = bool(payload.get("backgroundSync"))
+    elif "BACKGROUND_SYNC" in existing:
+        values["BACKGROUND_SYNC"] = existing.get("BACKGROUND_SYNC") is not False
 
     # 명시적 삭제 요청 (저장된 비밀 값 제거)
     cleared = [key for flag, key in (("clearGeminiKey", "GEMINI_API_KEY"), ("clearEmailPassword", "EMAIL_PASSWORD"),
@@ -4516,6 +4524,259 @@ def mail_flow_for(workspace: UserWorkspace, payload: dict[str, Any]) -> dict[str
     return mail_flow.build(me, to, index)
 
 
+# ===== 메일 쓰기 옆 창: AI 가 받는 사람·참조·제목·본문까지 (2026-11-09 사용자) =====
+# 받는 사람 후보는 서버가 모은다: 이번 학기 내 과목 교수·조교 → 최근 주고받은 사람 → 부탁에 나온 이름·부서(조직도).
+# 모델은 이 목록의 id 로만 고르고(지어낸 주소가 들어가지 않게), 서버가 id 를 주소로 바꾼다.
+_AI_PARTICLE = re.compile(r"(에게서|에게|께서|께|한테|에서|하고|으로|이랑|랑|로|에|을|를|이|가|은|는|의|과|와|도|님)+$")
+_AI_STOP = {"교수", "교수님", "조교", "조교님", "메일", "다음", "이번", "지난", "수업", "결석", "과제", "시험", "부탁", "문의",
+            "질문", "연락", "보내", "보내줘", "써줘", "써", "학생", "학교", "오늘", "내일", "모레", "이메일", "참조", "제목"}
+
+
+def _mail_ai_tokens(text: str) -> list[str]:
+    out = []
+    for raw in re.findall(r"[가-힣A-Za-z]{2,}", text or ""):
+        word = _AI_PARTICLE.sub("", raw) if re.match(r"[가-힣]", raw) else raw
+        if len(word) >= 2 and word not in _AI_STOP and word not in out:
+            out.append(word)
+    return out[:20]
+
+
+def mail_ai_people(workspace: UserWorkspace, text: str = "") -> list[dict[str, Any]]:
+    """[{id, name, email, role, course, dept, tag}] — 모델에 보이는 받는 사람 후보 (90명 안쪽)."""
+    raw_config = read_json(workspace.config_path, {})
+    mine = str((raw_config or {}).get("SCHOOL_EMAIL") or "").strip().lower() if isinstance(raw_config, dict) else ""
+    out: list[dict[str, Any]] = []
+    seen: set[str] = set()
+
+    def add(email: Any, name: Any, role: Any = "", course: str = "", dept: Any = "", tag: str = "") -> None:
+        email = str(email or "").strip().lower()
+        if "@" not in email or email in seen or email == mine or len(out) >= 90:
+            return
+        seen.add(email)
+        out.append({"id": f"p{len(out) + 1}", "email": email, "name": str(name or "").replace(",", " ").strip(),
+                    "role": str(role or ""), "course": course, "dept": str(dept or ""), "tag": tag})
+
+    staff = get_course_staff(workspace).get("courses") or {}
+    for rows in staff.values():
+        for r in rows or []:
+            if r.get("email"):
+                section = f"{r.get('section')}분반" if r.get("section") else ""
+                add(r["email"], r.get("name"), r.get("role"), " ".join(x for x in (str(r.get("title") or ""), section) if x),
+                    r.get("dept"), "내 과목")
+    people = directory_people(workspace)
+    by_email = {str(p.get("email", "")).lower(): p for p in people if p.get("email")}
+    mail = read_json(workspace.emails_log, {}) or {}
+    recent: list[tuple[str, str, str]] = []
+    if isinstance(mail, dict):
+        for m in mail.get("emails") or []:
+            if not isinstance(m, dict):
+                continue
+            if m.get("folder") == "sent":
+                recent.append((str(m.get("date") or ""), str(m.get("toEmail") or ""), str(m.get("toName") or "")))
+            else:
+                recent.append((str(m.get("date") or ""), str(m.get("fromEmail") or ""), str(m.get("fromName") or "")))
+        recent.sort(key=lambda x: x[0], reverse=True)
+        recent += [("", str(c.get("email") or ""), str(c.get("name") or "")) for c in mail.get("contacts") or [] if isinstance(c, dict)]
+    count = 0
+    for _, email, name in recent:
+        if count >= 25:
+            break
+        email = email.strip().lower()
+        if not email or email in seen or re.search(r"no-?reply|noreply|mailer-daemon", email):
+            continue
+        p = by_email.get(email) or {}
+        add(email, p.get("name") or name, p.get("role") or "", "", p.get("dept") or "", "주고받은 메일")
+        count += 1
+    # 부탁에 나온 이름·부서: 이름은 딱 맞을 때만(학생도), 부서는 직원·특별계정·교원 쪽만 (학생 수천 명이 딸려 오지 않게)
+    # 부서 낱말이면 그 부서 대표 주소(특별계정, 예: '학사팀')부터 — 담당자 개인보다 부서 메일로 보내는 게 맞을 때가 많다
+    rank = {"특별계정": 0, "직원": 1, "교원": 2}
+    hits = 0
+    for word in _mail_ai_tokens(text):
+        found = [
+            p for p in people
+            if str(p.get("name") or "") == word
+            or (len(word) >= 3 and str(p.get("role") or "") in rank
+                and (word in str(p.get("dept") or "") or word in str(p.get("name") or "")))
+        ]
+        found.sort(key=lambda p: (str(p.get("name") or "") != word, rank.get(str(p.get("role") or ""), 3)))
+        for p in found[:6]:
+            if hits >= 14:
+                break
+            before = len(out)
+            add(p.get("email"), p.get("name"), p.get("role"), "", p.get("dept"), "조직도")
+            hits += len(out) - before
+    return out
+
+
+def _mail_ai_timetable(workspace: UserWorkspace) -> str:
+    table = read_json(workspace.timetable_path, {})
+    entries = table.get("entries") if isinstance(table, dict) and isinstance(table.get("entries"), list) else []
+    days = "월화수목금토일"
+    groups: dict[str, dict[str, Any]] = {}
+    for e in entries:
+        if not isinstance(e, dict) or not e.get("title"):
+            continue
+        g = groups.setdefault(str(e["title"]), {"no": e.get("courseNo") or "", "prof": e.get("professor") or "", "times": []})
+        try:
+            day = days[int(e.get("day"))]
+        except (TypeError, ValueError, IndexError):
+            day = ""
+        g["times"].append(f"{day} {e.get('start') or ''}-{e.get('end') or ''}".strip())
+    lines = []
+    for title, g in groups.items():
+        no = f"({g['no']})" if g["no"] else ""
+        prof = f" · {g['prof']}" if g["prof"] else ""
+        lines.append(f"- {title}{no}{prof}: " + ", ".join(g["times"]))
+    return "\n".join(lines)
+
+
+def _mail_ai_deadlines(workspace: UserWorkspace) -> str:
+    from datetime import timedelta, timezone
+
+    now = datetime.now(timezone.utc)
+    rows = []
+    for item in get_deadlines(workspace).get("items") or []:
+        if not isinstance(item, dict) or is_deadline_done(item):
+            continue
+        try:
+            due = datetime.fromisoformat(str(item.get("due") or "").replace("Z", "+00:00"))
+            if due.tzinfo is None:
+                due = due.replace(tzinfo=timezone.utc)
+        except ValueError:
+            continue
+        if not (now - timedelta(days=3) <= due <= now + timedelta(days=35)):
+            continue
+        local = due.astimezone()
+        course = str(item.get("courseLabel") or extract_course_label(str(item.get("course") or "")) or "")
+        rows.append((due, f"- {item.get('name') or item.get('title') or ''} · {course} · 마감 {local.strftime('%Y-%m-%d %H:%M')}"))
+    rows.sort(key=lambda x: x[0])
+    return "\n".join(r for _, r in rows[:15])
+
+
+def _mail_ai_address(person: dict[str, Any]) -> str:
+    name = str(person.get("name") or "").replace(",", " ").replace("<", "").replace(">", "").strip()
+    return f"{name} <{person['email']}>" if name else person["email"]
+
+
+def _mail_ai_pick(ids: list[str], people: list[dict[str, Any]], allowed_text: str) -> list[dict[str, Any]]:
+    """모델이 고른 id(또는 학생이 직접 적은 주소) → [{name, email, address}]."""
+    by_id = {p["id"]: p for p in people}
+    by_mail = {p["email"]: p for p in people}
+    out: list[dict[str, Any]] = []
+    for raw in ids:
+        token = str(raw).strip().strip("<>").lower()
+        p = by_id.get(str(raw).strip()) or by_mail.get(token)
+        if not p and re.fullmatch(r"[\w.+-]+@[\w-]+(\.[\w-]+)+", token) and token in allowed_text.lower():
+            p = {"name": "", "email": token}
+        if p and all(x["email"] != p["email"] for x in out):
+            out.append({"name": p.get("name") or "", "email": p["email"], "address": _mail_ai_address(p),
+                        "role": p.get("role") or "", "course": p.get("course") or ""})
+    return out
+
+
+_MAIL_AI_ID = re.compile(r"\s*\(\s*p\d+(?:\s*[,·/]\s*p\d+)*\s*\)|(?<![A-Za-z0-9])p\d+(?![0-9])")
+
+
+def _mail_ai_text(text: Any, limit: int = 300) -> str:
+    """AI 가 쓴 한 줄(메모·질문·보기)에서 후보 id('(p1)', 'p2')를 뗀다. 실측: '담당 교수님(p1)께 보내며 … 김OO님(p2)'."""
+    return re.sub(r"\s{2,}", " ", _MAIL_AI_ID.sub("", str(text or ""))).strip()[:limit]
+
+
+def _mail_ai_ask(ask: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [{"q": _mail_ai_text(a.get("q")), "options": [_mail_ai_text(o, 160) for o in a.get("options") or []]}
+            for a in ask if isinstance(a, dict)]
+
+
+def _mail_ai_body(segs: list[dict[str, Any]], content: str) -> str:
+    """mail_flow 조각(호칭·인사·자기소개 / 감사·서명) 사이에 AI 가 쓴 용건을 넣는다. 조각의 after(뒤 줄바꿈 수)를 따른다."""
+    by = {s["kind"]: s for s in segs}
+    parts = [by[k]["text"] for k in ("greeting", "intro") if k in by and by[k].get("text")]
+    if content.strip():
+        parts.append(content.strip())
+    parts += [by[k]["text"] for k in ("closing", "signoff") if k in by and by[k].get("text")]
+    return "\n\n".join(parts)
+
+
+def mail_ai_compose(workspace: UserWorkspace, payload: dict[str, Any], provider: str | None, model: str) -> dict[str, Any]:
+    """옆 창의 첫 부탁(과 되물은 답) → {ask[]} 또는 {mail: {to[], cc[], subject, body, lang}}.
+
+    본문은 '인사·자기소개(mail_flow) + AI 용건 + 감사·서명(mail_flow)' — 사용자가 정한 꼴을 모델에 맡기지 않는다."""
+    import ai_cli
+    import mail_flow
+
+    request = str(payload.get("request") or "").strip()
+    if not request:
+        raise ValueError("무엇을 보낼지 한 줄 적어 주세요.")
+    answers = [a for a in payload.get("answers") or [] if isinstance(a, dict)][:9]
+    current = payload.get("current") if isinstance(payload.get("current"), dict) else {}
+    answer_text = " ".join(str(a.get("a") or "") for a in answers)
+    people = mail_ai_people(workspace, f"{request} {answer_text}")
+    me = mail_me(workspace)["me"]
+    extra = {
+        "timetable": _mail_ai_timetable(workspace),
+        "deadlines": _mail_ai_deadlines(workspace),
+        "current": {k: str(current.get(k) or "")[:500] for k in ("to", "cc", "subject")},
+        "quote": str(payload.get("quote") or "")[:4000],
+    }
+    # 두 번째로 묻고 나면 더 묻지 않는다(학생이 질문만 받다 끝나지 않게)
+    force = bool(payload.get("force")) or int(payload.get("round") or 0) >= 2
+    res = ai_cli.compose_mail(request, answers, people, me, extra, force, provider, model)
+    allowed = " ".join([request, answer_text, str(current.get("to") or ""), str(current.get("cc") or "")])
+    to = _mail_ai_pick(res.get("to") or [], people, allowed)
+    cc = [p for p in _mail_ai_pick(res.get("cc") or [], people, allowed) if all(p["email"] != t["email"] for t in to)]
+    meta = {"engine": res.get("modelLabel") or ai_cli.LABELS.get(res.get("provider"), ""), "seconds": res.get("seconds")}
+    if res.get("ask"):
+        return {"ok": True, "ask": _mail_ai_ask(res["ask"]), "to": to, "cc": cc, **meta}
+    # 받는 사람 칸에 이미 있던 사람(답장)을 모델이 빼먹으면 그대로 둔다
+    if not to and current.get("to"):
+        m = re.search(r"[\w.+-]+@[\w-]+(\.[\w-]+)+", str(current.get("to")))
+        if m:
+            to = [{"name": "", "email": m.group(0).lower(), "address": str(current.get("to")).split(",")[0].strip(),
+                   "role": "", "course": ""}]
+    staff = get_course_staff(workspace).get("courses") or {}
+    table = read_json(workspace.timetable_path, {})
+    entries = table.get("entries") if isinstance(table, dict) and isinstance(table.get("entries"), list) else []
+    first = to[0] if to else {"email": "", "name": ""}
+    who = mail_flow.recipient(first["email"], first.get("name") or "", staff, directory_people(workspace), entries)
+    want = re.sub(r"\s+", "", res.get("course") or "")
+    index = 0
+    for i, c in enumerate(who.get("courses") or []):
+        title = re.sub(r"\s+", "", str(c.get("title") or ""))
+        if want and title and (want in title or title in want):
+            index = i
+            break
+    lang = res.get("lang") or ("en" if who.get("foreign") else "ko")
+    segs = mail_flow.segments(me, who, index).get(lang) or []
+    body = _mail_ai_body(segs, res.get("content") or "")
+    return {
+        "ok": True,
+        "mail": {"to": to, "cc": cc, "subject": res.get("subject") or "", "body": body, "lang": lang, "courseIndex": index},
+        "note": _mail_ai_text(res.get("note")),
+        **meta,
+    }
+
+
+def mail_ai_revise(workspace: UserWorkspace, payload: dict[str, Any], provider: str | None, model: str) -> dict[str, Any]:
+    """다 쓴 메일 고치기 — 옆 창의 이어지는 말, 본문의 '/ai 지시'(⟦여기⟧ 자리)."""
+    import ai_cli
+
+    instruction = str(payload.get("instruction") or "").strip()
+    if not instruction:
+        raise ValueError("어떻게 고칠지 적어 주세요.")
+    mail = {k: str(payload.get(k) or "") for k in ("to", "cc", "subject", "body")}
+    people = mail_ai_people(workspace, instruction)
+    res = ai_cli.revise_mail(instruction, mail, people, provider, model, allow_ask=not payload.get("noAsk"))
+    meta = {"engine": res.get("modelLabel") or ai_cli.LABELS.get(res.get("provider"), ""), "seconds": res.get("seconds")}
+    if res.get("ask"):
+        return {"ok": True, "ask": _mail_ai_ask(res["ask"]), **meta}
+    out: dict[str, Any] = {k: res[k] for k in ("body", "insert", "subject") if k in res}
+    allowed = " ".join([instruction, mail["to"], mail["cc"]])
+    for key in ("to", "cc"):
+        if key in res:
+            out[key] = _mail_ai_pick(res[key], people, allowed)
+    return {"ok": True, "mail": out, "note": _mail_ai_text(res.get("note")), **meta}
+
+
 def import_directory(workspace: UserWorkspace, people: list[dict[str, Any]]) -> dict[str, Any]:
     import directory
 
@@ -5196,6 +5457,9 @@ def start_task(workspace: UserWorkspace, kind: str, sync_mode: str = "fast", aut
     if demo_mode.active():
         # 체험 중: LMS·메일 서버에 가짜 계정으로 로그인하러 가지 않는다 (자동 실행도 여기서 멈춘다)
         return False, demo_mode.BLOCK_MESSAGE
+    if kind in ("sync", "deadlines", "emails") and background_sync.busy(workspace.root):
+        # 앱을 꺼 둔 사이 시작한 하루 한 번 동기화(app.run_background)가 아직 돈다. LMS·메일 로그인이 겹치지 않게
+        return False, "뒤에서 하루 한 번 가져오기를 하는 중이에요. 끝나면 화면에 바로 보여요."
     if kind in ("sync", "deadlines", "emails") and secret_store.waiting():
         # 맥: 키체인 허락을 기다리는 중이면 빈 비밀번호로 로그인하러 가지 않는다. 가면 실패가 쌓이고
         # '서버가 로그인을 거절' 로 2시간 쉬기까지 한다. 허락하면 다음 자동 확인부터 그대로 돈다
@@ -5715,6 +5979,13 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         if route == "/api/whats-new":
             self.send_json(get_whats_new(workspace))
             return
+        if route == "/api/background-sync":
+            # 앱을 꺼 둬도 하루 한 번 동기화 (background_sync.py). 공유 웹사이트·Store 판에서는 supported=False
+            status = background_sync.status(workspace.root, read_config(workspace))
+            if MULTI_USER_MODE:
+                status.update(supported=False, enabled=False)
+            self.send_json(status)
+            return
         if route == "/api/autostart":
             # 맥·리눅스 '컴퓨터를 켤 때 Daling 켜기' (autostart.py). Windows 는 설치 파일이 맡아 supported=False
             supported = autostart.supported() and not MULTI_USER_MODE
@@ -6114,9 +6385,9 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         # 내 컴퓨터(문서·다운로드 폴더)에 가짜 자료를 쓰지 않는다
         "/api/save-local", "/api/export-ics",
         # AI CLI 는 바깥 서비스에 묻는다
-        "/api/ai/search", "/api/ai/draft", "/api/ai/polish", "/api/ai/continue", "/api/ai/login",
-        # 로그인 항목(LaunchAgents·~/.config/autostart)에 쓰지 않는다
-        "/api/autostart",
+        "/api/ai/search", "/api/ai/compose", "/api/ai/revise", "/api/ai/rewrite", "/api/ai/login",
+        # 로그인 항목(LaunchAgents·~/.config/autostart)·운영체제 예약 작업에 쓰지 않는다
+        "/api/autostart", "/api/background-sync",
         # Claude 연결(중계 서버 mcp.gudaling.dev)
         "/api/claude-link/enable", "/api/claude-link/pair", "/api/claude-link/revoke",
     }
@@ -6364,6 +6635,9 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         if route == "/api/config":
             payload = self.read_body_json()
             values = write_config(workspace, payload)
+            if not MULTI_USER_MODE and "scheduleTime" in payload:
+                # 매일 전체 확인 시각을 바꿨으면 앱을 꺼 둬도 도는 예약 시각도 함께 (schtasks 가 느려 뒤에서)
+                threading.Thread(target=background_sync.refresh, args=(workspace.root, values), daemon=True).start()
             self.send_json({"ok": True, "config": safe_public_config(workspace), "values": bool(values)})
             return
         if route == "/api/run":
@@ -6975,6 +7249,18 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             PRESENCE.update(viewing=bool(self.read_body_json().get("viewing")), at=time.time())
             self.send_json({"ok": True})
             return
+        if route == "/api/background-sync":
+            try:
+                if MULTI_USER_MODE:
+                    raise ValueError("공유 웹사이트 모드에서는 쓰지 않습니다.")
+                on = bool(self.read_body_json().get("on"))
+                result = background_sync.apply(workspace.root, on, str(read_config(workspace).get("SCHEDULE_TIME", "08:00")))
+                if result.get("ok"):
+                    write_config(workspace, {"backgroundSync": on})
+                self.send_json(result, HTTPStatus.OK if result.get("ok") else HTTPStatus.BAD_REQUEST)
+            except Exception as exc:
+                self.send_json({"ok": False, "message": str(exc)}, HTTPStatus.BAD_REQUEST)
+            return
         if route == "/api/autostart":
             try:
                 if MULTI_USER_MODE:
@@ -7224,7 +7510,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             except (ai_cli.AIError, ValueError) as exc:
                 self.send_json({"ok": False, "message": str(exc)}, HTTPStatus.BAD_REQUEST)
             return
-        if route in ("/api/ai/profile", "/api/ai/search", "/api/ai/draft", "/api/ai/polish", "/api/ai/continue"):
+        if route in ("/api/ai/profile", "/api/ai/search", "/api/ai/compose", "/api/ai/revise", "/api/ai/rewrite"):
             # AI CLI 도우미 (ai_cli.py). 답이 10초쯤 걸리지만 서버가 요청마다 스레드를 써서 화면은 멈추지 않는다.
             import ai_cli
 
@@ -7248,23 +7534,20 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 if route == "/api/ai/search":
                     index = payload.get("index") if isinstance(payload.get("index"), list) else []
                     res = ai_cli.search(str(payload.get("query") or ""), index, provider, model=model)
-                elif route == "/api/ai/polish":
-                    # 메일 쓰기 흐름의 가운데(용건)만 다듬는다. 인사·소개·서명은 화면이 이미 넣었다.
-                    flow = payload.get("flow") if isinstance(payload.get("flow"), dict) else {}
-                    res = ai_cli.polish(str(payload.get("text") or ""), str(payload.get("lang") or "ko"), flow,
-                                        provider, model=model)
-                elif route == "/api/ai/continue":
-                    # 메일 쓰기 칸의 '/ai 지시' 자리에 들어갈 글 (앞 글에 이어지고 뒤 글과 겹치지 않게)
-                    flow = payload.get("flow") if isinstance(payload.get("flow"), dict) else {}
-                    res = ai_cli.continue_text(str(payload.get("instruction") or ""), str(payload.get("before") or ""),
-                                               str(payload.get("after") or ""), str(payload.get("lang") or "ko"), flow,
-                                               provider, model=model)
+                elif route == "/api/ai/compose":
+                    # 메일 쓰기 옆 창: 부탁 한 마디 → 받는 사람·참조·제목·본문 (모자라면 되묻기)
+                    self.send_json(mail_ai_compose(workspace, payload, provider, model))
+                    return
+                elif route == "/api/ai/revise":
+                    # 다 쓴 메일 고치기 (옆 창의 이어지는 말, 본문의 '/ai 지시')
+                    self.send_json(mail_ai_revise(workspace, payload, provider, model))
+                    return
                 else:
-                    context = payload.get("context") if isinstance(payload.get("context"), dict) else {}
-                    # 이름·학번·소속은 직접 적은 값이 없으면 LMS·조직도에서 가져온 값으로
-                    me = mail_me(workspace)["me"]
-                    merged = {**profile, **{k: str(me.get(k) or "") for k in ("name", "nameEn", "studentId", "dept", "deptEn", "year")}}
-                    res = ai_cli.draft(str(payload.get("request") or ""), merged, context, provider, model=model)
+                    # 본문에서 끌어 고른 부분만 고치기 (고른 자리에 댓글 달듯)
+                    flow = payload.get("flow") if isinstance(payload.get("flow"), dict) else {}
+                    res = ai_cli.rewrite_part(str(payload.get("instruction") or ""), str(payload.get("selection") or ""),
+                                              str(payload.get("before") or ""), str(payload.get("after") or ""), flow,
+                                              provider, model=model)
                 res["engine"] = res.get("modelLabel") or ai_cli.LABELS.get(res.get("provider"), "")
                 self.send_json(res)
             except ai_cli.AIError as exc:

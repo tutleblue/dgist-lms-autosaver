@@ -643,6 +643,7 @@ function statusLabel(status) {
 let lastViewTransition = null;
 
 function switchView(view) {
+  if (view !== "emails") document.dispatchEvent(new Event("daling:compose-hidden"));
   const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   // 창이 가려져 있으면 화면을 그릴 필요가 없으니 전환 효과도 건너뛴다
   const canAnimate =
@@ -1843,6 +1844,7 @@ function openCompose({ to = "", cc = "", bcc = "", subject = "", body = "", inRe
   $("#composeFrom").textContent = account ? `보내는 사람: ${account}` : "설정에서 학교 이메일을 먼저 입력해 주세요.";
   showMailPane("compose");
   resetMailFlow();
+  openMailAiForCompose(); // AI 옆 창: 새 메일마다 대화를 비우고, 열어 두었으면 연다
   form.elements[to ? "subject" : "to"].focus();
 }
 
@@ -2507,7 +2509,11 @@ function composeIsRich() {
 /** 서식 칸의 HTML. 메일 쓰기 흐름의 회색 글씨([data-ghost])는 미리보기라 저장·보내기에 절대 섞이지 않게 뗀다 */
 function richHtml(rich) {
   const html = rich?.innerHTML || "";
-  return html.includes("data-ghost") ? html.replace(/<span[^>]*data-ghost[^>]*>[\s\S]*?<\/span>/g, "") : html;
+  if (!html.includes("data-ghost")) return html;
+  // 정규식으로 떼면 안에 <span> 이 든 꼬리표(AI 가 쓰는 중 칸)의 뒷부분이 남아 임시저장에 섞였다 → 복사본에서 노드째 뗀다
+  const copy = rich.cloneNode(true);
+  copy.querySelectorAll("[data-ghost]").forEach((n) => n.remove());
+  return copy.innerHTML;
 }
 
 /** 어느 칸에 쓰든 본문 내용을 가져온다 */
@@ -6189,6 +6195,7 @@ async function populateSettings() {
   if (form.elements.notifyDeadlines) form.elements.notifyDeadlines.checked = state.config?.notifyDeadlines !== false;
   if (form.elements.notifyNewFiles) form.elements.notifyNewFiles.checked = state.config?.notifyNewFiles !== false;
   loadAutostart();
+  loadBackgroundSync();
   loadAiConnections();
   loadClaudeLink();
   // 구글 캘린더 동기화 (체크박스라 value 대입으로는 반영되지 않음)
@@ -6261,6 +6268,8 @@ function showMailPane(pane) {
   $("#mailListPane").hidden = mailTwoPane() ? false : pane !== "list";
   $("#mailReadPane").hidden = pane !== "read";
   $("#mailComposePane").hidden = pane !== "compose";
+  // 본문 위에 떠 있는 'AI 로 고치기' 단추는 body 에 붙어 있어 쓰기 창과 함께 숨지 않는다
+  if (pane !== "compose") document.dispatchEvent(new Event("daling:compose-hidden"));
   syncReadingRow();
   navPush();
 }
@@ -12564,9 +12573,10 @@ const TOUR_STEPS = [
     title: "메일 쓰기",
     text: "웹메일을 따로 열 필요 없이 여기서 보내.",
     tips: [
+      "오른쪽 위 AI 로고를 누르고 한 마디면 받는 사람·참조·내용까지",
+      "고칠 곳을 끌어 고르면 그 자리에서 AI 에게 부탁",
       "'물리 조교'처럼 쳐도 그 과목 교수·조교 주소를 찾아 줘",
       "교수님 메일의 인사·자기소개·서명이 회색으로 떠. Tab 만 누르면 써져",
-      "내 PC나 Drive 파일을 첨부",
       "쓰다 멈추면 알아서 임시저장",
     ],
   },
@@ -12638,7 +12648,7 @@ const TOUR_STEPS = [
     pose: "bow",
     area: "settings",
     title: "AI 연결",
-    text: "메일의 /ai·자동 완성은 이 컴퓨터의 Claude·Codex·Gemini 를 써. '연결'을 누르고 브라우저에서 로그인만 하면 돼.",
+    text: "메일 옆 AI 창·/ai·끌어 고쳐 쓰기는 이 컴퓨터의 Claude·Codex·Gemini 를 써. '연결'을 누르고 브라우저에서 로그인만 하면 돼.",
   },
   {
     chapter: "설정",
@@ -13959,6 +13969,31 @@ reportPresence();
   });
 });
 
+
+/* 앱을 꺼 둬도 하루 한 번 동기화 (/api/background-sync, background_sync.py). 못 쓰는 판이면 줄을 숨긴 채 둔다 */
+async function loadBackgroundSync() {
+  const row = $("#backgroundSyncRow");
+  if (!row) return;
+  try {
+    const res = await api("/api/background-sync");
+    row.hidden = !res.supported;
+    $("#backgroundSyncToggle").checked = Boolean(res.enabled);
+  } catch {
+    row.hidden = true;
+  }
+}
+
+$("#backgroundSyncToggle")?.addEventListener("change", async (event) => {
+  const on = event.target.checked;
+  try {
+    const res = await api("/api/background-sync", { method: "POST", body: JSON.stringify({ on }) });
+    event.target.checked = Boolean(res.enabled);
+    if (res.message) showToast(tr(res.message));
+  } catch (error) {
+    event.target.checked = !on;
+    showToast(humanError(error));
+  }
+});
 
 /* 맥·리눅스: 컴퓨터를 켤 때 Daling 켜기 (/api/autostart). Windows 는 설치할 때 고르므로 줄을 숨긴 채 둔다 */
 async function loadAutostart() {
@@ -15657,7 +15692,7 @@ function paintAiSettings() {
   // 메일 쓰기의 모델 단추·/ai 안내는 AI CLI 가 있으면 보인다 (설정 카드가 없어도 칠한다)
   if ($("#aiDraftToggle")) $("#aiDraftToggle").hidden = !on;
   if ($("#mailFlowAiHint")) $("#mailFlowAiHint").hidden = !on;
-  if ($("#aiDraftBox")) $("#aiDraftBox").hidden = true; // 채팅식 초안 칸은 쓰지 않는다(2026-10-21)
+  if (typeof paintMailAi === "function") paintMailAi(); // 옆 창의 '연결해 주세요' ↔ 예시
   const box = $("#aiProviders");
   if (!box) return;
   const chosen = st.profile?.provider || "";
@@ -15974,172 +16009,17 @@ $("#claudeLinkGrants")?.addEventListener("click", async (event) => {
   }
 });
 
-/* --- 메일 초안 --- */
-// 받는 사람 칸의 첫 주소 → 이름·주소, 그 사람이 맡은 과목·분반(내 수업 먼저)
-function aiDraftContext() {
-  const form = $("#composeForm");
-  const toRaw = String(form?.elements.to.value || "");
-  const email = (toRaw.match(/[\w.+-]+@[\w-]+(\.[\w-]+)+/) || [""])[0].toLowerCase();
-  const name = toRaw.split(/[<,]/)[0].trim().replace(/^"|"$/g, "");
-  const hits = (state.coursePeople || {})[email] || [];
-  const hit = hits.find((h) => h.mine) || hits[0];
-  const plain = document.createElement("div");
-  plain.innerHTML = composeBody();
-  return {
-    to: [name && name !== email ? name : "", email].filter(Boolean).join(" "),
-    role: hit?.role || "",
-    course: hit?.title || "",
-    section: sectionText(hit?.section),
-    subject: form?.elements.subject.value || "",
-    body: (plain.innerText || "").trim().slice(0, 6000),
-    candidates: aiDraftCandidates(),
-  };
-}
-
-// 받는 사람·참조 후보: 내가 듣는 과목의 교수·조교(주소를 아는 사람)만. AI 는 이 안에서만 고를 수 있다.
-function aiDraftCandidates() {
-  const out = [];
-  const seen = new Set();
-  (state.courseStaff || new Map()).forEach(({ label, rows }) => {
-    (rows || []).forEach((r) => {
-      const email = String(r.email || "").toLowerCase();
-      if (!email || seen.has(email)) return;
-      const hits = (state.coursePeople || {})[email] || [];
-      if (!hits.some((h) => h.mine)) return;
-      seen.add(email);
-      out.push({ email, name: r.name || "", role: r.role || "", course: courseShortName(label), section: sectionText(r.section) });
-    });
-  });
-  return out.slice(0, 80);
-}
-
-function paintAiDraftContext() {
-  const ctx = aiDraftContext();
-  const p = state.mailMe?.me || {};
-  const bits = [];
-  if (ctx.course) bits.push(`${ctx.course}${ctx.section ? ` ${ctx.section}` : ""} ${ctx.role}`.trim());
-  bits.push(p.studentId || p.name ? `내 정보: ${[p.name, p.studentId].filter(Boolean).join(" · ")}` : "내 정보 없음 (설정 → 메일에 쓰는 내 정보)");
-  bits.push(providerLabel());
-  const el = $("#aiDraftContext");
-  if (el) el.textContent = bits.join(" · ");
-}
-
+/* --- 메일 쓰기 창 위 모델 단추 ---
+   (예전 'AI 초안' 칸 — 받는 사람 추천 칩 포함 — 은 오른쪽 'AI 메일 옆 창'이 대신한다, 2026-11-09) */
 // 'AI 초안' 칸 대신 모델 고르기 메뉴를 연다 (2026-10-21, 아래 'AI 모델 고르기')
-$("#aiDraftToggle")?.addEventListener("click", async () => {
-  if (aiMenu.el && !aiMenu.el.hidden) return closeAiMenu();
+$("#aiDraftToggle")?.addEventListener("click", async (event) => {
+  if (aiMenu.el && !aiMenu.el.hidden && aiMenu.anchor === event.currentTarget) return closeAiMenu();
   await loadAiStatus();
-  openAiMenu();
-});
-$("#composeTo")?.addEventListener("change", () => !$("#aiDraftBox")?.hidden && paintAiDraftContext());
-
-// (예전 '내 소개 넣기' 단추는 메일 쓰기 흐름 — 회색 글씨를 Tab 으로 넣기 — 가 대신한다)
-
-$("#aiDraftRun")?.addEventListener("click", async () => {
-  const request = ($("#aiDraftRequest")?.value || "").trim();
-  const note = $("#aiDraftNote");
-  const btn = $("#aiDraftRun");
-  if (!request) {
-    if (note) {
-      note.hidden = false;
-      note.textContent = "무엇을 쓸지 한 줄 적어 주세요.";
-    }
-    $("#aiDraftRequest")?.focus();
-    return;
-  }
-  await loadAiStatus();
-  if (!aiReady()) {
-    showToast("AI CLI(Claude·Gemini·Codex)가 설치되어 있지 않아요.");
-    return;
-  }
-  btn.disabled = true;
-  if (note) {
-    note.hidden = false;
-    note.textContent = `${providerLabel()} 가 쓰는 중… 10~20초쯤 걸려요`;
-  }
-  try {
-    const ctx = aiDraftContext();
-    const res = await api("/api/ai/draft", { method: "POST", body: JSON.stringify({ request, context: ctx }) });
-    const form = $("#composeForm");
-    // 제목은 제목 칸에 바로 (사용자: '제목도 바로 제목란에')
-    if (res.subject && form) form.elements.subject.value = res.subject;
-    // 받는 사람 칸이 비어 있으면 AI 가 고른 사람을 바로 넣는다. 이미 있으면 아래 추천 칩으로만.
-    if (form && !form.elements.to.value.trim() && (res.to || []).length) form.elements.to.value = res.to.join(", ");
-    // 이미 쓴 글(답장 인용 포함)은 아래에 남기고, 초안을 위에 넣는다
-    const old = composeBody();
-    setComposeBody(escapeHtml(res.body || "").replace(/\n/g, "<br>") + (old ? `<br><br>${old}` : ""));
-    paintAiSuggestions(res, ctx.candidates);
-    if (note) note.textContent = `${res.engine || "AI"} 초안이에요 (${res.seconds}초). [ ] 칸과 내용을 확인하고 보내 주세요.`;
-  } catch (error) {
-    if (note) note.textContent = humanError(error);
-  } finally {
-    btn.disabled = false;
-  }
+  openAiMenu(event.currentTarget);
 });
 
 // CLI 가 깔렸는지 미리 한 번 봐 둔다. 첫 화면을 늦추지 않게 몇 초 뒤에 (앱 켜는 시간 2초를 지킨다)
 window.setTimeout(() => loadAiStatus(), 4000);
-
-
-/* --- 받는 사람·참조 추천 칩: 눌러서 바로 넣고, 다시 누르면 뺀다 --- */
-function composeAddresses(field) {
-  const form = $("#composeForm");
-  return String(form?.elements[field].value || "")
-    .split(",")
-    .map((x) => x.trim())
-    .filter(Boolean);
-}
-function toggleComposeAddress(field, email) {
-  const form = $("#composeForm");
-  if (!form) return;
-  const list = composeAddresses(field);
-  const lower = email.toLowerCase();
-  const has = list.some((x) => x.toLowerCase().includes(lower));
-  const next = has ? list.filter((x) => !x.toLowerCase().includes(lower)) : [...list, email];
-  form.elements[field].value = next.join(", ");
-  form.elements[field].dispatchEvent(new Event("change"));
-}
-
-function paintAiSuggestions(res, candidates) {
-  const box = $("#aiDraftSuggest");
-  if (!box) return;
-  const who = new Map((candidates || []).map((c) => [c.email.toLowerCase(), c]));
-  const chip = (field, email) => {
-    const c = who.get(email.toLowerCase()) || { name: email };
-    const on = composeAddresses(field).some((x) => x.toLowerCase().includes(email.toLowerCase()));
-    const desc = [c.course, c.section, c.role].filter(Boolean).join(" ");
-    const fieldLabel = field === "to" ? "받는사람" : "참조";
-    const descHtml = desc ? `<span>${escapeHtml(desc)}</span>` : "";
-    const mark = on ? " ✓" : " +";
-    return `<button type="button" class="ai-chip${on ? " on" : ""}" data-field="${field}" data-email="${escapeHtml(email)}" title="${escapeHtml(email)}"><em>${fieldLabel}</em>${escapeHtml(c.name || email)}${descHtml}${mark}</button>`;
-  };
-  const items = [...(res.to || []).map((e) => chip("to", e)), ...(res.cc || []).map((e) => chip("cc", e))];
-  box.hidden = !items.length && !res.why;
-  const why = res.why ? `<p class="ai-why">${escapeHtml(res.why)}</p>` : "";
-  box.innerHTML = `${why}<div class="ai-chips">${items.join("")}</div>`;
-  box.dataset.res = JSON.stringify({ to: res.to || [], cc: res.cc || [], why: res.why || "" });
-}
-
-$("#aiDraftSuggest")?.addEventListener("click", (event) => {
-  const btn = event.target.closest(".ai-chip");
-  if (!btn) return;
-  toggleComposeAddress(btn.dataset.field, btn.dataset.email);
-  try {
-    paintAiSuggestions(JSON.parse($("#aiDraftSuggest").dataset.res || "{}"), aiDraftCandidates());
-  } catch (error) {
-    /* 다시 그리기만 못 하면 넘어간다 */
-  }
-});
-
-$("#aiModelSelect")?.addEventListener("change", async (event) => {
-  const [provider, model] = String(event.target.value || "").split("|");
-  try {
-    await saveAiProfile({ provider, model });
-    paintAiDraftContext();
-    showToast(currentAiModel().label + " 로 쓸게요");
-  } catch (error) {
-    showToast(humanError(error));
-  }
-});
 
 
 /* 실험실 스위치 */
@@ -16244,7 +16124,7 @@ function resetMailFlow() {
   flow.muted = false;
   removeGhost();
   // 쓰던 /ai 답은 이 새 메일에 붙이지 않는다
-  Object.assign(aiJob, { box: null, typing: false, text: "", prompt: "" });
+  Object.assign(aiJob, { box: null, typing: false, text: "", prompt: "", keep: null, undoable: false });
   aiJob.seq += 1;
   const bar = $("#mailFlowBar");
   if (bar) bar.hidden = true;
@@ -16408,7 +16288,7 @@ function refreshGhost() {
   let seg = null;
   if (!rest && findAiPrompt(rich, caret)) {
     // '/ai …' 를 쓰는 중: 줄 끝에 'Ctrl+Enter' 안내를 흐리게 (흐름 미리보기를 꺼도 보인다)
-    seg = { kind: "aihint", text: aiReady() ? aiHintText(rich, caret) : tr("  AI CLI(Claude·Gemini·Codex)를 설치하면 /ai 로 이어 쓸 수 있어요") };
+    seg = { kind: "aihint", text: aiReady() ? aiHintText(rich, caret) : tr("  AI CLI(Claude·Gemini·Codex)를 설치하면 /ai 로 고쳐 쓸 수 있어요") };
     if (!seg.text) return;
   } else {
     if (here || rest || !flow.data || !flowOn()) return; // 흐름 미리보기는 빈 줄에서만
@@ -16548,13 +16428,20 @@ function acceptGhost() {
   });
 })();
 
-/* --- /ai: 그 자리에서 AI 가 이어 쓰기 (2026-10-19 사용자) ---
-   '/ai' 를 치고 하고 싶은 말(한국어 메모도 됨)을 이어 쓴 뒤 Ctrl+Enter(안내에서 Tab·클릭도) → 지시 글은 지워지고,
-   메일 앞뒤 글에 자연스럽게 이어지는 글이 그 자리에 한 글자씩 타자 치듯 나온다.
+/* --- /ai: 본문 안에서 AI 에게 고쳐 달라기 (2026-10-19 사용자, 2026-11-09 '/ai 는 부가 기능, 주로 고치는 데') ---
+   '/ai' 를 치고 하고 싶은 말을 이어 쓴 뒤 Ctrl+Enter(안내에서 Tab·클릭도) → 지시 글은 지워지고 AI 가 메일을 고친다.
+   새 메일을 통째로 쓰는 건 오른쪽 AI 옆 창이 맡는다. /ai 는 쓰던 메일에 손대는 용도:
+   - 그 자리에 넣기만 하면 되는 지시('결석 사유 한 줄 추가') → 그 자리에 한 글자씩 (예전처럼)
+   - 다른 곳을 고치는 지시('위 문단 더 짧게', '전체적으로 더 공손하게') → 바뀐 부분만 타자 치듯 다시 쓴다
+   어느 쪽인지는 /api/ai/revise 가 고른다(본문에 지시 자리 ⟦여기⟧ 를 표시해 보낸다).
    - CLI 는 답을 한 번에 주므로(10초 안팎) 기다리는 동안 '쓰는 중' 을 보이고, 받은 뒤 글자를 흘려 보여 준다.
-   - 흘리는 동안의 글은 [data-ghost="ai"] 칸이라 저장·보내기에 섞이지 않는다. 다 나오면 execCommand 한 번으로
-     진짜 글로 넣어 Ctrl+Z 한 번이면 빠지고, 한 번 더 누르면 지운 지시 글이 돌아온다. */
-const aiJob = { box: null, typing: false, text: "", prompt: "", seq: 0 };
+   - 흘리는 동안의 글은 [data-ghost="ai"] 칸이라 저장·보내기에 섞이지 않는다. 다 나오면 지운 글(고른 부분·지시 글)을
+     되돌리기로 살려 고른 채 execCommand 한 번으로 새 글로 바꾼다 → Ctrl+Z 한 번이면 고치기 전 글이 그대로 돌아온다.
+     (지우기·넣기 두 단계로 두었더니 메일 전체를 고친 뒤 Ctrl+Z 한 번에 본문이 텅 비어 보였다, 2026-11-09) */
+// keep: [앞, 뒤] — 흘리지 않고 바로 보일 앞뒤 글의 경계(고친 부분만 타자 치듯). 없으면 전부 흘린다
+// undoable: 지운 뒤로 본문에 손댄 게 없다(되돌리기 한 번이 곧 그 지우기다). 학생이 그사이 글을 치면 false
+const aiJob = { box: null, typing: false, text: "", prompt: "", seq: 0, keep: null, undoable: false };
+const AI_MARK = "⟦여기⟧";
 
 // 커서 앞에서 가장 가까운 '/ai' (줄 처음이나 띄어쓰기 뒤) → 그 '/' 부터 커서까지의 범위
 function findAiPrompt(rich, caret) {
@@ -16613,15 +16500,21 @@ async function runAiContinue() {
   }
   const instruction = cmd.instruction;
   if (!instruction) {
-    showToast("[ ] 안에 무엇을 쓸지 적어 주세요. 예: /ai [10월 20일 기업탐방 때문에 결석, 공결 되는지 여쭤보기]");
+    showToast("[ ] 안에 어떻게 고칠지 적어 주세요. 예: /ai [위 문단을 더 공손하게]");
     return;
   }
+  // 지시 자리 앞뒤의 '내 글'(답장 원문은 빼고) — 서버에는 그 사이에 ⟦여기⟧ 를 끼워 보낸다
+  const part = myPartRange();
   const beforeRange = document.createRange();
   beforeRange.setStart(rich, 0);
   beforeRange.setEnd(prompt.startContainer, prompt.startOffset);
   const afterRange = document.createRange();
   afterRange.setStart(prompt.endContainer, prompt.endOffset);
-  afterRange.setEnd(rich, rich.childNodes.length);
+  if (part.quote && part.range.comparePoint(prompt.endContainer, prompt.endOffset) === 0) {
+    afterRange.setEnd(part.range.endContainer, part.range.endOffset);
+  } else {
+    afterRange.setEnd(rich, rich.childNodes.length);
+  }
   const before = rangeText(beforeRange, true).replaceAll(FLOW_MARK, "");
   const after = rangeText(afterRange, false).replaceAll(FLOW_MARK, "");
   // 지시 글을 지우고(되돌리기 한 단계) 그 자리에 '쓰는 중' 칸을 둔다
@@ -16636,7 +16529,7 @@ async function runAiContinue() {
   box.contentEditable = "false";
   // 쓰는 동안 그 회사 로고가 움직인다 (Claude 별꽃은 돌며 숨 쉬고, Gemini 는 반짝, OpenAI 는 천천히 돈다)
   const who = cmd.choice || { provider: currentAiModel().provider, label: providerLabel() };
-  box.innerHTML = `${aiLogo(who.provider, "busy")}<span>${escapeHtml(tr(`${who.label} 가 쓰는 중`))}</span>`;
+  box.innerHTML = `${aiLogo(who.provider, "busy")}<span>${escapeHtml(tr(`${who.label} 가 고치는 중`))}</span>`;
   spot.insertNode(box);
   const at = document.createRange();
   at.setStartBefore(box);
@@ -16644,24 +16537,49 @@ async function runAiContinue() {
   window.getSelection().removeAllRanges();
   window.getSelection().addRange(at);
   const seq = ++aiJob.seq;
-  Object.assign(aiJob, { box, typing: false, text: "", prompt: raw.trim() });
+  Object.assign(aiJob, { box, typing: false, text: "", prompt: raw.trim(), keep: null, undoable: true });
+  const form = $("#composeForm");
   try {
-    const res = await api("/api/ai/continue", {
+    const res = await api("/api/ai/revise", {
       method: "POST",
       body: JSON.stringify({
-        instruction, before: before.slice(-6000), after: after.slice(0, 3000), lang: flow.lang || "ko", flow: { to: aiFlowTo() },
+        instruction,
+        body: `${before.slice(-6000)}${AI_MARK}${after.slice(0, 4000)}`,
+        to: form?.elements.to.value || "",
+        cc: form?.elements.cc.value || "",
+        subject: form?.elements.subject.value || "",
+        noAsk: true,
         // '/ai with opus5.5 [ … ]' 로 고른 모델은 이번 한 번만 (평소 모델은 쓰기 창의 모델 단추)
-        provider: cmd.choice?.provider || "", model: cmd.choice?.id || "",
+        provider: cmd.choice?.provider || "",
+        model: cmd.choice?.id || "",
       }),
     });
     if (seq !== aiJob.seq || aiJob.box !== box) return; // 그사이 취소됨
-    let text = String(res.text || "").trim();
-    if (!text) throw new Error("AI 가 빈 답을 줬어요. 다시 눌러 주세요.");
-    // 'I am writing to' 처럼 띄어쓰기 없이 끝난 앞 글에 붙일 때는 한 칸 띄운다
-    const prev = before.slice(-1);
-    if (prev && !/[\s (\[“"']/.test(prev)) text = " " + text;
-    aiJob.text = text;
-    typeOutAi(seq);
+    if (res.ask?.length) {
+      // 그래도 되물으면 옆 창에서 고르게 한다
+      cancelAiContinue();
+      mailAiAskFromInline(instruction, res.ask);
+      return;
+    }
+    const mail = res.mail || {};
+    if (typeof mail.insert === "string") {
+      let text = mail.insert.trim();
+      if (!text) throw new Error("AI 가 빈 답을 줬어요. 다시 눌러 주세요.");
+      // 'I am writing to' 처럼 띄어쓰기 없이 끝난 앞 글에 붙일 때는 한 칸 띄운다
+      const prev = before.slice(-1);
+      if (prev && !/[\s (\[“"']/.test(prev)) text = " " + text;
+      aiJob.text = text;
+      typeOutAi(seq);
+    } else if (typeof mail.body === "string") {
+      // 다른 곳을 고쳤다: 쓰는 중 칸을 걷고, 내 글 전체를 바뀐 데만 흘려 다시 쓴다
+      box.remove();
+      Object.assign(aiJob, { box: null, typing: false, text: "", prompt: "", keep: null, undoable: false });
+      aiJob.seq += 1;
+      if (!replaceMyPart(mail.body)) showToast(tr("바꿀 곳이 없었어요."));
+    } else {
+      throw new Error("AI 답을 읽지 못했어요. 다시 눌러 주세요.");
+    }
+    applyMailHeads(mail);
   } catch (error) {
     if (seq !== aiJob.seq) return;
     cancelAiContinue();
@@ -16669,21 +16587,35 @@ async function runAiContinue() {
   }
 }
 
-// 받은 글을 한 글자씩 (짧으면 천천히, 길어도 4초 안에 끝나게)
+// 받은 글을 한 글자씩 (짧으면 천천히, 길어도 4초 안에 끝나게). keep 이 있으면 앞뒤 글은 바로 보이고 가운데만 흘린다
 function typeOutAi(seq) {
   const box = aiJob.box;
   const text = aiJob.text;
   if (!box) return;
   box.classList.remove("waiting");
+  const [from, to] = aiJob.keep || [0, text.length];
+  const head = text.slice(0, from);
+  const mid = text.slice(from, to);
+  let typed = box;
   box.textContent = "";
+  if (aiJob.keep) {
+    // 고친 부분만 흘린다: [앞 글 + 흘리는 글][깜빡이는 막대][뒤 글]
+    box.classList.add("split");
+    typed = document.createElement("span");
+    const caret = document.createElement("span");
+    caret.className = "ai-caret";
+    const rest = document.createElement("span");
+    rest.textContent = text.slice(to);
+    box.append(typed, caret, rest);
+  }
   aiJob.typing = true;
-  const duration = Math.min(4000, Math.max(700, text.length * 22));
+  const duration = Math.min(4000, Math.max(700, mid.length * 22));
   const started = performance.now();
   const step = (now) => {
     if (seq !== aiJob.seq || aiJob.box !== box || !aiJob.typing) return;
-    const n = Math.min(text.length, Math.ceil(((now - started) / duration) * text.length));
-    box.textContent = text.slice(0, n);
-    if (n >= text.length) finishAiTyping();
+    const n = Math.min(mid.length, Math.ceil(((now - started) / duration) * mid.length));
+    typed.textContent = head + mid.slice(0, n);
+    if (n >= mid.length) finishAiTyping();
     else window.requestAnimationFrame(step);
   };
   window.requestAnimationFrame(step);
@@ -16693,12 +16625,45 @@ function typeOutAi(seq) {
   }, duration + 600);
 }
 
+// range 를 지우고(되돌리기 한 단계) 그 자리에 text 를 타자 치듯 넣는다 (옆 창·끌어 고른 부분 고치기·/ai 가 함께 쓴다)
+function aiTypeReplace(range, text, keep = null) {
+  const rich = $("#composeRich");
+  if (!rich || !range) return false;
+  if (aiJob.box) finishAiTyping(); // 앞 작업은 먼저 끝까지 넣는다
+  removeGhost();
+  const back = document.activeElement !== rich ? document.activeElement : null;
+  rich.focus();
+  const sel = window.getSelection();
+  sel.removeAllRanges();
+  sel.addRange(range);
+  const deleting = !range.collapsed;
+  if (deleting) document.execCommand("delete");
+  const spot = sel.getRangeAt(0).cloneRange();
+  const box = document.createElement("span");
+  box.className = "ai-typing";
+  box.dataset.ghost = "ai";
+  box.contentEditable = "false";
+  spot.insertNode(box);
+  const at = document.createRange();
+  at.setStartBefore(box);
+  at.collapse(true);
+  sel.removeAllRanges();
+  sel.addRange(at);
+  const seq = ++aiJob.seq;
+  Object.assign(aiJob, { box, typing: false, text, prompt: "", keep, undoable: deleting });
+  typeOutAi(seq);
+  // 옆 창에서 부탁했으면 입력 칸을 그대로 쓸 수 있게 포커스를 돌려준다
+  if (back && back !== document.body && !rich.contains(back)) back.focus();
+  return true;
+}
+
 // 흘리던 칸을 진짜 글로 바꾼다 (한 번에 넣어야 Ctrl+Z 한 번으로 빠진다)
 function finishAiTyping() {
   const rich = $("#composeRich");
   const box = aiJob.box;
   const text = aiJob.text;
-  Object.assign(aiJob, { box: null, typing: false, text: "" });
+  const undoable = aiJob.undoable;
+  Object.assign(aiJob, { box: null, typing: false, text: "", keep: null, undoable: false });
   aiJob.seq += 1;
   if (!box) return;
   if (!rich?.contains(box) || !text) {
@@ -16710,10 +16675,24 @@ function finishAiTyping() {
   at.setStartBefore(box);
   at.collapse(true);
   box.remove();
+  removeGhost();
   rich.focus();
   const sel = window.getSelection();
   sel.removeAllRanges();
   sel.addRange(at);
+  if (undoable) {
+    // 지운 글을 되돌리기로 살린다 — Chromium 은 되살린 글을 골라 둔다(실측: 737자 그대로 골라짐). 그 위에 새 글을 넣으면
+    // 바꾸기 한 단계라 Ctrl+Z 한 번이면 고치기 전 글. 뜻대로 안 되면(고른 게 없으면) 다시 지운 자리로 되돌려 놓고 넣는다
+    const was = rich.innerHTML;
+    document.execCommand("undo");
+    const ok = sel.rangeCount && !sel.isCollapsed && rich.contains(sel.getRangeAt(0).commonAncestorContainer);
+    if (!ok && rich.innerHTML !== was) {
+      document.execCommand("redo");
+    } else if (!ok) {
+      sel.removeAllRanges();
+      sel.addRange(at);
+    }
+  }
   document.execCommand("insertText", false, text);
   if (back && back !== document.body) back.focus();
   else scheduleGhost(0);
@@ -16724,7 +16703,8 @@ function cancelAiContinue() {
   const rich = $("#composeRich");
   const box = aiJob.box;
   const prompt = aiJob.prompt;
-  Object.assign(aiJob, { box: null, typing: false, text: "" });
+  const undoable = aiJob.undoable;
+  Object.assign(aiJob, { box: null, typing: false, text: "", keep: null, undoable: false });
   aiJob.seq += 1;
   if (!box) return;
   if (!rich?.contains(box)) return;
@@ -16736,8 +16716,22 @@ function cancelAiContinue() {
   const sel = window.getSelection();
   sel.removeAllRanges();
   sel.addRange(at);
+  if (undoable) {
+    // 지우기를 되돌려 지시 글을 살린다 (되돌리기 목록에 남는 단계가 없다)
+    const was = rich.innerHTML;
+    document.execCommand("undo");
+    if (rich.innerHTML !== was) {
+      if (sel.rangeCount) sel.collapseToEnd();
+      return;
+    }
+  }
   if (prompt) document.execCommand("insertText", false, prompt);
 }
+
+// AI 가 쓰는 동안 학생이 본문에 글을 치면, 되돌리기 한 번이 그 글을 지우게 되므로 되살리기를 쓰지 않는다
+$("#composeRich")?.addEventListener("input", () => {
+  if (aiJob.box) aiJob.undoable = false;
+});
 
 ["input", "change"].forEach((type) =>
   $("#composeTo")?.addEventListener(type, () => {
@@ -16814,7 +16808,7 @@ function aiHintText(rich, caret) {
   const cmd = parseAiCommand(raw);
   if (!cmd.bracket && !cmd.instruction && !cmd.token) return keyLabel(tr("  [prompt]  ·  with 모델  ·  Ctrl+Enter"));
   const who = cmd.choice?.label || providerLabel();
-  return keyLabel(tr(`  Ctrl+Enter — ${who} 가 이어 써요`));
+  return keyLabel(tr(`  Ctrl+Enter — ${who} 가 고쳐 써요`));
 }
 
 /* --- with 뒤 모델 고르기 목록 --- */
@@ -16952,11 +16946,12 @@ function aiLogo(provider, cls = "") {
   return `<svg class="ai-logo ai-logo-${provider} ${cls}" viewBox="0 0 24 24" aria-hidden="true"><path d="${d}"/></svg>`;
 }
 
-const aiMenu = { el: null, provider: "" };
+// anchor: 메뉴를 연 단추 — 쓰기 창 위 모델 단추(#aiDraftToggle) 또는 AI 옆 창 머리의 모델 단추(#mailAiModel)
+const aiMenu = { el: null, provider: "", anchor: null };
 
 function closeAiMenu() {
   if (aiMenu.el) aiMenu.el.hidden = true;
-  $("#aiDraftToggle")?.setAttribute("aria-expanded", "false");
+  aiMenu.anchor?.setAttribute("aria-expanded", "false");
 }
 
 function aiModelRow(id, title, note, tag, tone, chosenId) {
@@ -17019,7 +17014,7 @@ function paintAiMenu() {
     </div>`;
 }
 
-function openAiMenu() {
+function openAiMenu(anchor = $("#aiDraftToggle")) {
   if (!aiMenu.el) {
     aiMenu.el = document.createElement("div");
     aiMenu.el.className = "ai-menu";
@@ -17054,23 +17049,27 @@ function openAiMenu() {
     });
     document.addEventListener("mousedown", (event) => {
       if (aiMenu.el.hidden) return;
-      if (aiMenu.el.contains(event.target) || event.target.closest("#aiDraftToggle")) return;
+      if (aiMenu.el.contains(event.target) || (aiMenu.anchor && aiMenu.anchor.contains(event.target))) return;
       closeAiMenu();
     });
     document.addEventListener("keydown", (event) => {
       if (event.key === "Escape" && !aiMenu.el.hidden) closeAiMenu();
     });
   }
+  aiMenu.anchor?.setAttribute("aria-expanded", "false");
+  aiMenu.anchor = anchor;
   aiMenu.provider = "";
   paintAiMenu();
-  const btn = $("#aiDraftToggle").getBoundingClientRect();
+  const btn = anchor.getBoundingClientRect();
   aiMenu.el.hidden = false;
   const w = aiMenu.el.offsetWidth;
+  // 옆 창 머리(오른쪽 끝)에서 열면 단추 오른쪽 끝에 맞춘다
+  const left = btn.left + w > window.innerWidth - 8 ? btn.right - w : btn.left;
   Object.assign(aiMenu.el.style, {
     top: `${Math.round(btn.bottom + 8)}px`,
-    left: `${Math.round(Math.max(8, Math.min(btn.left, window.innerWidth - w - 8)))}px`,
+    left: `${Math.round(Math.max(8, Math.min(left, window.innerWidth - w - 8)))}px`,
   });
-  $("#aiDraftToggle").setAttribute("aria-expanded", "true");
+  anchor.setAttribute("aria-expanded", "true");
 }
 
 async function pickAiModel(provider, model) {
@@ -17089,14 +17088,24 @@ async function pickAiModel(provider, model) {
   }
 }
 
-// 쓰기 창 위 단추: [로고] 모델 이름 ▾
+// 쓰기 창 위 단추·AI 옆 창 머리: [로고] 모델 이름 ▾
 function paintAiModelButton() {
-  const btn = $("#aiDraftToggle");
-  if (!btn) return;
   const now = currentAiModel();
-  btn.innerHTML = `${aiLogo(now.provider || "claude")}<span id="aiDraftModelName">${escapeHtml(now.label)}</span><span class="ai-btn-chev" aria-hidden="true">▾</span>`;
-  btn.title = tr("AI 모델 바꾸기 · 본문에 /ai [prompt]");
-  btn.setAttribute("aria-haspopup", "menu");
+  const btn = $("#aiDraftToggle");
+  if (btn) {
+    btn.innerHTML = `${aiLogo(now.provider || "claude")}<span id="aiDraftModelName">${escapeHtml(now.label)}</span><span class="ai-btn-chev" aria-hidden="true">▾</span>`;
+    btn.title = tr("AI 모델 바꾸기 · 본문에 /ai [prompt]");
+    btn.setAttribute("aria-haspopup", "menu");
+  }
+  // 옆 창 여닫는 단추: 글자 없이 지금 AI 로고만 (크롬 확장 단추처럼)
+  const toggle = $("#mailAiToggle");
+  if (toggle) toggle.innerHTML = aiLogo(now.provider || "claude");
+  const side = $("#mailAiModel");
+  if (side) {
+    side.innerHTML = aiReady()
+      ? `${aiLogo(now.provider || "claude")}<span>${escapeHtml(now.label)}</span><span class="ai-btn-chev" aria-hidden="true">▾</span>`
+      : `${iconHtml("sparkle")}<span>${escapeHtml(tr("AI 메일 도우미"))}</span>`;
+  }
 }
 
 // Gemini 로고의 파랑→보라 그라데이션 (CSS fill:url(#aiGeminiGrad) 가 쓴다)
@@ -17108,4 +17117,815 @@ function paintAiModelButton() {
   defs.style.position = "absolute";
   defs.innerHTML = '<defs><linearGradient id="aiGeminiGrad" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#1c7dff"/><stop offset=".55" stop-color="#6e6bf0"/><stop offset="1" stop-color="#c26be8"/></linearGradient></defs>';
   document.body.appendChild(defs);
+})();
+
+/* ===== AI 메일 옆 창 (2026-11-09 사용자) =====
+   '프롬프트를 넣으면 누구에게 보낼지, 참조는 누구, 내용은 어떻게 — 빠진 게 있으면 Claude 대화창처럼 1·2·3안을 골라
+   받고, 자동으로 메일을 다 써서 보내기만 누르면 되게. 그걸 Claude in Chrome 처럼 메일 쓰는 데 옆 창에서.'
+   (2026-10-21 에 채팅식 'AI 초안' 칸을 뺐던 것을 사용자가 다시 정했다: 새 메일은 옆 창, /ai 는 고치기용 보조.)
+   - 첫 말 → /api/ai/compose: 받는 사람·참조(서버가 모은 후보의 id 로만)·제목·용건. 모자란 것은 ask[] 로 되묻는다.
+     본문은 서버가 mail_flow(학생이 정한 인사·소개·서명 꼴) + 용건으로 묶어 준다.
+   - 메일이 채워진 뒤의 말 → /api/ai/revise: 지시대로 고친 본문(+바뀐 받는 사람·제목)을 바뀐 데만 타자 치듯 넣는다.
+   - 보내기는 언제나 사람이 누른다. 옆 창은 메일 칸만 채운다.
+   - 메일 내용은 부탁할 때만 고른 AI 로 간다(자동으로 돌지 않는다). */
+const mailAi = { open: false, msgs: [], request: "", answers: [], round: 0, ask: null, busy: false, seq: 0, drafted: false,
+  reviseText: "", reviseAnswers: [], started: 0, tick: 0 };
+const MAIL_AI_KEY = "daling.mailAi.open";
+// 본문에 이미 글이 있을 때 이런 말이면 '새로 쓰기' 가 아니라 '고치기'
+const MAIL_AI_EDIT_WORDS = /(고쳐|다듬|바꿔|바꾸|짧게|길게|줄여|늘려|공손|자연스럽|정중|번역|영어로|한국어로|추가|넣어|빼|지워|수정|부드럽|딱딱|격식)/;
+
+/* --- 내 글(답장·전달 원문 앞까지) --- */
+// 본문 처음부터 답장 원문('----- 원본 메일 …', '>' 인용, <blockquote>) 앞까지. AI 는 이 부분만 쓰고 고친다
+function myPartRange() {
+  const rich = $("#composeRich");
+  const range = document.createRange();
+  range.selectNodeContents(rich);
+  const walker = document.createTreeWalker(rich, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT, {
+    acceptNode: (n) => {
+      if (n.nodeType === 1) {
+        if (n.dataset?.ghost) return NodeFilter.FILTER_REJECT;
+        return n.nodeName === "BLOCKQUOTE" ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP;
+      }
+      return n.parentElement?.closest("[data-ghost]") ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT;
+    },
+  });
+  while (walker.nextNode()) {
+    const n = walker.currentNode;
+    const lineStart = !n.previousSibling || n.previousSibling.nodeName === "BR" || n.previousSibling.nodeType === 1;
+    if (n.nodeType === 1 || (lineStart && /^\s*(-{5,}\s*(원본 메일|전달된 메일|Original Message)|>)/i.test(n.data))) {
+      range.setEndBefore(n);
+      return { range, quote: true };
+    }
+  }
+  return { range, quote: false };
+}
+
+// 본문 글을 AI 와 주고받는 꼴로: 첫 줄이 <div> 밖에 있으면 innerText 가 문단 사이를 줄바꿈 셋으로 읽는다
+// (실측: "Dear …,<div><br></div><div>I hope …"). 빈 줄 하나로 맞춰야 고친 글과 비교할 때 문단마다 다르다고 보지 않는다
+function plainMail(text) {
+  return String(text || "").replaceAll(FLOW_MARK, "").replace(/\n{3,}/g, "\n\n").replace(/\s+$/, "");
+}
+
+function myPartText() {
+  const rich = $("#composeRich");
+  if (!rich) return "";
+  if (!composeIsRich()) {
+    const box = document.createElement("div");
+    box.innerHTML = document.querySelector('#composeForm [name="body"]')?.value || "";
+    return (box.innerText || "").split(/\n\s*-{5,}\s*(원본 메일|전달된 메일)/)[0].trim();
+  }
+  return plainMail(rangeText(myPartRange().range, true));
+}
+
+function quoteText() {
+  const rich = $("#composeRich");
+  const part = rich ? myPartRange() : null;
+  if (!part?.quote) return "";
+  const r = document.createRange();
+  r.setStart(part.range.endContainer, part.range.endOffset);
+  r.setEnd(rich, rich.childNodes.length);
+  return rangeText(r, false).replaceAll(FLOW_MARK, "").trim();
+}
+
+// 바꾼 글의 [앞, 뒤] 경계: 같은 앞·뒤는 흘리지 않고 바로 보인다 (가운데 바뀐 줄만 타자 치듯)
+function diffKeep(a, b) {
+  if (a === b) return null;
+  const max = Math.min(a.length, b.length);
+  let p = 0;
+  while (p < max && a[p] === b[p]) p += 1;
+  let s = 0;
+  while (s < max - p && a[a.length - 1 - s] === b[b.length - 1 - s]) s += 1;
+  const lineStart = p > 0 ? b.lastIndexOf("\n", p - 1) + 1 : 0; // 낱말 중간이 아니라 그 줄 처음부터
+  return [lineStart, b.length - s];
+}
+
+// 내 글 전체를 새 글로 (바뀐 데만 흘린다). 답장 원문은 그대로 아래에 둔다. 바뀐 게 없으면 false
+function replaceMyPart(body) {
+  const rich = $("#composeRich");
+  const next = String(body || "").replace(/\s+$/, "");
+  if (!composeIsRich()) {
+    // HTML 칸으로 쓰는 중이면 흘리지 않고 바로 넣는다
+    const area = document.querySelector('#composeForm [name="body"]');
+    const rest = (area.value.match(/(<br\s*\/?>)*\s*-{5,}\s*(원본 메일|전달된 메일)[\s\S]*$/) || [""])[0];
+    area.value = escapeHtml(next).replace(/\n/g, "<br>") + (rest ? `<br><br>${rest.replace(/^(<br\s*\/?>\s*)+/, "")}` : "");
+    area.dispatchEvent(new Event("input", { bubbles: true }));
+    return true;
+  }
+  if (!rich) return false;
+  const part = myPartRange();
+  const old = plainMail(rangeText(part.range, true));
+  const text = next + (part.quote ? "\n\n" : "");
+  if (old === next) return false;
+  const keep = old ? diffKeep(old + (part.quote ? "\n\n" : ""), text) : null;
+  return aiTypeReplace(part.range, text, keep);
+}
+
+// 받는 사람·참조·제목 칸 (값을 넣으면 칩이 다시 그려지고, input 을 쏘면 자동 저장·흐름 줄이 따라온다)
+function applyMailHeads(mail) {
+  const form = $("#composeForm");
+  if (!form || !mail) return false;
+  let changed = false;
+  [["to", mail.to], ["cc", mail.cc]].forEach(([field, list]) => {
+    if (!Array.isArray(list)) return;
+    if (field === "to" && !list.length) return; // 받는 사람을 비우지는 않는다
+    const value = list.map((p) => p.address || p.email).join(", ");
+    if (form.elements[field].value === value) return;
+    form.elements[field].value = value;
+    form.elements[field].dispatchEvent(new Event("input", { bubbles: true }));
+    changed = true;
+  });
+  if (typeof mail.subject === "string" && mail.subject && form.elements.subject.value !== mail.subject) {
+    form.elements.subject.value = mail.subject;
+    form.elements.subject.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+  return changed;
+}
+
+/* --- 옆 창 열고 닫기 --- */
+function mailAiWanted() {
+  // 한 번 열거나 닫으면 그대로 기억한다. 처음에는 AI CLI 가 있을 때만 열어 둔다
+  try {
+    const v = localStorage.getItem(MAIL_AI_KEY);
+    if (v === "1" || v === "0") return v === "1";
+  } catch (error) {
+    /* 저장소를 못 쓰면 기본값 */
+  }
+  return aiReady();
+}
+
+function setMailAiOpen(open, { remember = true, focus = false } = {}) {
+  mailAi.open = open;
+  const panel = $("#mailAiPanel");
+  if (panel) panel.hidden = !open;
+  $("#mailAiToggle")?.setAttribute("aria-pressed", String(open));
+  $("#mailComposePane")?.classList.toggle("ai-open", open);
+  if (remember) {
+    try {
+      localStorage.setItem(MAIL_AI_KEY, open ? "1" : "0");
+    } catch (error) {
+      /* 기억만 못 한다 */
+    }
+  }
+  if (open) {
+    paintMailAi();
+    if (focus) $("#mailAiText")?.focus();
+  }
+}
+
+function resetMailAi() {
+  mailAi.seq += 1;
+  window.clearInterval(mailAi.tick);
+  Object.assign(mailAi, { msgs: [], request: "", answers: [], round: 0, ask: null, busy: false, drafted: false,
+    reviseText: "", reviseAnswers: [], tick: 0 });
+  const box = $("#mailAiText");
+  if (box) {
+    box.value = "";
+    growMailAiText();
+  }
+  paintMailAi();
+}
+
+// 새 메일 쓰기 창을 열 때 (openCompose 가 부른다)
+function openMailAiForCompose() {
+  resetMailAi();
+  setMailAiOpen(mailAiWanted(), { remember: false });
+  // 앱을 켜자마자 쓰기를 열면 AI 상태(4초 뒤 읽음)를 모르는 채라 닫혀 시작했다(설치본 실측). 읽은 뒤 다시 정한다
+  if (!state.ai.status) {
+    loadAiStatus().then(() => {
+      if (!mailAi.open && mailAiWanted() && state.mailPane === "compose") setMailAiOpen(true, { remember: false });
+      else paintMailAi();
+    });
+  }
+}
+
+/* --- 그리기 --- */
+function mailAiExamples() {
+  const form = $("#composeForm");
+  if (form?.dataset.inReplyTo) {
+    return [tr("고맙다고 하고 참석하겠다고 답장해 줘"), tr("정중하게 거절하는 답장 써 줘"), tr("궁금한 점 하나만 되물어 줘")];
+  }
+  const profs = [];
+  const tas = [];
+  (state.courseStaff || new Map()).forEach(({ label, rows }) => {
+    (rows || []).forEach((r) => {
+      if (!r.email) return;
+      if (r.role === "교수") profs.push(courseShortName(label));
+      else if (/조교/.test(r.role || "")) tas.push(courseShortName(label));
+    });
+  });
+  const p = profs[0] || tr("일반물리");
+  const t = tas[0] || profs[1] || p;
+  return [
+    tr("{c} 교수님께 다음 주 수업 결석 미리 말씀드리기").replace("{c}", p),
+    tr("{c} 조교님께 과제 파일을 잘못 냈는데 다시 내도 되는지 묻기").replace("{c}", t),
+    tr("학사팀에 휴학 신청 방법 문의하기"),
+  ];
+}
+
+function mailAiMsgHtml(m) {
+  if (m.kind === "user") return `<div class="mai-msg mai-user" data-no-i18n>${escapeHtml(m.text)}</div>`;
+  if (m.kind === "think") {
+    const now = currentAiModel();
+    const verb = m.verb === "revise" ? tr("{who} 가 고치는 중") : tr("{who} 가 메일을 쓰는 중");
+    return `<div class="mai-msg mai-think">${aiLogo(now.provider || "claude", "busy")}<span>${escapeHtml(verb.replace("{who}", now.label))}</span><em class="mai-time" data-mai-time></em></div>`;
+  }
+  if (m.kind === "error") return `<div class="mai-msg mai-err">${escapeHtml(m.text)}</div>`;
+  if (m.kind === "answered") {
+    const rows = m.picked
+      .map((a) => `<div><span data-no-i18n>${escapeHtml(a.q)}</span><b data-no-i18n>${escapeHtml(a.skipped ? tr("건너뜀") : a.a)}</b></div>`)
+      .join("");
+    return `<div class="mai-msg mai-answers">${rows}</div>`;
+  }
+  if (m.kind === "ask") return mailAiAskHtml(m);
+  if (m.kind === "done" || m.kind === "edit") {
+    const mail = m.mail || {};
+    const who = (list) => (list || []).map((p) => {
+      const role = p.role === "교수" ? tr("교수님") : p.role === "조교" ? tr("조교님") : "";
+      const desc = [role, p.course].filter(Boolean).join(" · ");
+      return `<span class="mai-who" title="${escapeHtml(p.email)}" data-no-i18n>${escapeHtml(p.name || p.email)}${desc ? ` <small>${escapeHtml(desc)}</small>` : ""}</span>`;
+    }).join("");
+    const rows = [];
+    if (m.kind === "done" || mail.to) rows.push([tr("받는 사람"), mail.to?.length ? who(mail.to) : `<span class="mai-miss">${escapeHtml(tr("정하지 못했어요 — 받는사람 칸에 넣어 주세요"))}</span>`]);
+    if ((m.kind === "done" && mail.cc?.length) || (m.kind === "edit" && mail.cc)) rows.push([tr("참조"), mail.cc.length ? who(mail.cc) : `<span class="mai-miss">${escapeHtml(tr("넣지 않음"))}</span>`]);
+    if (mail.subject) rows.push([tr("제목"), `<span data-no-i18n>${escapeHtml(mail.subject)}</span>`]);
+    const blanks = (String(mail.body || "").match(/\[[^\]\n]{0,40}\]/g) || []).length;
+    const title = m.kind === "done" ? tr("메일을 채웠어요") : tr("고쳤어요");
+    const meta = [m.engine, m.seconds ? tr("{n}초").replace("{n}", Math.round(m.seconds)) : ""].filter(Boolean).join(" · ");
+    const tip = m.kind === "done"
+      ? blanks
+        ? tr("본문의 [ ] {n}곳을 채우고 보내기를 눌러 주세요.").replace("{n}", blanks)
+        : tr("확인하고 보내기를 눌러 주세요.")
+      : "";
+    return `<div class="mai-done${m.kind === "edit" ? " edit" : ""}">
+      <div class="mai-done-head"><span class="mai-check">✓</span><strong>${escapeHtml(title)}</strong><small>${escapeHtml(meta)}</small></div>
+      ${rows.length ? `<dl>${rows.map(([k, v]) => `<dt>${escapeHtml(k)}</dt><dd>${v}</dd>`).join("")}</dl>` : ""}
+      ${m.note ? `<p class="mai-note" data-no-i18n>${escapeHtml(m.note)}</p>` : ""}
+      ${tip ? `<p class="mai-tip">${escapeHtml(tip)}</p>` : ""}
+    </div>`;
+  }
+  return "";
+}
+
+// 되묻기 카드: Claude 처럼 1·2·3 보기 + 직접 입력. 숫자 키로 고르고, 다 고르면 바로 이어서 쓴다
+function mailAiAskHtml(m) {
+  if (m !== mailAi.ask) return "";
+  const q = m.questions[m.index];
+  const total = m.questions.length;
+  const opts = q.options
+    .map((o, i) => `<button type="button" class="mai-opt" data-opt="${i}"><kbd>${i + 1}</kbd><span data-no-i18n>${escapeHtml(o)}</span></button>`)
+    .join("");
+  const n = q.options.length + 1;
+  return `<div class="mai-ask" tabindex="-1" data-ask>
+    <div class="mai-ask-top">
+      <span class="mai-ask-step">${total > 1 ? `${m.index + 1} / ${total}` : escapeHtml(tr("하나만 물을게요"))}</span>
+      <button type="button" class="mai-skip" data-skip>${escapeHtml(tr("건너뛰기"))}</button>
+    </div>
+    <p class="mai-ask-q" data-no-i18n>${escapeHtml(q.q)}</p>
+    <div class="mai-opts">${opts}
+      <form class="mai-own" data-own><kbd>${n}</kbd><input type="text" maxlength="300" placeholder="${escapeHtml(tr("직접 입력"))}" aria-label="${escapeHtml(tr("직접 입력"))}" /><button type="submit" aria-label="${escapeHtml(tr("이걸로"))}">↵</button></form>
+    </div>
+  </div>`;
+}
+
+function mailAiEmptyHtml() {
+  if (!aiReady()) {
+    return `<div class="mai-empty">
+      <div class="mai-hello">${iconHtml("sparkle")}<strong>${escapeHtml(tr("AI 에게 메일을 맡겨 보세요"))}</strong></div>
+      <p>${escapeHtml(tr("이 컴퓨터의 Claude·Codex 를 연결하면 한 마디로 받는 사람·참조·내용까지 채워 드려요."))}</p>
+      <button type="button" class="button compact" data-mai-connect>${escapeHtml(tr("AI 연결하러 가기"))}</button>
+    </div>`;
+  }
+  const examples = mailAiExamples()
+    .map((e) => `<button type="button" class="mai-example" data-example="${escapeHtml(e)}">${escapeHtml(e)}</button>`)
+    .join("");
+  return `<div class="mai-empty">
+    <div class="mai-hello">${aiLogo(currentAiModel().provider || "claude")}<strong>${escapeHtml(tr("누구에게, 무슨 메일을 쓸까요?"))}</strong></div>
+    <p>${escapeHtml(tr("받는 사람·참조·제목·인사·서명까지 채워 드려요. 모자란 건 보기를 드릴게요."))}</p>
+    <div class="mai-examples">${examples}</div>
+    <p class="mai-hint">${escapeHtml(tr("다 쓴 뒤에는 고칠 곳을 끌어 골라 바로 부탁할 수 있어요."))}</p>
+  </div>`;
+}
+
+function paintMailAi() {
+  const log = $("#mailAiLog");
+  if (!log) return;
+  paintAiModelButton();
+  if (!mailAi.open) return;
+  log.innerHTML = mailAi.msgs.length ? mailAi.msgs.map(mailAiMsgHtml).join("") : mailAiEmptyHtml();
+  log.scrollTop = log.scrollHeight;
+  const input = $("#mailAiText");
+  if (input) {
+    input.placeholder = mailAi.ask
+      ? tr("보기를 고르거나 직접 답을 적어 주세요")
+      : mailAi.drafted
+        ? tr("어떻게 고칠까요? 예: 더 짧게, 조교님도 참조에")
+        : tr("누구에게, 무슨 일로 보낼지 적어 주세요");
+  }
+  const send = $("#mailAiSend");
+  if (send) send.disabled = mailAi.busy;
+  paintMailAiTime();
+  // 되묻는 중이면 카드에 포커스 → 숫자 키로 바로 고른다 (입력 칸에 쓰던 글이 있으면 그대로 둔다)
+  const card = log.querySelector("[data-ask]");
+  if (card && !(input && document.activeElement === input && input.value.trim())) card.focus({ preventScroll: true });
+}
+
+function paintMailAiTime() {
+  const el = $("#mailAiLog")?.querySelector("[data-mai-time]");
+  if (el && mailAi.started) el.textContent = tr("{n}초").replace("{n}", Math.floor((Date.now() - mailAi.started) / 1000));
+}
+
+function growMailAiText() {
+  const box = $("#mailAiText");
+  if (!box) return;
+  box.style.height = "auto";
+  box.style.height = `${Math.min(box.scrollHeight, 160)}px`;
+}
+
+/* --- 부탁 보내기 --- */
+async function mailAiSubmit(raw) {
+  const text = String(raw || "").trim();
+  if (!text || mailAi.busy) return;
+  await loadAiStatus();
+  const input = $("#mailAiText");
+  if (!aiReady()) {
+    mailAi.msgs.push({ kind: "error", text: tr("AI 가 연결되어 있지 않아요. 설정 → AI 연결에서 Claude 나 Codex 를 연결해 주세요.") });
+    paintMailAi();
+    return;
+  }
+  if (input) {
+    input.value = "";
+    growMailAiText();
+  }
+  // 되묻는 중에 친 글은 지금 질문의 답
+  if (mailAi.ask) {
+    answerMailAi(text);
+    return;
+  }
+  mailAi.msgs.push({ kind: "user", text });
+  const mine = myPartText().trim();
+  if (mailAi.drafted || (mine.length > 20 && MAIL_AI_EDIT_WORDS.test(text))) {
+    mailAi.reviseText = text;
+    mailAi.reviseAnswers = [];
+    runMailAiRevise();
+    return;
+  }
+  // 새로 쓰기: 본문에 적어 둔 메모가 있으면 같이 넘긴다 (다 쓴 뒤에는 이 메모 자리에 메일이 들어간다)
+  mailAi.request = mine ? `${text}\n\n(학생이 본문에 적어 둔 메모)\n${mine.slice(0, 3000)}` : text;
+  mailAi.answers = [];
+  mailAi.round = 0;
+  runMailAiCompose();
+}
+
+function startMailAiBusy(verb) {
+  mailAi.busy = true;
+  mailAi.started = Date.now();
+  const think = { kind: "think", verb };
+  mailAi.msgs.push(think);
+  window.clearInterval(mailAi.tick);
+  mailAi.tick = window.setInterval(paintMailAiTime, 1000);
+  paintMailAi();
+  return think;
+}
+
+function stopMailAiBusy(think) {
+  mailAi.busy = false;
+  mailAi.started = 0;
+  window.clearInterval(mailAi.tick);
+  mailAi.msgs = mailAi.msgs.filter((m) => m !== think);
+}
+
+function pushMailAiAsk(mode, questions) {
+  const ask = { kind: "ask", mode, questions, index: 0, picked: [] };
+  mailAi.msgs.push(ask);
+  mailAi.ask = ask;
+}
+
+async function runMailAiCompose() {
+  const seq = ++mailAi.seq;
+  const think = startMailAiBusy("compose");
+  const form = $("#composeForm");
+  try {
+    const res = await api("/api/ai/compose", {
+      method: "POST",
+      body: JSON.stringify({
+        request: mailAi.request,
+        answers: mailAi.answers,
+        round: mailAi.round,
+        current: { to: form.elements.to.value, cc: form.elements.cc.value, subject: form.elements.subject.value },
+        quote: quoteText(),
+      }),
+    });
+    if (seq !== mailAi.seq) return;
+    stopMailAiBusy(think);
+    if (res.ask?.length) {
+      // 받는 사람은 이미 정했으면 먼저 넣어 둔다 (답을 고르는 동안 누구에게 가는지 보이게)
+      applyMailHeads({ to: res.to, cc: res.to?.length ? res.cc : undefined });
+      mailAi.round += 1;
+      pushMailAiAsk("compose", res.ask);
+    } else {
+      const mail = res.mail || {};
+      applyMailHeads(mail);
+      replaceMyPart(mail.body);
+      mailAi.drafted = true;
+      mailAi.msgs.push({ kind: "done", mail, note: res.note, engine: res.engine, seconds: res.seconds });
+      // 흐름 줄(받는 사람·과목·언어)도 이 메일에 맞춘다. 받는 사람이 바뀌면 loadMailFlow 가 과목을 0 으로 되돌리므로
+      // key 를 비워 두고(되돌리지 않게) 받는사람 칸 input 이 잡아 둔 늦은 새로 읽기는 지운다
+      window.clearTimeout(flow.toTimer);
+      flow.key = "";
+      flow.course = Number(mail.courseIndex) || 0;
+      loadMailFlow(true).then(() => {
+        if (mail.lang && flow.data) {
+          flow.lang = mail.lang;
+          paintFlowBar();
+        }
+      });
+    }
+  } catch (error) {
+    if (seq !== mailAi.seq) return;
+    stopMailAiBusy(think);
+    mailAi.msgs.push({ kind: "error", text: humanError(error) });
+  }
+  paintMailAi();
+}
+
+async function runMailAiRevise() {
+  const seq = ++mailAi.seq;
+  const think = startMailAiBusy("revise");
+  const form = $("#composeForm");
+  const answers = mailAi.reviseAnswers;
+  const instruction = answers.length
+    ? `${mailAi.reviseText}\n\n[물어본 것에 대한 학생의 답]\n${answers.map((a) => `- ${a.q} → ${a.a}`).join("\n")}\n(더 묻지 말고 고쳐 주세요. 모르는 것은 [ ])`
+    : mailAi.reviseText;
+  try {
+    const res = await api("/api/ai/revise", {
+      method: "POST",
+      body: JSON.stringify({
+        instruction,
+        body: myPartText(),
+        to: form.elements.to.value,
+        cc: form.elements.cc.value,
+        subject: form.elements.subject.value,
+        noAsk: answers.length > 0,
+      }),
+    });
+    if (seq !== mailAi.seq) return;
+    stopMailAiBusy(think);
+    if (res.ask?.length) {
+      pushMailAiAsk("revise", res.ask);
+    } else {
+      const mail = res.mail || {};
+      const heads = applyMailHeads(mail);
+      const body = typeof mail.body === "string" ? replaceMyPart(mail.body) : false;
+      mailAi.drafted = true;
+      if (!body && !heads && !mail.subject) mailAi.msgs.push({ kind: "error", text: tr("바꿀 곳이 없었어요. 다르게 말해 주세요.") });
+      else mailAi.msgs.push({ kind: "edit", mail, note: res.note, engine: res.engine, seconds: res.seconds });
+      if (heads) loadMailFlow(true);
+    }
+  } catch (error) {
+    if (seq !== mailAi.seq) return;
+    stopMailAiBusy(think);
+    mailAi.msgs.push({ kind: "error", text: humanError(error) });
+  }
+  paintMailAi();
+}
+
+// 고른 답 하나 → 다음 질문, 다 고르면 그 답으로 다시 쓴다
+function answerMailAi(answer, skipped = false) {
+  const ask = mailAi.ask;
+  if (!ask) return;
+  const q = ask.questions[ask.index];
+  ask.picked.push({ q: q.q, a: skipped ? "(학생이 건너뜀 — 알아서 정하거나 [ ] 로 비움)" : answer, skipped });
+  ask.index += 1;
+  if (ask.index < ask.questions.length) {
+    paintMailAi();
+    return;
+  }
+  ask.kind = "answered";
+  mailAi.ask = null;
+  if (ask.mode === "revise") {
+    mailAi.reviseAnswers.push(...ask.picked);
+    runMailAiRevise();
+  } else {
+    mailAi.answers.push(...ask.picked);
+    runMailAiCompose();
+  }
+}
+
+// 본문의 /ai 가 되물었을 때: 옆 창을 열고 거기서 고르게 한다
+function mailAiAskFromInline(instruction, questions) {
+  setMailAiOpen(true);
+  mailAi.drafted = true;
+  mailAi.msgs.push({ kind: "user", text: instruction });
+  mailAi.reviseText = instruction;
+  mailAi.reviseAnswers = [];
+  pushMailAiAsk("revise", questions);
+  paintMailAi();
+}
+
+(() => {
+  const panel = $("#mailAiPanel");
+  if (!panel) return;
+  $("#mailAiToggle")?.addEventListener("click", () => setMailAiOpen(!mailAi.open, { focus: !mailAi.open }));
+  $("#mailAiClose")?.addEventListener("click", () => setMailAiOpen(false));
+  $("#mailAiReset")?.addEventListener("click", () => {
+    resetMailAi();
+    $("#mailAiText")?.focus();
+  });
+  $("#mailAiModel")?.addEventListener("click", async (event) => {
+    const btn = event.currentTarget;
+    if (aiMenu.el && !aiMenu.el.hidden && aiMenu.anchor === btn) return closeAiMenu();
+    await loadAiStatus();
+    if (!aiReady()) return goAiSettings();
+    openAiMenu(btn);
+  });
+  const input = $("#mailAiText");
+  input?.addEventListener("input", growMailAiText);
+  input?.addEventListener("keydown", (event) => {
+    // Enter 보내기 · Shift+Enter 줄바꿈 (한글 조합 중 Enter 는 글자 확정이라 넘긴다)
+    if (event.key === "Enter" && !event.shiftKey && !event.isComposing && event.keyCode !== 229) {
+      event.preventDefault();
+      mailAiSubmit(input.value);
+    }
+  });
+  $("#mailAiForm")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    mailAiSubmit(input?.value || "");
+  });
+  const log = $("#mailAiLog");
+  log?.addEventListener("click", (event) => {
+    const example = event.target.closest("[data-example]");
+    if (example) {
+      if (input) {
+        input.value = example.dataset.example;
+        growMailAiText();
+        input.focus();
+        input.setSelectionRange(input.value.length, input.value.length);
+      }
+      return;
+    }
+    if (event.target.closest("[data-mai-connect]")) return goAiSettings();
+    const opt = event.target.closest("[data-opt]");
+    if (opt && mailAi.ask) {
+      const q = mailAi.ask.questions[mailAi.ask.index];
+      answerMailAi(q.options[Number(opt.dataset.opt)]);
+      return;
+    }
+    if (event.target.closest("[data-skip]") && mailAi.ask) answerMailAi("", true);
+  });
+  log?.addEventListener("submit", (event) => {
+    const own = event.target.closest("[data-own]");
+    if (!own) return;
+    event.preventDefault();
+    const v = own.querySelector("input")?.value.trim();
+    if (v) answerMailAi(v);
+  });
+  // 숫자 키: 카드에 포커스가 있을 때 1·2·3 고르기, 마지막 번호는 직접 입력 칸으로
+  log?.addEventListener("keydown", (event) => {
+    if (!mailAi.ask || event.target.closest("input, textarea") || event.ctrlKey || event.metaKey || event.altKey) return;
+    const q = mailAi.ask.questions[mailAi.ask.index];
+    const n = Number(event.key);
+    if (!Number.isInteger(n) || n < 1 || n > q.options.length + 1) return;
+    event.preventDefault();
+    if (n <= q.options.length) answerMailAi(q.options[n - 1]);
+    else log.querySelector("[data-own] input")?.focus();
+  });
+  // 쓰기 창을 떠나면 고르는 칸·떠 있는 단추를 치운다
+  document.addEventListener("daling:compose-hidden", () => closeSelAi());
+})();
+
+function goAiSettings() {
+  switchView("settings");
+  window.setTimeout(() => $("#stAi")?.scrollIntoView({ block: "start", behavior: "smooth" }), 120);
+}
+
+/* ===== 끌어 고른 부분 고치기 (2026-11-09 사용자: '글을 고칠 때 드래그해서 고르면 그 자리에서 댓글 달듯 프롬프트') =====
+   본문에서 글을 고르면 고른 끝 아래에 작은 'AI 로 고치기' 단추가 뜬다(포커스는 뺏지 않는다 — 복사·지우기·서식은 그대로).
+   누르거나 Ctrl+/(⌘/) → 그 자리에 '어떻게 고칠까요?' 칸이 열린다. 적고 Enter(또는 빠른 단추) → 고른 부분만
+   /api/ai/rewrite 로 고쳐 그 자리에 타자 치듯 넣는다(Ctrl+Z 두 번이면 원래 글).
+   고른 자리는 CSS Highlight 로 칠해 두어(글에는 손대지 않음) 칸에 적는 동안·AI 가 고치는 동안에도 어디인지 보인다. */
+const selAi = { el: null, range: null, open: false, busy: false, seq: 0, timer: 0, down: false };
+const SEL_AI_QUICK = ["더 공손하게", "더 짧게", "자연스럽게", "영어로"];
+
+function selAiRange() {
+  const rich = $("#composeRich");
+  const sel = window.getSelection();
+  if (!rich || rich.hidden || !composeIsRich() || !sel?.rangeCount || sel.isCollapsed) return null;
+  const range = sel.getRangeAt(0);
+  if (!rich.contains(range.commonAncestorContainer)) return null;
+  const host = range.commonAncestorContainer.nodeType === 1 ? range.commonAncestorContainer : range.commonAncestorContainer.parentElement;
+  if (host?.closest("[data-ghost]")) return null;
+  return range.toString().trim().length >= 2 ? range : null;
+}
+
+function setSelHighlight(range) {
+  try {
+    if (!window.CSS?.highlights || typeof Highlight === "undefined") return;
+    if (range) CSS.highlights.set("ai-sel", new Highlight(range));
+    else CSS.highlights.delete("ai-sel");
+  } catch (error) {
+    /* 칠하기를 못 하는 브라우저면 넘어간다 */
+  }
+}
+
+function ensureSelAi() {
+  if (selAi.el) return selAi.el;
+  const el = document.createElement("div");
+  el.className = "sel-ai";
+  el.hidden = true;
+  el.setAttribute("role", "dialog");
+  el.setAttribute("aria-label", tr("고른 부분 AI 로 고치기"));
+  document.body.appendChild(el);
+  // 단추를 눌러도 본문에서 고른 글이 풀리지 않게 (입력 칸만은 눌러 들어갈 수 있게)
+  el.addEventListener("mousedown", (event) => {
+    if (!event.target.closest("input")) event.preventDefault();
+  });
+  el.addEventListener("click", (event) => {
+    if (event.target.closest("[data-sel-open]")) return openSelAi();
+    const quick = event.target.closest("[data-quick]");
+    if (quick) return runSelAi(quick.dataset.quick);
+    if (event.target.closest("[data-sel-cancel]")) return closeSelAi({ restore: true });
+  });
+  el.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const v = el.querySelector("input")?.value.trim();
+    if (v) runSelAi(v);
+  });
+  el.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      closeSelAi({ restore: true });
+    }
+  });
+  selAi.el = el;
+  return el;
+}
+
+function paintSelAi() {
+  const el = ensureSelAi();
+  const now = currentAiModel();
+  if (selAi.busy) {
+    el.className = "sel-ai busy";
+    el.innerHTML = `${aiLogo(now.provider || "claude", "busy")}<span>${escapeHtml(tr("{who} 가 고치는 중").replace("{who}", now.label))}</span>
+      <button type="button" class="sel-ai-x" data-sel-cancel>${escapeHtml(tr("취소"))}</button>`;
+  } else if (selAi.open) {
+    el.className = "sel-ai open";
+    const quick = SEL_AI_QUICK
+      .map((q) => (q === "영어로" && flow.lang === "en" ? "한국어로" : q))
+      .map((q) => `<button type="button" class="sel-ai-chip" data-quick="${escapeHtml(tr(q))}">${escapeHtml(tr(q))}</button>`)
+      .join("");
+    el.innerHTML = `<form class="sel-ai-form">${aiLogo(now.provider || "claude")}
+        <input type="text" maxlength="500" placeholder="${escapeHtml(tr("어떻게 고칠까요?"))}" aria-label="${escapeHtml(tr("어떻게 고칠까요?"))}" />
+        <button type="submit" class="sel-ai-go" aria-label="${escapeHtml(tr("고치기"))}">↵</button></form>
+      <div class="sel-ai-chips">${quick}</div>`;
+  } else {
+    el.className = "sel-ai";
+    el.innerHTML = `<button type="button" class="sel-ai-pill" data-sel-open>${iconHtml("sparkle")}<span>${escapeHtml(tr("AI 로 고치기"))}</span><kbd>${escapeHtml(keyLabel("Ctrl+/"))}</kbd></button>`;
+  }
+  placeSelAi();
+}
+
+// 고른 글 끝 바로 아래 (화면 아래가 모자라면 고른 글 위)
+function placeSelAi() {
+  const el = selAi.el;
+  const range = selAi.range;
+  if (!el || !range) return;
+  const rects = range.getClientRects();
+  const last = rects[rects.length - 1] || range.getBoundingClientRect();
+  const first = rects[0] || last;
+  el.hidden = false;
+  const w = el.offsetWidth;
+  const h = el.offsetHeight;
+  let top = last.bottom + 8;
+  if (top + h > window.innerHeight - 8) top = Math.max(8, first.top - h - 8);
+  const left = Math.max(8, Math.min(last.right - Math.min(w, 120), window.innerWidth - w - 8));
+  Object.assign(el.style, { top: `${Math.round(top)}px`, left: `${Math.round(left)}px` });
+  // 본문 칸 밖으로 스크롤되어 나가면 숨긴다 (닫지는 않는다)
+  const box = $(".compose-scroll")?.getBoundingClientRect();
+  if (box && (last.bottom < box.top || first.top > box.bottom)) el.hidden = true;
+}
+
+function showSelAiPill() {
+  if (selAi.open || selAi.busy) return;
+  const range = selAiRange();
+  if (!range || !aiReady() || aiJob.box) return hideSelAiPill();
+  selAi.range = range.cloneRange();
+  paintSelAi();
+}
+
+function hideSelAiPill() {
+  if (selAi.open || selAi.busy || !selAi.el) return;
+  selAi.el.hidden = true;
+  selAi.range = null;
+}
+
+function openSelAi() {
+  const range = selAiRange() || selAi.range;
+  if (!range || !aiReady()) return;
+  selAi.range = range.cloneRange();
+  selAi.open = true;
+  setSelHighlight(selAi.range);
+  paintSelAi();
+  selAi.el.querySelector("input")?.focus();
+}
+
+function closeSelAi({ restore = false } = {}) {
+  const range = selAi.range;
+  selAi.seq += 1;
+  selAi.open = false;
+  selAi.busy = false;
+  selAi.range = null;
+  setSelHighlight(null);
+  if (selAi.el) selAi.el.hidden = true;
+  if (restore && range && $("#composeRich")?.contains(range.startContainer)) {
+    $("#composeRich").focus();
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }
+}
+
+async function runSelAi(instruction) {
+  const range = selAi.range;
+  const rich = $("#composeRich");
+  if (!range || range.collapsed || !rich?.contains(range.startContainer)) return closeSelAi();
+  await loadAiStatus();
+  if (!aiReady()) return closeSelAi();
+  const selection = rangeText(range, true).replaceAll(FLOW_MARK, "");
+  const part = myPartRange();
+  const beforeRange = document.createRange();
+  beforeRange.setStart(rich, 0);
+  beforeRange.setEnd(range.startContainer, range.startOffset);
+  const afterRange = document.createRange();
+  afterRange.setStart(range.endContainer, range.endOffset);
+  if (part.quote && part.range.comparePoint(range.endContainer, range.endOffset) === 0) {
+    afterRange.setEnd(part.range.endContainer, part.range.endOffset);
+  } else {
+    afterRange.setEnd(rich, rich.childNodes.length);
+  }
+  const before = rangeText(beforeRange, true).replaceAll(FLOW_MARK, "");
+  const after = rangeText(afterRange, false).replaceAll(FLOW_MARK, "");
+  const seq = ++selAi.seq;
+  selAi.busy = true;
+  selAi.open = false;
+  paintSelAi();
+  try {
+    const res = await api("/api/ai/rewrite", {
+      method: "POST",
+      body: JSON.stringify({ instruction, selection, before: before.slice(-3000), after: after.slice(0, 2000), flow: { to: aiFlowTo() } }),
+    });
+    if (seq !== selAi.seq) return; // 그사이 취소
+    if (range.collapsed || !rich.contains(range.startContainer)) throw new Error(tr("고르던 글이 바뀌어서 넣지 않았어요."));
+    const text = String(res.text || "");
+    const keep = range.cloneRange();
+    selAi.range = null;
+    closeSelAi();
+    aiTypeReplace(keep, text);
+  } catch (error) {
+    if (seq !== selAi.seq) return;
+    selAi.busy = false;
+    selAi.open = true;
+    paintSelAi();
+    showToast(humanError(error));
+  }
+}
+
+(() => {
+  const rich = $("#composeRich");
+  if (!rich) return;
+  // 끄는 동안(마우스를 누른 채)에는 띄우지 않고, 놓은 뒤에 띄운다
+  rich.addEventListener("mousedown", () => {
+    selAi.down = true;
+    if (!selAi.busy) closeSelAi();
+  });
+  document.addEventListener("mouseup", () => {
+    if (!selAi.down) return;
+    selAi.down = false;
+    window.clearTimeout(selAi.timer);
+    selAi.timer = window.setTimeout(showSelAiPill, 60);
+  });
+  document.addEventListener("selectionchange", () => {
+    if (selAi.down || selAi.open || selAi.busy) return;
+    window.clearTimeout(selAi.timer);
+    selAi.timer = window.setTimeout(() => (selAiRange() ? showSelAiPill() : hideSelAiPill()), 180);
+  });
+  // Ctrl+/ (맥 ⌘/): 고른 글이 있으면 바로 '어떻게 고칠까요?' 칸으로
+  rich.addEventListener("keydown", (event) => {
+    if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key === "/" && selAiRange()) {
+      event.preventDefault();
+      openSelAi();
+    }
+  });
+  // 다른 데를 누르면 닫는다 (AI 가 고치는 중이면 그대로 두고 끝나면 넣는다)
+  document.addEventListener("mousedown", (event) => {
+    if (!selAi.el || selAi.el.hidden || selAi.busy) return;
+    if (selAi.el.contains(event.target) || rich.contains(event.target)) return;
+    closeSelAi();
+  });
+  $(".compose-scroll")?.addEventListener("scroll", () => {
+    if (selAi.el && selAi.range) placeSelAi();
+  }, { passive: true });
+  window.addEventListener("resize", () => {
+    if (selAi.el && selAi.range && !selAi.el.hidden) placeSelAi();
+  });
 })();

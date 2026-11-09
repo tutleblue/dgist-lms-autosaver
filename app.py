@@ -427,37 +427,45 @@ def run_scheduled_sync(workspace) -> None:
     # (예전에는 여기서 매일 '새 자료가 없습니다' 까지 알려 귀찮았다)
 
 
+def last_full_sync_day(workspace) -> str | None:
+    """마지막으로 전체 동기화가 실제로 끝난 날(로컬 날짜).
+
+    예전에는 '앱을 켤 때 이미 예약 시간이 지났으면 오늘은 건너뜀' 이었다.
+    그러면 08:00 이후에 앱을 켜는 날은 동기화가 영영 안 돈다 — 실제로
+    LMS 에 새로 올라온 학술 글쓰기 자료가 하루 넘게 안 들어왔다.
+    메모리 대신 파일을 보면 '오늘 아직 안 했다' 를 정확히 안다.
+    """
+    try:
+        # 빠른 동기화(3시간마다)도 last_sync.json 을 고치므로, 그걸 보면 '오늘은 이미 했다' 로
+        # 보여 전체 검사가 한 번도 돌지 않았다. 전체 검사만 적는 파일을 본다.
+        data = web_ui.read_json(workspace.root / "last_full_sync.json", {})
+        raw = str((data or {}).get("lastFullSync", ""))
+        if not raw:
+            return None
+        when = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        return when.astimezone().strftime("%Y-%m-%d")
+    except Exception:
+        return None
+
+
 def scheduler_loop() -> None:
     """앱이 켜져 있는 동안 매일 예약 시간(SCHEDULE_TIME)에 자동 동기화."""
+    import background_sync
+
     workspace = web_ui.workspace_for_user("local")
-
-    def last_sync_day() -> str | None:
-        """마지막으로 자료 동기화가 실제로 끝난 날(로컬 날짜).
-
-        예전에는 '앱을 켤 때 이미 예약 시간이 지났으면 오늘은 건너뜀' 이었다.
-        그러면 08:00 이후에 앱을 켜는 날은 동기화가 영영 안 돈다 — 실제로
-        LMS 에 새로 올라온 학술 글쓰기 자료가 하루 넘게 안 들어왔다.
-        메모리 대신 last_sync.json 을 보면 '오늘 아직 안 했다' 를 정확히 안다.
-        """
-        try:
-            # 빠른 동기화(3시간마다)도 last_sync.json 을 고치므로, 그걸 보면 '오늘은 이미 했다' 로
-            # 보여 전체 검사가 한 번도 돌지 않았다. 전체 검사만 적는 파일을 본다.
-            data = web_ui.read_json(workspace.root / "last_full_sync.json", {})
-            raw = str((data or {}).get("lastFullSync", ""))
-            if not raw:
-                return None
-            when = datetime.fromisoformat(raw.replace("Z", "+00:00"))
-            return when.astimezone().strftime("%Y-%m-%d")
-        except Exception:
-            return None
-
-    last_run_day = last_sync_day()
+    last_run_day = last_full_sync_day(workspace)
     # 켜자마자 LMS 를 두드리지 않도록 2분만 숨을 고른다
     started_at = time.monotonic()
     while True:
         if web_ui.demo_mode.active():
             # 체험 모드 중에는 자동 가져오기·알림을 쉰다 (바깥 서버에 묻지 않고, 진짜 마감 알림이 가짜 화면과 섞이지 않게)
             time.sleep(30)
+            continue
+        if background_sync.busy(workspace.root):
+            # 앱을 꺼 둔 사이 시작한 '하루 한 번 동기화'(run_background)가 아직 돈다. LMS 로그인이 겹치지 않게 끝나길 기다린다.
+            # 끝나면 그쪽이 적은 last_full_sync.json 을 다시 읽어 오늘 전체 동기화를 두 번 하지 않는다
+            time.sleep(30)
+            last_run_day = last_full_sync_day(workspace) or last_run_day
             continue
         try:
             config = web_ui.read_config(workspace)
@@ -877,6 +885,87 @@ def run_worker(job: str) -> int:
     return 0
 
 
+def _wait_threads(before: set, limit_seconds: float) -> None:
+    """start_task 가 띄운 작업 스레드(run_process)가 끝날 때까지. 'running' 이 꺼진 뒤에도 그 스레드가
+    폴더 정리·내 컴퓨터 저장·성공 기록·캘린더를 이어서 하므로, 스레드째 기다려야 이 프로세스를 끝낼 수 있다."""
+    deadline = time.monotonic() + limit_seconds
+    for thread in [t for t in threading.enumerate() if t not in before]:
+        thread.join(max(1.0, deadline - time.monotonic()))
+
+
+def _refresh_background_sync() -> None:
+    if web_ui.MULTI_USER_MODE or web_ui.demo_mode.active():
+        return
+    import background_sync
+
+    workspace = web_ui.workspace_for_user("local")
+    background_sync.refresh(workspace.root, web_ui.read_config(workspace))
+
+
+def run_background() -> int:
+    """운영체제 예약 작업이 하루 한 번 부른다 (background_sync). 창·서버 없이 자동 가져오기를 한 바퀴 돌고 끝난다.
+
+    앱 안의 scheduler_loop 와 같은 규칙을 따른다: 계정이 빈 작업은 안 하고, 실패 뒤 쉬는 간격·로그인 거절 멈춤
+    (next_due_job)을 지키고, 전체 동기화는 하루 한 번(last_full_sync.json). 알림도 앱이 켜져 있을 때처럼 띄운다.
+    """
+    import background_sync
+
+    _bind_worker_output()
+    if sys.platform.startswith("linux"):
+        try:
+            linux_support.use_system_env_for_children()
+        except Exception:
+            pass
+    # 앱이 켜져 있으면 그쪽이 같은 일을 한다
+    if any(port_in_use(HOST, port) and existing_dashboard(HOST, port) for port in PORT_CANDIDATES):
+        print("Daling 이 켜져 있어 앱이 가져옵니다.")
+        return 0
+    workspace = web_ui.workspace_for_user("local")
+    if web_ui.demo_mode.active():
+        return 0
+    with background_sync.hold(workspace.root) as got:
+        if not got:
+            return 0
+        config = web_ui.read_config(workspace)
+        if not background_sync.wanted(config):
+            return 0  # 설정에서 껐는데 예약이 남아 있었다 (다음에 앱을 켜면 refresh 가 지운다)
+        web_ui.ensure_data_files(workspace)
+        ready = {kind: web_ui.account_ready(config, kind) for kind in ("emails", "deadlines", "sync")}
+        minutes = web_ui.auto_minutes(config)
+        today = datetime.now().strftime("%Y-%m-%d")
+        plan = []
+        if ready["emails"] and next_due_job(workspace, minutes, ("emails",)):
+            plan.append(("emails", "fast"))
+        # 전체 동기화는 하루 한 번. 자동 확인 주기를 꺼 뒀어도(0분) 앱 안의 '매일 전체 확인' 처럼 한다
+        if ready["sync"] and last_full_sync_day(workspace) != today and next_due_job(workspace, {"sync": 1}, ("sync",)):
+            plan.append(("sync", "full"))
+        if ready["deadlines"] and next_due_job(workspace, minutes, ("deadlines",)):
+            plan.append(("deadlines", "fast"))
+        started = datetime.now().astimezone().isoformat(timespec="seconds")
+        results = {}
+        for kind, mode in plan:
+            before = set(threading.enumerate())
+            ok, message = web_ui.start_task(workspace, kind, sync_mode=mode, auto=True)
+            if not ok:
+                results[kind] = message
+                continue
+            _wait_threads(before, 90 * 60)
+            with web_ui.task_lock:
+                code = web_ui.task_states.get(web_ui.task_key(workspace.user_id, kind), {}).get("returnCode")
+            results[kind] = code
+            print(f"[하루 한 번 동기화] {kind}: 종료 코드 {code}")
+        try:
+            check_deadline_alerts(workspace, config)
+            check_new_file_alerts(workspace, config)
+            check_announcement_alerts(workspace, config)
+        except Exception:
+            pass
+        background_sync.record_run(workspace.root, {
+            "at": started, "finishedAt": datetime.now().astimezone().isoformat(timespec="seconds"), "results": results,
+        })
+    return 0
+
+
 def initial_window_size() -> tuple[int, int, int | None, int | None]:
     """첫 창 크기와 자리: 1320×880 을 바라되 작업 영역(작업표시줄 뺀 화면)을 넘지 않게, 가운데에.
 
@@ -1076,6 +1165,8 @@ def main() -> None:
             import autostart
 
             autostart.refresh()
+        # 앱을 꺼 둬도 하루 한 번 동기화: 설정대로 운영체제 예약을 맞춘다(업데이트로 실행 파일 자리가 바뀐 경우도). schtasks 가 느려 뒤에서
+        threading.Thread(target=_refresh_background_sync, daemon=True).start()
 
         # 켤 때마다 띄우던 '48시간 마감 요약' 은 없앴다. 마감 알림(하루·3시간·1시간 전)이 대신한다.
 
@@ -1144,6 +1235,8 @@ if __name__ == "__main__":
 
     if len(sys.argv) >= 3 and sys.argv[1] == WORKER_FLAG:
         sys.exit(run_worker(sys.argv[2]))
+    if len(sys.argv) >= 2 and sys.argv[1] == "--autosaver-background":  # background_sync.FLAG
+        sys.exit(run_background())
     if len(sys.argv) >= 2 and sys.argv[1] == SMOKE_FLAG:
         import smoke_test
 
