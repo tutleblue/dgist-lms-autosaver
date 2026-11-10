@@ -77,6 +77,12 @@ Daling.exe (PyInstaller onedir, Python 3.14)
 - 지표 카드: 임박한 마감, 전체 자료, 강의 수, 새 메일
 - **주간 시간표**: 수업을 눌러 편집 창에서 고치기(드래그로 옮기지 않음 — 사용자가 정한 방식), 에브리타임 링크 가져오기, 시간표 이미지 가져오기(Gemini 키 필요), 토요일 표시
   - 색: 과목(과목번호, 없으면 이름)마다 반드시 다른 색. 12가지(`TT_COLORS`, `.tone-*`). 그릴 때마다 `normalizeTtColors`가 겹친 과목만 다시 칠하고 바뀐 칸만 저장. 12과목을 넘을 때만 가장 적게 쓰인 색을 나눠 씀.
+  - **LMS 과목으로 채우기** (1.12.58): 이번 학기 LMS 과목 이름('일반물리Ⅱ (General PhysicsⅡ )_03[ 2026_2학기 ]', `course_meta`)의 과목명·분반을 DGIST 개설과목(`get_course_catalog`, 학부 먼저·없으면 대학원)과 맞춰 요일·시간·강의실·학수번호·교수·학점을 얻는다(`web_ui.lms_timetable_plan`). 이름은 NFKC·띄어쓰기·괄호를 없애고 견주고, 개설과목 쪽 부제(' - 인지심리학')는 앞만, 영어 이름도 함께 본다(`_catalog_match`). 실측(2026-2학기): LMS 9과목 모두 맞음.
+    - 수강 변경: 바꾸기 전 과목도 LMS 에 남아 LMS 과목끼리 부딪친다(같은 과목 분반 둘·시간 겹침). 사용자 결정(2026-11-10): **받은 자료가 더 많은 쪽을 지금 듣는 과목으로 본다**(`_lms_material_counts` — `file_metadata.json` 의 course 별 개수). 자료 많은 과목부터 자리를 잡고, 이미 잡은 과목과 부딪치는데 자료가 적으면 `dropped`('변경 전 과목', `keptBy`), 같으면 정하지 않고 `duplicate`·`overlap` 으로 사용자에게 맡긴다. 실측: Academic English 03(10개)·09(8개), 03 과 화요일이 겹치는 사회과학 특강Ⅰ(2개) → 03 만 남아 사용자가 손으로 만든 시간표와 같았다.
+    - 저절로: 동기화·마감 새로고침이 성공하면(`run_process`) 학기마다 한 번 `auto_fill_timetable`. 이번 학기 과목이 시간표에 하나라도 있으면(`added`·`otherSection`) 손으로 만든 시간표라 보고 건드리지 않는다. `new` 만 넣고 `dropped`(알림에 몇 과목 뺐다고 적음)·자료 수가 같아 못 정한 `duplicate`·`overlap` 은 넣지 않는다. 넣었으면 시간표 위에 한 번 알림(`timetable.json` 의 `lmsAuto`, '확인' → `/api/timetable/lms-seen`). 한 학기 한 번 표시는 `lmsAutoTerm` — 다 지워도 같은 학기엔 다시 채우지 않는다. 이번 학기 LMS 과목을 아직 모르면(첫 동기화 전) 표시를 남기지 않고 다음 동기화에 다시 본다. 체험 모드·여러 사용자 모드에서는 안 함.
+    - 손으로: '시간표 편집' 옆 창 맨 위 '내 LMS 과목' — 상태 꼬리표(넣음·다른 분반 있음·변경 전 과목·LMS 분반 둘·시간 겹침)와 ＋, 넣을 수 있는 과목이 둘 이상이면 'N과목 모두 넣기'(`/api/timetable/lms-plan`, `/api/timetable/lms-apply` `{ids}`). 고른 것은 겹쳐도 넣는다. 같은 과목이 같은 요일·시각에 이미 있으면 그 칸은 건너뛴다. 색은 같은 과목이면 그 색, 아니면 안 쓴 색(`_tt_color`, app.js `pickTtColor` 와 같은 규칙).
+    - `timetable.json` 에 쓰는 곳은 모두 `_write_timetable` 을 거친다 — 칸을 고칠 때 `lmsAutoTerm`·`lmsAuto` 가 지워지지 않게(예전엔 entries·semester 만 다시 썼다).
+    - 긴 과목명이 옆 창(300px)을 403px 로 밀어 검색 칸까지 잘렸다(실측) → `.lms-tt { contain: inline-size }`.
 - 다가오는 마감, 다가오는 일정, 학교 공지, 학교 사이트 바로가기
 - 시험 기간 응원(`examSeason`, `EXAM_CHEERS`): 학사일정의 학부 중간·기말 시험 기준으로 7일 전(before)·시험 중(during)·마지막 날(last)·끝난 뒤 2일(after). 나우바 아래 줄에 짧은 문장(수업 중·직전 제외). 대시보드 인사 아래 줄(`#heroCheer`)은 1.12.13 에 뺐다(사용자: 거기엔 없어도 됨). 문장은 날짜로 골라 하루 동안 그대로. 나우바를 펼치면(수업이 없을 때) 달구 카드(`nowDalguCard`, `EXAM_DALGU`): 시기별 포즈·움직임(전 study/book 흔들림, 중 fight 주먹, 후 yay/lounge 폴짝)과 위 두 줄과 겹치지 않는 '달구가 하는 말'. 달구를 누르면 폴짝 뛰며 다음 말. 예전엔 펼친 칸이 나우바 아래 줄을 그대로 되풀이했다
 - 화면 편집(블록 순서 끌어 옮기기), 모두 접기
@@ -162,6 +168,7 @@ Daling.exe (PyInstaller onedir, Python 3.14)
 - 답장, 전체 답장, 전달, 이전/다음 메일, 별표(서버 `\Flagged`), 삭제.
 - ⋮ 메뉴: 읽지 않음으로 표시, 한국어로 번역, 다시 알림, 이메일 이동(폴더 만들기 포함), 인쇄, 파일로 저장(.eml), 일정 추가, 리마인드 메일 쓰기.
 - 답장 안 온 보낸 메일 찾기 (`/api/mail/pending`) → 리마인드 초안 (`/api/mail/reminder`).
+- 거꾸로, 물어봤는데 내가 아직 답 안 한 받은 메일은 '답장할 메일'(대시보드에서 잠깐 뜨는 알림·빠른 거르기 '답장할'·읽기 창 띠) — 아래 '답장할 메일' 절.
 
 쓰기:
 - 서식 도구, 서명, 인용, 주소 찾기(조직도 + 받은 주소 자동완성), 임시저장, 미리보기.
@@ -447,9 +454,11 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 | `/api/storage/trash-browser` | Edge 를 쓰는 PC 에서 예전에 받은 LMS 브라우저(헤드리스 셸)를 휴지통으로 |
 | `/api/samsung-notes/send`, `/api/samsung-notes/organize` | 한 개 넣기(뒤에서), 노트 폴더 정리 |
 | `/api/timetable/save`, `/api/timetable/delete`, `/api/timetable/bulk`, `/api/timetable/import-link`, `/api/timetable/import-image` | 시간표 |
+| `/api/timetable/lms-plan` (GET), `/api/timetable/lms-apply`, `/api/timetable/lms-seen` | LMS 과목으로 시간표 채우기, 채웠다는 알림 닫기 |
 | `/api/my-events/save`, `/api/my-events/delete`, `/api/export-ics` | 내 일정, ics 저장 |
 | `/api/mark-read`, `/api/mark-all-read`, `/api/delete-email`, `/api/restore-email` | 메일 상태 |
 | `/api/mail/star`, `/api/mail/move`, `/api/mail/folder-create`, `/api/mail/reminder`, `/api/mail/translate` | 메일 기능 |
+| `/api/mail/reply-dismiss` | 답장할 메일에서 빼기·다시 넣기 `{id, undo}` (`reply_state.json` 에만 씀, 메일 서버는 그대로) |
 | `/api/mail/open-link` | 메일 본문 링크를 기본 브라우저로 (http·https 만) |
 | `/api/send-email` | 메일 보내기 |
 | `/api/mail/flow` | 메일 쓰기 흐름 `{to, courseIndex}` → 받는 사람(교수·조교·외국인·과목)과 한국어·영어 글 조각 |
@@ -479,6 +488,7 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 | `courses_state.json` | 수강 과목, 추가·삭제 감지 |
 | `deadlines.json` | 과제 마감 |
 | `emails.json` | 메일 (본문·HTML·그림 메타·첨부 메타, `bodyVersion`) |
+| `reply_state.json` | 답장할 메일에서 뺀 것(`dismissed`)·이 앱으로 답장한 것(`replied`) {메일 id: 시각}, 60일 지나면 지움 |
 | `mail_images\` | 본문 그림 캐시 |
 | `upload_selection.json` | Drive 과목 선택, 숨긴 과목·마감·자료 |
 | `shelves.json` | 내 폴더 |
@@ -789,6 +799,7 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 - 위쪽 떠 있는 진행 막대(`showTopProgress`)는 사용자가 시킨 작업만 보여 준다. `task.auto`(예약·주기 실행)면 띄우지 않고 실행 기록에만 남는다. 막대를 작업이 띄웠는지 `state.taskOwnsBar` 로 기억해, 삼성 노트·내 컴퓨터 저장 막대는 건드리지 않는다.
 - 자동 작업이 도는 중에 사용자가 작업을 시키면 거절하지 않고 `task_state['queued']` 에 두었다가 `run_process` 끝에서 이어서 시작한다(`web_ui.start_task`). 그동안 막대는 '○○ · 곧 시작해요'. 사용자 작업끼리는 예전처럼 '이미 실행 중'.
 - 계기: 메일만 새로 가져오려는데 '자동 마감·일정 새로고침' 막대가 떠 있었다.
+- **메일 가져오기는 막대를 안 띄운다**(2026-11-10, 1.12.58): 직접 눌러도(`kind === "emails"`) `renderTaskBar` 가 고르지 않는다. 사용자: '이메일 가져올 때는 진행률 띄우지 마'. 메일함에서는 새로고침 단추가 돌며 '가져오는 중 · 누르면 멈춤'(`renderMailRefreshAgo`), 대시보드 '전체 새로고침' 은 마감 막대만('외 1개' 도 메일은 안 셈). 메일만 다시 하는 경고 배너 '다시 시도' 는 물방울도 안 날린다.
 - 메일 칸 분리(1.12.16): 메일 가져오기는 IMAP 만 써서 `web_ui.task_key(user, 'emails')` = `user:mail` 칸에서 따로 돈다(상태·로그·프로세스). `/api/task` 응답의 `mail` 에 들어 있고, 화면은 `renderTaskBar` 가 두 칸 중 사용자가 시킨 것을 보여 준다('외 1개'). 예약 실행(`app.scheduler_loop`)도 메일은 따로, LMS 작업(마감·자료)만 한 번에 하나. 이어서 하기(queued)는 이제 본 칸 작업에만 쓰인다. 작업 중지 버튼은 본 칸만 멈춘다.
 - 교수·조교(`fetch_course_staff`)는 과제 마감 확인(1시간)과 자료 동기화(`crawl_lms` 끝, 마감 수집 뒤) 둘 다에서 받는다. 새 PC 에서 첫 동기화를 마치면 바로 채워진다. 받은 것은 그 PC 의 `course_staff.json` 에만 두어 사용자마다 자기 과목 조교만 보인다(다른 사용자와 나누지 않음 — 수강 정보가 모이는 서버를 두지 않기로, 2026-10-11).
 
@@ -1223,6 +1234,25 @@ Microsoft Store 정책 10.3.1(로그인 앱은 심사용 시험 계정을 줄 �
 - `/ai with ` 를 치면 커서 아래에 설치된 모델 목록(`.ai-model-pop`)이 뜨고 ↑↓·Tab·클릭으로 고르면 `모델 []` 이 들어가 `[ ]` 안에 커서가 선다. 실행은 Ctrl+Enter, 커서 뒤의 `]` 까지 지시 글로 지운다.
 - with 로 고른 모델은 그 한 번만: `/api/ai/continue` 에 provider·model 을 실어 보내고, 서버는 아는 CLI·안전한 글자일 때만 받는다. 평소 모델은 쓰기 창의 모델 단추(`#aiModelSelect`)에서 바꾼다. 실측: `with haiku` 요청이 Haiku 4.5 로 13초.
 - AI 모델 메뉴·로고(2026-10-21): 채팅식 'AI 초안' 칸은 쓰지 않는다(늘 숨김). 쓰기 창 위 모델 단추(`#aiDraftToggle`, [로고] 모델 ▾) → `.ai-menu` 두 칸: 오른쪽 회사(ChatGPT·Gemini·Claude, 설치 초록 점·지금 ✓, 마우스를 올리면 바뀜) · 왼쪽 세부 모델(기본(CLI 설정)·설명·꼬리표 최고 성능/추천/빠름·직접 입력). 고르면 `ai_profile.json` 에 저장. 로고는 Simple Icons(CC0) 경로를 `AI_LOGO_PATHS` 에 넣고(`web/img/ai/` 원본), AI 가 쓰는 동안 Claude 는 돌며 숨 쉬고(aiClaudeSpin) Gemini 반짝·OpenAI 회전. Gemini 그라데이션은 `#aiGeminiGrad`.
+
+## 답장할 메일 (2026-11-10, 1.12.58)
+
+사용자: '회신해야 하는 메일을 회신 안 했으면 대시보드에서 알림으로 알려 주면 좋겠어. 아니면 이메일 창이나'. `/api/mail/pending`(답 안 온 보낸 메일)의 거울.
+
+- **고르기**(`email_reader.replies_needed`, `GET /api/emails` 가 메일에 `replyAsk`(회신을 바라는 문장)·`replyDays`·`replyDismissed` 를 붙임, 121통 5ms):
+  - 받은 편지함, 받은 지 14일 안. 보낸 사람이 나·자동 주소(noreply·mailer-daemon 등)면 뺀다.
+  - **사람이 나에게 쓴 메일만**: 내 메일에 온 답장(답신이면서 전에 보낸 적 있는 사람이거나 인용에 내 주소), 분류 '교수님', 전에 내가 메일을 보낸 사람(단체 분류·말머리 `[`로 시작하는 새 메일·'여러분·구성원·Dear all' 은 뺌).
+    학교 단체 메일도 받는 사람이 나 하나로 찍혀 와서(받은 편지함 60통 모두) 받는 사람 칸으로는 못 가른다. 숨은 참조(받는 사람에 내가 없음)는 뺀다.
+  - **답했는지**: 받은 뒤에 그 사람에게 보낸 메일이 보낸 편지함에 있으면 답한 것. 서버 `\Answered` 는 못 쓴다 — 받은 편지함 275통 중 0통에 붙어 있었다(2026-11-10 실측). 이 앱으로 답장을 보내면 `send-email` 이 `inReplyTo` 로 그 메일을 찾아 `reply_state.json` `replied` 에 적어 새로고침 전에도 바로 빠진다.
+  - **묻는 말**: 인용·원본 앞의 새로 쓴 부분(`mail_new_part`: `>`·'---- 원본 메일 ----'·'Org.'·'On … wrote:'·'… 작성:'·'From:' 에서 자름)에 회신 요청·물음이 있는 문장(`reply_ask_sentence`). '회신 주셔서 감사'·'알려 줘서 고마워' 는 안 걸리게 끝을 '주시기·주세요…' 로 묶고, '궁금한 점이 있으면 연락 주세요'·'If you have any questions, please let me know' 같은 끝인사는 뺀다. 영어 메일은 70자 남짓에서 줄을 꺾으므로 긴 줄은 다음 줄과 이어 본다.
+  - 실측(내 메일 121통): 답신 5통 중 진짜 회신 요청 1통('…작성 후 회신 주시기 바랍니다')만 골랐다. 교수님 끝인사 'please let me know'(줄 꺾임), '연락 줘서 고마워요', 이미 답한 'Please write back', 예전에 문의한 부서의 '[기업탐방] 참가자 모집'(‘?’)은 고치는 동안 걸렸다가 빠졌다.
+- **대시보드 알림**(`#replyNudge`, app.js `maybeReplyNudge`): 붙박이 칸이 아니라 잠깐 뜨는 카드다 — 처음엔 대시보드 칸으로 만들었다가 사용자가 '섹션 말고 일시적 알림으로' 해서 바꿨다.
+  - 대시보드에 올 때(앱을 켤 때 포함) 오늘 아직 알리지 않은 답장할 메일이 있으면 0.9초 뒤 오른쪽 아래(휴대폰 폭은 탭바 위)에 밀려 들어와 12초 뒤 사라진다. 마우스를 올렸거나 단추에 초점이 있으면 기다리고, ×·Esc·다른 화면으로 가면 닫힌다.
+  - 같은 메일은 **하루 한 번**: 알린 날과 메일 id 를 localStorage `daling.replyNudgeSeen` 에 둔다. 새 답장할 메일이 생기면(메일 새로고침) 그때 다시 뜬다. 창이 가려졌거나(트레이로 켬) 첫 실행 소개 중이면 볼 수 있을 때까지 3초마다 미룬다.
+  - 1통: 보낸 사람·며칠째·제목·묻는 문장 + [안 해도 돼요]·[답장](메일을 열고 답장 쓰기, AI 옆 창도). 여러 통: 오래 기다린 것부터 3통 + 'n통 더 보기' + [메일함에서 보기]. 줄을 누르면 그 메일.
+  - `RENDER_PARTS` 의 `replyNudge`(그리는 대신 띄울지 판단). 대시보드 블록이 아니라 `loadDashLayout`·화면 편집과 상관없다.
+- **메일 창**: 메일함 빠른 거르기 '답장할'(넷째 칸), 줄·카드에 '답장할 메일' 꼬리표, 읽기 창 위 띠(`#readReplyAsk`) — 뺀 메일은 '다시 넣기'.
+- AI 는 부르지 않는다. 메일 서버에는 쓰지 않는다.
 
 ## AI 메일 옆 창·끌어 고치기 (2026-11-09, 1.12.57)
 

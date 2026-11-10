@@ -1887,12 +1887,45 @@ def _mark_events(emails: list[dict[str, Any]], config: dict[str, Any], school_ev
                 g["mail"]["schoolEventId"] = ev.get("id")
 
 
+# 답장할 메일(email_reader.replies_needed)에서 뺄 메일: 학생이 '답장 안 해도 돼요' 한 것(dismissed)과
+# 이 앱으로 답장을 보낸 것(replied — 보낸 편지함 사본은 다음 메일 새로고침 때 오므로 그사이에도 사라지게). 60일 지나면 지운다.
+_reply_state_lock = threading.Lock()
+
+
+def _reply_state_path(workspace: UserWorkspace) -> Path:
+    return workspace.root / "reply_state.json"
+
+
+def read_reply_state(workspace: UserWorkspace) -> dict[str, dict[str, str]]:
+    data = read_json(_reply_state_path(workspace), {})
+    data = data if isinstance(data, dict) else {}
+    return {key: dict(data.get(key) or {}) if isinstance(data.get(key), dict) else {} for key in ("dismissed", "replied")}
+
+
+def mark_reply_state(workspace: UserWorkspace, kind: str, mail_ids: list[str], on: bool = True) -> None:
+    from datetime import timedelta
+
+    now = datetime.now()
+    cutoff = (now - timedelta(days=60)).isoformat(timespec="seconds")
+    with _reply_state_lock:
+        state = read_reply_state(workspace)
+        for mail_id in mail_ids:
+            if on:
+                state[kind][mail_id] = now.isoformat(timespec="seconds")
+            else:
+                state[kind].pop(mail_id, None)
+        for key in state:
+            state[key] = {k: v for k, v in state[key].items() if str(v) >= cutoff}
+        atomic_write_text(_reply_state_path(workspace), json.dumps(state, ensure_ascii=False, indent=2))
+
+
 def get_emails(workspace: UserWorkspace) -> dict[str, Any]:
     stamp = (
         str(workspace.emails_log),
         _file_stamp(workspace.emails_log),
         _file_stamp(workspace.config_path),
         _file_stamp(_school_events_path(workspace)),  # 학교 행사가 새로 오면 메일 행사 중복도 다시 본다
+        _file_stamp(_reply_state_path(workspace)),
     )
     if _emails_cache.get("key") == stamp and _emails_cache.get("data") is not None:
         return _emails_cache["data"]
@@ -1924,6 +1957,24 @@ def get_emails(workspace: UserWorkspace) -> dict[str, Any]:
             item["snippet"] = strip_css_text(body)[:300]
         elif "&" in snippet and re.search(r"&(?:[a-z]+|#\d+);", snippet):
             item["snippet"] = html.unescape(snippet).replace("\xa0", " ")
+    # 답장할 메일: 화면은 replyAsk(회신을 바라는 문장)가 있는 메일을 대시보드·'답장할 메일' 거르기에 보인다
+    try:
+        import email_reader
+
+        reply_state = read_reply_state(workspace)
+        raw_config = read_json(workspace.config_path, {})
+        me = str(raw_config.get("SCHOOL_EMAIL") or "") if isinstance(raw_config, dict) else ""
+        need = email_reader.replies_needed([m for m in emails if isinstance(m, dict)], me, skip=set(reply_state["replied"]))
+        for item in listed:
+            info = need.get(str(item.get("id")))
+            if info:
+                item["replyAsk"] = info["ask"]
+                item["replyDays"] = info["days"]
+                # '안 해도 돼요' 한 메일도 문장은 준다 — 읽기 창에서 '다시 넣기' 로 되돌릴 수 있게
+                if str(item.get("id")) in reply_state["dismissed"]:
+                    item["replyDismissed"] = True
+    except Exception as exc:
+        print(f"[메일] 답장할 메일을 고르지 못했습니다: {exc}")
     result = {
         "updatedAt": data.get("updatedAt"),
         "briefing": data.get("briefing", ""),
@@ -3528,15 +3579,22 @@ def get_timetable(workspace: UserWorkspace) -> dict[str, Any]:
     # 채운 값을 파일에 남겨야 다음 요청부터 이 일을 안 한다
     if _fill_missing_credits(workspace, entries):
         try:
-            workspace.root.mkdir(parents=True, exist_ok=True)
-            atomic_write_text(workspace.timetable_path, 
-                json.dumps({"entries": entries, "semester": semester}, ensure_ascii=False, indent=2),
-                encoding="utf-8",
-            )
+            _write_timetable(workspace, entries, semester)
         except OSError:
             pass  # 못 써도 화면은 그대로 나온다
 
-    return {"entries": entries, "semester": semester}
+    # LMS 과목으로 저절로 채웠으면 화면에 한 번 알린다 (auto_fill_timetable)
+    return {"entries": entries, "semester": semester, "lmsAuto": data.get("lmsAuto")}
+
+
+def _write_timetable(workspace: UserWorkspace, entries: list[dict[str, Any]], semester: str) -> None:
+    """수업 칸만 바꾸고 같은 파일의 다른 값(LMS 로 채운 학기 lmsAutoTerm·알림 lmsAuto)은 그대로 둔다.
+    예전엔 칸을 고칠 때마다 entries·semester 만 써서 그런 값이 사라졌다."""
+    raw = read_json(workspace.timetable_path, {})
+    raw = raw if isinstance(raw, dict) else {}
+    raw.update(entries=entries, semester=semester)
+    workspace.root.mkdir(parents=True, exist_ok=True)
+    atomic_write_text(workspace.timetable_path, json.dumps(raw, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def save_timetable_entry(workspace: UserWorkspace, payload: dict[str, Any]) -> dict[str, Any]:
@@ -3581,26 +3639,271 @@ def save_timetable_entry(workspace: UserWorkspace, payload: dict[str, Any]) -> d
     else:
         entries.append(entry)
 
-    workspace.root.mkdir(parents=True, exist_ok=True)
-    atomic_write_text(workspace.timetable_path, 
-        json.dumps(
-            {"entries": entries, "semester": str(payload.get("semester", data.get("semester", "")))},
-            ensure_ascii=False,
-            indent=2,
-        ),
-        encoding="utf-8",
-    )
+    _write_timetable(workspace, entries, str(payload.get("semester", data.get("semester", ""))))
     return {"ok": True, "entry": entry, "entries": entries}
 
 
 def delete_timetable_entry(workspace: UserWorkspace, entry_id: str) -> dict[str, Any]:
     data = get_timetable(workspace)
     remaining = [e for e in data["entries"] if e.get("id") != entry_id]
-    atomic_write_text(workspace.timetable_path, 
-        json.dumps({"entries": remaining, "semester": data["semester"]}, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    _write_timetable(workspace, remaining, data["semester"])
     return {"ok": True, "entries": remaining}
+
+
+# ===== LMS 수강 과목으로 시간표 채우기 (2026-11-10, 1.12.58) =====
+# LMS 과목 이름에는 과목명·분반·학기('일반물리Ⅱ (General PhysicsⅡ )_03[ 2026_2학기 ]', course_meta)가 있고, 개설과목 목록
+# (get_course_catalog)에는 같은 과목·분반의 요일·시간·강의실이 있다. 둘을 과목명+분반으로 맞추면 시간표를 손으로 넣지 않아도 된다.
+# 실측(개발자 2026-2학기): LMS 이번 학기 9과목이 모두 맞았다. '사회과학 특강 Ⅰ' 은 개설과목 쪽 이름에 부제가 붙어
+# ('사회과학 특강Ⅰ - 인지심리학') ' - ' 앞만 견준다.
+# LMS 과목끼리 부딪치는 일(같은 과목 분반 둘·시간 겹침)은 수강신청 변경 때문이다 — 바꾸기 전 과목도 LMS 에 그대로 남는다.
+# 사용자 결정(2026-11-10): 자료가 더 많이 들어온 쪽을 지금 듣는 과목으로 본다. 실측: Academic English 03(10개)·09(8개),
+# 03 과 화요일이 겹치는 사회과학 특강Ⅰ(2개) → 03 만 남고, 사용자가 손으로 만든 시간표와 같았다. 자료 수가 같으면 정하지 않고 고르게 둔다.
+TT_COLORS = ("coral", "blue", "green", "amber", "violet", "teal", "rose", "olive", "indigo", "plum", "sky", "brown")  # app.js 와 같은 순서
+_LMS_EN_RE = re.compile(r"^.*?\((.*)\)\s*_[0-9A-Za-z]+\s*\[")
+
+
+def _tt_norm(text: str) -> str:
+    """'일반화학Ⅱ  ' · '사회과학 특강 Ⅰ' 처럼 띄어쓰기·로마 숫자 꼴이 다른 이름을 같게."""
+    return re.sub(r"[\s()\[\]_\-:.,·]+", "", unicodedata.normalize("NFKC", str(text or ""))).lower()
+
+
+def _tt_names(title: str) -> set[str]:
+    text = str(title or "")
+    return {name for name in (_tt_norm(text), _tt_norm(text.split(" - ", 1)[0])) if name}
+
+
+def _tt_minutes(hhmm: str) -> int:
+    try:
+        hour, minute = str(hhmm).split(":", 1)
+        return int(hour) * 60 + int(minute)
+    except ValueError:
+        return 0
+
+
+def _tt_overlaps(slot: dict[str, Any], entry: dict[str, Any]) -> bool:
+    try:
+        if int(entry.get("day", -1)) != int(slot.get("day", -2)):
+            return False
+    except (TypeError, ValueError):
+        return False
+    # 끝 시각과 시작 시각이 같은 건 겹친 게 아니다 (app.js ttOverlaps 와 같음)
+    return _tt_minutes(slot["start"]) < _tt_minutes(entry.get("end", "")) and _tt_minutes(entry.get("start", "")) < _tt_minutes(slot["end"])
+
+
+def _tt_entry_names(entry: dict[str, Any]) -> set[str]:
+    names = _tt_names(entry.get("title", ""))
+    if str(entry.get("courseNo", "")).strip():
+        names.add("#" + str(entry["courseNo"]).strip().lower())
+    return names
+
+
+def _tt_row_names(row: dict[str, Any]) -> set[str]:
+    names = _tt_names(row.get("title", "")) | _tt_names(row.get("lmsTitle", ""))
+    if row.get("courseNo"):
+        names.add("#" + str(row["courseNo"]).lower())
+    return names
+
+
+def _tt_same_slot(entry: dict[str, Any], slot: dict[str, Any]) -> bool:
+    try:
+        return int(entry.get("day", -1)) == int(slot["day"]) and entry.get("start") == slot["start"]
+    except (TypeError, ValueError):
+        return False
+
+
+def _catalog_match(courses: list[dict[str, Any]], title: str, title_en: str, section: str) -> dict[str, Any] | None:
+    want, want_en = _tt_names(title), _tt_names(title_en)
+    for course in courses:
+        if str(course.get("section", "")).lstrip("0") != str(section).lstrip("0") or not course.get("slots"):
+            continue
+        if want & _tt_names(course.get("title", "")) or (want_en and want_en & _tt_names(course.get("titleEn", ""))):
+            return course
+    return None
+
+
+def lms_timetable_plan(workspace: UserWorkspace) -> dict[str, Any]:
+    """이번 학기 LMS 과목마다 개설과목에서 찾은 수업 시간과, 지금 시간표와 견준 상태.
+
+    state: added(이미 다 들어 있음) · otherSection(같은 과목 다른 분반이 들어 있음)
+           · dropped(부딪치는 LMS 과목에 자료가 더 많아 바꾸기 전 과목으로 봄, keptBy)
+           · duplicate(LMS 에 같은 과목 분반이 둘인데 자료 수가 같음) · overlap(다른 수업과 시간이 겹침) · new(넣을 수 있음)
+    """
+    term = current_term_key()
+    lms = [c for c in get_course_state(workspace)["current"] if course_meta(c.get("name", ""))["term"] == term]
+    materials = _lms_material_counts(workspace)
+    catalogs: list[list[dict[str, Any]]] = []
+    entries = get_timetable(workspace)["entries"]
+    rows, unmatched = [], []
+    for item in lms:
+        name = str(item.get("name", ""))
+        meta = course_meta(name)
+        en = _LMS_EN_RE.match(name)
+        found = None
+        # 학부 먼저, 못 찾으면 대학원 목록 (씨앗·캐시가 없으면 학교 사이트에서 한 번 받아 온다)
+        for index, undergraduate in enumerate((True, False)):
+            if len(catalogs) <= index:
+                try:
+                    catalogs.append(get_course_catalog(workspace, "", undergraduate).get("courses") or [])
+                except Exception:
+                    catalogs.append([])
+            found = _catalog_match(catalogs[index], meta["title"], en.group(1).strip() if en else "", meta["section"])
+            if found:
+                break
+        if not found:
+            # 실험·논문연구처럼 개설과목에 시간이 없는 과목
+            unmatched.append({"id": str(item.get("id", "")), "title": meta["title"], "section": meta["section"]})
+            continue
+        rows.append({
+            "id": str(item.get("id", "")),
+            "lmsTitle": meta["title"],
+            "title": str(found.get("title", "")).strip(),
+            "section": meta["section"],
+            "courseNo": str(found.get("courseNo", "")).strip(),
+            "professor": str(found.get("professor", "")).strip(),
+            "credit": str(found.get("credit", "")).strip(),
+            "slots": found.get("slots") or [],
+            "materials": materials.get(_tt_norm(name), 0),
+        })
+
+    def course_key(row: dict[str, Any]) -> str:
+        return row["courseNo"] or _tt_norm(row["title"])
+
+    def collide(a: dict[str, Any], b: dict[str, Any]) -> bool:
+        return course_key(a) == course_key(b) or any(_tt_overlaps(s, t) for s in a["slots"] for t in b["slots"])
+
+    # 자료가 많은 과목부터 자리를 잡는다. 이미 자리 잡은 과목과 부딪치면: 자료가 적으면 바꾸기 전 과목(dropped),
+    # 같으면 어느 쪽인지 모르니 둘 다 사용자에게 맡긴다(tie).
+    kept: list[dict[str, Any]] = []
+    for row in sorted(rows, key=lambda r: -r["materials"]):
+        rivals = [k for k in kept if collide(row, k)]
+        more = [k for k in rivals if k["materials"] > row["materials"]]
+        if not rivals:
+            kept.append(row)
+        elif more:
+            # 같은 과목 다른 분반이 있으면 그 이름을 댄다 ('Academic English 09' 는 03 때문에 빠짐)
+            row["keptBy"] = next((k for k in more if course_key(k) == course_key(row)), more[0])["title"]
+        else:
+            for rival in rivals:
+                row.setdefault("tie", []).append(rival)
+                rival.setdefault("tie", []).append(row)
+    for row in rows:
+        mine = [e for e in entries if _tt_entry_names(e) & _tt_row_names(row)]
+        ties = row.pop("tie", [])
+        if mine and all(any(_tt_same_slot(e, s) for e in mine) for s in row["slots"]):
+            row["state"] = "added"
+        elif row.get("keptBy"):
+            row["state"] = "dropped"  # 다른 분반이 시간표에 있어도 '변경 전' 이 더 정확한 말
+        elif mine:
+            row["state"] = "otherSection"
+        elif any(course_key(t) == course_key(row) for t in ties):
+            row["state"] = "duplicate"
+        else:
+            clash = sorted({str(e.get("title", "")) for s in row["slots"] for e in entries if _tt_overlaps(s, e)}
+                           | {t["title"] for t in ties})
+            row["state"] = "overlap" if clash else "new"
+            if clash:
+                row["clash"] = clash
+    return {"ok": True, "term": term, "courses": rows, "unmatched": unmatched}
+
+
+def _lms_material_counts(workspace: UserWorkspace) -> dict[str, int]:
+    """LMS 과목 이름(_tt_norm) → 받은 자료 수. file_metadata.json 의 course 는 LMS 과목 이름 그대로다."""
+    counts: dict[str, int] = {}
+    metadata = read_json(workspace.file_metadata_log, {})
+    for meta in (metadata.values() if isinstance(metadata, dict) else []):
+        key = _tt_norm(meta.get("course", "") if isinstance(meta, dict) else meta)
+        counts[key] = counts.get(key, 0) + 1
+    return counts
+
+
+def _tt_color(entries: list[dict[str, Any]], names: set[str]) -> str:
+    """같은 과목이 있으면 그 색, 아니면 아직 안 쓴 색 (app.js pickTtColor 와 같은 규칙)."""
+    used: dict[str, int] = {}
+    for entry in entries:
+        if _tt_entry_names(entry) & names and entry.get("color") in TT_COLORS:
+            return entry["color"]
+        used[str(entry.get("color", ""))] = used.get(str(entry.get("color", "")), 0) + 1
+    free = [color for color in TT_COLORS if color not in used]
+    return free[0] if free else min(TT_COLORS, key=lambda color: used.get(color, 0))
+
+
+def add_lms_courses(workspace: UserWorkspace, rows: list[dict[str, Any]]) -> list[str]:
+    """고른 LMS 과목의 수업 칸을 모두 넣는다. 같은 과목이 같은 요일·시각에 이미 있으면 그 칸은 건너뛴다. 넣은 과목 이름."""
+    added = []
+    for row in rows:
+        entries = get_timetable(workspace)["entries"]
+        names = _tt_row_names(row)
+        color = _tt_color(entries, names)
+        count = 0
+        for slot in row.get("slots") or []:
+            if any(_tt_entry_names(e) & names and _tt_same_slot(e, slot) for e in entries):
+                continue
+            save_timetable_entry(workspace, {
+                "title": row["title"], "day": slot["day"], "start": slot["start"], "end": slot["end"],
+                "room": slot.get("room", ""), "color": color, "credit": row.get("credit", ""),
+                "courseNo": row.get("courseNo", ""), "professor": row.get("professor", ""),
+            })
+            count += 1
+        if count:
+            added.append(row["title"])
+    return added
+
+
+def apply_lms_timetable(workspace: UserWorkspace, course_ids: list[str]) -> dict[str, Any]:
+    """'시간표 편집' 의 내 LMS 과목에서 고른 것을 넣는다. 겹치는 수업이 있어도 사용자가 고른 것이라 그대로 넣는다."""
+    wanted = {str(i) for i in course_ids or []}
+    rows = [row for row in lms_timetable_plan(workspace)["courses"] if row["id"] in wanted and row["state"] != "added"]
+    if not rows:
+        raise ValueError("넣을 과목이 없어요.")
+    added = add_lms_courses(workspace, rows)
+    return {"ok": True, "added": added, **get_timetable(workspace)}
+
+
+def _timetable_raw(workspace: UserWorkspace) -> dict[str, Any]:
+    raw = read_json(workspace.timetable_path, {})
+    return raw if isinstance(raw, dict) else {}
+
+
+def auto_fill_timetable(workspace: UserWorkspace) -> dict[str, Any] | None:
+    """학기마다 한 번: 이번 학기 과목이 시간표에 하나도 없으면 LMS 과목으로 채운다. 동기화가 끝난 뒤 부른다(run_process).
+
+    이미 이번 학기 과목을 하나라도 넣어 둔 사람의 시간표는 건드리지 않는다(손으로 고친 것을 덮지 않게).
+    LMS 과목끼리 부딪치면 자료가 많은 쪽만 넣는다(dropped 는 뺌). 자료 수가 같아 못 정한 것은 '시간표 편집' 에서 고르게 남긴다.
+    넣었으면 화면에 한 번 알린다(lmsAuto).
+    """
+    if demo_mode.active() or MULTI_USER_MODE:
+        return None
+    term = current_term_key()
+    if _timetable_raw(workspace).get("lmsAutoTerm") == term:
+        return None
+    plan = lms_timetable_plan(workspace)
+    if not plan["courses"]:
+        return None  # 이번 학기 LMS 과목을 아직 모른다(학기 초·첫 동기화 전) — 다음 동기화 때 다시 본다
+    notice = None
+    if not any(row["state"] in ("added", "otherSection") for row in plan["courses"]):
+        added = add_lms_courses(workspace, [row for row in plan["courses"] if row["state"] == "new"])
+        if added:
+            notice = {
+                "term": term,
+                "at": now_iso(),
+                "added": added,
+                # 분반이 둘인 과목은 한 번만 센다
+                "skipped": list(dict.fromkeys(row["title"] for row in plan["courses"] if row["state"] in ("duplicate", "overlap"))),
+                "dropped": list(dict.fromkeys(row["title"] for row in plan["courses"] if row["state"] == "dropped")),
+            }
+    raw = _timetable_raw(workspace)
+    raw["lmsAutoTerm"] = term
+    if notice:
+        raw["lmsAuto"] = notice
+    atomic_write_text(workspace.timetable_path, json.dumps(raw, ensure_ascii=False, indent=2), encoding="utf-8")
+    return notice
+
+
+def dismiss_lms_auto_notice(workspace: UserWorkspace) -> dict[str, Any]:
+    raw = _timetable_raw(workspace)
+    if raw.pop("lmsAuto", None) is not None:
+        atomic_write_text(workspace.timetable_path, json.dumps(raw, ensure_ascii=False, indent=2), encoding="utf-8")
+    return {"ok": True}
 
 
 # ===== 미리 탑재한 씨앗 데이터 =====
@@ -5402,6 +5705,15 @@ def run_process(workspace: UserWorkspace, kind: str, command: list[str] | None, 
                 f"[알림] 실패 까닭: {info.get('title', '알 수 없음')} (이 작업 연속 {info.get('count', 1)}회). {info.get('hint', '')}",
             )
 
+    # 학기마다 한 번: 이번 학기 과목이 시간표에 없으면 LMS 과목으로 채운다 (동기화가 courses_state.json 을 새로 적은 뒤라야 안다)
+    if kind in ("sync", "deadlines") and return_code == 0:
+        try:
+            notice = auto_fill_timetable(workspace)
+            if notice:
+                append_log(key, f"[시간표] LMS 과목 {len(notice['added'])}개로 이번 학기 시간표를 채웠습니다.")
+        except Exception as exc:
+            append_log(key, f"[시간표] LMS 과목으로 채우지 못했습니다: {exc}")
+
     # 메일을 새로 읽어온 뒤 구글 캘린더 자동 동기화 (설정에서 켠 경우에만)
     if kind in ("emails", "sync") and return_code == 0:
         auto_sync_calendar(workspace)
@@ -5880,6 +6192,13 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             return
         if route == "/api/timetable":
             self.send_json(get_timetable(workspace))
+            return
+        if route == "/api/timetable/lms-plan":
+            # 이번 학기 LMS 과목과 개설과목의 수업 시간 ('시간표 편집' 위쪽 '내 LMS 과목')
+            try:
+                self.send_json(lms_timetable_plan(workspace))
+            except Exception as exc:
+                self.send_json({"ok": False, "courses": [], "message": str(exc)}, HTTPStatus.BAD_REQUEST)
             return
         if route == "/api/notices":
             try:
@@ -6767,6 +7086,17 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                     message += f" (서버가 거절한 주소: {', '.join(result['refused'])})"
                 if not result.get("savedToSent"):
                     message += " · 보낸 편지함에 사본은 못 남겼어요"
+                # 답장을 보냈으면 그 메일은 '답장할 메일' 에서 바로 뺀다 (보낸 편지함 사본은 다음 새로고침 때 온다)
+                replied_to = str(payload.get("inReplyTo", "")).strip()
+                if replied_to:
+                    try:
+                        mails = (read_json(workspace.emails_log, {}) or {}).get("emails") or []
+                        ids = [str(m.get("id")) for m in mails if isinstance(m, dict) and m.get("folder") == "inbox"
+                               and str(m.get("messageId") or "").strip() == replied_to]
+                        if ids:
+                            mark_reply_state(workspace, "replied", ids)
+                    except Exception as exc:
+                        print(f"[메일] 답장한 메일을 적어 두지 못했습니다: {exc}")
                 self.send_json({"ok": True, "message": message, **result})
             except Exception as exc:
                 self.send_json({"ok": False, "message": f"메일 발송 실패: {exc}"}, HTTPStatus.BAD_REQUEST)
@@ -6979,6 +7309,16 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             except Exception as exc:
                 self.send_json({"ok": False, "message": str(exc)}, HTTPStatus.BAD_REQUEST)
             return
+        if route == "/api/mail/reply-dismiss":
+            # 답장할 메일에서 빼기 {id, undo}. 메일 서버에는 손대지 않고 데이터 폴더의 reply_state.json 에만 적는다
+            payload = self.read_body_json()
+            mail_id = str(payload.get("id") or "").strip()[:120]
+            if not mail_id:
+                self.send_json({"ok": False, "message": "어느 메일인지 알 수 없어요."}, HTTPStatus.BAD_REQUEST)
+                return
+            mark_reply_state(workspace, "dismissed", [mail_id], on=not payload.get("undo"))
+            self.send_json({"ok": True, "id": mail_id, "dismissed": not payload.get("undo")})
+            return
         if route in ("/api/mail/star", "/api/mail/move", "/api/mail/folder-create", "/api/mail/reminder"):
             try:
                 import email_reader
@@ -7173,10 +7513,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 if not isinstance(entries, list) or not entries:
                     raise ValueError("추가할 수업이 없습니다.")
                 if payload.get("replace"):
-                    atomic_write_text(workspace.timetable_path, 
-                        json.dumps({"entries": [], "semester": ""}, ensure_ascii=False),
-                        encoding="utf-8",
-                    )
+                    _write_timetable(workspace, [], "")
                 saved = 0
                 for item in entries:
                     try:
@@ -7187,6 +7524,17 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 self.send_json({"ok": True, "saved": saved, **get_timetable(workspace)})
             except Exception as exc:
                 self.send_json({"ok": False, "message": str(exc)}, HTTPStatus.BAD_REQUEST)
+            return
+        if route == "/api/timetable/lms-apply":
+            # '시간표 편집' 의 내 LMS 과목에서 고른 과목 넣기 (apply_lms_timetable)
+            try:
+                ids = self.read_body_json().get("ids")
+                self.send_json(apply_lms_timetable(workspace, ids if isinstance(ids, list) else []))
+            except Exception as exc:
+                self.send_json({"ok": False, "message": str(exc)}, HTTPStatus.BAD_REQUEST)
+            return
+        if route == "/api/timetable/lms-seen":
+            self.send_json(dismiss_lms_auto_notice(workspace))
             return
         if route == "/api/timetable/save":
             try:

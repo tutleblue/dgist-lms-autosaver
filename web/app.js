@@ -817,6 +817,8 @@ async function runViewRefresh(view) {
 function applyView(view) {
   state.view = view;
   updateRefreshButton(view);
+  // 답장할 메일 알림은 대시보드에서만 뜬다. 다른 화면으로 가면 닫는다
+  if (view !== "dashboard") hideReplyNudge();
   // 메일 쓰기는 메일함(view-emails) 셸을 공유하되 작성 pane을 연다
   const isCompose = view === "compose";
   const shellView = isCompose ? "emails" : view;
@@ -1438,6 +1440,7 @@ function newsCard(mail, featured = false) {
       <div class="news-card-top">
         <input type="checkbox" class="mail-pick" aria-label="선택" />
         <span class="category-chip ${color}">${escapeHtml(mail.category || "기타")}</span>
+        ${needsReply(mail) ? replyTagHtml(mail) : ""}
         ${mail.unread ? '<span class="unread-dot" title="안 읽은 메일"></span>' : ""}
         <span class="card-actions">
           <button type="button" class="mail-act" data-act="read" title="${mail.unread ? "읽음 표시" : "안읽음 표시"}">
@@ -1682,6 +1685,7 @@ function openEmailDetail(mail) {
     summary.hidden = true;
   }
 
+  paintReadReplyAsk(mail);
   renderMailBody(mail);
   state.replyContext = mail;
   // 읽음/안읽음 토글 아이콘
@@ -3275,6 +3279,7 @@ const MAIL_TABS = [
 /* 왼쪽 위 빠른 필터 (네이버의 안읽음/중요/첨부) */
 const MAIL_QUICK = [
   { key: "unread", label: "안읽음", icon: "alert" },
+  { key: "reply", label: "답장할", icon: "reply", title: "답장할 메일 — 물어본 말에 아직 답하지 않은 메일" },
   { key: "starred", label: "중요", icon: "sparkle" },
   { key: "attach", label: "첨부", icon: "paperclip" },
 ];
@@ -3394,12 +3399,14 @@ function renderMailQuick(emails) {
   if (!wrap) return;
   const counts = {
     unread: emails.filter((m) => m.unread).length,
+    reply: emails.filter(needsReply).length,
     starred: emails.filter(isStarredMail).length,
     attach: emails.filter((m) => m.hasAttachment || (m.attachments || []).length).length,
   };
   wrap.innerHTML = MAIL_QUICK.map(
     (q) => `
-      <button type="button" class="mail-quick-item ${state.emailQuick === q.key ? "active" : ""}" data-quick="${q.key}">
+      <button type="button" class="mail-quick-item ${state.emailQuick === q.key ? "active" : ""} ${q.key === "reply" && counts.reply ? "has-reply" : ""}"
+        data-quick="${q.key}"${q.title ? ` title="${escapeHtml(q.title)}"` : ""}>
         <strong>${counts[q.key] || 0}</strong>
         <span class="icon" data-icon="${q.icon}"></span>
         <span>${escapeHtml(q.label)}</span>
@@ -3540,6 +3547,7 @@ function renderEmails() {
 
   // 왼쪽 빠른 필터
   if (state.emailQuick === "unread") folderPool = folderPool.filter((m) => m.unread);
+  else if (state.emailQuick === "reply") folderPool = folderPool.filter(needsReply);
   else if (state.emailQuick === "starred") folderPool = folderPool.filter(isStarredMail);
   else if (state.emailQuick === "attach")
     folderPool = folderPool.filter((m) => m.hasAttachment || (m.attachments || []).length);
@@ -3704,6 +3712,7 @@ function emailListRow(mail) {
       <div class="list-main">
         <div class="list-head">
           <span class="list-folder-tag">${escapeHtml(MAIL_FOLDER_TAG[mail.folder] || "메일")}</span>
+          ${needsReply(mail) ? replyTagHtml(mail) : ""}
           <span class="list-from">${
             (mail.folder === "sent" || mail.folder === "draft") && (mail.toName || mail.toEmail)
               ? `→ ${escapeHtml(shortText(mail.toName || mail.toEmail, 22))}`
@@ -3742,6 +3751,245 @@ function emailListRow(mail) {
     </div>
   `;
 }
+
+/* ===== 답장할 메일 (2026-11-10) =====
+   사용자: '회신해야 하는 메일을 회신 안 했으면 대시보드나 메일 창에서 알려 줬으면'.
+   서버(email_reader.replies_needed)가 '사람이 나에게 묻거나 회신을 부탁했는데, 받은 뒤 그 사람에게 보낸 메일이 없는' 받은 메일에
+   replyAsk(회신을 바라는 그 문장)를 붙여 준다. 대시보드에서 잠깐 뜨는 알림 · 메일함 빠른 거르기 '답장할' · 읽기 창 위 띠에 보인다.
+   '안 해도 돼요' 는 데이터 폴더 reply_state.json 에만 적고(메일 서버는 그대로), 읽기 창의 '다시 넣기' 로 되돌린다. */
+function needsReply(mail) {
+  return Boolean(mail?.replyAsk) && !mail.replyDismissed && mail.folder === "inbox";
+}
+
+function replySig(s) {
+  return (s.emails?.emails || []).filter(needsReply).map((m) => m.id).join(",");
+}
+
+function replyAgo(days) {
+  const n = Number(days) || 0;
+  return n <= 0 ? "오늘 받음" : n === 1 ? "어제 받음" : `${n}일째`;
+}
+
+function replyTagHtml(mail) {
+  return `<span class="reply-tag" title="${escapeHtml(`답장할 메일 · “${mail.replyAsk}”`)}">${iconHtml("reply")}답장할 메일</span>`;
+}
+
+/* 대시보드 알림 — 처음엔 대시보드에 '답장할 메일' 칸을 붙박이로 넣었는데, 사용자: '섹션 말고 잠깐 뜨는 알림으로'(2026-11-10).
+   대시보드에 올 때(앱을 켤 때 포함) 오늘 아직 알리지 않은 답장할 메일이 있으면 오른쪽 아래에 카드가 떴다가 12초 뒤 사라진다.
+   같은 메일은 하루 한 번만 — 알린 날과 메일 id 를 localStorage 에 둔다. 새 메일이 오면 그 메일로 다시 뜬다.
+   마우스를 올려 두거나 단추에 초점이 있으면 사라지지 않고 기다린다. 창이 가려졌거나 첫 실행 소개 중이면 볼 수 있을 때까지 미룬다. */
+const REPLY_NUDGE_STORE = "daling.replyNudgeSeen";
+const REPLY_NUDGE_MS = 12000;
+const REPLY_NUDGE_ROWS = 3;
+
+/** 오래 기다린 것부터 */
+function pendingReplies() {
+  return (state.emails?.emails || []).filter(needsReply).sort((a, b) => new Date(a.date || 0) - new Date(b.date || 0));
+}
+
+function replyNudgeSeen() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(REPLY_NUDGE_STORE) || "{}");
+    if (saved.day === new Date().toDateString() && Array.isArray(saved.ids)) return new Set(saved.ids.map(String));
+  } catch (error) {
+    /* 깨진 값이면 오늘 처음인 셈 */
+  }
+  return new Set();
+}
+
+function markReplyNudgeSeen(ids) {
+  const seen = replyNudgeSeen();
+  ids.forEach((id) => seen.add(String(id)));
+  try {
+    localStorage.setItem(REPLY_NUDGE_STORE, JSON.stringify({ day: new Date().toDateString(), ids: [...seen] }));
+  } catch (error) {
+    /* 저장을 못 하면 다음에 한 번 더 뜰 뿐 */
+  }
+}
+
+function replyNudgeMailHtml(mail, one) {
+  const sender = mail.fromName || mail.fromEmail || "";
+  return `
+    <button class="rn-mail" type="button" data-mail-id="${escapeHtml(String(mail.id))}" title="메일 열기">
+      <span class="rn-line">
+        <strong class="rn-from">${escapeHtml(shortText(sender, 24))}</strong>
+        ${coursePersonTagHtml(mail.fromEmail)}
+        <span class="rn-when">${escapeHtml(replyAgo(mail.replyDays))}</span>
+      </span>
+      <span class="rn-subject">${escapeHtml(shortText(mail.subject || "", 80))}</span>
+      ${one ? `<span class="rn-ask">“${escapeHtml(mail.replyAsk)}”</span>` : ""}
+    </button>`;
+}
+
+function paintReplyNudge(items) {
+  const box = $("#replyNudge");
+  if (!box) return;
+  const one = items.length === 1;
+  $("#replyNudgeTitle").textContent = one ? "답장 안 한 메일" : `답장 안 한 메일 ${items.length}통`;
+  const more = items.length - REPLY_NUDGE_ROWS;
+  $("#replyNudgeBody").innerHTML =
+    items.slice(0, REPLY_NUDGE_ROWS).map((mail) => replyNudgeMailHtml(mail, one)).join("") +
+    (more > 0 ? `<button class="rn-more" type="button" data-reply-all>${more}통 더 보기</button>` : "");
+  box.dataset.mailId = one ? String(items[0].id) : "";
+  $("#replyNudgeReply").hidden = !one;
+  $("#replyNudgeDismiss").hidden = !one;
+  $("#replyNudgeAll").hidden = one;
+  installIcons(box);
+}
+
+function armReplyNudgeTimer(ms = REPLY_NUDGE_MS) {
+  window.clearTimeout(armReplyNudgeTimer.timer);
+  armReplyNudgeTimer.timer = window.setTimeout(() => {
+    const box = $("#replyNudge");
+    // 읽는 중(마우스를 올렸거나 단추에 초점)이면 조금 더 기다린다
+    if (box && (box.matches(":hover") || box.contains(document.activeElement))) armReplyNudgeTimer(4000);
+    else hideReplyNudge();
+  }, ms);
+}
+
+function showReplyNudge() {
+  const box = $("#replyNudge");
+  if (!box) return;
+  box.hidden = false;
+  void box.offsetWidth; // 숨김을 푼 뒤 한 번 그려야 밀려 들어오는 움직임이 보인다
+  box.classList.add("visible");
+  armReplyNudgeTimer();
+}
+
+function hideReplyNudge() {
+  window.clearTimeout(armReplyNudgeTimer.timer);
+  window.clearTimeout(maybeReplyNudge.wait);
+  const box = $("#replyNudge");
+  if (!box || box.hidden) return;
+  box.classList.remove("visible");
+  window.setTimeout(() => {
+    if (!box.classList.contains("visible")) box.hidden = true;
+  }, 240);
+}
+
+/** RENDER_PARTS 'replyNudge': 대시보드를 그릴 때마다 불린다. 오늘 안 알린 메일이 있을 때만 띄운다 */
+function maybeReplyNudge() {
+  window.clearTimeout(maybeReplyNudge.wait);
+  if (state.view !== "dashboard") return;
+  const items = pendingReplies();
+  const box = $("#replyNudge");
+  if (!items.length) {
+    hideReplyNudge();
+    return;
+  }
+  const seen = replyNudgeSeen();
+  if (items.every((mail) => seen.has(String(mail.id)))) {
+    // 오늘 다 알렸다. 떠 있는 중이면('안 해도 돼요'로 하나 뺐을 때 등) 내용만 맞춘다
+    if (box && !box.hidden) paintReplyNudge(items);
+    return;
+  }
+  // 트레이로 켜져 창이 가려졌거나 소개가 떠 있으면 아무도 못 본 채 지나간다 — 볼 수 있을 때까지 미룬다
+  if (document.hidden || document.body.classList.contains("tour-open")) {
+    maybeReplyNudge.wait = window.setTimeout(maybeReplyNudge, 3000);
+    return;
+  }
+  // 화면이 막 그려질 때 같이 나오면 눈에 안 띈다. 조금 뒤에 밀고 들어온다
+  maybeReplyNudge.wait = window.setTimeout(() => {
+    if (state.view !== "dashboard") return;
+    const now = pendingReplies();
+    if (!now.length) return;
+    paintReplyNudge(now);
+    showReplyNudge();
+    markReplyNudgeSeen(now.map((mail) => mail.id));
+  }, 900);
+}
+
+function findMailById(id) {
+  return (state.emails?.emails || []).find((m) => String(m.id) === String(id));
+}
+
+/** 메일함을 '답장할' 거르기로 연다 */
+function showRepliesInMail() {
+  state.emailFolder = "inbox";
+  state.emailFilter = "";
+  state.emailQuick = "reply";
+  switchView("emails");
+  window.setTimeout(() => renderEmails(), 0);
+}
+
+/** 대시보드에서 바로 답장: 메일을 연 뒤(답장 문맥 = 그 메일) 답장 쓰기를 연다 */
+function replyFromDashboard(mail) {
+  switchView("emails");
+  // 전환이 끝난 뒤에 열어야 창이 목록으로 안 돌아간다 (다른 곳의 openEmailDetail 과 같은 200ms)
+  window.setTimeout(() => {
+    openEmailDetail(mail);
+    replyToCurrentEmail();
+  }, 200);
+}
+
+async function dismissReply(mail, undo = false) {
+  if (!mail) return;
+  mail.replyDismissed = !undo;
+  renderAll();
+  if (state.replyContext === mail) paintReadReplyAsk(mail);
+  try {
+    await api("/api/mail/reply-dismiss", { method: "POST", body: JSON.stringify({ id: mail.id, undo }) });
+    showToast(undo ? "답장할 메일에 다시 넣었어요." : "답장할 메일에서 뺐어요. 그 메일을 열면 다시 넣을 수 있어요.");
+  } catch (error) {
+    mail.replyDismissed = undo;
+    renderAll();
+    if (state.replyContext === mail) paintReadReplyAsk(mail);
+    showToast(humanError(error));
+  }
+}
+
+/** 읽기 창 위 띠: 답을 기다리는 메일이면 그 문장과 [답장]·[안 해도 돼요], 뺀 메일이면 [다시 넣기] */
+function paintReadReplyAsk(mail) {
+  const box = $("#readReplyAsk");
+  if (!box) return;
+  const show = Boolean(mail?.replyAsk) && mail.folder === "inbox";
+  box.hidden = !show;
+  if (!show) return;
+  const off = Boolean(mail.replyDismissed);
+  box.classList.toggle("off", off);
+  $("#readReplyAskTitle").textContent = off ? "답장할 메일에서 뺐어요" : "답을 기다리는 메일이에요";
+  const text = $("#readReplyAskText");
+  text.textContent = off ? "" : `“${mail.replyAsk}”`;
+  text.hidden = off;
+  $("#readReplyAskReply").hidden = off;
+  $("#readReplyAskDismiss").textContent = off ? "다시 넣기" : "안 해도 돼요";
+}
+
+(function bindReplies() {
+  const nudge = $("#replyNudge");
+  nudge?.addEventListener("click", (event) => {
+    if (event.target.closest("#replyNudgeClose")) {
+      hideReplyNudge();
+      return;
+    }
+    if (event.target.closest("#replyNudgeAll, [data-reply-all]")) {
+      hideReplyNudge();
+      showRepliesInMail();
+      return;
+    }
+    const row = event.target.closest(".rn-mail");
+    const mail = findMailById(row ? row.dataset.mailId : nudge.dataset.mailId);
+    if (!mail) return;
+    if (event.target.closest("#replyNudgeDismiss")) {
+      dismissReply(mail); // 다시 그리면서 maybeReplyNudge 가 남은 게 없으면 닫는다
+    } else if (event.target.closest("#replyNudgeReply")) {
+      hideReplyNudge();
+      replyFromDashboard(mail);
+    } else if (row) {
+      hideReplyNudge();
+      switchView("emails");
+      window.setTimeout(() => openEmailDetail(mail), 200);
+    }
+  });
+  nudge?.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") hideReplyNudge();
+  });
+  $("#readReplyAskReply")?.addEventListener("click", () => replyToCurrentEmail());
+  $("#readReplyAskDismiss")?.addEventListener("click", () => {
+    const mail = state.replyContext;
+    if (mail) dismissReply(mail, Boolean(mail.replyDismissed));
+  });
+})();
 
 /* ===== 강의 뷰 ===== */
 /* '일반화학Ⅰ (General chemistryⅠ )_03[ 2026_1학기 ]' → 'General chemistryⅠ'.
@@ -4913,23 +5161,26 @@ function taskProgress(task) {
 /* 위쪽 떠 있는 진행 막대. 사용자가 시킨 일만 보여 준다.
    자동 마감·메일 확인까지 띄우니 '메일만 가져오는데 왜 유난이냐' 는 말을 들었다. 자동 작업은 설정의 실행 기록에만 남는다.
    작업은 두 칸(본 칸 = 자료·마감, 메일 칸)에서 따로 돌 수 있다(web_ui.task_key). 막대를 띄운 칸을
-   state.taskBar 에 기억해 그 칸이 끝나면 '완료' 를 보여 주고, 삼성 노트·내 컴퓨터 저장 막대는 건드리지 않는다. */
+   state.taskBar 에 기억해 그 칸이 끝나면 '완료' 를 보여 주고, 삼성 노트·내 컴퓨터 저장 막대는 건드리지 않는다.
+   메일 가져오기는 직접 눌러도 막대를 띄우지 않는다(2026-11-10 사용자: '이메일 가져올 때는 진행률 띄우지 마').
+   메일함에서는 새로고침 단추가 돌며 '가져오는 중' 을 적고, 대시보드 '전체 새로고침' 은 마감 쪽 막대만 남는다. */
 function renderTaskBar(task, labels) {
   if (state.notesJob?.running) return; // 삼성 노트를 넣는 중이면 그쪽이 막대를 쓴다
   const lanes = { main: task, mail: task.mail || {} };
   const labelOf = (t) => labels[t.kind] || "작업";
+  const barred = (t) => t.running && !t.auto && t.kind !== "emails";
   const pick = ["main", "mail"]
-    .filter((k) => lanes[k].running && !lanes[k].auto)
+    .filter((k) => barred(lanes[k]))
     .sort((a, b) => String(lanes[b].startedAt || "").localeCompare(String(lanes[a].startedAt || "")))[0];
   if (pick) {
     const p = taskProgress(lanes[pick]);
     const other = pick === "main" ? lanes.mail : lanes.main;
-    const more = other.running && !other.auto ? ` 외 1개` : "";
+    const more = barred(other) ? ` 외 1개` : "";
     showTopProgress(`${labelOf(lanes[pick])}${more} · ${p.label}`, p.pct);
     state.taskBar = pick;
     return;
   }
-  if (task.running && task.auto && task.queued) {
+  if (task.running && task.auto && task.queued && task.queued.kind !== "emails") {
     // 자동 작업이 끝나기를 기다리는 동안엔 시킨 일만 '곧 시작' 으로
     showTopProgress(`${labels[task.queued.kind] || "작업"} · 곧 시작해요`, 4);
     state.taskBar = "main";
@@ -5043,7 +5294,10 @@ const RENDER_PARTS = [
       (s.selection?.hiddenDeadlines || []).length, (s.deadlines?.hiddenItems || []).length, s.search, s.deadlineCourse,
       s.deadlineStatus) },
   { key: "emails", views: ["emails", "compose"], render: renderEmails,
-    of: (s) => sig(s.emails?.updatedAt, (s.emails?.emails || []).length, s.emailView, s.emailFolder, s.emailSort, s.search) },
+    of: (s) => sig(s.emails?.updatedAt, (s.emails?.emails || []).length, s.emailView, s.emailFolder, s.emailSort, s.search,
+      replySig(s)) },
+  // 칸이 아니라 잠깐 뜨는 알림. 대시보드로 올 때마다 불리고, 오늘 안 알린 메일이 있을 때만 뜬다(maybeReplyNudge)
+  { key: "replyNudge", views: ["dashboard"], render: maybeReplyNudge, of: (s) => replySig(s) },
   { key: "calendar", views: ["calendar"], render: renderCalendar,
     of: (s) => sig(s.deadlines?.updatedAt, (s.deadlines?.items || []).length, (s.myEvents || []).length, (s.academic || []).length, (s.schoolEvents || []).length,
       s.academicUnderOnly, s.calMonth, s.showHolidays, s.emails?.updatedAt,
@@ -6027,6 +6281,7 @@ async function refreshAll() {
     // 학사일정은 하루 한 번만 받아오면 되므로 첫 로드 때만 요청한다
     loadAcademic();
     state.timetable = timetable.entries || [];
+    state.timetableAuto = timetable.lmsAuto || null;
     loadShelves();
     if (state.samsungNotes === undefined) loadSamsungNotes();
     state.status = status;
@@ -7000,6 +7255,13 @@ function bindEvents() {
         (sent > 1 ? `${sent}명에게 각각 보냈습니다.` : "메일을 보냈습니다.") +
           (warnings.length ? ` (${[...new Set(warnings)].join(" · ")})` : ""),
       );
+      // 답장을 보냈으면 그 메일은 '답장할 메일' 에서 바로 뺀다 (서버도 reply_state.json 에 적었다)
+      if (payload.inReplyTo) {
+        (state.emails?.emails || []).forEach((m) => {
+          if (m.replyAsk && m.messageId === payload.inReplyTo) delete m.replyAsk;
+        });
+        renderAll();
+      }
       // 보낸 편지함에 방금 보낸 메일이 보이게 바로 받아 온다
       window.setTimeout(() => refreshMailNow?.(), 800);
       clearAutosave();
@@ -7204,7 +7466,6 @@ function bindEvents() {
 
   // 동기화 실패 배너
   $("#healthRetryButton")?.addEventListener("click", async () => {
-    splashFromButton($("#healthRetryButton"));
     // 실패한 작업을 다시 한다. 예전엔 늘 자료 동기화만 돌려서, 메일 로그인이 막혔다는 경고는 눌러도 그대로였다
     // (메일은 다시 해 보지도 않았다 — 2026-10-21 맥 사용자 신고). 서버가 거절해 쉬는 중이어도 직접 누르면 다시 해 본다.
     const h = state.health || {};
@@ -7214,6 +7475,8 @@ function bindEvents() {
       h.lastFailure?.kind,
     ].filter(Boolean));
     if (!kinds.size) kinds.add("sync");
+    // 물방울은 진행 막대로 날아간다. 메일만 다시 하면 막대가 안 뜨므로(renderTaskBar) 날리지 않는다
+    if ([...kinds].some((kind) => kind !== "emails")) splashFromButton($("#healthRetryButton"));
     if (kinds.has("emails")) await startRun("/api/refresh-emails", "메일 다시 가져오기");
     if (kinds.has("deadlines")) await startRun("/api/refresh-deadlines", "마감 다시 가져오기");
     if (kinds.has("sync")) await startRun("/api/run", "빠른 동기화", { confirm: true, mode: "fast" });
@@ -8193,7 +8456,28 @@ function ttSummaryText(entries) {
   return parts.join(" · ");
 }
 
+/** 동기화가 LMS 과목으로 이번 학기 시간표를 채웠으면 한 번 알린다 (web_ui.auto_fill_timetable → lmsAuto). */
+function renderTtAutoNote() {
+  const note = $("#timetableAutoNote");
+  if (!note) return;
+  const auto = state.timetableAuto;
+  note.hidden = !auto;
+  if (!auto) return;
+  const sig = JSON.stringify(auto);
+  if (note.dataset.sig === sig) return;
+  note.dataset.sig = sig;
+  const skipped = (auto.skipped || []).length;
+  const dropped = (auto.dropped || []).length;
+  const pick = skipped ? `<span>시간이 겹치거나 분반이 둘인 ${skipped}과목은 '시간표 편집'에서 골라 주세요.</span>` : "";
+  const drop = dropped
+    ? `<span>겹치는 과목 중 자료가 적은 ${dropped}과목은 수강 변경 전 과목으로 보고 뺐어요.</span>`
+    : "";
+  note.innerHTML = `<span>LMS 과목 ${(auto.added || []).length}개로 이번 학기 시간표를 채웠어요.</span>${drop}${pick}`
+    + `<button type="button" class="button compact ghost" id="timetableAutoOk">확인</button>`;
+}
+
 function renderTimetable() {
+  renderTtAutoNote();
   const grid = $("#timetable");
   if (!grid) return;
   // 과목끼리 같은 색이 있으면 그릴 때마다 정리한다.
@@ -8677,11 +8961,19 @@ function bindTimetable() {
     }
   });
 
+  $("#timetableAutoNote")?.addEventListener("click", (event) => {
+    if (!event.target.closest("#timetableAutoOk")) return;
+    state.timetableAuto = null;
+    renderTtAutoNote();
+    api("/api/timetable/lms-seen", { method: "POST", body: "{}" }).catch(() => {});
+  });
+
   // DGIST 개설과목에서 찾아 넣기
   $("#timetableFromCatalog")?.addEventListener("click", async () => {
     const panel = $("#catalogPanel");
     panel.hidden = false;
     showTtSide("search");
+    loadLmsPlan();
     // 학기 목록을 아직 안 채웠으면 채운다
     const termSel = $("#catalogTerm");
     if (termSel && !termSel.options.length) {
@@ -8720,9 +9012,11 @@ function bindTimetable() {
   // 커서를 스치고 지나갈 때마다 깜빡이지 않게 조금 기다렸다 보여 준다
   let hoverTimer = null;
   list?.addEventListener("pointerover", (event) => {
-    const row = event.target.closest("[data-course-index]");
+    const row = event.target.closest("[data-course-index], [data-lms-index]");
     if (!row) return;
-    const course = (state.catalog || [])[Number(row.dataset.courseIndex)];
+    const course = row.dataset.lmsIndex !== undefined
+      ? (state.lmsPlan?.courses || [])[Number(row.dataset.lmsIndex)]
+      : (state.catalog || [])[Number(row.dataset.courseIndex)];
     if (!course || !course.slots.length) return;
     window.clearTimeout(hoverTimer);
     hoverTimer = window.setTimeout(() => {
@@ -8735,6 +9029,27 @@ function bindTimetable() {
   });
   $("#catalogSearch")?.addEventListener("input", renderCatalog);
   $("#catalogList")?.addEventListener("click", async (event) => {
+    // 내 LMS 과목: 하나 넣기·넣을 수 있는 것 모두 넣기 (web_ui.apply_lms_timetable)
+    const lmsBtn = event.target.closest("[data-lms-add], [data-lms-all]");
+    if (lmsBtn) {
+      const courses = state.lmsPlan?.courses || [];
+      const ids = lmsBtn.dataset.lmsAll !== undefined
+        ? courses.filter((c) => c.state === "new").map((c) => c.id)
+        : [lmsBtn.dataset.lmsAdd];
+      lmsBtn.disabled = true;
+      try {
+        const res = await api("/api/timetable/lms-apply", { method: "POST", body: JSON.stringify({ ids }) });
+        state.timetable = res.entries || [];
+        setTtPreview(null);
+        renderTimetable();
+        await loadLmsPlan();
+        showToast(`${(res.added || []).length}과목을 시간표에 넣었어요.`);
+      } catch (error) {
+        lmsBtn.disabled = false;
+        showToast(humanError(error));
+      }
+      return;
+    }
     const btn = event.target.closest("[data-add-course]");
     if (!btn) return;
     const course = (state.catalog || [])[Number(btn.dataset.addCourse)];
@@ -8814,6 +9129,55 @@ function catalogHaystack(c) {
   return c._hay;
 }
 
+/** 이번 학기 LMS 과목과 개설과목의 수업 시간 ('시간표 편집' 맨 위). 시간표를 고칠 때마다 상태가 바뀌어 다시 받는다. */
+async function loadLmsPlan() {
+  try {
+    state.lmsPlan = await api("/api/timetable/lms-plan");
+  } catch {
+    state.lmsPlan = null;
+  }
+  renderCatalog();
+}
+
+const LMS_TT_BADGE = {
+  added: ["넣음", ""],
+  otherSection: ["다른 분반 있음", "warn"],
+  dropped: ["변경 전 과목", ""],
+  duplicate: ["LMS 분반 둘", "warn"],
+  overlap: ["시간 겹침", "warn"],
+};
+
+function lmsPlanHtml() {
+  const courses = state.lmsPlan?.courses || [];
+  if (!courses.length) return "";
+  const fresh = courses.filter((c) => c.state === "new").length;
+  const rows = courses
+    .map((c, i) => {
+      const badge = LMS_TT_BADGE[c.state];
+      const why = c.state === "overlap"
+        ? `${(c.clash || []).join(", ")}와 겹쳐요`
+        : c.state === "dropped"
+          ? `${c.keptBy} 쪽에 자료가 더 많아 지금 듣는 과목으로 봤어요`
+          : "";
+      return `
+      <div class="catalog-row" data-lms-index="${i}">
+        <div class="catalog-main">
+          <strong title="${escapeHtml(c.title)}">${escapeHtml(shortText(c.title, 38))}</strong>
+          <span>${escapeHtml(c.courseNo)} · ${escapeHtml(c.section)}분반${c.professor ? " · " + escapeHtml(shortText(c.professor, 18)) : ""}</span>
+          <em>${c.slots.map((s) => `${"월화수목금토"[s.day]} ${s.start}~${s.end}`).join(", ")}</em>
+        </div>
+        ${badge ? `<span class="lms-tt-badge ${badge[1]}" title="${escapeHtml(why)}">${badge[0]}</span>` : ""}
+        ${c.state === "added" ? "" : `<button type="button" class="catalog-add" data-lms-add="${escapeHtml(c.id)}" aria-label="시간표에 넣기">＋</button>`}
+      </div>`;
+    })
+    .join("");
+  return `<div class="lms-tt">
+    <div class="lms-tt-head">
+      <span>내 LMS 과목</span>
+      ${fresh > 1 ? `<button type="button" class="button compact ghost" data-lms-all>${fresh}과목 모두 넣기</button>` : ""}
+    </div>${rows}<div class="lms-tt-end"></div></div>`;
+}
+
 function renderCatalog() {
   const list = $("#catalogList");
   if (!list) return;
@@ -8826,7 +9190,7 @@ function renderCatalog() {
     .filter(({ c }) => !q || catalogHaystack(c).includes(q))
     .slice(0, 40);
 
-  list.innerHTML = rows.length
+  list.innerHTML = (q ? "" : lmsPlanHtml()) + (rows.length
     ? rows
         .map(
           ({ c, i }) => `
@@ -8841,7 +9205,7 @@ function renderCatalog() {
       </div>`,
         )
         .join("")
-    : `<p class="catalog-empty">${q ? "검색 결과가 없습니다." : "시간 정보가 있는 과목이 없습니다."}</p>`;
+    : `<p class="catalog-empty">${q ? "검색 결과가 없습니다." : "시간 정보가 있는 과목이 없습니다."}</p>`);
 }
 
 /* ===== 대시보드: 카드에 커서를 올리면 오른쪽에 상세가 뜬다 ===== */
@@ -12529,6 +12893,7 @@ const TOUR_STEPS = [
     text: "학교 메일을 앱 안에서 바로 읽고 정리해.",
     tips: [
       "오늘·어제로 묶어 보고, 안읽음·중요·첨부로 거르기",
+      "물어봤는데 아직 답 안 한 메일은 '답장할'에 모이고, 대시보드에 알림으로도 떠요",
       "메일을 왼쪽 폴더로 끌어 옮기거나 휴지통으로",
       "⋮ 메뉴: 일정에 추가, 다시 알림, 인쇄",
       "답이 없는 보낸 메일은 ⋮ › 리마인드 메일 쓰기",

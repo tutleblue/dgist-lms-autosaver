@@ -430,6 +430,8 @@
                   <div>
                     <h2 id="timetableTitle">주간 시간표 <span class="semester-badge" id="timetableSemester" hidden></span></h2>
                     <p id="timetableHint">빈 칸을 누르면 과목을 넣을 수 있어요.</p>
+                    <!-- 동기화가 LMS 과목으로 이번 학기 시간표를 채웠을 때 한 번 (web_ui.auto_fill_timetable) -->
+                    <p class="tt-auto-note" id="timetableAutoNote" hidden></p>
                   </div>
                   <div class="timetable-actions">
                     <label class="holiday-toggle" title="토요일 표시">
@@ -968,6 +970,18 @@
                           <time id="readDate"></time>
                         </div>
                         <p class="read-summary" id="readSummary" hidden></p>
+                        <!-- 답장할 메일: 물어본 말에 아직 답하지 않은 메일이면 그 문장과 단추 (app.js paintReadReplyAsk) -->
+                        <div class="read-reply-ask" id="readReplyAsk" hidden>
+                          <span class="icon" data-icon="reply" aria-hidden="true"></span>
+                          <div class="rra-text">
+                            <strong id="readReplyAskTitle">답을 기다리는 메일이에요</strong>
+                            <span id="readReplyAskText"></span>
+                          </div>
+                          <div class="rra-actions">
+                            <button class="button compact primary" id="readReplyAskReply" type="button">답장</button>
+                            <button class="button compact ghost" id="readReplyAskDismiss" type="button">안 해도 돼요</button>
+                          </div>
+                        </div>
                         <!-- 첨부: 누르면 받는다 (renderReadAttachments) -->
                         <div class="read-attachments" id="readAttachments" hidden></div>
                         <!-- HTML 메일은 스크립트를 막은 iframe 안에서 그린다 -->
@@ -2013,6 +2027,23 @@
         <div class="preview-body" id="previewBody"></div>
       </div>
     </dialog>
+
+    <!-- 답장할 메일 알림: 대시보드에 올 때 잠깐 떴다가 사라진다 (app.js maybeReplyNudge). 같은 메일은 하루 한 번 -->
+    <div class="reply-nudge" id="replyNudge" role="status" aria-live="polite" hidden>
+      <div class="rn-head">
+        <span class="icon" data-icon="reply" aria-hidden="true"></span>
+        <strong class="rn-title" id="replyNudgeTitle">답장 안 한 메일</strong>
+        <button class="rn-close" id="replyNudgeClose" type="button" aria-label="닫기" title="닫기">
+          <span class="icon" data-icon="x" aria-hidden="true"></span>
+        </button>
+      </div>
+      <div class="rn-body" id="replyNudgeBody"></div>
+      <div class="rn-actions">
+        <button class="button compact ghost" id="replyNudgeDismiss" type="button">안 해도 돼요</button>
+        <button class="button compact ghost" id="replyNudgeAll" type="button">메일함에서 보기</button>
+        <button class="button compact primary" id="replyNudgeReply" type="button">답장</button>
+      </div>
+    </div>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
     <script src="/app.js" defer></script>

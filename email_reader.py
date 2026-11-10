@@ -1943,6 +1943,151 @@ def pending_replies(emails: list[dict], days: int = 3) -> list[dict]:
     return waiting
 
 
+# ===== 답장할 메일 (2026-11-10) =====
+# 사용자: '회신해야 하는 메일을 회신 안 했으면 대시보드나 메일 창에서 알려 줬으면'. pending_replies 의 거울이다.
+# - 서버의 \Answered 표시는 못 쓴다: 받은 편지함 275통 중 0통에 붙어 있었다(웹메일·이 앱 모두 안 붙임, 2026-11-10 실측).
+#   그래서 '받은 뒤에 그 사람에게 보낸 메일이 보낸 편지함에 있는가' 로 답했는지 본다.
+# - 학교 단체 메일도 받는 사람이 나 하나로 찍혀 온다(받은 편지함 60통 모두). 받는 사람 칸으로는 단체 메일을 못 가르므로
+#   '사람이 나에게 쓴 메일'(내 메일에 온 답장·교수님 개인 메일·전에 내가 메일을 보낸 사람)만 본다.
+# - 그 메일에서 새로 쓴 부분(인용 앞)에 묻는 말·회신 요청이 있을 때만 고른다. 인용까지 보면 내가 쓴 '알려 주시면…' 에 걸렸고,
+#   'If you have any questions, please let me know' 같은 끝인사에도 걸렸다(실측: 답신 5통 중 진짜 회신 요청은 1통).
+# - AI 는 자동으로 부르지 않는다(메일 AI 방침).
+_QUOTE_HEAD = re.compile(
+    r"^\s*(?:"
+    r"-{2,}\s*\*?\s*(?:원본\s*(?:메일|메시지)|original\s+message|org\.?|forwarded\s+message|전달된\s*메시지|전달\s*메일)\s*\*?\s*-{2,}"
+    r"|_{5,}\s*$"
+    r"|on\s.{4,160}\bwrote:\s*$"
+    r"|\d{4}\s*[년./-].{0,160}작성\s*:\s*$"
+    r"|(?:from|sent|sender|보낸\s*사람)\s*:\s*\S"
+    r")",
+    re.I,
+)
+# 회신을 바라는 말. '회신 주셔서 감사합니다'·'알려 주셔서' 처럼 고마움을 적은 말에는 걸리지 않게 끝을 '주시기·주세요…' 로 묶는다
+_REPLY_ASK = re.compile(
+    r"(?:회신|답장|답변|연락)\s*(?:을|를)?\s*(?:부탁|주시기|주세요|주십|주시면|줘(?!서)|바랍|요청|해\s*주)"
+    r"|(?:알려|말씀해|확인해|보내|제출해|작성해|정해|골라|선택해|답해)\s*"
+    r"(?:주시기|주세요|주시면|주십시오|주실\s*수|줄\s*수|줘(?!서)|주겠|주길|주시겠)"
+    r"|확인\s*(?:을\s*)?부탁"
+    r"|(?:가능하신|가능한|괜찮으신|괜찮은|되시는|편하신)\s*(?:지|가요)"
+    r"|어떠(?:세요|신가요|실까요|십니까|신지)"
+    r"|여쭤|여쭙"
+    r"|(?:할|될|있을|갈|올|볼|드릴|하실|되실|있으실)\s*까요"
+    r"|(?:되|있|하|보|오)나요"
+    r"|please\s+(?:reply|respond|confirm|let\s+(?:me|us)\s+know|write\s+back|get\s+back|advise|answer)"
+    r"|let\s+(?:me|us)\s+know|write\s+back|get\s+back\s+to\s+(?:me|us)"
+    r"|(?:could|would|can|will)\s+you|kindly|\brsvp\b"
+    r"|[?？]",
+    re.I,
+)
+# 묻는 꼴이어도 회신을 바라는 게 아닌 끝인사
+_REPLY_ASK_SKIP = re.compile(
+    r"(?:문의|궁금|질문|어려운|불편|필요한)[^.?!\n]{0,12}?(?:있|생기)[^.?!\n]{0,6}?(?:면|다면|을\s*경우|실\s*경우)"
+    r"|if\s+you\s+have\s+(?:any\s+)?(?:further\s+|other\s+|more\s+)?(?:questions?|concerns?|problems?|issues?|trouble)"
+    r"|(?:feel\s+free|do\s+not\s+hesitate|don'?t\s+hesitate)\s+to",
+    re.I,
+)
+_AUTO_SENDER = re.compile(
+    r"^(?:no-?reply|do-?not-?reply|donotreply|mailer-daemon|postmaster|notifications?|alerts?|newsletter|webmaster|bounce)"
+    r"|noreply",
+    re.I,
+)
+# 사람이 보내도 여럿에게 돌리는 분류 — 전에 메일을 보낸 사람이어도 이 분류면 답장할 메일로 치지 않는다
+_MASS_CATEGORIES = {"수업·LMS", "학생회", "세미나·행사", "취업·진로", "동아리·문화", "계정·알림"}
+_ADDR = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
+# 여럿에게 쓴 말투. 전에 문의한 부서가 보낸 '[기업탐방] 참가자 모집' 이 '?' 로 걸렸다(2026-11-10) — 말머리 붙은 새 메일도 단체 안내로 본다
+_MASS_TEXT = re.compile(r"여러분|구성원|재학생|dear\s+(?:all|students|colleagues|members)|수신\s*거부|unsubscribe", re.I)
+
+
+def mail_new_part(body: str) -> str:
+    """답장·전달 메일에서 새로 쓴 부분(인용·원본 앞)만."""
+    out = []
+    for line in str(body or "").splitlines():
+        if line.lstrip().startswith(">") or _QUOTE_HEAD.match(line):
+            break
+        out.append(line)
+    return "\n".join(out).strip()
+
+
+def reply_ask_sentence(body: str) -> str:
+    """새로 쓴 부분에서 회신을 바라는 첫 문장(없으면 '')."""
+    text = re.sub(r"https?://\S+|www\.\S+", " ", mail_new_part(body))
+    # 영어 메일은 70자 남짓에서 줄을 꺾어 보낸다('…about it, please' / 'let me know.') — 그러면 끝인사 거르기가 앞 줄만 본다.
+    # 길고 문장부호 없이 끝난 줄만 다음 줄과 잇는다. 한국어 메일은 한 줄이 한 문장인 일이 많아 짧은 줄은 그대로 끊는다.
+    lines: list[str] = []
+    for line in text.splitlines():
+        line = " ".join(line.split())
+        if lines and len(lines[-1]) >= 55 and lines[-1][-1] not in ".!?。？！" and line:
+            lines[-1] += " " + line
+        else:
+            lines.append(line)
+    for sentence in (s for line in lines for s in re.split(r"(?<=[.!?。？！])\s+", line)):
+        if len(sentence) < 4 or _REPLY_ASK_SKIP.search(sentence):
+            continue
+        if _REPLY_ASK.search(sentence):
+            return sentence if len(sentence) <= 90 else sentence[:88].rstrip() + "…"
+    return ""
+
+
+def _naive_time(value: Any) -> datetime | None:
+    try:
+        when = datetime.fromisoformat(str(value or ""))
+    except ValueError:
+        return None
+    return when.astimezone().replace(tzinfo=None) if when.tzinfo else when
+
+
+def replies_needed(emails: list[dict], me: str = "", skip: Any = (), days: int = 14,
+                   now: datetime | None = None) -> dict[str, dict]:
+    """답장할 메일 {메일 id: {ask, days}}. 받은 지 days 일이 넘은 것과 skip(답장 안 해도 된다고 한 것·이 앱으로 답한 것)은 뺀다."""
+    me = str(me or "").strip().lower()
+    skip = set(skip or ())
+    now = now or datetime.now()
+    contacted: set[str] = set()
+    sent_to: dict[str, list[datetime]] = {}
+    for mail in emails:
+        if not isinstance(mail, dict) or mail.get("folder") != "sent":
+            continue
+        when = _naive_time(mail.get("date"))
+        for addr in _ADDR.findall(str(mail.get("toEmail") or "").lower()):
+            contacted.add(addr)
+            if when:
+                sent_to.setdefault(addr, []).append(when)
+    out: dict[str, dict] = {}
+    for mail in emails:
+        if not isinstance(mail, dict) or mail.get("folder") != "inbox":
+            continue
+        mail_id = str(mail.get("id") or "")
+        sender = str(mail.get("fromEmail") or "").strip().lower()
+        if not mail_id or mail_id in skip or "@" not in sender or sender == me:
+            continue
+        if _AUTO_SENDER.search(sender.split("@", 1)[0]):
+            continue
+        when = _naive_time(mail.get("date"))
+        if not when or (now - when).days > days:
+            continue
+        body = str(mail.get("body") or mail.get("snippet") or "")
+        category = mail.get("category") or "기타"
+        # 내 메일에 온 답장: 보낸 적 있는 사람이거나, 인용된 원문에 내 주소가 있다
+        to_my_mail = (bool(mail.get("isReply")) or category == "답신") and (
+            sender in contacted or (bool(me) and me in body.lower())
+        )
+        subject = str(mail.get("subject") or "").strip()
+        personal = to_my_mail or category == "교수님" or (
+            sender in contacted and category not in _MASS_CATEGORIES and not subject.startswith(("[", "<", "【"))
+        )
+        if not personal or (not to_my_mail and _MASS_TEXT.search(mail_new_part(body)[:800])):
+            continue
+        # 숨은 참조로 여럿에게 보낸 메일(받는 사람에 내가 없음)은 답장하라는 메일이 아니다
+        if not to_my_mail and me and me not in str(mail.get("toEmail") or "").lower():
+            continue
+        if any(t > when for t in sent_to.get(sender, [])):
+            continue  # 받은 뒤에 그 사람에게 메일을 보냈다 = 답했다
+        ask = reply_ask_sentence(body)
+        if ask:
+            out[mail_id] = {"ask": ask, "days": max(0, (now - when).days)}
+    return out
+
+
 def build_reminder(mail: dict) -> dict:
     """리마인드(재확인) 메일 초안.
 

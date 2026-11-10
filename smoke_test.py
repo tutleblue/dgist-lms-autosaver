@@ -62,7 +62,7 @@ SWEEP_POST = (
     "/api/delete-email", "/api/directory/import", "/api/drive/pick", "/api/drive/share", "/api/export-ics", "/api/files/bulk", "/api/gcal/sync",
     "/api/gcal/sync-academic", "/api/google/connect", "/api/google/credentials", "/api/google/disconnect",
     "/api/local-autosave/run", "/api/mail/big-cancel", "/api/mail/discard-draft", "/api/mail/flow", "/api/mail/folder-create", "/api/mail/me",
-    "/api/mail/move", "/api/mail/reminder", "/api/mail/save-draft", "/api/mail/star", "/api/mail/translate",
+    "/api/mail/move", "/api/mail/reminder", "/api/mail/reply-dismiss", "/api/mail/save-draft", "/api/mail/star", "/api/mail/translate",
     "/api/mark-all-read", "/api/mark-read", "/api/my-events/delete", "/api/my-events/save", "/api/organize-files",
     "/api/presence",
     "/api/refresh-deadlines", "/api/refresh-emails", "/api/restore-email", "/api/run", "/api/samsung-notes/organize",

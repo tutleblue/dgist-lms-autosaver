@@ -5214,6 +5214,26 @@ tbody tr:hover {
 }
 .catalog-add:hover { filter: brightness(0.96); }
 .catalog-empty { font-size: 12px; color: var(--text-faint); padding: 16px 10px; margin: 0; }
+/* '시간표 편집' 맨 위: 이번 학기 내 LMS 과목 (/api/timetable/lms-plan).
+   긴 과목명·교수 이름의 글자 폭이 옆 패널 칸(300px)을 403px 로 밀어 검색 칸까지 잘렸다(실측) → 폭은 패널을 따른다 */
+.lms-tt { contain: inline-size; }
+.lms-tt-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 8px 8px 2px; font-size: 11.5px; font-weight: 600; color: var(--text-muted);
+}
+.lms-tt-head .button { padding: 3px 9px; font-size: 11.5px; }
+.lms-tt-badge {
+  flex: none; font-size: 10.5px; color: var(--text-faint); padding: 3px 7px;
+  border: 1px solid var(--border); border-radius: 999px; white-space: nowrap;
+}
+.lms-tt-badge.warn { color: var(--warning, #b7791f); border-color: currentColor; }
+.lms-tt-end { height: 1px; background: var(--border); margin: 6px 8px 4px; }
+.tt-auto-note {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  margin: 6px 0 0; font-size: 12px; color: var(--accent-strong);
+}
+.tt-auto-note[hidden] { display: none; }
+.tt-auto-note .button { padding: 2px 9px; font-size: 11.5px; }
 
 @media (prefers-reduced-motion: reduce) {
   .metrics-stage.peek-open .peek-row { animation: none; }
@@ -11964,3 +11984,135 @@ html:has(.lock-screen[open]) { overflow: hidden; }
 /* 고른 자리(글에는 손대지 않고 칠만 한다): 칸에 적는 동안·AI 가 고치는 동안에도 어디인지 보이게 */
 ::highlight(ai-sel) { background-color: rgba(192, 103, 74, 0.26); }
 @media (prefers-reduced-motion: reduce) { .ai-caret { animation: none; } }
+
+/* ===== 답장할 메일 (2026-11-10) — app.js '답장할 메일' =====
+   대시보드 알림(#replyNudge) · 메일 줄/카드의 꼬리표(.reply-tag) · 읽기 창 위 띠(#readReplyAsk) · 빠른 거르기 '답장할' */
+.mail-quick { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.mail-quick-item.has-reply strong { color: var(--accent-strong); }
+
+.reply-tag {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1.5;
+  color: var(--accent-strong);
+  background: var(--accent-soft);
+  border-radius: 999px;
+  padding: 1px 7px 1px 5px;
+  white-space: nowrap;
+}
+.reply-tag .icon { width: 11px; height: 11px; }
+
+.read-reply-ask {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 18px;
+  padding: 10px 12px 10px 14px;
+  border: 1px solid var(--accent-soft);
+  background: color-mix(in srgb, var(--accent-soft) 55%, transparent);
+  border-radius: var(--radius-sm);
+}
+.read-reply-ask > .icon { flex: none; width: 17px; height: 17px; color: var(--accent-strong); }
+.rra-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.rra-text strong { font-size: 13px; font-weight: 650; color: var(--text); }
+.rra-text span { font-size: 12.5px; line-height: 1.5; color: var(--text-soft); overflow-wrap: anywhere; }
+.rra-actions { flex: none; display: flex; gap: 6px; }
+.read-reply-ask.off { background: var(--surface-soft); border-color: var(--border); padding-block: 6px; }
+.read-reply-ask.off > .icon { color: var(--text-faint); }
+.read-reply-ask.off .rra-text strong { font-weight: 500; color: var(--text-faint); }
+
+@media (max-width: 720px) {
+  .read-reply-ask { flex-wrap: wrap; }
+  .rra-actions { width: 100%; justify-content: flex-end; }
+}
+/* 답장할 메일 알림 (#replyNudge) — 대시보드에 올 때 오른쪽 아래에 잠깐 떴다가 사라진다. 토스트(가운데 아래)와 겹치지 않는 자리 */
+.reply-nudge {
+  position: fixed;
+  right: 22px;
+  bottom: 22px;
+  z-index: 96;
+  width: min(360px, calc(100vw - 32px));
+  padding: 12px 12px 12px 16px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 14px 36px -8px rgba(0, 0, 0, 0.22), 0 2px 8px rgba(0, 0, 0, 0.08);
+  opacity: 0;
+  transform: translateY(14px);
+  transition: opacity 0.22s ease, transform 0.22s ease;
+}
+.reply-nudge.visible { opacity: 1; transform: none; }
+.rn-head { display: flex; align-items: center; gap: 8px; }
+.rn-head > .icon { flex: none; width: 17px; height: 17px; color: var(--accent-strong); }
+.rn-title { flex: 1; min-width: 0; font-size: 13.5px; font-weight: 650; }
+.rn-close {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  margin: -4px -2px -4px 0;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  color: var(--text-faint);
+  cursor: pointer;
+}
+.rn-close:hover { background: var(--surface-soft); color: var(--text); }
+.rn-close .icon { width: 15px; height: 15px; }
+.rn-body { display: flex; flex-direction: column; margin: 6px 0 10px; }
+.rn-mail {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: calc(100% + 12px);
+  margin: 0 -6px;
+  padding: 6px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.rn-mail:hover { background: var(--surface-soft); }
+.rn-mail:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.rn-line { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.rn-from { font-size: 13px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rn-when { margin-left: auto; flex: none; font-size: 11.5px; color: var(--text-faint); }
+.rn-subject { font-size: 12.5px; color: var(--text-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rn-ask {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.rn-more {
+  align-self: flex-start;
+  margin-top: 2px;
+  padding: 3px 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--accent-strong);
+  cursor: pointer;
+}
+.rn-more:hover { text-decoration: underline; }
+.rn-actions { display: flex; justify-content: flex-end; gap: 6px; }
+/* 휴대폰 폭: 아래 탭바 위로 올리고 양옆을 채운다 */
+@media (max-width: 760px) {
+  .reply-nudge { left: 12px; right: 12px; width: auto; bottom: calc(var(--tabbar-h, 64px) + 12px + env(safe-area-inset-bottom, 0px)); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .reply-nudge { transform: none; transition: opacity 0.15s linear; }
+}
