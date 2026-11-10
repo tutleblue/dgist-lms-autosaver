@@ -11743,7 +11743,18 @@ html:has(.lock-screen[open]) { overflow: hidden; }
     box-shadow: -14px 0 34px -20px rgba(0, 0, 0, 0.5);
   }
 }
-.mail-ai-head { display: flex; align-items: center; gap: 2px; padding: 9px 8px 8px 10px; border-bottom: 1px solid var(--border); }
+/* 2026-11-10 사용자: '더 깔끔하게'. 머리 밑줄·카드 테두리·그림자를 걷고, 대화 글은 말풍선 하나(내 말)와 맨 글(AI)로만 나눈다 */
+.mail-ai-head { display: flex; align-items: center; gap: 2px; padding: 10px 8px 4px 10px; }
+.mail-ai-head .icon-button {
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--text-faint);
+}
+.mail-ai-head .icon-button:hover { background: var(--surface); color: var(--text); }
+.mail-ai-head .icon-button .icon { width: 16px; height: 16px; }
 .mail-ai-model {
   display: inline-flex;
   align-items: center;
@@ -11767,8 +11778,8 @@ html:has(.lock-screen[open]) { overflow: hidden; }
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 14px 14px 10px;
+  gap: 14px;
+  padding: 12px 16px 14px;
   font-size: 13.5px;
   line-height: 1.55;
 }
@@ -11776,13 +11787,13 @@ html:has(.lock-screen[open]) { overflow: hidden; }
   display: flex;
   align-items: flex-end;
   gap: 6px;
-  margin: 0 12px;
-  padding: 7px 7px 7px 12px;
-  border: 1px solid var(--border-strong);
-  border-radius: 14px;
+  margin: 0 12px 12px;
+  padding: 7px 7px 7px 13px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
   background: var(--surface);
 }
-.mail-ai-form:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.mail-ai-form:focus-within { border-color: var(--border-strong); }
 .mail-ai-form textarea,
 .mail-ai-form textarea:focus {
   flex: 1;
@@ -11805,51 +11816,35 @@ html:has(.lock-screen[open]) { overflow: hidden; }
   display: grid;
   place-items: center;
   border: 0;
-  border-radius: 9px;
+  border-radius: 10px;
   background: var(--accent);
   color: #fff;
   cursor: pointer;
 }
-.mail-ai-send:disabled { opacity: 0.45; cursor: default; }
+.mail-ai-send:disabled { opacity: 0.4; cursor: default; }
 .mail-ai-send .icon { width: 15px; height: 15px; }
-.mail-ai-foot { margin: 6px 14px 10px; font-size: 11px; color: var(--text-faint); text-align: center; }
 
-/* 대화 글 */
-.mai-user,
-.mai-answers {
+/* 대화 글: 내 말(고른 답 포함)만 말풍선 */
+.mai-user {
   align-self: flex-end;
-  max-width: 88%;
+  max-width: 85%;
   padding: 8px 12px;
-  border: 1px solid var(--border);
-  border-radius: 14px 14px 4px 14px;
+  border-radius: 16px 16px 4px 16px;
   background: var(--surface);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
-.mai-answers { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; white-space: normal; }
-.mai-answers div { display: flex; flex-direction: column; }
-.mai-answers span { font-size: 11.5px; color: var(--text-faint); }
-.mai-answers b { font-weight: 600; }
-.mai-think { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--accent-strong); }
+.mai-think { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-soft); }
+.mai-think .ai-logo { width: 16px; height: 16px; }
 .mai-time { margin-left: auto; font-style: normal; font-size: 12px; color: var(--text-faint); font-variant-numeric: tabular-nums; }
 .mai-err { padding: 8px 11px; border-radius: 10px; background: var(--red-soft); color: var(--red); font-size: 13px; }
 
-/* 되묻기 카드: 1·2·3 보기 + 직접 입력 */
-.mai-ask {
-  padding: 12px;
-  border: 1px solid var(--border-strong);
-  border-radius: 14px;
-  background: var(--surface);
-  box-shadow: 0 8px 22px -16px rgba(0, 0, 0, 0.4);
-  outline: none;
-}
-.mai-ask:focus-visible { border-color: var(--accent); }
-.mai-ask-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
-.mai-ask-step { font-size: 11.5px; font-weight: 700; color: var(--text-faint); }
-.mai-skip { padding: 2px 6px; border: 0; border-radius: 6px; background: none; color: var(--text-faint); font: 12px var(--font-sans); cursor: pointer; }
-.mai-skip:hover { background: var(--surface-soft); color: var(--text); }
-.mai-ask-q { margin: 0 0 10px; font-size: 14px; font-weight: 650; line-height: 1.5; }
-.mai-opts { display: flex; flex-direction: column; gap: 6px; }
+/* 되묻기: 질문 한 줄 + 보기 줄. 상자 없이 */
+.mai-ask { display: flex; flex-direction: column; gap: 8px; outline: none; }
+.mai-ask-top { display: flex; align-items: baseline; gap: 10px; }
+.mai-ask-q { flex: 1; margin: 0; font-size: 14px; font-weight: 650; line-height: 1.5; }
+.mai-ask-step { flex: none; font-size: 11.5px; color: var(--text-faint); font-variant-numeric: tabular-nums; }
+.mai-opts { display: flex; flex-direction: column; gap: 4px; }
 .mai-opt,
 .mai-own {
   box-sizing: border-box;
@@ -11860,67 +11855,67 @@ html:has(.lock-screen[open]) { overflow: hidden; }
   padding: 8px 10px;
   border: 1px solid var(--border);
   border-radius: 10px;
-  background: var(--surface);
+  background: none;
+  color: var(--text);
   font: 13px/1.45 var(--font-sans);
   text-align: left;
   cursor: pointer;
 }
 .mai-opt:hover,
-.mai-opt:focus-visible { border-color: var(--accent); background: var(--accent-soft); outline: none; }
+.mai-opt:focus-visible { border-color: var(--border-strong); background: var(--surface); outline: none; }
 .mai-opt kbd,
 .mai-own kbd {
   flex: none;
-  width: 20px;
-  height: 20px;
-  display: grid;
-  place-items: center;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--surface-soft);
-  font: 600 11px var(--font-sans);
-  color: var(--text-soft);
+  width: 14px;
+  border: 0;
+  background: none;
+  font: 600 12px var(--font-sans);
+  color: var(--text-faint);
+  text-align: center;
 }
-.mai-opt:hover kbd { border-color: var(--accent); color: var(--accent-strong); }
-.mai-own { padding: 4px 4px 4px 10px; cursor: text; }
-.mai-own:focus-within { border-color: var(--accent); }
+.mai-opt:hover kbd { color: var(--accent-strong); }
+.mai-own { padding: 3px 4px 3px 10px; cursor: text; }
+.mai-own:focus-within { border-color: var(--border-strong); background: var(--surface); }
 .mai-own input,
-.mai-own input:focus { flex: 1; min-width: 0; height: 28px; padding: 0; border: 0; outline: none; background: none; box-shadow: none; font: inherit; }
-.mai-own button { flex: none; width: 28px; height: 28px; border: 0; border-radius: 8px; background: var(--surface-soft); color: var(--text-soft); cursor: pointer; }
+.mai-own input:focus { flex: 1; min-width: 0; height: 30px; padding: 0; border: 0; outline: none; background: none; box-shadow: none; font: inherit; }
+.mai-own button { flex: none; width: 28px; height: 28px; border: 0; border-radius: 8px; background: none; color: var(--text-faint); cursor: pointer; }
 .mai-own button:hover { background: var(--accent); color: #fff; }
+.mai-skip { align-self: flex-start; padding: 2px 4px; border: 0; border-radius: 6px; background: none; color: var(--text-faint); font: 12px var(--font-sans); cursor: pointer; }
+.mai-skip:hover { color: var(--text); text-decoration: underline; text-underline-offset: 3px; }
 
-/* 다 채웠어요 · 고쳤어요 */
-.mai-done { padding: 11px 12px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); }
-.mai-done-head { display: flex; align-items: center; gap: 7px; }
-.mai-done-head small { margin-left: auto; font-size: 11px; color: var(--text-faint); }
-.mai-check { width: 18px; height: 18px; display: grid; place-items: center; border-radius: 50%; background: var(--green); color: #fff; font-size: 11px; font-weight: 800; }
-.mai-done dl { display: grid; grid-template-columns: auto 1fr; gap: 6px 10px; margin: 10px 0 0; font-size: 12.5px; }
-.mai-done dt { color: var(--text-faint); }
-.mai-done dd { display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; margin: 0; overflow-wrap: anywhere; }
-.mai-who { display: inline-flex; align-items: baseline; gap: 4px; padding: 1px 8px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface-soft); }
+/* 다 채웠어요 · 고쳤어요: 상자 없이 한 줄 머리 + 받는 사람·참조·제목 */
+.mai-done { display: flex; flex-direction: column; gap: 8px; }
+.mai-done-head { display: flex; align-items: center; gap: 7px; font-size: 13.5px; }
+.mai-done-head small { margin-left: auto; font-size: 11.5px; color: var(--text-faint); }
+.mai-check { flex: none; width: 18px; height: 18px; display: grid; place-items: center; border-radius: 50%; background: var(--green); color: #fff; }
+.mai-check .icon { width: 11px; height: 11px; stroke-width: 3.2; }
+.mai-done dl { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; margin: 0; padding-left: 25px; font-size: 12.5px; }
+.mai-done dt { color: var(--text-faint); line-height: 22px; }
+.mai-done dd { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; min-width: 0; margin: 0; line-height: 1.5; overflow-wrap: anywhere; }
+.mai-who { display: inline-flex; align-items: baseline; gap: 4px; padding: 1px 9px; border-radius: 999px; background: var(--surface); }
 .mai-who small { font-size: 11px; color: var(--text-faint); }
 .mai-miss { color: var(--amber); }
-.mai-note { margin: 8px 0 0; font-size: 12.5px; line-height: 1.5; color: var(--text-soft); }
-.mai-tip { margin: 8px 0 0; font-size: 12px; color: var(--accent-strong); }
-.mai-done.edit { padding: 9px 12px; }
+.mai-note { margin: 0; padding-left: 25px; font-size: 12.5px; line-height: 1.5; color: var(--text-soft); }
+.mai-tip { margin: 0; padding-left: 25px; font-size: 12.5px; color: var(--amber); }
 
-/* 처음 화면 */
-.mai-empty { display: flex; flex-direction: column; gap: 10px; margin: auto 0; padding: 6px 2px; }
-.mai-hello { display: flex; align-items: center; gap: 8px; font-size: 15px; }
+/* 처음 화면: 물음 한 줄 + 예시 */
+.mai-empty { display: flex; flex-direction: column; gap: 12px; margin: auto 0; padding: 4px 0; }
+.mai-hello { display: flex; align-items: center; gap: 9px; font-size: 15.5px; }
 .mai-hello .ai-logo,
 .mai-hello .icon { width: 20px; height: 20px; color: var(--accent); }
-.mai-empty p { margin: 0; font-size: 12.5px; line-height: 1.55; color: var(--text-soft); }
-.mai-empty p.mai-hint { font-size: 11.5px; color: var(--text-faint); }
-.mai-examples { display: flex; flex-direction: column; gap: 6px; }
+.mai-empty .button { align-self: flex-start; }
+.mai-examples { display: flex; flex-direction: column; gap: 2px; }
 .mai-example {
-  padding: 8px 11px;
-  border: 1px solid var(--border);
-  border-radius: 11px;
-  background: var(--surface);
-  font: 12.5px/1.45 var(--font-sans);
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  color: var(--text-soft);
+  font: 13px/1.45 var(--font-sans);
   text-align: left;
   cursor: pointer;
 }
-.mai-example:hover { border-color: var(--accent); background: var(--accent-soft); }
+.mai-example:hover { background: var(--surface); color: var(--text); }
 
 /* 고친 부분만 흘릴 때: [앞 글 + 흘리는 글][깜빡이는 막대][뒤 글] */
 .ai-typing.split::after { display: none; }

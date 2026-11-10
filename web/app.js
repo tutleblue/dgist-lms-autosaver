@@ -17663,68 +17663,82 @@ function openMailAiForCompose() {
   }
 }
 
-/* --- 그리기 --- */
+/* --- 그리기 ---
+   2026-11-10 사용자: '더 깔끔하게, 부가 설명 줄이고 번역체 없애고'. 상자·그림자·테두리를 걷어 글이 대화처럼 흐르게 하고,
+   처음 화면의 설명 두 줄·아래 '메일 내용은 고른 AI 로 가요' 줄·다 쓴 뒤 'AI 가 왜 이렇게 골랐는지' 한 줄은 뺐다
+   (받는 사람·참조 칩이 이미 말해 준다). '{모델} 가 쓰는 중' 은 로마자 이름 뒤 조사가 어색해 '메일 쓰는 중' 으로. */
+
+// 예시에 넣을 과목 이름: 영어 화면이면 LMS 과목명 괄호 안 영어 이름('일반물리Ⅱ (General PhysicsⅡ )_03…')
+function mailAiCourseName(label) {
+  if (I18N.lang === "en") {
+    const hit = (state.courseState?.current || []).find((c) => staffKey(extractCourseLabelJs(c.name)) === staffKey(label));
+    const en = (hit?.name.match(/\(([^()]*[A-Za-z][^()]*)\)/) || [])[1];
+    if (en) return en.replace(/\s+/g, " ").trim();
+  }
+  return courseShortName(label);
+}
+
 function mailAiExamples() {
   const form = $("#composeForm");
   if (form?.dataset.inReplyTo) {
-    return [tr("고맙다고 하고 참석하겠다고 답장해 줘"), tr("정중하게 거절하는 답장 써 줘"), tr("궁금한 점 하나만 되물어 줘")];
+    return [tr("고맙다고, 참석하겠다고 답장"), tr("정중하게 거절하는 답장"), tr("궁금한 점 하나 되묻기")];
   }
   const profs = [];
   const tas = [];
   (state.courseStaff || new Map()).forEach(({ label, rows }) => {
     (rows || []).forEach((r) => {
       if (!r.email) return;
-      if (r.role === "교수") profs.push(courseShortName(label));
-      else if (/조교/.test(r.role || "")) tas.push(courseShortName(label));
+      if (r.role === "교수") profs.push(mailAiCourseName(label));
+      else if (/조교/.test(r.role || "")) tas.push(mailAiCourseName(label));
     });
   });
   const p = profs[0] || tr("일반물리");
   const t = tas[0] || profs[1] || p;
   return [
-    tr("{c} 교수님께 다음 주 수업 결석 미리 말씀드리기").replace("{c}", p),
-    tr("{c} 조교님께 과제 파일을 잘못 냈는데 다시 내도 되는지 묻기").replace("{c}", t),
-    tr("학사팀에 휴학 신청 방법 문의하기"),
+    tr("{c} 교수님께 다음 주 결석 말씀드리기").replace("{c}", p),
+    tr("{c} 조교님께 과제 다시 내도 되는지 묻기").replace("{c}", t),
+    tr("학사팀에 휴학 방법 묻기"),
   ];
+}
+
+function mailAiWhoHtml(list) {
+  return (list || []).map((p) => {
+    const role = p.role === "교수" ? tr("교수님") : p.role === "조교" ? tr("조교님") : "";
+    const desc = [role, p.course].filter(Boolean).join(" · ");
+    return `<span class="mai-who" title="${escapeHtml([p.email, desc].filter(Boolean).join(" · "))}" data-no-i18n>${escapeHtml(p.name || p.email)}${role ? ` <small>${escapeHtml(role)}</small>` : ""}</span>`;
+  }).join("");
 }
 
 function mailAiMsgHtml(m) {
   if (m.kind === "user") return `<div class="mai-msg mai-user" data-no-i18n>${escapeHtml(m.text)}</div>`;
   if (m.kind === "think") {
-    const now = currentAiModel();
-    const verb = m.verb === "revise" ? tr("{who} 가 고치는 중") : tr("{who} 가 메일을 쓰는 중");
-    return `<div class="mai-msg mai-think">${aiLogo(now.provider || "claude", "busy")}<span>${escapeHtml(verb.replace("{who}", now.label))}</span><em class="mai-time" data-mai-time></em></div>`;
+    const verb = m.verb === "revise" ? tr("고치는 중") : tr("메일 쓰는 중");
+    return `<div class="mai-msg mai-think">${aiLogo(currentAiModel().provider || "claude", "busy")}<span>${escapeHtml(verb)}</span><em class="mai-time" data-mai-time></em></div>`;
   }
   if (m.kind === "error") return `<div class="mai-msg mai-err">${escapeHtml(m.text)}</div>`;
   if (m.kind === "answered") {
-    const rows = m.picked
-      .map((a) => `<div><span data-no-i18n>${escapeHtml(a.q)}</span><b data-no-i18n>${escapeHtml(a.skipped ? tr("건너뜀") : a.a)}</b></div>`)
-      .join("");
-    return `<div class="mai-msg mai-answers">${rows}</div>`;
+    // 고른 답만 내 말풍선으로 (질문은 위 카드에 있었고, 마우스를 올리면 보인다)
+    const said = m.picked.map((a) => (a.skipped ? tr("건너뜀") : a.a)).join(" · ");
+    const title = m.picked.map((a) => `${a.q} → ${a.skipped ? tr("건너뜀") : a.a}`).join("\n");
+    return `<div class="mai-msg mai-user mai-answers" title="${escapeHtml(title)}" data-no-i18n>${escapeHtml(said)}</div>`;
   }
   if (m.kind === "ask") return mailAiAskHtml(m);
   if (m.kind === "done" || m.kind === "edit") {
     const mail = m.mail || {};
-    const who = (list) => (list || []).map((p) => {
-      const role = p.role === "교수" ? tr("교수님") : p.role === "조교" ? tr("조교님") : "";
-      const desc = [role, p.course].filter(Boolean).join(" · ");
-      return `<span class="mai-who" title="${escapeHtml(p.email)}" data-no-i18n>${escapeHtml(p.name || p.email)}${desc ? ` <small>${escapeHtml(desc)}</small>` : ""}</span>`;
-    }).join("");
     const rows = [];
-    if (m.kind === "done" || mail.to) rows.push([tr("받는 사람"), mail.to?.length ? who(mail.to) : `<span class="mai-miss">${escapeHtml(tr("정하지 못했어요 — 받는사람 칸에 넣어 주세요"))}</span>`]);
-    if ((m.kind === "done" && mail.cc?.length) || (m.kind === "edit" && mail.cc)) rows.push([tr("참조"), mail.cc.length ? who(mail.cc) : `<span class="mai-miss">${escapeHtml(tr("넣지 않음"))}</span>`]);
+    if (m.kind === "done" || mail.to) rows.push([tr("받는 사람"), mail.to?.length ? mailAiWhoHtml(mail.to) : `<span class="mai-miss">${escapeHtml(tr("못 정했어요"))}</span>`]);
+    if ((m.kind === "done" && mail.cc?.length) || (m.kind === "edit" && mail.cc)) rows.push([tr("참조"), mail.cc.length ? mailAiWhoHtml(mail.cc) : `<span class="mai-miss">${escapeHtml(tr("없음"))}</span>`]);
     if (mail.subject) rows.push([tr("제목"), `<span data-no-i18n>${escapeHtml(mail.subject)}</span>`]);
     const blanks = (String(mail.body || "").match(/\[[^\]\n]{0,40}\]/g) || []).length;
     const title = m.kind === "done" ? tr("메일을 채웠어요") : tr("고쳤어요");
     const meta = [m.engine, m.seconds ? tr("{n}초").replace("{n}", Math.round(m.seconds)) : ""].filter(Boolean).join(" · ");
-    const tip = m.kind === "done"
-      ? blanks
-        ? tr("본문의 [ ] {n}곳을 채우고 보내기를 눌러 주세요.").replace("{n}", blanks)
-        : tr("확인하고 보내기를 눌러 주세요.")
-      : "";
+    const tip = m.kind === "done" && blanks ? tr("[ ] {n}곳은 직접 채워 주세요").replace("{n}", blanks) : "";
+    // 고친 뒤에는 무엇을 고쳤는지 한 줄(AI 가 준 것)만. 다 쓴 뒤의 '왜 이 사람에게' 는 칩과 겹쳐 뺀다
+    const note = m.kind === "edit" && m.note ? m.note : "";
     return `<div class="mai-done${m.kind === "edit" ? " edit" : ""}">
-      <div class="mai-done-head"><span class="mai-check">✓</span><strong>${escapeHtml(title)}</strong><small>${escapeHtml(meta)}</small></div>
+      <div class="mai-done-head"><span class="mai-check" aria-hidden="true">${iconHtml("check")}</span><strong>${escapeHtml(title)}</strong><small>${escapeHtml(meta)}</small></div>
+      ${note ? `<p class="mai-note" data-no-i18n>${escapeHtml(note)}</p>` : ""}
       ${rows.length ? `<dl>${rows.map(([k, v]) => `<dt>${escapeHtml(k)}</dt><dd>${v}</dd>`).join("")}</dl>` : ""}
-      ${m.note ? `<p class="mai-note" data-no-i18n>${escapeHtml(m.note)}</p>` : ""}
       ${tip ? `<p class="mai-tip">${escapeHtml(tip)}</p>` : ""}
     </div>`;
   }
@@ -17742,32 +17756,29 @@ function mailAiAskHtml(m) {
   const n = q.options.length + 1;
   return `<div class="mai-ask" tabindex="-1" data-ask>
     <div class="mai-ask-top">
-      <span class="mai-ask-step">${total > 1 ? `${m.index + 1} / ${total}` : escapeHtml(tr("하나만 물을게요"))}</span>
-      <button type="button" class="mai-skip" data-skip>${escapeHtml(tr("건너뛰기"))}</button>
+      <p class="mai-ask-q" data-no-i18n>${escapeHtml(q.q)}</p>
+      ${total > 1 ? `<span class="mai-ask-step">${m.index + 1}/${total}</span>` : ""}
     </div>
-    <p class="mai-ask-q" data-no-i18n>${escapeHtml(q.q)}</p>
     <div class="mai-opts">${opts}
       <form class="mai-own" data-own><kbd>${n}</kbd><input type="text" maxlength="300" placeholder="${escapeHtml(tr("직접 입력"))}" aria-label="${escapeHtml(tr("직접 입력"))}" /><button type="submit" aria-label="${escapeHtml(tr("이걸로"))}">↵</button></form>
     </div>
+    <button type="button" class="mai-skip" data-skip>${escapeHtml(tr("건너뛰기"))}</button>
   </div>`;
 }
 
 function mailAiEmptyHtml() {
   if (!aiReady()) {
     return `<div class="mai-empty">
-      <div class="mai-hello">${iconHtml("sparkle")}<strong>${escapeHtml(tr("AI 에게 메일을 맡겨 보세요"))}</strong></div>
-      <p>${escapeHtml(tr("이 컴퓨터의 Claude·Codex 를 연결하면 한 마디로 받는 사람·참조·내용까지 채워 드려요."))}</p>
-      <button type="button" class="button compact" data-mai-connect>${escapeHtml(tr("AI 연결하러 가기"))}</button>
+      <div class="mai-hello">${iconHtml("sparkle")}<strong>${escapeHtml(tr("AI 를 연결하면 쓸 수 있어요"))}</strong></div>
+      <button type="button" class="button compact" data-mai-connect>${escapeHtml(tr("AI 연결하기"))}</button>
     </div>`;
   }
   const examples = mailAiExamples()
     .map((e) => `<button type="button" class="mai-example" data-example="${escapeHtml(e)}">${escapeHtml(e)}</button>`)
     .join("");
   return `<div class="mai-empty">
-    <div class="mai-hello">${aiLogo(currentAiModel().provider || "claude")}<strong>${escapeHtml(tr("누구에게, 무슨 메일을 쓸까요?"))}</strong></div>
-    <p>${escapeHtml(tr("받는 사람·참조·제목·인사·서명까지 채워 드려요. 모자란 건 보기를 드릴게요."))}</p>
+    <div class="mai-hello">${aiLogo(currentAiModel().provider || "claude")}<strong>${escapeHtml(tr("무슨 메일을 쓸까요?"))}</strong></div>
     <div class="mai-examples">${examples}</div>
-    <p class="mai-hint">${escapeHtml(tr("다 쓴 뒤에는 고칠 곳을 끌어 골라 바로 부탁할 수 있어요."))}</p>
   </div>`;
 }
 
@@ -17781,10 +17792,10 @@ function paintMailAi() {
   const input = $("#mailAiText");
   if (input) {
     input.placeholder = mailAi.ask
-      ? tr("보기를 고르거나 직접 답을 적어 주세요")
+      ? tr("직접 답해도 돼요")
       : mailAi.drafted
-        ? tr("어떻게 고칠까요? 예: 더 짧게, 조교님도 참조에")
-        : tr("누구에게, 무슨 일로 보낼지 적어 주세요");
+        ? tr("더 고칠 게 있으면 말해 주세요")
+        : tr("누구에게 무슨 일로 보낼지 적어 주세요");
   }
   const send = $("#mailAiSend");
   if (send) send.disabled = mailAi.busy;
@@ -17813,7 +17824,7 @@ async function mailAiSubmit(raw) {
   await loadAiStatus();
   const input = $("#mailAiText");
   if (!aiReady()) {
-    mailAi.msgs.push({ kind: "error", text: tr("AI 가 연결되어 있지 않아요. 설정 → AI 연결에서 Claude 나 Codex 를 연결해 주세요.") });
+    mailAi.msgs.push({ kind: "error", text: tr("아직 AI 를 연결하지 않았어요. 설정 → AI 연결에서 연결해 주세요.") });
     paintMailAi();
     return;
   }
@@ -17942,7 +17953,7 @@ async function runMailAiRevise() {
       const heads = applyMailHeads(mail);
       const body = typeof mail.body === "string" ? replaceMyPart(mail.body) : false;
       mailAi.drafted = true;
-      if (!body && !heads && !mail.subject) mailAi.msgs.push({ kind: "error", text: tr("바꿀 곳이 없었어요. 다르게 말해 주세요.") });
+      if (!body && !heads && !mail.subject) mailAi.msgs.push({ kind: "error", text: tr("바뀐 곳이 없어요. 조금 다르게 말해 주세요.") });
       else mailAi.msgs.push({ kind: "edit", mail, note: res.note, engine: res.engine, seconds: res.seconds });
       if (heads) loadMailFlow(true);
     }
@@ -18131,7 +18142,7 @@ function paintSelAi() {
   const now = currentAiModel();
   if (selAi.busy) {
     el.className = "sel-ai busy";
-    el.innerHTML = `${aiLogo(now.provider || "claude", "busy")}<span>${escapeHtml(tr("{who} 가 고치는 중").replace("{who}", now.label))}</span>
+    el.innerHTML = `${aiLogo(now.provider || "claude", "busy")}<span>${escapeHtml(tr("고치는 중"))}</span>
       <button type="button" class="sel-ai-x" data-sel-cancel>${escapeHtml(tr("취소"))}</button>`;
   } else if (selAi.open) {
     el.className = "sel-ai open";
