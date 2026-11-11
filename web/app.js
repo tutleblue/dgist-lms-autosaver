@@ -1816,8 +1816,13 @@ async function markAllRead() {
 /* ===== 인앱 작성 화면 ===== */
 let composeGen = 0; // 새로 쓸 때마다 올린다 — 늦게 끝난 전달 첨부가 다른 메일에 붙지 않게
 
-function openCompose({ to = "", cc = "", bcc = "", subject = "", body = "", inReplyTo = "", references = "", title = "새 메일" } = {}) {
+// html: 본문을 HTML 그대로(답장 인용). replyOf: 답장하는 메일 — AI 옆 창이 무엇에 답하는지 보여 주고 추천 문구를 고른다
+function openCompose({ to = "", cc = "", bcc = "", subject = "", body = "", html = "", replyOf = null, inReplyTo = "", references = "", title = "새 메일" } = {}) {
   composeGen += 1;
+  state.composeReplyOf = replyOf && inReplyTo
+    ? { fromName: replyOf.fromName || "", fromEmail: replyOf.fromEmail || "", subject: replyOf.subject || "",
+        replyAsk: replyOf.replyAsk || "", text: quotableText(replyOf).slice(0, 1500) }
+    : null;
   const form = $("#composeForm");
   form.elements.to.value = to;
   form.elements.cc.value = cc;
@@ -1837,7 +1842,7 @@ function openCompose({ to = "", cc = "", bcc = "", subject = "", body = "", inRe
     toggle.dispatchEvent(new Event("change"));
   }
   // 본문은 서식 영역에도 넣어 준다 (답장 인용문이 보이도록)
-  setComposeBody(body ? escapeHtml(body).replace(/\n/g, "<br>") : "");
+  setComposeBody(html || (body ? escapeHtml(body).replace(/\n/g, "<br>") : ""));
   const important = $("#markImportant");
   if (important) important.checked = false;
   const separately = $("#sendSeparately");
@@ -2513,11 +2518,83 @@ function composeIsRich() {
 /** 서식 칸의 HTML. 메일 쓰기 흐름의 회색 글씨([data-ghost])는 미리보기라 저장·보내기에 절대 섞이지 않게 뗀다 */
 function richHtml(rich) {
   const html = rich?.innerHTML || "";
-  if (!html.includes("data-ghost")) return html;
+  if (!html.includes("data-ghost") && !html.includes("data-quote")) return html;
   // 정규식으로 떼면 안에 <span> 이 든 꼬리표(AI 가 쓰는 중 칸)의 뒷부분이 남아 임시저장에 섞였다 → 복사본에서 노드째 뗀다
   const copy = rich.cloneNode(true);
   copy.querySelectorAll("[data-ghost]").forEach((n) => n.remove());
+  // 쓰기 칸에서만 쓰는 표시(잠금·접기·단추 글)는 보내기·임시저장 글에서 뗀다
+  copy.querySelectorAll("[data-quote]").forEach((n) => {
+    n.removeAttribute("contenteditable");
+    n.removeAttribute("data-open");
+    n.firstElementChild?.removeAttribute("data-toggle");
+  });
   return copy.innerHTML;
+}
+
+/* 답장 인용 칸 (2026-11-11 사용자: '본문과 인용이 따로 논다').
+   - 잠금: 쓰기 칸 안에서 손대지 못하게(통째로 지우기는 된다). 잠그지 않으면 AI 가 내 글을 바꿀 때(지우고 넣기) Chromium 이 지운 줄 뒤의
+     인용 칸 첫 줄을 끌어올려 합쳐, 새 글이 인용 머리줄 안에 들어갔다(실측).
+   - 접기: 본문 칸은 높이 270px 남짓의 스크롤 칸이라 긴 원문이 칸을 채우고, 원문을 누르면 칸이 내려가 쓰던 글이 위로 사라졌다.
+     Gmail 처럼 머리줄 한 줄만 두고 '원문 보기' 로 편다. 받는 사람에게는 원문이 다 간다.
+   - 커서: 잠근 칸 안이나 그 아래를 누르고 치면 글이 사라졌다(실측) → 커서가 인용 안·뒤로 가면 내 글 끝으로 옮긴다(bindQuoteGuard).
+   보내기·임시저장 글에서는 richHtml 이 이 표시들을 뗀다. */
+function lockQuotes(rich) {
+  rich?.querySelectorAll("[data-quote]").forEach((n) => {
+    n.contentEditable = "false";
+    paintQuoteToggle(n);
+  });
+}
+
+function paintQuoteToggle(quote) {
+  const head = quote.firstElementChild;
+  if (head && head.nodeName !== "BLOCKQUOTE") head.dataset.toggle = tr(quote.dataset.open ? "원문 접기" : "원문 보기");
+}
+
+// 내 글(인용 앞)의 마지막 글자 뒤. 글이 없으면 맨 앞
+function myPartEndPoint(rich, quote) {
+  const walker = document.createTreeWalker(rich, NodeFilter.SHOW_TEXT);
+  let last = null;
+  while (walker.nextNode()) {
+    const n = walker.currentNode;
+    if (quote.contains(n) || quote.compareDocumentPosition(n) & Node.DOCUMENT_POSITION_FOLLOWING) break;
+    if (n.parentElement?.closest("[data-ghost]")) continue;
+    if (n.data.trim()) last = n;
+  }
+  return last ? [last, last.data.replace(/\s+$/, "").length] : [rich, 0];
+}
+
+function bindQuoteGuard(rich) {
+  // 머리줄을 누르면 원문을 펴고 접는다
+  rich.addEventListener("click", (event) => {
+    const quote = event.target.closest?.("[data-quote]");
+    if (!quote || !rich.contains(quote)) return;
+    if (event.target.closest("[data-quote] > div:first-child") === quote.firstElementChild && quote.firstElementChild?.dataset.toggle) {
+      if (quote.dataset.open) delete quote.dataset.open;
+      else quote.dataset.open = "1";
+      paintQuoteToggle(quote);
+    }
+  });
+  // 커서가 인용 안이나 그 뒤에 놓이면(누르기·화살표·Ctrl+End) 내 글 끝으로. 끌어 고른 것(범위)은 그대로 둔다 — 원문 복사는 된다
+  document.addEventListener("selectionchange", () => {
+    const sel = window.getSelection();
+    if (!sel?.rangeCount || !sel.isCollapsed || !composeIsRich()) return;
+    const node = sel.anchorNode;
+    if (!node || !rich.contains(node)) return;
+    const quote = rich.querySelector("[data-quote]");
+    if (!quote) return;
+    const index = Array.prototype.indexOf.call(rich.childNodes, quote);
+    if (node === rich && sel.anchorOffset <= index) return; // 인용 바로 앞(빈 줄)은 내 글 자리
+    const after = document.createRange();
+    after.setStartBefore(quote);
+    after.setEnd(rich, rich.childNodes.length);
+    if (after.comparePoint(node, sel.anchorOffset) !== 0) return;
+    const [n, offset] = myPartEndPoint(rich, quote);
+    const at = document.createRange();
+    at.setStart(n, offset);
+    at.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(at);
+  });
 }
 
 /** 어느 칸에 쓰든 본문 내용을 가져온다 */
@@ -2532,6 +2609,7 @@ function setComposeBody(html) {
   const area = document.querySelector('#composeForm [name="body"]');
   if (rich) rich.innerHTML = html || "";
   if (area) area.value = html || "";
+  lockQuotes(rich);
 }
 
 /* --- 서식 도구 --- */
@@ -2599,6 +2677,7 @@ function bindRichToolbar() {
       if (area) area.value = richHtml(rich);
     } else {
       rich.innerHTML = area?.value || "";
+      lockQuotes(rich);
     }
     rich.hidden = html;
     if (area) area.hidden = !html;
@@ -2609,6 +2688,7 @@ function bindRichToolbar() {
   rich.addEventListener("input", () => {
     if (area && composeIsRich()) area.value = richHtml(rich);
   });
+  bindQuoteGuard(rich);
 }
 
 /* --- 주소찾기 --- */
@@ -3224,12 +3304,6 @@ async function replyToCurrentEmail(all = false) {
   // 목록에서 바로 답장하면 본문이 아직 안 와 있을 수 있다 (인용이 비면 곤란하다)
   await ensureMailBody(mail);
   const subject = /^\s*re\s*:/i.test(mail.subject) ? mail.subject : `Re: ${mail.subject}`;
-  const when = mail.date ? formatEmailDate(mail.date) : "";
-  const quoted = quotableText(mail)
-    .split("\n")
-    .map((line) => `> ${line}`)
-    .join("\n");
-  const body = `\n\n----- 원본 메일 (${escapeHtml(mail.fromName || mail.fromEmail)}${when ? ", " + when : ""}) -----\n${quoted}`;
 
   // 전체 답장: 원래 받는 사람들도 참조에 넣는다. 단 내 주소는 뺀다.
   let cc = "";
@@ -3246,11 +3320,47 @@ async function replyToCurrentEmail(all = false) {
     to: mail.fromEmail,
     cc,
     subject,
-    body,
+    html: `<br>${replyQuoteHtml(mail)}`, // 쓸 줄 하나 + 인용(인용 위 여백은 인용 칸이 가진다)
+    replyOf: mail,
     inReplyTo: mail.messageId || "",
     references: mail.messageId || "",
     title: all ? "전체 답장" : "답장",
   });
+}
+
+/* 답장 인용 (2026-11-11 사용자: '> 표시가 많아서 지저분해 보인다'). 예전엔 줄마다 '> ' 를 붙인 평문이었다.
+   Gmail 처럼 '날짜, 보낸 사람 님이 작성:' 한 줄 + 왼쪽 회색 줄 인용(blockquote)으로 — 받는 사람의 메일 앱도 인용으로 접어 보인다.
+   [data-quote] 는 '여기부터 원문' 표시: AI 는 이 앞(내 글)만 쓰고 고친다(myPartRange). 표시가 지워져도 머리줄·blockquote 로 알아본다.
+   머리줄 말은 원문 언어를 따른다(외국인 교수님 메일에 '님이 작성:' 이 붙지 않게). 원문 HTML 은 옮기지 않는다 — 바깥 메일의
+   태그·스크립트를 쓰기 칸(앱 화면)에 넣게 되므로 글만 옮긴다. */
+function replyQuoteHead(mail, en) {
+  const who = mail.fromName && mail.fromEmail ? `${mail.fromName} <${mail.fromEmail}>` : mail.fromName || mail.fromEmail || "";
+  const d = mail.date ? new Date(mail.date) : null;
+  if (!d || Number.isNaN(d.getTime())) return en ? `${who} wrote:` : `${who} 님이 작성:`;
+  const hm = `${d.getHours() % 12 || 12}:${String(d.getMinutes()).padStart(2, "0")}`;
+  if (en) {
+    const day = d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" });
+    return `On ${day} at ${hm} ${d.getHours() < 12 ? "AM" : "PM"}, ${who} wrote:`;
+  }
+  const wd = "일월화수목금토"[d.getDay()];
+  return `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일 (${wd}) ${d.getHours() < 12 ? "오전" : "오후"} ${hm}, ${who} 님이 작성:`;
+}
+
+function replyQuoteHtml(mail) {
+  const text = quotableText(mail);
+  const en = !/[가-힣]/.test(`${mail.subject || ""} ${text.slice(0, 3000)}`);
+  const body = escapeHtml(text).replace(/\n/g, "<br>");
+  // 위 여백(margin-top)은 받는 사람 쪽에서도 내 글과 인용 사이를 띄운다 — 내 글이 인용 바로 위 줄까지 차도 붙어 보이지 않게
+  return `<div data-quote="reply" style="margin-top:16px"><div>${escapeHtml(replyQuoteHead(mail, en))}</div>` +
+    `<blockquote style="margin:4px 0 0 0.8ex;padding-left:1ex;border-left:2px solid #ccc">${body}</blockquote></div>`;
+}
+
+// HTML 글에서 답장·전달 원문이 시작하는 자리 (없으면 -1). HTML 칸으로 쓸 때·보내기 전 첨부 확인이 쓴다
+const HTML_QUOTE_START =
+  /(<br\s*\/?>\s*)*(<div[^>]*\bdata-quote\b|<blockquote\b|-{5,}\s*(원본 메일|전달된 메일)|(\d{4}년 |On )[^<\n]{4,200}(님이 작성|wrote)\s*:)/i;
+function htmlQuoteStart(html) {
+  const m = HTML_QUOTE_START.exec(String(html || ""));
+  return m ? m.index : -1;
 }
 
 /* 왼쪽은 '메일함'만 둔다.
@@ -7212,9 +7322,9 @@ function bindEvents() {
     }
     // 첨부를 말했는데 첨부가 없으면 한 번 묻는다. 인용·전달된 원문은 빼고 내가 쓴 부분만 본다.
     if (!(state.attachments || []).length) {
-      const mine = String(payload.body || "")
-        .replace(/<[^>]+>/g, " ")
-        .split(/-{5,}\s*(?:원본 메일|전달된 메일)/)[0];
+      const raw = String(payload.body || "");
+      const cut = htmlQuoteStart(raw);
+      const mine = (cut >= 0 ? raw.slice(0, cut) : raw).replace(/<[^>]+>/g, " ");
       // 답장 제목은 상대가 쓴 것이라(Re: 자료 첨부합니다) 내가 새로 쓸 때만 본다
       if (/첨부|attach/i.test(`${payload.inReplyTo ? "" : subject} ${mine}`)) {
         const go = await uiConfirm("본문에 '첨부'가 있는데 첨부한 파일이 없어요. 그대로 보낼까요?", {
@@ -7487,7 +7597,30 @@ function bindEvents() {
     state.health = null; // 결과를 다시 받아 경고를 새로 그린다
     await refreshAll();
   });
-  $("#healthSettingsButton")?.addEventListener("click", openSettings);
+  $("#healthFixButton")?.addEventListener("click", (event) => HEALTH_FIX[event.currentTarget.dataset.fix]?.run());
+  $("#healthLaterButton")?.addEventListener("click", () => {
+    const banner = $("#healthBanner");
+    try {
+      localStorage.setItem("daling-health-later", JSON.stringify({ sig: banner.dataset.sig, until: Date.now() + 6 * 3600e3 }));
+    } catch {
+      /* 저장이 막혀도 이번에는 숨긴다 */
+    }
+    banner.hidden = true;
+  });
+  $("#healthCopyButton")?.addEventListener("click", async () => {
+    const text = state.healthCopy || "";
+    try {
+      await navigator.clipboard.writeText(text);
+      showToast(tr("오류 내용을 복사했어요."));
+    } catch {
+      showToast(humanError(text));
+    }
+  });
+  // 인터넷이 끊겨 실패했던 작업은 다시 연결되는 대로 한 번 해 본다 (자동 시도 차례를 기다리지 않는다)
+  window.addEventListener("online", () => {
+    const kinds = [...new Set((state.health?.failing || []).filter((f) => f.category === "network").map((f) => f.kind))];
+    if (kinds.length) setTimeout(() => retryAfterOnline(kinds), 3000);
+  });
 
   // 자료함: 폴더/리스트 전환
   document.querySelectorAll("[data-filemode]").forEach((btn) => {
@@ -8315,6 +8448,84 @@ async function renderStorage() {
 }
 
 /* ===== 동기화 상태 (조용한 실패 방지) ===== */
+// 사용자가 할 일 없이 저절로 풀리는 실패 갈래 (web_ui.FAILURE_KINDS) → 한 줄 안내
+const HEALTH_QUIET = {
+  network: "인터넷이나 학교 서버에 닿으면 저절로 다시 해요.",
+  server: "학교 서버가 바빠요. 잠시 뒤 저절로 다시 해요.",
+  timeout: "학교 사이트가 느려요. 잠시 뒤 저절로 다시 해요.",
+  busy: "다른 프로그램이 파일을 쓰고 있어요. 닫으면 다음에 저절로 저장해요.",
+};
+
+/** 설정의 한 칸으로 가서 반짝 표시 (상태판 카드와 같은 방식) */
+function jumpToSetting(sectionId, fieldName) {
+  openSettings();
+  window.setTimeout(() => {
+    const el = document.getElementById(sectionId);
+    if (!el) return;
+    el.scrollIntoView({ block: "start", behavior: "smooth" });
+    el.classList.remove("search-flash");
+    void el.offsetWidth;
+    el.classList.add("search-flash");
+    const field = fieldName && $("#configForm")?.elements[fieldName];
+    field?.focus({ preventScroll: true });
+  }, 220);
+}
+
+// 실패 갈래마다 바로 고치는 길. 학교 서버·인터넷처럼 저절로 풀리는 것은 HEALTH_QUIET, 브라우저는 앱이 스스로
+// 다른 브라우저로 바꿔 띄우므로(browser_setup.launch_lms_browser) '다시 해 보기' 만 둔다.
+const HEALTH_FIX = {
+  account: { label: "계정 넣기", run: () => jumpToSetting("stAccounts", state.health?.failing?.[0]?.kind === "emails" ? "schoolEmail" : "lmsId") },
+  login: {
+    label: "비밀번호 바꾸기",
+    run: () => jumpToSetting("stAccounts", Object.keys(state.health?.authFailed || {})[0] === "emails" ? "schoolEmailPassword" : "lmsPassword"),
+  },
+  drive: { label: "구글 다시 연결", run: () => $("#googleLoginButton")?.click() },
+  site: { label: "업데이트 확인", run: () => { openSettings(); checkForUpdate(true); window.setTimeout(() => $("#updateRow")?.scrollIntoView({ block: "center" }), 500); } },
+  disk: { label: "저장 위치 보기", run: () => jumpToSetting("stStorage") },
+  unknown: { label: "문제 알리기", run: () => openFeedback() },
+};
+
+function healthSig(h) {
+  return JSON.stringify([
+    Object.keys(h.authFailed || {}).sort(),
+    (h.failing || []).map((f) => [f.kind, f.category, f.since]),
+    Boolean(h.keychain), h.stale,
+  ]);
+}
+
+function healthLater() {
+  try {
+    return JSON.parse(localStorage.getItem("daling-health-later") || "null");
+  } catch {
+    return null;
+  }
+}
+
+/** '2026-11-10T13:22:05' → 오늘이면 '13:22', 아니면 '11/10 13:22' */
+function shortStamp(stamp) {
+  const when = new Date(String(stamp));
+  if (Number.isNaN(when.getTime())) return String(stamp).replace("T", " ");
+  const same = when.toDateString() === new Date().toDateString();
+  return same ? hhmm(when) : `${when.getMonth() + 1}/${when.getDate()} ${hhmm(when)}`;
+}
+
+async function retryAfterOnline(kinds) {
+  if (!navigator.onLine) return;
+  const routes = {
+    emails: ["/api/refresh-emails", {}],
+    deadlines: ["/api/refresh-deadlines", {}],
+    sync: ["/api/run", { confirm: true, mode: "fast" }],
+  };
+  for (const kind of kinds) {
+    const route = routes[kind];
+    if (!route) continue;
+    // 이미 도는 작업이 있으면 서버가 거절한다 — 그건 그대로 두고 다음 것을 한다
+    await api(route[0], { method: "POST", body: JSON.stringify(route[1]) }).catch(() => {});
+  }
+  state.health = null;
+  refreshAll();
+}
+
 async function renderHealth() {
   const banner = $("#healthBanner");
   if (!banner) return;
@@ -8334,6 +8545,46 @@ async function renderHealth() {
     const last = failKind && h.lastSuccess?.[failKind]
       ? h.lastSuccess[failKind]
       : Object.values(h.lastSuccess || {}).sort().pop();
+    // '자세히 복사' 가 주는 글: 화면에는 짧게만 쓰고, 서버가 한 말·남은 로그는 여기로만
+    state.healthCopy = [
+      h.warning,
+      h.authReason ? `서버: ${h.authReason}` : "",
+      fail?.title, fail?.hint,
+      last ? `마지막 성공: ${String(last).replace("T", " ")}` : "",
+      fail?.reason ? `오류 내용: ${fail.reason}` : "",
+      ...(fail?.tail || []),
+    ].filter(Boolean).join("\n");
+    // '나중에' 를 눌렀으면 까닭이 바뀌거나 6시간이 지날 때까지 띄우지 않는다
+    const sig = healthSig(h);
+    const later = healthLater();
+    if (later && later.sig === sig && Date.now() < later.until) {
+      banner.hidden = true;
+      return;
+    }
+    banner.dataset.sig = sig;
+    // 인터넷이 끊겼거나 학교 서버가 바쁘거나 느린 것뿐이면(사용자가 할 일 없음) 저절로 다시 하므로 한 줄로 조용히.
+    // 다만 12시간 넘게 이어지면 다른 까닭일 수 있어 보통 띠로 알린다
+    const failing = h.failing || [];
+    const quiet = Boolean(fail) && failing.every(
+      (f) => HEALTH_QUIET[f.category] && Date.now() - new Date(String(f.since || f.at)).getTime() < 12 * 3600e3,
+    );
+    banner.classList.toggle("quiet", quiet);
+    if (quiet) {
+      $("#healthTitle").textContent = tr("동기화 잠시 멈춤");
+      $("#healthDetail").textContent = tr(HEALTH_QUIET[fail.category]);
+      $("#healthCause").hidden = true;
+      banner.hidden = false;
+      return;
+    }
+    // 까닭마다 바로 고치는 단추 (계정 넣기·비밀번호 바꾸기·구글 다시 연결·업데이트 확인·저장 위치·문제 알리기)
+    const fixKey = h.keychain ? "" : auth ? "login" : fail?.category || "";
+    const fix = HEALTH_FIX[fixKey];
+    const fixButton = $("#healthFixButton");
+    fixButton.hidden = !fix;
+    fixButton.dataset.fix = fix ? fixKey : "";
+    if (fix) fixButton.textContent = tr(fix.label);
+    $("#healthRetryButton").classList.toggle("primary", !fix);
+    $("#healthRetryButton").classList.toggle("ghost", Boolean(fix));
     // 맥 키체인에서 비밀번호를 못 꺼내면(업데이트 뒤 허락 전·거부) LMS·메일이 함께 실패한다. 그때는 그것부터 말한다
     // 제목은 '왜' 를 말한다 (2026-11-03 사용자: '계속 실패' 만 떠서 비밀번호인지 서버인지 사이트가 바뀐 건지 모르겠다)
     $("#healthTitle").textContent = h.keychain
@@ -8341,24 +8592,18 @@ async function renderHealth() {
       : auth ? "로그인이 거절됐어요"
       : fail ? tr(fail.title || "동기화가 계속 실패하고 있어요") : "한동안 동기화가 되지 않았어요";
     // 경고와 '(마지막 성공: …)' 을 따로 옮긴다. 한 줄로 붙이면 영어 화면 번역표의 어느 틀에도 안 맞아 한국어로 남았다
+    // 마지막 성공은 짧게 ('11/10 13:22'). 초까지 쓴 긴 시각은 '자세히 복사' 에만
     $("#healthDetail").textContent =
-      tr(h.warning) + (last && !h.keychain ? tr(` (마지막 성공: ${String(last).replace("T", " ")})`) : "");
-    // 할 일 · 다음 자동 시도 · 서버나 오류가 한 말 (서버의 말은 옮기지 않는다)
+      tr(h.warning) + (last && !h.keychain ? tr(` (마지막 성공: ${shortStamp(last)})`) : "");
+    // 할 일 · 다음 자동 시도. 서버나 오류가 한 말(영어 오류 줄)은 화면에 두지 않고 '자세히 복사' 로만 준다
     const cause = $("#healthCause");
     if (cause) {
       const parts = [];
       if (fail?.hint) parts.push(tr(fail.hint));
       const next = fail ? nextAutoJob(fail.kind) : null;
       if (next) parts.push(tr(`다음 자동 시도 ${hhmm(new Date(next.at))}`));
-      const reason = fail?.reason ? `${tr("오류 내용")}: ${fail.reason}` : "";
-      cause.textContent = [parts.join(" "), reason].filter(Boolean).join("\n");
+      cause.textContent = parts.join(" ");
       cause.hidden = !cause.textContent;
-    }
-    const log = $("#healthLog");
-    if (log) {
-      const tail = (fail?.tail || []).filter(Boolean);
-      log.hidden = !tail.length;
-      $("#healthLogText").textContent = tail.join("\n");
     }
     banner.hidden = false;
   } catch (error) {
@@ -16413,8 +16658,8 @@ state.mailMe = null;
 const flow = { data: null, key: "", lang: "", course: 0, muted: false, timer: 0, toTimer: 0, seq: 0, ghost: null };
 const FLOW_STAGE = { greeting: 0, intro: 1, leadin: 2, content: 3, closing: 4, signoff: 5 };
 const FLOW_TEST_ORDER = ["signoff", "closing", "leadin", "intro", "greeting"];
-// 답장·전달에 붙는 원본 메일('----- 원본 메일 …', '>' 인용)부터는 내 글이 아니다
-const FLOW_QUOTE = /^\s*(>|-{3,}|_{3,})/;
+// 답장·전달에 붙는 원본 메일('----- 원본 메일 …', '>' 인용, '… 님이 작성:' 머리줄)부터는 내 글이 아니다
+const FLOW_QUOTE = /^\s*(>|-{3,}|_{3,}|.{0,200}(님이 작성|\bwrote)\s*:\s*$)/i;
 const FLOW_MARK = "⁣";
 const ME_FIELDS = { name: "#meName", nameEn: "#meNameEn", studentId: "#meStudentId", dept: "#meDept" };
 
@@ -16913,6 +17158,7 @@ async function runAiContinue() {
         to: form?.elements.to.value || "",
         cc: form?.elements.cc.value || "",
         subject: form?.elements.subject.value || "",
+        quote: quoteText().slice(0, 4000),
         noAsk: true,
         // '/ai with opus5.5 [ … ]' 로 고른 모델은 이번 한 번만 (평소 모델은 쓰기 창의 모델 단추)
         provider: cmd.choice?.provider || "",
@@ -17500,7 +17746,9 @@ const MAIL_AI_KEY = "daling.mailAi.open";
 const MAIL_AI_EDIT_WORDS = /(고쳐|다듬|바꿔|바꾸|짧게|길게|줄여|늘려|공손|자연스럽|정중|번역|영어로|한국어로|추가|넣어|빼|지워|수정|부드럽|딱딱|격식)/;
 
 /* --- 내 글(답장·전달 원문 앞까지) --- */
-// 본문 처음부터 답장 원문('----- 원본 메일 …', '>' 인용, <blockquote>) 앞까지. AI 는 이 부분만 쓰고 고친다
+// 본문 처음부터 답장 원문([data-quote], '… 님이 작성:' 머리줄, '----- 원본 메일 …', '>' 인용, <blockquote>) 앞까지.
+// AI 는 이 부분만 쓰고 고친다
+const QUOTE_LINE = /^\s*(-{5,}\s*(원본 메일|전달된 메일|Original Message)|>|.{0,200}(님이 작성|\bwrote)\s*:\s*$)/i;
 function myPartRange() {
   const rich = $("#composeRich");
   const range = document.createRange();
@@ -17509,7 +17757,7 @@ function myPartRange() {
     acceptNode: (n) => {
       if (n.nodeType === 1) {
         if (n.dataset?.ghost) return NodeFilter.FILTER_REJECT;
-        return n.nodeName === "BLOCKQUOTE" ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP;
+        return n.nodeName === "BLOCKQUOTE" || n.dataset?.quote ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP;
       }
       return n.parentElement?.closest("[data-ghost]") ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT;
     },
@@ -17517,7 +17765,7 @@ function myPartRange() {
   while (walker.nextNode()) {
     const n = walker.currentNode;
     const lineStart = !n.previousSibling || n.previousSibling.nodeName === "BR" || n.previousSibling.nodeType === 1;
-    if (n.nodeType === 1 || (lineStart && /^\s*(-{5,}\s*(원본 메일|전달된 메일|Original Message)|>)/i.test(n.data))) {
+    if (n.nodeType === 1 || (lineStart && QUOTE_LINE.test(n.data))) {
       range.setEndBefore(n);
       return { range, quote: true };
     }
@@ -17535,9 +17783,12 @@ function myPartText() {
   const rich = $("#composeRich");
   if (!rich) return "";
   if (!composeIsRich()) {
+    const html = document.querySelector('#composeForm [name="body"]')?.value || "";
+    const cut = htmlQuoteStart(html);
     const box = document.createElement("div");
-    box.innerHTML = document.querySelector('#composeForm [name="body"]')?.value || "";
-    return (box.innerText || "").split(/\n\s*-{5,}\s*(원본 메일|전달된 메일)/)[0].trim();
+    // 붙이지 않은 칸의 innerText 는 <br> 을 줄로 읽지 않는다 → 줄바꿈으로 먼저 바꾼다
+    box.innerHTML = (cut >= 0 ? html.slice(0, cut) : html).replace(/<br\s*\/?>/gi, "\n").replace(/<\/(div|p)>/gi, "\n");
+    return (box.textContent || "").trim();
   }
   return plainMail(rangeText(myPartRange().range, true));
 }
@@ -17571,7 +17822,8 @@ function replaceMyPart(body) {
   if (!composeIsRich()) {
     // HTML 칸으로 쓰는 중이면 흘리지 않고 바로 넣는다
     const area = document.querySelector('#composeForm [name="body"]');
-    const rest = (area.value.match(/(<br\s*\/?>)*\s*-{5,}\s*(원본 메일|전달된 메일)[\s\S]*$/) || [""])[0];
+    const cut = htmlQuoteStart(area.value);
+    const rest = cut >= 0 ? area.value.slice(cut) : "";
     area.value = escapeHtml(next).replace(/\n/g, "<br>") + (rest ? `<br><br>${rest.replace(/^(<br\s*\/?>\s*)+/, "")}` : "");
     area.dispatchEvent(new Event("input", { bubbles: true }));
     return true;
@@ -17678,10 +17930,43 @@ function mailAiCourseName(label) {
   return courseShortName(label);
 }
 
+// 답장 창이면 무엇에 답하는지 (openCompose 의 replyOf). 옆 창 처음 화면에 보이고, 추천 문구를 고른다
+function mailAiReplyOf() {
+  return $("#composeForm")?.dataset.inReplyTo ? state.composeReplyOf || null : null;
+}
+
+/* 답장 추천 문구 (2026-11-11 사용자: '답신할 때 그 맥락도 들어가게, 그에 맞게 추천 문구를 띄워도 좋고').
+   AI 를 부르지 않고(메일 내용은 부탁할 때만 AI 로 간다) 원문의 회신을 바라는 문장·제목·첫 부분의 낱말로 고른다.
+   원문은 고른 문구와 함께 옆 창이 늘 넘기므로(quote), 문구는 짧은 방향만 말하면 된다. */
+function mailAiReplyExamples(of) {
+  const text = `${of.replyAsk || ""} ${of.subject || ""} ${String(of.text || "").slice(0, 800)}`;
+  const out = [];
+  const add = (s) => {
+    if (!out.includes(s)) out.push(s);
+  };
+  if (/참석|참여|출석|신청|attend|join|participat|rsvp/i.test(text)) {
+    add(tr("참석하겠다고 답장"));
+    add(tr("참석이 어렵다고 정중히 답장"));
+  }
+  if (/면담|미팅|일정|시간|날짜|언제|meeting|schedule|available|availability|what time|when/i.test(text)) add(tr("가능한 시간 알려 드리기"));
+  if (/가능(한지|하신지|할지|여부)|괜찮으신지|되는지|whether|possible/i.test(text)) {
+    add(tr("가능하다고 답장"));
+    add(tr("어렵다고 정중히 답장"));
+  }
+  if (/제출|보내\s*주|첨부|자료를|submit|send (me|us)|attach/i.test(text)) add(tr("확인했고 곧 보내겠다고 답장"));
+  if (/의견|피드백|생각을|opinion|feedback|thoughts/i.test(text)) add(tr("의견 정리해 답장"));
+  if (/\?|궁금|문의|질문|여쭤/i.test(of.replyAsk || "")) add(tr("물어보신 것에 답하기"));
+  add(tr("잘 받았다고 감사 답장"));
+  add(tr("궁금한 점 하나 되묻기"));
+  add(tr("정중하게 거절하는 답장"));
+  return out.slice(0, 3);
+}
+
 function mailAiExamples() {
-  const form = $("#composeForm");
-  if (form?.dataset.inReplyTo) {
-    return [tr("고맙다고, 참석하겠다고 답장"), tr("정중하게 거절하는 답장"), tr("궁금한 점 하나 되묻기")];
+  const of = mailAiReplyOf();
+  if (of) return mailAiReplyExamples(of);
+  if ($("#composeForm")?.dataset.inReplyTo) {
+    return [tr("잘 받았다고 감사 답장"), tr("궁금한 점 하나 되묻기"), tr("정중하게 거절하는 답장")];
   }
   const profs = [];
   const tas = [];
@@ -17776,8 +18061,15 @@ function mailAiEmptyHtml() {
   const examples = mailAiExamples()
     .map((e) => `<button type="button" class="mai-example" data-example="${escapeHtml(e)}">${escapeHtml(e)}</button>`)
     .join("");
+  // 답장이면 무엇에 답하는지 한 줄(보낸 사람·제목)과 회신을 바라는 문장 — 이 메일을 보고 쓴다는 것이 보이게
+  const of = mailAiReplyOf();
+  const ctx = of
+    ? `<div class="mai-reply-of" data-no-i18n title="${escapeHtml(of.fromEmail)}">${iconHtml("reply")}<span><b>${escapeHtml(of.fromName || of.fromEmail)}</b> · ${escapeHtml(of.subject || tr("(제목 없음)"))}</span></div>
+       ${of.replyAsk ? `<p class="mai-reply-ask" data-no-i18n>“${escapeHtml(of.replyAsk)}”</p>` : ""}`
+    : "";
   return `<div class="mai-empty">
-    <div class="mai-hello">${aiLogo(currentAiModel().provider || "claude")}<strong>${escapeHtml(tr("무슨 메일을 쓸까요?"))}</strong></div>
+    <div class="mai-hello">${aiLogo(currentAiModel().provider || "claude")}<strong>${escapeHtml(tr(of ? "어떻게 답장할까요?" : "무슨 메일을 쓸까요?"))}</strong></div>
+    ${ctx ? `<div class="mai-reply">${ctx}</div>` : ""}
     <div class="mai-examples">${examples}</div>
   </div>`;
 }
@@ -17795,7 +18087,9 @@ function paintMailAi() {
       ? tr("직접 답해도 돼요")
       : mailAi.drafted
         ? tr("더 고칠 게 있으면 말해 주세요")
-        : tr("누구에게 무슨 일로 보낼지 적어 주세요");
+        : mailAiReplyOf()
+          ? tr("어떻게 답할지 적어 주세요")
+          : tr("누구에게 무슨 일로 보낼지 적어 주세요");
   }
   const send = $("#mailAiSend");
   if (send) send.disabled = mailAi.busy;
@@ -17845,8 +18139,9 @@ async function mailAiSubmit(raw) {
     runMailAiRevise();
     return;
   }
-  // 새로 쓰기: 본문에 적어 둔 메모가 있으면 같이 넘긴다 (다 쓴 뒤에는 이 메모 자리에 메일이 들어간다)
-  mailAi.request = mine ? `${text}\n\n(학생이 본문에 적어 둔 메모)\n${mine.slice(0, 3000)}` : text;
+  // 새로 쓰기: 본문에 이미 쓴 글·제목은 runMailAiCompose 가 current 로 함께 넘긴다(그 뜻을 살려 쓴다).
+  // 다 쓴 뒤에는 그 글 자리에 메일이 들어간다
+  mailAi.request = text;
   mailAi.answers = [];
   mailAi.round = 0;
   runMailAiCompose();
@@ -17887,8 +18182,9 @@ async function runMailAiCompose() {
         request: mailAi.request,
         answers: mailAi.answers,
         round: mailAi.round,
-        current: { to: form.elements.to.value, cc: form.elements.cc.value, subject: form.elements.subject.value },
-        quote: quoteText(),
+        // 학생이 이미 쓴 제목·본문(답장 원문 앞까지)과 답장하는 원문 — AI 가 그 뜻·맥락을 살려 쓴다
+        current: { to: form.elements.to.value, cc: form.elements.cc.value, subject: form.elements.subject.value, body: myPartText().slice(0, 3000) },
+        quote: quoteText().slice(0, 4000),
       }),
     });
     if (seq !== mailAi.seq) return;
@@ -17941,6 +18237,7 @@ async function runMailAiRevise() {
         to: form.elements.to.value,
         cc: form.elements.cc.value,
         subject: form.elements.subject.value,
+        quote: quoteText().slice(0, 4000), // 답장이면 원문을 보고 고친다(묻는 말에 맞게)
         noAsk: answers.length > 0,
       }),
     });
@@ -18248,7 +18545,10 @@ async function runSelAi(instruction) {
   try {
     const res = await api("/api/ai/rewrite", {
       method: "POST",
-      body: JSON.stringify({ instruction, selection, before: before.slice(-3000), after: after.slice(0, 2000), flow: { to: aiFlowTo() } }),
+      body: JSON.stringify({
+        instruction, selection, before: before.slice(-3000), after: after.slice(0, 2000), flow: { to: aiFlowTo() },
+        subject: $("#composeForm")?.elements.subject.value || "", quote: quoteText().slice(0, 3000),
+      }),
     });
     if (seq !== selAi.seq) return; // 그사이 취소
     if (range.collapsed || !rich.contains(range.startContainer)) throw new Error(tr("고르던 글이 바뀌어서 넣지 않았어요."));

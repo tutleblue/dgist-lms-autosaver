@@ -2785,12 +2785,11 @@ def get_health(workspace: UserWorkspace) -> dict[str, Any]:
         out["authPaused"] = sorted(auth)
         # 학교 서버는 맞는 비밀번호도 몇 시간씩 거절하다 풀릴 때가 있다(9/27, 10/12 13:44~16:02).
         # 곧장 '비밀번호를 확인하라' 고 하면 멀쩡한 비밀번호를 의심하게 되므로, 2시간 뒤 다시 해 본다는 것을 먼저 알린다.
+        # 서버가 한 말은 화면에 늘어놓지 않고 '자세히 복사' 로만 준다 (authReason, 2026-11-10 사용자: 오류 글은 짧게)
         reasons = [str(v.get("reason")) for v in auth.values() if isinstance(v, dict) and v.get("reason")]
-        said = f" (서버: {reasons[0]})" if reasons else ""
-        out["warning"] = (
-            f"{who} 서버가 로그인을 거절했어요{said}. 2시간 뒤 자동으로 다시 해 볼게요. "
-            "비밀번호를 바꿨다면 설정에서 새 비밀번호를 넣어 주세요."
-        )
+        if reasons:
+            out["authReason"] = reasons[0]
+        out["warning"] = f"{who} 서버가 로그인을 거절했어요. 2시간 뒤 자동으로 다시 해 볼게요."
     elif failing:
         # 예전엔 'deadlines이(가) 7번 연속 실패했습니다' 처럼 횟수만 컸고 왜 실패했는지는 없었다. 횟수는 모든 작업을
         # 합친 수라 실제보다 커 보였다. 이제 작업마다 언제부터 안 되는지와 까닭 갈래(failures[kind])를 말한다
@@ -2907,8 +2906,11 @@ FAILURE_KINDS: list[tuple[str, str, str, tuple[str, ...]]] = [
      (r"Timeout \d+ms exceeded", r"TimeoutError")),
     ("drive", "Google Drive 연결에 문제가 있어요", "설정에서 구글을 다시 연결해 주세요.",
      (r"invalid_grant", r"googleapiclient", r"HttpError", r"RefreshError")),
-    ("disk", "파일을 저장하지 못했어요", "저장 공간이 넉넉한지, 파일이 다른 프로그램에 열려 있지 않은지 확인해 주세요.",
-     (r"No space left", r"Errno 28", r"WinError 32", r"Permission denied", r"PermissionError")),
+    # 다른 프로그램(OneDrive·PDF 뷰어)이 잠깐 쥐고 있는 파일은 놓으면 다음 동기화가 저절로 저장한다 → 화면은 한 줄로(app.js HEALTH_QUIET)
+    ("busy", "파일이 다른 프로그램에 열려 있어요", "그 파일을 닫으면 다음 동기화 때 저절로 저장해요.",
+     (r"WinError 32", r"being used by another process", r"Resource busy")),
+    ("disk", "파일을 저장하지 못했어요", "저장 공간이 넉넉한지, 저장 폴더에 쓸 수 있는지 확인해 주세요.",
+     (r"No space left", r"Errno 28", r"Permission denied", r"PermissionError")),
 ]
 FAILURE_UNKNOWN = ("unknown", "알 수 없는 오류가 났어요", "계속되면 설정의 실행 로그를 보내 주세요.")
 
@@ -5000,6 +5002,39 @@ def _mail_ai_body(segs: list[dict[str, Any]], content: str) -> str:
     return "\n\n".join(parts)
 
 
+_SUBJECT_JUNK = re.compile("[\U0001F300-\U0001FAFF☀-➿]|[ㅠㅜㅎㅋ]+|[!~]+")
+
+
+def _mail_ai_subject(subject: str, current: str, lang: str, me: dict[str, Any], course: dict[str, Any] | None) -> str:
+    """AI 가 지은 제목을 격식 꼴로 맞춘다 (2026-11-11 사용자: '제목 형식을 규칙처럼 지켜지게').
+
+    - 답장(지금 제목이 'Re:')은 제목을 바꾸지 않는다.
+    - 이모티콘·ㅠ·느낌표·물결을 뗀다.
+    - 과목 일인데 앞의 [과목 분반] 이 빠졌으면 붙이고, 끝의 (이름 학번)/'- 영문 이름 (학번)' 이 빠졌으면 붙인다.
+      모델이 프롬프트의 꼴을 자주 잊는 두 부분이라 코드로 지킨다. 내 정보에 학번이 없으면 끝은 건드리지 않는다."""
+    if re.match(r"\s*(re|fwd?)\s*:", current or "", re.I):
+        return current.strip()
+    text = re.sub(r"\s{2,}", " ", _SUBJECT_JUNK.sub("", subject or "")).strip(" ?.")
+    if not text:
+        return current.strip()
+    if course and not text.startswith("["):
+        sec = str(course.get("section") or "").strip()
+        if lang == "en" and course.get("courseNo"):
+            tag = f"[{course['courseNo']}-{sec}]" if sec else f"[{course['courseNo']}]"
+        else:
+            title = str(course.get("title") or "").strip()
+            tag = f"[{title} {sec}분반]" if title and sec else (f"[{title}]" if title else "")
+        text = f"{tag} {text}".strip()
+    sid = str(me.get("studentId") or "").strip()
+    if sid and sid not in text:
+        name = str((me.get("nameEn") if lang == "en" else me.get("name")) or "").strip()
+        if lang == "en":
+            text = f"{text} - {name} ({sid})" if name else f"{text} ({sid})"
+        else:
+            text = f"{text} ({name} {sid})" if name else f"{text} ({sid})"
+    return text[:200]
+
+
 def mail_ai_compose(workspace: UserWorkspace, payload: dict[str, Any], provider: str | None, model: str) -> dict[str, Any]:
     """옆 창의 첫 부탁(과 되물은 답) → {ask[]} 또는 {mail: {to[], cc[], subject, body, lang}}.
 
@@ -5018,7 +5053,8 @@ def mail_ai_compose(workspace: UserWorkspace, payload: dict[str, Any], provider:
     extra = {
         "timetable": _mail_ai_timetable(workspace),
         "deadlines": _mail_ai_deadlines(workspace),
-        "current": {k: str(current.get(k) or "")[:500] for k in ("to", "cc", "subject")},
+        "current": {**{k: str(current.get(k) or "")[:500] for k in ("to", "cc", "subject")},
+                    "body": str(current.get("body") or "")[:3000]},  # 학생이 본문에 이미 쓴 글
         "quote": str(payload.get("quote") or "")[:4000],
     }
     # 두 번째로 묻고 나면 더 묻지 않는다(학생이 질문만 받다 끝나지 않게)
@@ -5051,9 +5087,11 @@ def mail_ai_compose(workspace: UserWorkspace, payload: dict[str, Any], provider:
     lang = res.get("lang") or ("en" if who.get("foreign") else "ko")
     segs = mail_flow.segments(me, who, index).get(lang) or []
     body = _mail_ai_body(segs, res.get("content") or "")
+    course = (who.get("courses") or [None])[index] if want and who.get("courses") else None
+    subject = _mail_ai_subject(res.get("subject") or "", str(current.get("subject") or ""), lang, me, course)
     return {
         "ok": True,
-        "mail": {"to": to, "cc": cc, "subject": res.get("subject") or "", "body": body, "lang": lang, "courseIndex": index},
+        "mail": {"to": to, "cc": cc, "subject": subject, "body": body, "lang": lang, "courseIndex": index},
         "note": _mail_ai_text(res.get("note")),
         **meta,
     }
@@ -5067,12 +5105,19 @@ def mail_ai_revise(workspace: UserWorkspace, payload: dict[str, Any], provider: 
     if not instruction:
         raise ValueError("어떻게 고칠지 적어 주세요.")
     mail = {k: str(payload.get(k) or "") for k in ("to", "cc", "subject", "body")}
+    mail["quote"] = str(payload.get("quote") or "")[:4000]  # 답장하는 원문(참고만)
     people = mail_ai_people(workspace, instruction)
     res = ai_cli.revise_mail(instruction, mail, people, provider, model, allow_ask=not payload.get("noAsk"))
     meta = {"engine": res.get("modelLabel") or ai_cli.LABELS.get(res.get("provider"), ""), "seconds": res.get("seconds")}
     if res.get("ask"):
         return {"ok": True, "ask": _mail_ai_ask(res["ask"]), **meta}
     out: dict[str, Any] = {k: res[k] for k in ("body", "insert", "subject") if k in res}
+    if "subject" in out:
+        # 답장 제목('Re: …')은 그대로 두고, 새 제목은 이모티콘·느낌표만 뗀다(과목·학번 꼴은 처음 쓸 때 맞췄다)
+        if re.match(r"\s*(re|fwd?)\s*:", mail["subject"], re.I) and not re.search(r"제목", instruction):
+            out.pop("subject")
+        else:
+            out["subject"] = re.sub(r"\s{2,}", " ", _SUBJECT_JUNK.sub("", out["subject"])).strip() or mail["subject"]
     allowed = " ".join([instruction, mail["to"], mail["cc"]])
     for key in ("to", "cc"):
         if key in res:
@@ -7895,7 +7940,8 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                     flow = payload.get("flow") if isinstance(payload.get("flow"), dict) else {}
                     res = ai_cli.rewrite_part(str(payload.get("instruction") or ""), str(payload.get("selection") or ""),
                                               str(payload.get("before") or ""), str(payload.get("after") or ""), flow,
-                                              provider, model=model)
+                                              provider, model=model, subject=str(payload.get("subject") or ""),
+                                              quote=str(payload.get("quote") or ""))
                 res["engine"] = res.get("modelLabel") or ai_cli.LABELS.get(res.get("provider"), "")
                 self.send_json(res)
             except ai_cli.AIError as exc:

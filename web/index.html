@@ -345,14 +345,14 @@
                   <strong id="healthTitle">동기화가 되지 않고 있어요</strong>
                   <p id="healthDetail"></p>
                   <p class="alert-note" id="healthCause" hidden></p>
-                  <details class="health-log" id="healthLog" hidden>
-                    <summary>실패할 때 남은 기록</summary>
-                    <pre id="healthLogText"></pre>
-                  </details>
                 </div>
+                <!-- 서버가 한 말·로그는 화면에 늘어놓지 않고 '자세히 복사' 로만 준다 (2026-11-10 사용자) -->
                 <div class="alert-actions">
-                  <button class="button compact primary" id="healthRetryButton" type="button">지금 동기화</button>
-                  <button class="button compact ghost" id="healthSettingsButton" type="button">설정 확인</button>
+                  <!-- 까닭마다 바로 고치는 곳으로 (app.js HEALTH_FIX). 고칠 게 없으면 숨는다 -->
+                  <button class="button compact primary" id="healthFixButton" type="button" hidden>설정 확인</button>
+                  <button class="button compact ghost" id="healthRetryButton" type="button">다시 해 보기</button>
+                  <button class="button compact ghost" id="healthLaterButton" type="button">나중에</button>
+                  <button class="button compact ghost" id="healthCopyButton" type="button">자세히 복사</button>
                 </div>
               </section>
 

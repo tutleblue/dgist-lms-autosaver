@@ -409,11 +409,81 @@ def _calendar(days: int = 21) -> str:
     )
 
 
-# 번역투 막기 (2026-11-10 사용자: AI 옆 창에 '번역체 같은 것 없애고'). 질문·보기·한 줄 설명·본문 모두에 붙인다
+# 번역투 막기 (2026-11-10 사용자: AI 옆 창에 '번역체 같은 것 없애고'). 질문·보기·한 줄 설명·본문 모두에 붙인다.
+# '자연스럽게' 를 '편하게' 로 읽고 메일 본문을 해요체로 쓴 일이 있어(2026-11-11 사용자: '형식이 전혀 formal 하지 않다')
+# 본문의 격식은 아래 FORMAL_RULES 가 정한다고 못 박는다
 NATURAL_KO = (
-    "[말투] 한국어는 한국 대학생이 실제로 쓰는 자연스러운 말로 씁니다. 번역투를 쓰지 마세요: '~에 대해(서)', "
+    "[말투] 번역투 없는 자연스러운 한국어로 씁니다(메일 본문은 아래 [격식]대로 합쇼체). 번역투를 쓰지 마세요: '~에 대해(서)', "
     "'~하는 것이 가능합니다', '~되어지다', '~를 통해', '~에 있어서', '~하는 중에 있습니다', '당신', 주어 '저는/제가' 되풀이."
 )
+
+# 메일 격식 (2026-11-11 사용자: '제목이나 내용이나 형식을 명확히 정해서 규칙처럼 지켜지면 좋겠어').
+# 새로 쓰기·고치기·끌어 고치기 세 곳에 같은 글을 넣고, 본문은 _formal_issues 로 한 번 더 본다(어기면 한 번 고쳐 쓴다)
+FORMAL_RULES = (
+    "[격식 — 반드시 지킵니다. 받는 사람은 교수·조교·교직원입니다]\n"
+    "제목\n"
+    "- 한국어: '[과목명 분반] 용건 (이름 학번)'. 용건은 '…말씀드립니다·…여쭙니다·…요청드립니다·…드립니다' 나 명사형으로 끝냅니다\n"
+    "  (예: '[일반물리학Ⅱ 01분반] 11월 11일(화) 결석 사유 말씀드립니다 (홍길동 20250000)', '과제 3 제출 기한 연장 요청드립니다').\n"
+    "  과목과 관계없으면 [ ] 부분만 뺍니다. '~요'·'?'·'!'·'~'·이모티콘·'ㅠ'·'급' 같은 말은 쓰지 않습니다.\n"
+    "- 영어: '[학수번호-분반] 용건(Title Case) - 영문 이름 (Student ID)'\n"
+    "  (예: '[PHY102-01] Request for Excused Absence on November 11 - Gildong Hong (20250000)'). 'Hi'·'Quick question'·느낌표·이모티콘 금지.\n"
+    "- 답장(제목이 'Re:' 로 시작)은 제목을 바꾸지 않습니다.\n"
+    "본문\n"
+    "- 한국어: 모든 문장을 합쇼체로 끝냅니다('-습니다·-ㅂ니다·-습니까·-드립니다·-겠습니다'). 해요체('-요'·'-죠'), 반말, 구어('좀'·'너무'·'진짜'·'되게'),\n"
+    "  줄임말, 이모티콘, 'ㅠㅠ'·'ㅎㅎ', '!'·'~' 는 쓰지 않습니다. 부탁은 '…해 주실 수 있을지 여쭙습니다', '…해 주시면 감사하겠습니다' 처럼 완곡하게.\n"
+    "  다만 '말씀 올리옵니다' 같은 지나친 옛말·겸양은 쓰지 않습니다.\n"
+    "- 영어: formal academic register — 'I would like to…', 'Could you please…', 'I would be grateful if…'. 줄임꼴(I'm, don't, can't, I'll)·\n"
+    "  'Hey'·'gonna'·'Thanks a lot'·느낌표·이모티콘은 쓰지 않습니다.\n"
+    "- 학생이 '친근하게'·'편하게' 처럼 말투를 정하면 그 말을 따릅니다."
+)
+
+# 학생이 말투를 편하게 하라고 했으면 격식 검사를 하지 않는다
+_CASUAL_ASK = re.compile(r"친근|편하게|편한\s*말|반말|캐주얼|가볍게|casual|friendly|informal", re.I)
+_EMOJI = re.compile("[\U0001F300-\U0001FAFF☀-➿]")
+# '-신지요·-는지요·-을지요' 는 편지글에 쓰는 높임 물음이라 둔다
+_KO_POLITE_YO = re.compile(r"(신지|실지|는지|은지|을지|ㄹ지|인지|런지)요$")
+_EN_CASUAL = re.compile(r"\b(i'm|i've|i'll|i'd|don't|doesn't|didn't|can't|won't|isn't|aren't|wasn't|it's|that's|hey|gonna|wanna|thanks a lot)\b", re.I)
+
+
+def _formal_issues(text: str, lang: str = "") -> list[str]:
+    """메일 글에서 격식에 어긋난 문장(해요체·반말 끝맺음, 이모티콘, ㅠ·ㅎ, 느낌표, 영어 줄임꼴)을 찾는다. [ ] 빈칸·인용은 본다."""
+    out: list[str] = []
+    for raw in re.split(r"(?<=[.?!])\s+|\n+", text or ""):
+        s = raw.strip()
+        if len(s) < 4 or s.startswith(">"):
+            continue
+        core = re.sub(r"[\s\]\[)(\"'”’.?!~]+$", "", s)
+        bad = bool(_EMOJI.search(s)) or bool(re.search(r"[ㅠㅜㅎㅋ]{2,}", s)) or "!" in s
+        if re.search(r"안녕하세요$", core):
+            continue  # 첫인사는 학생이 정한 꼴(mail_flow)이고 메일에서 흔히 쓰는 높임이라 둔다
+        if re.search(r"[가-힣]", s):
+            if (core.endswith("요") and not _KO_POLITE_YO.search(core)) or core.endswith("죠") or s.rstrip().endswith("~"):
+                bad = True
+        elif lang != "ko" and _EN_CASUAL.search(s):
+            bad = True
+        if bad:
+            out.append(s[:160])
+    return out[:8]
+
+
+def _formalize(text: str, issues: list[str], lang: str, provider: str | None, model: str) -> str:
+    """격식에 어긋난 문장만 고쳐 쓴다(나머지는 그대로). 실패하면 원래 글."""
+    prompt = (
+        "다음은 대학생이 교수·조교에게 보낼 메일 글입니다. [고칠 문장]만 아래 [격식]에 맞게 고치고, 나머지 글은 한 글자도 바꾸지 마세요.\n"
+        "뜻·사실·[ ] 빈칸·줄바꿈은 그대로 둡니다. 출력은 고친 글 전체만(설명·따옴표·코드 블록 없이).\n\n"
+        f"{FORMAL_RULES}\n\n[고칠 문장]\n" + "\n".join(f"- {s}" for s in issues)
+        + f"\n\n[메일 글]\n<<<\n{text}\n>>>"
+    )
+    try:
+        res = run(prompt, provider, model=model)
+    except AIError:
+        return text
+    fixed = re.sub(r"^```[a-zA-Z]*\s*|\s*```$", "", res["text"].strip()).strip()
+    fixed = fixed.removeprefix("<<<").removesuffix(">>>").strip("\n")
+    # 모델이 글을 크게 줄이거나 늘렸으면(설명을 붙였거나 잘랐으면) 원래 글을 쓴다
+    if not fixed.strip() or not (0.6 * len(text) <= len(fixed) <= 1.5 * len(text) + 40):
+        return text
+    return fixed
 
 # 용건에 무엇이 들어가야 하는지 (교수님께 보내는 메일에서 자주 빠지는 것)
 SITUATION_GUIDE = (
@@ -488,7 +558,7 @@ def _flow_facts(flow: dict) -> str:
 
 
 # 모델이 시킨 대로 하지 않고 인사·서명을 붙였을 때 떼어 낼 줄 (인사·소개·서명은 앱이 학생의 꼴로 붙인다)
-_HEAD_LINE = re.compile(r"^\s*(dear|hello|hi|안녕하(세요|십니까)|.{0,24}(교수님|조교님|담당자님|선생님)\s*께?\s*[,.]?$"
+_HEAD_LINE = re.compile(r"^\s*(dear|hello|hi|안녕하(세요|십니까)|.{0,24}(교수님|조교님|담당자님|선생님)\s*께?\s*[,.]?$|.{0,24}님\s*께\s*[,.]?$"
                         r"|i hope (this email|you)|my name is|저는 .{0,80}(학번|입니다))", re.I)
 _TAIL_LINE = re.compile(r"^\s*(sincerely|best regards|kind regards|regards|best wishes|respectfully|thank you|thanks"
                         r"|.{0,30}(드림|올림)\s*$|바쁘신|읽어 주셔서|확인해 주셔서|감사합니다|감사드립니다|늘 건강|좋은 하루)", re.I)
@@ -527,6 +597,10 @@ def compose_mail(request: str, answers: list[dict], people: list[dict], me: dict
     cur_lines = "\n".join(f"- {k}: {v}" for k, v in (
         ("받는 사람", cur.get("to")), ("참조", cur.get("cc")), ("제목", cur.get("subject")),
     ) if v)
+    # 학생이 본문에 이미 쓴 글(답장 원문 앞까지) — 2026-11-11 사용자: '제목이나 내용을 이미 썼을 때도 그 맥락을 반영해서'
+    written = str(cur.get("body") or "").strip()[:3000]
+    quote = str(extra.get("quote") or "").strip()[:4000]
+    reply = bool(quote) or bool(re.match(r"\s*re\s*:", str(cur.get("subject") or ""), re.I))
     got = "\n".join(f"- {a.get('q')} → {a.get('a')}" for a in answers if isinstance(a, dict) and a.get("a"))
     ask_rule = ("- 이번에는 더 묻지 말고 바로 씁니다. 모르는 것은 본문에 [ ] 로 비웁니다." if force
                 else "- 다 알면 묻지 말고 바로 씁니다. 같은 것을 두 번 묻지 마세요.")
@@ -549,13 +623,21 @@ def compose_mail(request: str, answers: list[dict], people: list[dict], me: dict
         "- 질문은 학생에게 하는 짧은 해요체로(예: '언제 빠지나요?', '사유는 뭔가요?'). 합쇼체·존댓말 과잉은 쓰지 않습니다.\n"
         "  보기는 10자 안팎의 짧은 말로(예: '병원 진료', '네, 넣어 주세요').\n"
         f"{ask_rule}\n\n"
-        "[언어] 받는 사람 이름이 로마자(외국인 교수님)면 영어, 아니면 한국어. 학생이 언어를 정하면 그 말대로.\n"
-        "[제목] 한국어: '[과목명 분반] 용건 (이름 학번)' — 예: '[일반물리학Ⅱ 01분반] 11월 11일(화) 결석 사유 말씀드립니다 (홍길동 20250000)'.\n"
-        "  영어: '[학수번호-분반] 용건 - 영문 이름 (Student ID)'. 과목과 관계없으면 [ ] 부분은 뺍니다.\n"
+        "[언어] 받는 사람 이름이 로마자(외국인 교수님)면 영어, 아니면 한국어. 답장이면 [답장하는 메일]의 언어. 학생이 언어를 정하면 그 말대로.\n"
         "[본문] 인사·자기소개·마무리 인사·서명은 앱이 학생의 꼴로 붙이니 절대 쓰지 말고 용건 문단만 씁니다.\n"
-        "- 한국어: '다름이 아니라, ' 로 시작, 정중한 합쇼체(과하지 않게), 2~4문단, 목록 기호 없이 문장으로.\n"
-        "- 영어: 'I am writing to ' 로 시작, polite academic English, 2-4 short paragraphs, no bullet points.\n"
-        "- 학생 말·답·아래 자료에 있는 사실만 씁니다. 요일은 [달력]으로 맞춥니다.\n"
+        "- 새 메일: 한국어는 '다름이 아니라, ' 로, 영어는 'I am writing to ' 로 시작합니다.\n"
+        "- 2~4문단, 목록 기호 없이 문장으로. 학생 말·답·아래 자료에 있는 사실만 씁니다. 요일은 [달력]으로 맞춥니다.\n"
+        + ("[답장] 이 메일은 [답장하는 메일]에 대한 답장입니다.\n"
+           "- 그 메일이 묻거나 부탁한 것에 바로 답합니다. 거기 적힌 날짜·시간·장소·과제 이름은 그대로 옮겨 씁니다.\n"
+           "- '다름이 아니라' 로 시작하지 말고 '보내 주신 메일 잘 받았습니다.' 처럼 받은 메일을 이어받아 시작합니다"
+           "(영어: 'Thank you for your email.').\n"
+           "- 원문을 되풀이하거나 요약하지 마세요. 받는 사람은 학생이 바꾸라고 하지 않는 한 그 메일을 보낸 사람입니다.\n"
+           "- 제목은 [지금 메일 칸]의 'Re: …' 를 그대로 씁니다.\n" if reply else "")
+        + ("[학생이 이미 쓴 것] 학생이 제목·본문에 이미 적은 글은 학생의 뜻입니다.\n"
+           "- 거기 담긴 용건·사실·부탁을 빠짐없이 살려 쓰고, 말투와 꼴만 [격식]에 맞게 다듬습니다. 학생이 쓰지 않은 사실을 보태지 마세요.\n"
+           "- 답장이 아니면 제목은 학생이 쓴 용건을 지키며 [격식]의 제목 꼴로 맞춥니다.\n"
+           if (written or (cur.get("subject") and not reply)) else "")
+        + f"{FORMAL_RULES}\n"
         f"{NATURAL_KO}\n"
         f"[상황별로 들어가면 좋은 것]\n{SITUATION_GUIDE}\n\n"
         "출력은 JSON 하나만(설명·코드 블록 없이):\n"
@@ -568,7 +650,8 @@ def compose_mail(request: str, answers: list[dict], people: list[dict], me: dict
         f"[다가오는 마감]\n{extra.get('deadlines') or '- (없음)'}\n\n"
         f"[사람 목록: id | 이름 | 역할 | 과목·소속 | 어디서 | 주소]\n{_people_lines(people) or '- (없음)'}\n\n"
         f"[지금 메일 칸]\n{cur_lines or '- (비어 있음)'}\n\n"
-        + (f"[답장하는 메일]\n<<<\n{str(extra.get('quote'))[:4000]}\n>>>\n\n" if extra.get("quote") else "")
+        + (f"[학생이 본문에 이미 쓴 글]\n<<<\n{written}\n>>>\n\n" if written else "")
+        + (f"[답장하는 메일]\n<<<\n{quote}\n>>>\n\n" if quote else "")
         + f"[학생의 부탁]\n{request[:3000]}\n\n"
         + f"[이미 받은 답]\n{got or '- (없음)'}"
     )
@@ -580,6 +663,12 @@ def compose_mail(request: str, answers: list[dict], people: list[dict], me: dict
                 "content": _content_only(res["text"]), "note": ""}
     ask = [] if force else _clean_ask(data.get("ask"))
     lang = str(data.get("lang") or "").strip().lower()
+    content = "" if ask else _content_only(str(data.get("content") or data.get("body") or ""))
+    # 격식 검사: 해요체·이모티콘·느낌표·영어 줄임꼴이 남았으면 그 문장만 한 번 고쳐 쓴다(학생이 편하게 쓰라고 했으면 둔다)
+    issues = _formal_issues(content, lang) if content and not _CASUAL_ASK.search(request + " " + got) else []
+    if issues:
+        content = _content_only(_formalize(content, issues, lang, provider, model))
+        res = {**res, "formalFixed": len(issues)}
     return {
         **res,
         "ask": ask,
@@ -588,7 +677,7 @@ def compose_mail(request: str, answers: list[dict], people: list[dict], me: dict
         "course": str(data.get("course") or "").strip()[:120],
         "lang": lang if lang in ("ko", "en") else "",
         "subject": str(data.get("subject") or "").strip().splitlines()[0][:200] if data.get("subject") else "",
-        "content": "" if ask else _content_only(str(data.get("content") or data.get("body") or "")),
+        "content": content,
         "note": str(data.get("note") or "").strip()[:240],
     }
 
@@ -613,6 +702,9 @@ def revise_mail(instruction: str, mail: dict, people: list[dict], provider: str 
     head = "\n".join(f"- {k}: {v}" for k, v in (
         ("받는 사람", mail.get("to")), ("참조", mail.get("cc")), ("제목", mail.get("subject")),
     ) if v)
+    # 답장이면 원문도 본다(2026-11-11 사용자: '답신할 때 AI 를 쓰면 그 답신의 맥락도 같이') — 고칠 글이 아니라 참고
+    quote = str(mail.get("quote") or "").strip()[:4000]
+    quote_part = (f"[답장하는 메일 — 참고만, 고치지 않음]\n<<<\n{quote}\n>>>\n\n" if quote else "")
     # 본문의 /ai 는 되묻지 않는다(쓰던 자리에서 바로 고친다). 옆 창은 모자라면 보기를 골라 받는다
     ask_rule = (
         "- 지시대로 하려면 꼭 알아야 하는데 모르는 것이 있으면 고치지 말고 묻습니다: "
@@ -624,6 +716,9 @@ def revise_mail(instruction: str, mail: dict, people: list[dict], provider: str 
         "- 지시와 관계없는 줄은 한 글자도 바꾸지 말고 그대로 둡니다(인사·자기소개·서명 포함).\n"
         "- 메일의 언어를 지킵니다. 지시가 번역을 바랄 때만 바꿉니다.\n"
         "- 사실을 지어내지 마세요. 꼭 필요한데 모르면 [ ] 로 비웁니다. 요일은 [달력]으로 맞춥니다.\n"
+        + ("- 답장입니다. [답장하는 메일]이 묻거나 부탁한 것에 맞게 고치고, 거기 적힌 날짜·이름 같은 사실은 그대로 씁니다.\n" if quote else "")
+        + "- 고친 글과 제목은 아래 [격식]을 지킵니다(지시가 말투를 따로 정하면 그 말대로).\n"
+        f"{FORMAL_RULES}\n"
         f"{NATURAL_KO}\n"
         f"{mark_rule}"
         "- 받는 사람·참조를 바꾸라는 지시면 [사람 목록]의 id(또는 학생이 적은 주소)로 to·cc 를 줍니다(바뀐 뒤 전체). 아니면 넣지 마세요.\n"
@@ -635,6 +730,7 @@ def revise_mail(instruction: str, mail: dict, people: list[dict], provider: str 
         f"[달력] {_calendar(28)}\n\n"
         f"[사람 목록: id | 이름 | 역할 | 과목·소속 | 어디서 | 주소]\n{_people_lines(people) or '- (없음)'}\n\n"
         f"[메일 머리]\n{head or '- (비어 있음)'}\n\n[메일 본문]\n<<<\n{body}\n>>>\n\n"
+        f"{quote_part}"
         f"[학생의 지시]\n{instruction[:3000]}"
     )
     res = run(prompt, provider, model=model)
@@ -651,6 +747,13 @@ def revise_mail(instruction: str, mail: dict, people: list[dict], provider: str 
         if not text.strip():
             raise AIError("AI 가 빈 답을 줬어요. 한 번 더 해 주세요.")
         out["body"] = text.replace(AI_MARK, "").strip("\n")
+    # 격식 검사: AI 가 새로 쓰거나 바꾼 문장만 본다(학생이 원래 써 둔 줄은 지시와 관계없으면 그대로 두는 것이 약속)
+    key = "insert" if "insert" in out else "body"
+    if out.get(key) and not _CASUAL_ASK.search(instruction):
+        issues = [s for s in _formal_issues(out[key]) if s not in body]
+        if issues:
+            out[key] = _formalize(out[key], issues, "", provider, model)
+            res = {**res, "formalFixed": len(issues)}
     if isinstance(data.get("subject"), str) and data["subject"].strip():
         out["subject"] = data["subject"].strip().splitlines()[0][:200]
     for key in ("to", "cc"):
@@ -660,19 +763,25 @@ def revise_mail(instruction: str, mail: dict, people: list[dict], provider: str 
 
 
 def rewrite_part(instruction: str, selection: str, before: str, after: str, flow: dict,
-                 provider: str | None = None, model: str = "") -> dict:
+                 provider: str | None = None, model: str = "", subject: str = "", quote: str = "") -> dict:
     """본문에서 끌어 고른 부분만 지시대로 고친다 (2026-11-09 사용자: '드래그해서 고르면 그 자리에서 댓글 달듯 프롬프트').
-    답은 고른 부분을 대신할 글만."""
+    답은 고른 부분을 대신할 글만. subject·quote: 메일 제목과 답장하는 원문(맥락으로만 본다)."""
     facts = _flow_facts(flow)
+    quote = str(quote or "").strip()[:3000]
     prompt = (
         "당신은 메일 편집기 안의 비서입니다. 대학생이 메일에서 끌어 고른 한 부분만 학생의 지시대로 고쳐 씁니다.\n"
         "- 출력은 [고른 부분]을 대신할 글만(설명·따옴표·머리말 없이).\n"
         "- [앞 글]·[뒤 글]과 자연스럽게 이어지게 쓰고, 앞뒤 글을 되풀이하지 마세요. 고른 부분이 문장 중간에서 시작·끝나면 그 모양을 지킵니다.\n"
         "- 고른 부분의 언어를 지킵니다. 지시가 번역을 바랄 때만 바꿉니다.\n"
         "- 줄바꿈은 고른 부분에 있던 만큼만 둡니다(문단을 늘리라는 지시가 아니면).\n"
-        "- 사실을 지어내지 마세요. 꼭 필요한데 모르면 [ ] 로 비웁니다. 요일은 [달력]으로 맞춥니다.\n\n"
+        "- 사실을 지어내지 마세요. 꼭 필요한데 모르면 [ ] 로 비웁니다. 요일은 [달력]으로 맞춥니다.\n"
+        + ("- 답장입니다. [답장하는 메일]이 묻거나 부탁한 것에 맞게 씁니다(그 메일은 고치지 않습니다).\n" if quote else "")
+        + "- 고친 글은 아래 [격식]의 본문 규칙을 지킵니다(지시가 말투를 따로 정하면 그 말대로).\n"
+        f"{FORMAL_RULES}\n{NATURAL_KO}\n\n"
         f"[달력] {_calendar(28)}\n\n[받는 사람·과목]\n{facts or '- (모름)'}\n\n"
-        f"[앞 글]\n<<<\n{before[-3000:]}\n>>>\n\n[고른 부분]\n<<<\n{selection[:4000]}\n>>>\n\n"
+        + (f"[메일 제목] {subject[:200]}\n\n" if subject.strip() else "")
+        + (f"[답장하는 메일]\n<<<\n{quote}\n>>>\n\n" if quote else "")
+        + f"[앞 글]\n<<<\n{before[-3000:]}\n>>>\n\n[고른 부분]\n<<<\n{selection[:4000]}\n>>>\n\n"
         f"[뒤 글]\n<<<\n{after[:2000]}\n>>>\n\n[학생의 지시]\n{instruction[:2000]}"
     )
     res = run(prompt, provider, model=model)

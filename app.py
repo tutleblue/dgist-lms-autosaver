@@ -565,10 +565,34 @@ def next_due_job(workspace, minutes: dict[str, int], kinds=("emails", "deadlines
         wait = min(max(5, every) * (2 ** max(0, streak - 1)), 360) if streak else 0
         if failed_at:
             wait = max(wait, max(5, every / 2))
+        # 인터넷·학교 서버에 닿지 않아 실패한 것은 오래 쉰다고 나아지지 않는다. 연결이 돌아오면 곧 다시 하도록 5분만 쉬고,
+        # 그 대신 닿는지 먼저 가볍게 본다 — 안 닿으면 브라우저를 띄우지도, 실패 횟수를 늘리지도 않는다(2026-11-10 사용자).
+        offline = mine.get("category") == "network"
+        if offline:
+            wait = min(wait, 5)
         if wait and age_minutes(failed_at or success.get(kind)) < wait:
+            continue
+        if offline and not school_reachable():
             continue
         return kind
     return None
+
+
+_REACH = {"at": -1e9, "ok": True}
+
+
+def school_reachable() -> bool:
+    """학교 로그인 서버(saml.dgist.ac.kr:443)에 닿는지. 1분 동안은 앞서 본 답을 쓴다 (스케줄러가 30초마다 묻는다)."""
+    now = time.monotonic()
+    if now - _REACH["at"] < 60:
+        return _REACH["ok"]
+    try:
+        with socket.create_connection(("saml.dgist.ac.kr", 443), timeout=3):
+            ok = True
+    except OSError:
+        ok = False
+    _REACH.update(at=now, ok=ok)
+    return ok
 
 
 def port_in_use(host: str, port: int) -> bool:

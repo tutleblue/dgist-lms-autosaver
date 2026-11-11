@@ -4074,31 +4074,31 @@ tbody tr:hover {
 }
 
 #healthCause { white-space: pre-line; }
-/* 동기화 실패 띠: 실패할 때 남은 로그 (앱을 다시 켜도 health.json 의 failures[kind].tail 에 남는다) */
-.health-log {
-  margin-top: 6px;
-  font-size: 11.5px;
-  color: var(--text-faint);
+/* 인터넷·학교 서버에 닿지 않아 실패한 것은 연결되면 저절로 다시 한다 → 붉은 큰 띠 대신 한 줄로 조용히 (2026-11-10 사용자:
+   '단순히 인터넷이 안 돼서 안 된 것을 대문짝만하게 쓰면 안 된다') */
+/* 고치기·다시 해 보기·나중에·자세히 복사 — 네 줄로 세우면 띠가 너무 길어 두 줄 두 칸으로 */
+.health-banner .alert-actions { flex-direction: row; flex-wrap: wrap; justify-content: flex-end; max-width: 230px; }
+/* 좁은 화면: 단추가 글을 한 글자 폭으로 밀어냈다(375px 실측) → 단추는 글 아래 한 줄로 */
+@media (max-width: 760px) {
+  .health-banner .alert-body { flex-basis: calc(100% - 50px); }
+  .health-banner .alert-actions { max-width: none; flex-basis: 100%; justify-content: flex-start; }
 }
-.health-log summary {
-  cursor: pointer;
-  width: fit-content;
+.health-banner.quiet {
+  align-items: center;
+  gap: 10px;
+  padding: 7px 12px;
+  background: transparent;
+  border-color: var(--border);
 }
-.health-log pre {
-  margin: 6px 0 0;
-  max-height: 180px;
-  overflow: auto;
-  padding: 8px 10px;
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--text) 6%, transparent);
-  color: var(--text-soft);
-  font-family: "Cascadia Code", Consolas, "SF Mono", Menlo, monospace;
-  font-size: 11px;
-  line-height: 1.45;
-  white-space: pre-wrap;
-  word-break: break-all;
-  user-select: text;
-}
+.health-banner.quiet .alert-icon,
+.health-banner.quiet #healthRetryButton,
+.health-banner.quiet #healthLaterButton,
+.health-banner.quiet #healthFixButton { display: none; }
+.health-banner.quiet .alert-body { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.health-banner.quiet .alert-body strong { display: inline; margin: 0; font-size: 12.5px; font-weight: 600; color: var(--text-soft); }
+.health-banner.quiet .alert-body p { font-size: 12px; color: var(--text-faint); }
+.health-banner.quiet .alert-actions { flex-direction: row; }
+.health-banner.quiet .alert-actions .button { padding: 3px 9px; font-size: 11.5px; }
 
 .alert-actions {
   display: flex;
@@ -11916,6 +11916,44 @@ html:has(.lock-screen[open]) { overflow: hidden; }
   cursor: pointer;
 }
 .mai-example:hover { background: var(--surface); color: var(--text); }
+/* 답장이면 무엇에 답하는지: 보낸 사람·제목 한 줄 + 회신을 바라는 문장(왼쪽 줄 인용) */
+.mai-reply { display: flex; flex-direction: column; gap: 5px; min-width: 0; padding: 0 10px; }
+.mai-reply-of { display: flex; align-items: center; gap: 7px; min-width: 0; font-size: 12.5px; color: var(--text-soft); }
+.mai-reply-of .icon { flex: none; width: 14px; height: 14px; color: var(--text-faint); }
+.mai-reply-of span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mai-reply-of b { font-weight: 600; color: var(--text); }
+.mai-reply-ask {
+  display: -webkit-box;
+  margin: 0 0 0 6px;
+  padding-left: 13px;
+  overflow: hidden;
+  border-left: 2px solid var(--border-strong);
+  color: var(--text-soft);
+  font-size: 12.5px;
+  line-height: 1.5;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+}
+
+/* 쓰기 칸의 답장 인용: 앱 안에서는 흐리고 작게, 처음엔 머리줄 한 줄만(받는 사람에게는 원문 전체 + 왼쪽 줄이 간다).
+   머리줄 끝의 '원문 보기' 는 data-toggle 글(보내는 글에서는 richHtml 이 뗀다). 누르면 펴고 접는다(bindQuoteGuard) */
+#composeRich [data-quote] { color: var(--text-faint); font-size: 13px; line-height: 1.65; cursor: default; user-select: text; }
+#composeRich [data-quote]:not([data-open]) > blockquote { display: none; }
+#composeRich [data-quote] > blockquote { color: var(--text-soft); border-left-color: var(--border-strong) !important; }
+#composeRich [data-quote] > div[data-toggle] { cursor: pointer; }
+#composeRich [data-quote] > div[data-toggle]::after {
+  content: attr(data-toggle);
+  display: inline-block;
+  margin-left: 8px;
+  padding: 0 9px;
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text-soft);
+  font-size: 12px;
+  line-height: 20px;
+  vertical-align: 1px;
+}
+#composeRich [data-quote] > div[data-toggle]:hover::after { color: var(--text); }
 
 /* 고친 부분만 흘릴 때: [앞 글 + 흘리는 글][깜빡이는 막대][뒤 글] */
 .ai-typing.split::after { display: none; }
