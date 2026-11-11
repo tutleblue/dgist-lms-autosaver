@@ -316,7 +316,9 @@ def run(prompt: str, provider: str | None = None, timeout: int = TIMEOUT, model:
         raise AIError("Claude·Gemini·Codex CLI 가 하나도 설치되어 있지 않아요.")
     exe = _which(chosen)
     started = time.time()
-    with tempfile.TemporaryDirectory(prefix="daling-ai-") as work:
+    # ignore_cleanup_errors: CLI 가 띄운 자식 프로세스가 아직 이 폴더를 잡고 있으면 Windows 가 지우기를 막아(WinError 32)
+    # 이미 받은 답을 버리고 오류로 끝났다(2026-11-11 실측 — 메일 AI 를 여럿 동시에 돌릴 때). 남은 빈 폴더는 임시 폴더라 둔다
+    with tempfile.TemporaryDirectory(prefix="daling-ai-", ignore_cleanup_errors=True) as work:
         out_file = Path(work) / "answer.txt"
         # 고른 모델은 그 CLI 일 때만. 안 골랐으면 화면 단추에 보이는 그 CLI 의 기본 모델(models() default)을 쓴다
         # — CLI 자체 기본값에 맡기면 단추엔 'Opus 5.5' 인데 다른 모델이 답할 수 있었다.
@@ -418,30 +420,72 @@ NATURAL_KO = (
 )
 
 # 메일 격식 (2026-11-11 사용자: '제목이나 내용이나 형식을 명확히 정해서 규칙처럼 지켜지면 좋겠어').
-# 새로 쓰기·고치기·끌어 고치기 세 곳에 같은 글을 넣고, 본문은 _formal_issues 로 한 번 더 본다(어기면 한 번 고쳐 쓴다)
+# 새로 쓰기·고치기·끌어 고치기 세 곳에 같은 글을 넣고, 본문은 _formal_issues 로 한 번 더 본다(어기면 한 번 고쳐 쓴다).
+# 같은 날 사용자가 준 '대학생을 위한 이메일 작성법 — 한국어·영어 이론과 예시'(연세대 IDOL Lab·국립국어원·링커리어·
+# Biesenbach-Lucas 2007·Inside Higher Ed 등을 정리한 글)를 줄여 넣었다: 제목 꼴 '[과목 분반] 용건_학번 이름' /
+# '용건 – 과목 코드', 결론 먼저(BLUF), 부탁이 클수록 간접적으로, 윗사람에게 틀리는 말, 영어 상투어.
 FORMAL_RULES = (
-    "[격식 — 반드시 지킵니다. 받는 사람은 교수·조교·교직원입니다]\n"
-    "제목\n"
-    "- 한국어: '[과목명 분반] 용건 (이름 학번)'. 용건은 '…말씀드립니다·…여쭙니다·…요청드립니다·…드립니다' 나 명사형으로 끝냅니다\n"
-    "  (예: '[일반물리학Ⅱ 01분반] 11월 11일(화) 결석 사유 말씀드립니다 (홍길동 20250000)', '과제 3 제출 기한 연장 요청드립니다').\n"
-    "  과목과 관계없으면 [ ] 부분만 뺍니다. '~요'·'?'·'!'·'~'·이모티콘·'ㅠ'·'급' 같은 말은 쓰지 않습니다.\n"
-    "- 영어: '[학수번호-분반] 용건(Title Case) - 영문 이름 (Student ID)'\n"
-    "  (예: '[PHY102-01] Request for Excused Absence on November 11 - Gildong Hong (20250000)'). 'Hi'·'Quick question'·느낌표·이모티콘 금지.\n"
+    "[격식 — 반드시 지킵니다. 받는 사람은 교수·조교·연구원·교직원입니다]\n"
+    "제목 — 열기 전에 용건을 알 수 있게. 메일 하나에 용건 하나\n"
+    "- 한국어: '[과목명 분반] 용건_학번 이름' (예: '[일반물리학 02분반] 6주차 과제 3번 문항 조건 질문_202612345 홍길동',\n"
+    "  '[일반화학 01분반] 11/10(화) 결석 관련 출석인정 요청_202612345 홍길동'). 과목 일이 아니면 [ ] 에 용건 갈래를 씁니다\n"
+    "  ('[국가근로장학] 2학기 근로일지 제출 방법 문의_202612345 홍길동', '[학부연구생 문의] 2027년 겨울방학 참여 희망_기초학부 1학년 홍길동').\n"
+    "  용건은 '…질문·문의·요청·확인 요청·제출' 같은 명사형으로 끝냅니다. 급하면 느낌표 대신 날짜·시각을 넣습니다.\n"
+    "  '~요'·'?'·'!'·'~'·이모티콘·'ㅠ'·'급해요'·'꼭 읽어 주세요' 는 쓰지 않습니다. 답이 없어 다시 보내는 메일은 앞에 '[재문의]'.\n"
+    "- 영어: '용건(Title Case) – 과목 코드 (Section 분반)' (예: 'Question about Problem 3, HW 6 – PHYS 101 (Section 02)',\n"
+    "  'Request for a Meeting about My Midterm Exam – CHEM 101 (Section 01)'). 과목 일이 아니면 용건만, 행정 부서면 끝에\n"
+    "  '– Student ID 학번'. 'Hi'·'Hey professor'·'Quick question'·느낌표·이모티콘 금지. 다시 보내면 앞에 'Follow-up: '.\n"
     "- 답장(제목이 'Re:' 로 시작)은 제목을 바꾸지 않습니다.\n"
-    "본문\n"
-    "- 한국어: 모든 문장을 합쇼체로 끝냅니다('-습니다·-ㅂ니다·-습니까·-드립니다·-겠습니다'). 해요체('-요'·'-죠'), 반말, 구어('좀'·'너무'·'진짜'·'되게'),\n"
-    "  줄임말, 이모티콘, 'ㅠㅠ'·'ㅎㅎ', '!'·'~' 는 쓰지 않습니다. 부탁은 '…해 주실 수 있을지 여쭙습니다', '…해 주시면 감사하겠습니다' 처럼 완곡하게.\n"
-    "  다만 '말씀 올리옵니다' 같은 지나친 옛말·겸양은 쓰지 않습니다.\n"
-    "- 영어: formal academic register — 'I would like to…', 'Could you please…', 'I would be grateful if…'. 줄임꼴(I'm, don't, can't, I'll)·\n"
-    "  'Hey'·'gonna'·'Thanks a lot'·느낌표·이모티콘은 쓰지 않습니다.\n"
+    "본문 — 받는 사람이 한 번 읽고 바로 처리할 수 있게\n"
+    "- 결론 먼저: 용건 첫 문장에 무엇을 바라는지 한 문장으로(예: '…가능할지 여쭙고자 메일 드립니다', 'I am writing to ask whether…').\n"
+    "  이어서 근거·사정(학생이 이미 확인한 자료가 있으면 그것), 끝에 상대가 해 줄 일과 기한. 사정은 큰 틀만, 한 화면 안에.\n"
+    "- 날짜는 '오늘·내일·이번 주' 대신 '11월 18일(수)' / 'on Wednesday, November 18' 처럼 씁니다. 상대가 기억한다고 가정하지 않습니다\n"
+    "  ('지난번 말씀하신 건' 대신 '10월 30일 면담에서 말씀하신 기말 프로젝트 주제 변경 건').\n"
+    "- 부탁이 클수록 간접적으로, 상대가 거절할 여지를 남깁니다. 간단한 확인은 '…알려 주실 수 있을까요?' / 'Could you let me know…?',\n"
+    "  면담·자료는 '…가능할지 여쭙고 싶습니다' / 'Would it be possible for me to…?', 연장·추천서·예외는 '…해 주실 수 있을지\n"
+    "  조심스럽게 여쭙습니다', '어려우시다면 괜찮습니다' / 'I was wondering if…', 'I completely understand if…'.\n"
+    "  재촉·명령('빨리 답장 부탁드려요', '오늘까지 해 주세요', 'Please answer me as soon as possible')은 쓰지 않습니다.\n"
+    "- 성적은 올려 달라가 아니라 채점 기준을 확인하고 싶다고, 결석 뒤에는 '무엇을 놓쳤는지' 묻지 말고 스스로 보충하겠다고 씁니다.\n"
+    "- 한국어: 평서문은 합쇼체('-습니다·-ㅂ니다·-드립니다·-겠습니다'). 물음·부탁은 '…주실 수 있을까요?'·'…여쭤도 될까요?' 도 됩니다.\n"
+    "  해요체 평서문('-어요·-해요·-죠'), 반말, 구어('좀'·'너무'·'진짜'·'되게'), 줄임말, 이모티콘, 'ㅠㅠ'·'ㅎㅎ', '!'·'~' 는 쓰지 않습니다.\n"
+    "  윗사람에게 틀리는 말도 쓰지 않습니다: '수고하세요', '좋은 밤 되세요', 사물 높임('파일 첨부되셨습니다' → '파일을 첨부했습니다'),\n"
+    "  '…로부터'. 지나친 겸양·옛말('말씀 올리옵니다')도 피합니다. 맞춤법: 됐습니다·봬요·며칠·말씀드립니다·학생으로서·교수님께.\n"
+    "- 영어: formal academic register. 줄임꼴(I'm, don't, can't, I'll), 'I want…', 'Hey', 'gonna', 'Thx', 'Thanks in advance',\n"
+    "  'Sorry for disturbing you' 되풀이, 느낌표·이모티콘은 쓰지 않습니다. 'Thanks for…' 보다 'Thank you for…'.\n"
     "- 학생이 '친근하게'·'편하게' 처럼 말투를 정하면 그 말을 따릅니다."
+)
+
+# 인사·자기소개·맺음 (2026-11-11 사용자: '인삿말, 끝말이 정형화해서 모든 것을 같게 하지 말고, 맥락과 대상과 본문의
+# 내용에 맞게'). 예전엔 앱이 받는 사람 갈래(교수·조교·그 밖)마다 한 문장씩 정해 붙여, 질문이든 결석이든 답장이든
+# 끝이 늘 '바쁘신 와중에 읽어 주셔서 감사합니다. 늘 건강하시고 좋은 하루 보내십시오.' 였다. 이제 호칭 줄(○○ 교수님께,)과
+# 이름·학번 서명만 앱이 붙이고(틀리면 안 되는 사실), 그 사이 인사·소개·맺음은 모델이 용건에 맞게 쓴다.
+FRAME_RULES = (
+    "[인사·자기소개·맺음 — 받는 사람·사이·용건에 맞게. 늘 같은 문장으로 쓰지 않습니다]\n"
+    "- 호칭 줄('김민수 교수님께,' / 'Dear Professor Kim,')과 이름·학번 서명 줄은 앱이 붙이니 쓰지 마세요.\n"
+    "- hello(호칭 다음 인사 한 줄): 한국어는 받는 사람에 맞게 — 교수 '교수님, 안녕하십니까.'·'안녕하십니까.', 조교 '조교님, 안녕하세요.',\n"
+    "  교직원 '안녕하십니까.'·'안녕하세요.'. 답장이면 받은 메일을 이어받는 짧은 인사도 됩니다('교수님, 답변 감사합니다.').\n"
+    "  영어는 보통 빈칸(호칭 다음 바로 소개). 'I hope this email finds you well.' 은 상투어라 기본으로 넣지 않습니다.\n"
+    "- intro(자기소개): 처음 연락하거나 교수님께 보내면 '일반물리학 02분반 수강생 홍길동(202612345)입니다.' 처럼 과목·분반·이름·학번을\n"
+    "  [내 정보]의 값 그대로 한 문장. 연구실·행정 부서면 소속·학년·이름(·학번). 이미 주고받는 답장이면 '일반물리학 02분반 홍길동입니다.'\n"
+    "  처럼 짧게 하거나 빈칸. 영어 'I am Gildong Hong, a first-year student in your PHYS 101 class (Section 02).' — 'My name is' 만 되풀이하지 않습니다.\n"
+    "- closing(맺음 문장 1~2줄)은 용건에 맞게 고릅니다: 질문 '바쁘신 중에 읽어 주셔서 감사합니다.', 부탁·면담 '시간 내어 검토해 주시면\n"
+    "  감사하겠습니다.', 결석 '놓친 수업 내용은 강의자료로 보충하겠습니다. 감사합니다.', 제출·확인 '확인 부탁드립니다. 감사합니다.',\n"
+    "  감사 답장 '덕분에 많이 배웠습니다.', 답장 '말씀해 주신 대로 준비하겠습니다.' 같은 식.\n"
+    "  예시를 그대로 옮기지 말고 이 메일의 일에 닿게 씁니다(감점 문의 → '알려 주시면 다음 보고서부터 반영하겠습니다.',\n"
+    "  서류 문의 → '안내해 주시는 대로 기한 안에 제출하겠습니다.'). 인사·용건·맺음에서 같은 감사를 두 번 하지 않습니다\n"
+    "  (인사가 '답변 감사합니다' 면 맺음은 감사 없이 할 일만, 용건 끝에 할 일을 이미 썼으면 맺음은 '감사합니다.' 한 마디).\n"
+    "  영어: 'Thank you for your time.' / 'Thank you for considering my request.' / 'Thank you for your help.' / 'I look forward to hearing from you.'\n"
+    "  '늘 건강하시고 좋은 하루 보내십시오' 같은 축원은 매번 붙이지 않습니다.\n"
+    "- signoff: 한국어 '올림'(교수님, 첫 연락·부탁) 또는 '드림'(조교·교직원·짧은 답장). 영어 'Sincerely,'(첫 연락·큰 부탁·격식) /\n"
+    "  'Best regards,'(무난) / 'Best,'(이미 주고받는 가벼운 답장)."
 )
 
 # 학생이 말투를 편하게 하라고 했으면 격식 검사를 하지 않는다
 _CASUAL_ASK = re.compile(r"친근|편하게|편한\s*말|반말|캐주얼|가볍게|casual|friendly|informal", re.I)
 _EMOJI = re.compile("[\U0001F300-\U0001FAFF☀-➿]")
-# '-신지요·-는지요·-을지요' 는 편지글에 쓰는 높임 물음이라 둔다
-_KO_POLITE_YO = re.compile(r"(신지|실지|는지|은지|을지|ㄹ지|인지|런지)요$")
+# '-신지요·-는지요·-을지요' 는 편지글에 쓰는 높임 물음이라 둔다. '…주실 수 있을까요?'·'여쭤도 될까요?' 도 메일 작성법
+# 글(2026-11-11)이 교수님께 쓰는 부탁 물음으로 권하는 꼴이라 둔다
+_KO_POLITE_YO = re.compile(r"((신지|실지|는지|은지|을지|ㄹ지|인지|런지)요|까요)$")
 _EN_CASUAL = re.compile(r"\b(i'm|i've|i'll|i'd|don't|doesn't|didn't|can't|won't|isn't|aren't|wasn't|it's|that's|hey|gonna|wanna|thanks a lot)\b", re.I)
 
 
@@ -583,10 +627,11 @@ def compose_mail(request: str, answers: list[dict], people: list[dict], me: dict
     """메일 쓰기 옆 창(2026-11-09 사용자): 한 마디 부탁 → 받는 사람·참조·제목·용건까지 정하고, 모자란 것은 되묻는다.
 
     '누구에게 보낼지, 참조는 누구, 내용은 어떻게 — 빠진 게 있으면 Claude 처럼 1·2·3안을 골라 받고, 보내기만 누르면
-    되게'. 인사·자기소개·마무리·서명은 여기서 쓰지 않는다 — 화면 서버가 mail_flow(학생이 정한 꼴)로 앞뒤에 붙인다.
+    되게'. 호칭 줄과 이름·학번 서명은 화면 서버가 mail_flow 로 붙이고, 그 사이 인사·자기소개·맺음은 모델이 받는 사람과
+    용건에 맞게 고른다(2026-11-11 사용자: '인삿말, 끝말이 정형화해서 모든 것을 같게 하지 말고') — FRAME_RULES·_frame_parts.
     people: [{id, name, email, role, course, dept, tag}] — 받는 사람·참조는 이 id 로만 고른다(모델이 주소를 지어내지 않게).
-    extra: timetable·deadlines(줄 글), current{to,cc,subject}, quote(답장하는 메일)
-    답: {ask[], to[], cc[], course, lang, subject, content, note}
+    extra: timetable·deadlines(줄 글), current{to,cc,subject,body}, quote(답장하는 메일)
+    답: {ask[], to[], cc[], course, lang, subject, content, hello?, intro?, closing?, signoff?, note}
     """
     me_lines = "\n".join(f"- {k}: {v}" for k, v in (
         ("이름", me.get("name")), ("영문 이름", me.get("nameEn")), ("학번", me.get("studentId")),
@@ -624,26 +669,31 @@ def compose_mail(request: str, answers: list[dict], people: list[dict], me: dict
         "  보기는 10자 안팎의 짧은 말로(예: '병원 진료', '네, 넣어 주세요').\n"
         f"{ask_rule}\n\n"
         "[언어] 받는 사람 이름이 로마자(외국인 교수님)면 영어, 아니면 한국어. 답장이면 [답장하는 메일]의 언어. 학생이 언어를 정하면 그 말대로.\n"
-        "[본문] 인사·자기소개·마무리 인사·서명은 앱이 학생의 꼴로 붙이니 절대 쓰지 말고 용건 문단만 씁니다.\n"
-        "- 새 메일: 한국어는 '다름이 아니라, ' 로, 영어는 'I am writing to ' 로 시작합니다.\n"
-        "- 2~4문단, 목록 기호 없이 문장으로. 학생 말·답·아래 자료에 있는 사실만 씁니다. 요일은 [달력]으로 맞춥니다.\n"
+        "[본문] content 에는 용건 문단만 씁니다(호칭·인사·자기소개·맺음·서명은 hello·intro·closing·signoff 칸에 따로).\n"
+        "- 첫 문장에 용건을 바로 씁니다. 늘 '다름이 아니라' 나 'I am writing to' 로 시작하지 말고 용건에 맞게 엽니다.\n"
+        "- 1~3문단, 목록 기호 없이 문장으로(행정 부서에 여러 가지를 물을 때만 '1. 2.' 번호). 학생 말·답·아래 자료에 있는 사실만 씁니다.\n"
+        "  요일은 [달력]으로 맞춥니다. 짧은 확인·감사 답장은 두세 문장이면 충분합니다.\n"
         + ("[답장] 이 메일은 [답장하는 메일]에 대한 답장입니다.\n"
            "- 그 메일이 묻거나 부탁한 것에 바로 답합니다. 거기 적힌 날짜·시간·장소·과제 이름은 그대로 옮겨 씁니다.\n"
-           "- '다름이 아니라' 로 시작하지 말고 '보내 주신 메일 잘 받았습니다.' 처럼 받은 메일을 이어받아 시작합니다"
-           "(영어: 'Thank you for your email.').\n"
+           "- 받은 메일을 이어받아 시작하되 늘 같은 문장으로 열지 않습니다. 받은 메일이 안내·답변이면 '안내해 주셔서 감사합니다',\n"
+           "  묻는 메일이면 그 물음에 대한 답부터('11월 18일(수) 오후 2시에 참석하겠습니다.'), 부탁이면 할 수 있는지부터.\n"
            "- 원문을 되풀이하거나 요약하지 마세요. 받는 사람은 학생이 바꾸라고 하지 않는 한 그 메일을 보낸 사람입니다.\n"
+           "- 이미 주고받는 사이이므로 자기소개(intro)는 짧게 하거나 빈칸으로 둡니다.\n"
            "- 제목은 [지금 메일 칸]의 'Re: …' 를 그대로 씁니다.\n" if reply else "")
         + ("[학생이 이미 쓴 것] 학생이 제목·본문에 이미 적은 글은 학생의 뜻입니다.\n"
            "- 거기 담긴 용건·사실·부탁을 빠짐없이 살려 쓰고, 말투와 꼴만 [격식]에 맞게 다듬습니다. 학생이 쓰지 않은 사실을 보태지 마세요.\n"
            "- 답장이 아니면 제목은 학생이 쓴 용건을 지키며 [격식]의 제목 꼴로 맞춥니다.\n"
            if (written or (cur.get("subject") and not reply)) else "")
         + f"{FORMAL_RULES}\n"
+        f"{FRAME_RULES}\n"
         f"{NATURAL_KO}\n"
         f"[상황별로 들어가면 좋은 것]\n{SITUATION_GUIDE}\n\n"
         "출력은 JSON 하나만(설명·코드 블록 없이):\n"
         '- 물어야 하면: {"ask": [{"q": "질문", "options": ["보기1", "보기2", "보기3"]}], "to": ["id"], "cc": ["id"]}  (to·cc 는 이미 정했으면)\n'
         '- 쓸 수 있으면: {"to": ["id"], "cc": ["id"], "course": "과목 이름(과목 일이 아니면 빈칸)", "lang": "ko 또는 en", '
-        '"subject": "제목", "content": "용건 본문(문단 사이는 빈 줄)", "note": "누구에게 보내고 누구를 참조로 넣었는지와 까닭(한 줄, 해요체, id 는 적지 않음)"}\n\n'
+        '"subject": "제목", "hello": "호칭 다음 인사 한 줄(없으면 빈칸)", "intro": "자기소개(없으면 빈칸)", '
+        '"content": "용건 본문(문단 사이는 빈 줄)", "closing": "맺음 문장", "signoff": "올림·드림 또는 Sincerely,·Best regards,·Best,", '
+        '"note": "누구에게 보내고 누구를 참조로 넣었는지와 까닭(한 줄, 해요체, id 는 적지 않음)"}\n\n'
         f"[오늘] {today}\n[달력] {_calendar(28)}\n\n"
         f"[내 정보]\n{me_lines or '- (모름)'}\n\n"
         f"[내 시간표]\n{extra.get('timetable') or '- (없음)'}\n\n"
@@ -669,6 +719,7 @@ def compose_mail(request: str, answers: list[dict], people: list[dict], me: dict
     if issues:
         content = _content_only(_formalize(content, issues, lang, provider, model))
         res = {**res, "formalFixed": len(issues)}
+    casual = bool(_CASUAL_ASK.search(request + " " + got))
     return {
         **res,
         "ask": ask,
@@ -678,8 +729,44 @@ def compose_mail(request: str, answers: list[dict], people: list[dict], me: dict
         "lang": lang if lang in ("ko", "en") else "",
         "subject": str(data.get("subject") or "").strip().splitlines()[0][:200] if data.get("subject") else "",
         "content": content,
+        **({} if ask else _frame_parts(data, lang, me, casual)),
         "note": str(data.get("note") or "").strip()[:240],
     }
+
+
+_SIGNOFFS = {"올림": "올림", "드림": "드림", "sincerely": "Sincerely,", "best regards": "Best regards,",
+             "kind regards": "Kind regards,", "best": "Best,", "regards": "Regards,", "respectfully": "Respectfully,"}
+
+
+def _frame_parts(data: dict, lang: str, me: dict, casual: bool = False) -> dict:
+    """모델이 고른 인사(hello)·자기소개(intro)·맺음(closing)·서명 인사(signoff)를 거른다.
+
+    없는 칸은 넣지 않는다(화면 서버가 mail_flow 의 기본 꼴을 쓴다). 빈 문자열은 '일부러 뺌'(답장의 자기소개 등).
+    - 호칭 줄('○○ 교수님께,' / 'Dear …,')·서명 이름 줄은 앱이 붙이므로 모델이 써 넣었으면 뗀다.
+    - 격식에 어긋나면(해요체·느낌표·영어 줄임꼴) 그 칸만 기본 꼴로 돌린다 — 짧은 줄이라 고쳐 쓰기보다 기본이 낫다.
+    - 자기소개에 [내 정보]와 다른 학번이 들어가면 버린다(모델이 예시의 학번을 옮겨 쓴 일을 막는다)."""
+    out: dict[str, str] = {}
+    sid = str(me.get("studentId") or "").strip()
+    for key, limit in (("hello", 80), ("intro", 300), ("closing", 240)):
+        if key not in data or not isinstance(data.get(key), str):
+            continue
+        lines = [l.strip() for l in data[key].strip().splitlines() if l.strip()]
+        # 호칭 줄·서명 줄을 뗀다
+        lines = [l for l in lines if not re.match(r"^(dear\s|to whom|.{0,30}께\s*,?$)", l, re.I)
+                 and not re.search(r"(드림|올림)$|^(sincerely|best regards|kind regards|best|regards),?$", l, re.I)]
+        text = "\n".join(lines)
+        text = re.sub(r"^.{0,30}께\s*,\s*", "", text)  # '김민수 교수님께, 안녕하십니까.' → '안녕하십니까.'
+        if len(text) > limit:
+            continue
+        if key == "intro" and any(n != sid for n in re.findall(r"(?<!\d)\d{8,10}(?!\d)", text)):
+            continue
+        if text and not casual and _formal_issues(text, lang):
+            continue
+        out[key] = text
+    sign = re.sub(r"[\s,.]+$", "", str(data.get("signoff") or "")).strip().lower()
+    if sign in _SIGNOFFS:  # 언어가 맞는지는 화면 서버가 본다(그쪽이 메일 언어를 최종으로 정한다)
+        out["signoff"] = _SIGNOFFS[sign]
+    return out
 
 
 AI_MARK = "⟦여기⟧"
@@ -718,7 +805,10 @@ def revise_mail(instruction: str, mail: dict, people: list[dict], provider: str 
         "- 사실을 지어내지 마세요. 꼭 필요한데 모르면 [ ] 로 비웁니다. 요일은 [달력]으로 맞춥니다.\n"
         + ("- 답장입니다. [답장하는 메일]이 묻거나 부탁한 것에 맞게 고치고, 거기 적힌 날짜·이름 같은 사실은 그대로 씁니다.\n" if quote else "")
         + "- 고친 글과 제목은 아래 [격식]을 지킵니다(지시가 말투를 따로 정하면 그 말대로).\n"
+        "- 고쳐서 용건이 달라지면(예: 질문 → 결석 알림) 인사·맺음 문장도 아래 [인사·자기소개·맺음]에 맞게 함께 고칩니다.\n"
+        "  호칭 줄과 이름·학번 서명 줄은 지시가 없으면 그대로 둡니다.\n"
         f"{FORMAL_RULES}\n"
+        f"{FRAME_RULES}\n"
         f"{NATURAL_KO}\n"
         f"{mark_rule}"
         "- 받는 사람·참조를 바꾸라는 지시면 [사람 목록]의 id(또는 학생이 적은 주소)로 to·cc 를 줍니다(바뀐 뒤 전체). 아니면 넣지 마세요.\n"

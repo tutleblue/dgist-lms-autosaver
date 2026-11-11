@@ -4992,13 +4992,36 @@ def _mail_ai_ask(ask: list[dict[str, Any]]) -> list[dict[str, Any]]:
             for a in ask if isinstance(a, dict)]
 
 
-def _mail_ai_body(segs: list[dict[str, Any]], content: str) -> str:
-    """mail_flow 조각(호칭·인사·자기소개 / 감사·서명) 사이에 AI 가 쓴 용건을 넣는다. 조각의 after(뒤 줄바꿈 수)를 따른다."""
-    by = {s["kind"]: s for s in segs}
-    parts = [by[k]["text"] for k in ("greeting", "intro") if k in by and by[k].get("text")]
-    if content.strip():
-        parts.append(content.strip())
-    parts += [by[k]["text"] for k in ("closing", "signoff") if k in by and by[k].get("text")]
+def _mail_ai_body(segs: list[dict[str, Any]], content: str, frame: dict[str, Any] | None = None, lang: str = "ko") -> str:
+    """호칭 줄(mail_flow) + 인사·자기소개(AI) + 용건(AI) + 맺음(AI) + 서명(mail_flow, 끝인사 낱말만 AI) 으로 잇는다.
+
+    2026-11-11 사용자: '인삿말, 끝말이 정형화해서 모든 것을 같게 하지 말고, 맥락과 대상과 본문의 내용에 맞게'.
+    호칭(받는 사람 이름·직함)과 서명(내 이름·학번)은 틀리면 안 되는 사실이라 mail_flow 가 쓰고, 그 사이는 모델이 용건에
+    맞게 고른다. frame 에 없는 칸은 mail_flow 의 기본 꼴을 쓴다(모델이 칸을 빠뜨리거나 격식에 어긋났을 때)."""
+    frame = frame or {}
+    by = {s["kind"]: s.get("text") or "" for s in segs}
+    greeting = by.get("greeting", "")
+    # 한국어 조각은 '김민수 교수님께,\n안녕하십니까.' — 첫 줄이 호칭이고 나머지가 인사. 호칭 없이 '안녕하십니까.' 만일 때도 있다
+    if lang == "ko":
+        head, _, rest = greeting.partition("\n")
+        address, hello = (head, rest) if re.search(r"께\s*,?$", head) else ("", greeting)
+    else:
+        address, hello = greeting, ""
+    hello = frame.get("hello", hello)
+    intro = frame.get("intro", by.get("intro", ""))
+    closing = frame.get("closing", by.get("closing", ""))
+    sign = by.get("signoff", "")
+    word = frame.get("signoff") or ""
+    if sign and word:
+        if lang == "ko" and word in ("올림", "드림"):
+            sign = re.sub(r"(올림|드림)(?=\n|$)", word, sign, count=1)
+        elif lang == "en" and not re.search(r"[가-힣]", word):
+            first, sep, rest = sign.partition("\n")
+            if re.match(r"^(sincerely|best regards|kind regards|regards|best wishes|respectfully|yours)\b", first, re.I):
+                sign = word + sep + rest
+    # 한국어는 호칭 줄 바로 다음 줄에 인사('김민수 교수님께,\n교수님, 안녕하십니까.'), 영어는 호칭 뒤 빈 줄
+    opening = "\n".join(x for x in (address, hello.strip()) if x) if lang == "ko" else address
+    parts = [x for x in (opening, (hello.strip() if lang != "ko" else ""), intro.strip(), content.strip(), closing.strip(), sign) if x]
     return "\n\n".join(parts)
 
 
@@ -5008,37 +5031,38 @@ _SUBJECT_JUNK = re.compile("[\U0001F300-\U0001FAFF☀-➿]|[ㅠㅜㅎㅋ]+|[!~]+
 def _mail_ai_subject(subject: str, current: str, lang: str, me: dict[str, Any], course: dict[str, Any] | None) -> str:
     """AI 가 지은 제목을 격식 꼴로 맞춘다 (2026-11-11 사용자: '제목 형식을 규칙처럼 지켜지게').
 
+    꼴은 사용자가 준 '대학생을 위한 이메일 작성법'(2026-11-11)을 따른다 — 한국어 '[과목명 분반] 용건_학번 이름',
+    영어 '용건 – 과목 코드 (Section 분반)'(영어 제목에는 이름을 넣지 않는다).
     - 답장(지금 제목이 'Re:')은 제목을 바꾸지 않는다.
     - 이모티콘·ㅠ·느낌표·물결을 뗀다.
-    - 과목 일인데 앞의 [과목 분반] 이 빠졌으면 붙이고, 끝의 (이름 학번)/'- 영문 이름 (학번)' 이 빠졌으면 붙인다.
-      모델이 프롬프트의 꼴을 자주 잊는 두 부분이라 코드로 지킨다. 내 정보에 학번이 없으면 끝은 건드리지 않는다."""
+    - 과목 일인데 과목 표시가 빠졌으면 붙이고, 한국어 제목 끝의 '_학번 이름' 이 빠졌으면 붙인다(이름이나 학번이 이미
+      있으면 둔다 — 연구실 문의의 '_기초학부 1학년 홍길동' 같은 꼴). 모델이 자주 잊는 부분이라 코드로 지킨다."""
     if re.match(r"\s*(re|fwd?)\s*:", current or "", re.I):
         return current.strip()
     text = re.sub(r"\s{2,}", " ", _SUBJECT_JUNK.sub("", subject or "")).strip(" ?.")
     if not text:
         return current.strip()
+    sec = str((course or {}).get("section") or "").strip()
+    if lang == "en":
+        code = str((course or {}).get("courseNo") or "").strip()
+        if course and code and code.replace(" ", "").lower() not in text.replace(" ", "").lower():
+            text = f"{text} – {code}" + (f" (Section {sec})" if sec else "")
+        return text[:200]
     if course and not text.startswith("["):
-        sec = str(course.get("section") or "").strip()
-        if lang == "en" and course.get("courseNo"):
-            tag = f"[{course['courseNo']}-{sec}]" if sec else f"[{course['courseNo']}]"
-        else:
-            title = str(course.get("title") or "").strip()
-            tag = f"[{title} {sec}분반]" if title and sec else (f"[{title}]" if title else "")
+        title = str(course.get("title") or "").strip()
+        tag = f"[{title} {sec}분반]" if title and sec else (f"[{title}]" if title else "")
         text = f"{tag} {text}".strip()
     sid = str(me.get("studentId") or "").strip()
-    if sid and sid not in text:
-        name = str((me.get("nameEn") if lang == "en" else me.get("name")) or "").strip()
-        if lang == "en":
-            text = f"{text} - {name} ({sid})" if name else f"{text} ({sid})"
-        else:
-            text = f"{text} ({name} {sid})" if name else f"{text} ({sid})"
+    name = str(me.get("name") or "").strip()
+    if sid and sid not in text and not (name and name in text):
+        text = f"{text}_{sid} {name}".rstrip()
     return text[:200]
 
 
 def mail_ai_compose(workspace: UserWorkspace, payload: dict[str, Any], provider: str | None, model: str) -> dict[str, Any]:
     """옆 창의 첫 부탁(과 되물은 답) → {ask[]} 또는 {mail: {to[], cc[], subject, body, lang}}.
 
-    본문은 '인사·자기소개(mail_flow) + AI 용건 + 감사·서명(mail_flow)' — 사용자가 정한 꼴을 모델에 맡기지 않는다."""
+    본문은 '호칭(mail_flow) + 인사·자기소개·용건·맺음(AI, 받는 사람과 용건에 맞게) + 서명(mail_flow)' — _mail_ai_body."""
     import ai_cli
     import mail_flow
 
@@ -5086,7 +5110,8 @@ def mail_ai_compose(workspace: UserWorkspace, payload: dict[str, Any], provider:
             break
     lang = res.get("lang") or ("en" if who.get("foreign") else "ko")
     segs = mail_flow.segments(me, who, index).get(lang) or []
-    body = _mail_ai_body(segs, res.get("content") or "")
+    frame = {k: res[k] for k in ("hello", "intro", "closing", "signoff") if isinstance(res.get(k), str)}
+    body = _mail_ai_body(segs, res.get("content") or "", frame, lang)
     course = (who.get("courses") or [None])[index] if want and who.get("courses") else None
     subject = _mail_ai_subject(res.get("subject") or "", str(current.get("subject") or ""), lang, me, course)
     return {
