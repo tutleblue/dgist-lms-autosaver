@@ -2726,6 +2726,29 @@ def note_outside_change() -> None:
     OUTSIDE_CHANGES["n"] += 1
 
 
+def _app_version() -> str:
+    try:
+        return (PROJECT_ROOT / "VERSION").read_text(encoding="utf-8").strip()
+    except OSError:
+        return ""
+
+
+def _os_label() -> str:
+    import platform
+
+    return f"{platform.system()} {platform.release()} {platform.machine()}".strip()
+
+
+def _doctor_last(workspace: UserWorkspace) -> str:
+    try:
+        import doctor
+
+        report = doctor.last_report(workspace)
+        return report.replace("Daling 점검 보고서", f"Daling 점검 보고서 (버전 {_app_version()})", 1) if report else ""
+    except Exception:
+        return ""
+
+
 def get_health(workspace: UserWorkspace) -> dict[str, Any]:
     """마지막 성공 시각과 최근 실패를 알려 준다 (조용한 실패 방지)."""
     data = read_json(workspace.health_path, {})
@@ -6537,6 +6560,15 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         if route == "/api/health":
             self.send_json(get_health(workspace))
             return
+        if route == "/api/doctor":
+            # 점검 진행 상황·결과 (doctor.py). 보고서 글은 화면이 '보고서 복사' 로 쓴다
+            import doctor
+
+            snap = doctor.snapshot(workspace)
+            if snap.get("result"):
+                snap["report"] = doctor.report_text(snap["result"], _app_version(), _os_label())
+            self.send_json(snap)
+            return
         if route == "/api/config/export":
             try:
                 self.send_json(export_settings(workspace, params.get("secrets", ["0"])[0] == "1"))
@@ -6590,6 +6622,8 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 "installed": bool(getattr(sys, "frozen", False)),
                 "lastFailure": f"{failure.get('kind', '')} {failure.get('at', '')}".strip() if failure else "",
                 "lastError": last_error,
+                # 사흘 안에 '문제 점검' 을 돌렸으면 그 보고서 (주소는 앞 글자만, 비밀번호는 없음)
+                "doctor": _doctor_last(workspace),
             })
             return
         if route == "/api/update/check":
@@ -6766,7 +6800,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
     DEMO_BLOCKED_POST = {
         "/api/config", "/api/config/import", "/api/run", "/api/verify", "/api/refresh-deadlines", "/api/refresh-emails",
         "/api/update/apply", "/api/update/open-download", "/api/send-email", "/api/mail/save-draft",
-        "/api/mail/big-cancel", "/api/drive/share",
+        "/api/mail/big-cancel", "/api/drive/share", "/api/doctor/run", "/api/doctor/fix",
         "/api/mail/move", "/api/mail/folder-create", "/api/mail/translate", "/api/timetable/import-image",
         "/api/timetable/import-link", "/api/samsung-notes/send", "/api/samsung-notes/organize", "/api/organize-files",
         "/api/assignment/open", "/api/storage/cleanup", "/api/storage/trash-browser", "/api/google/credentials", "/api/google/connect",
@@ -7218,6 +7252,31 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                                 "link": meta.get("webViewLink") or f"https://drive.google.com/file/d/{file_id}/view"})
             except Exception as exc:
                 self.send_json({"ok": False, "message": str(exc)}, HTTPStatus.BAD_REQUEST)
+            return
+        if route == "/api/doctor/run":
+            # 문제 점검: 인터넷·계정·메일 로그인·LMS·Google 을 차례로 시험해 근본 원인을 찾는다 (doctor.py, 뒤에서 돈다)
+            import doctor
+
+            # force: ['mail'] 이면 막 거절된 메일 계정도 한 번 시험한다 ('그래도 지금 시험' 단추).
+            # 포트는 다른 Daling 이 함께 켜져 있는지 볼 때 나를 빼려고 넘긴다
+            payload = self.read_body_json()
+            force = tuple(str(f) for f in (payload.get("force") or []) if str(f) in ("mail",))
+            try:
+                own_port = int(self.server.server_address[1])
+            except Exception:
+                own_port = None
+            self.send_json({"ok": True, **doctor.start(workspace, force, own_port)})
+            return
+        if route == "/api/doctor/fix":
+            import doctor
+
+            payload = self.read_body_json()
+            files = payload.get("files")
+            try:
+                self.send_json(doctor.apply_fix(workspace, str(payload.get("op", "")), files if isinstance(files, list) else [],
+                                                str(payload.get("kind", "")), str(payload.get("lane", ""))))
+            except Exception as exc:
+                self.send_json({"ok": False, "message": f"고치지 못했어요: {exc}"}, HTTPStatus.BAD_REQUEST)
             return
         if route == "/api/mail/save-draft":
             # 임시저장을 서버의 '임시 보관함'에 넣는다 (웹메일·휴대폰에서도 이어서 쓰게)

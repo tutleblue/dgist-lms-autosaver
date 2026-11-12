@@ -156,9 +156,13 @@ class MiniIMAP:
         return sorted(ids)
 
     logins = 0  # 이 프로세스에서 LOGIN 을 보낸 횟수 (session_login_count)
+    # 언제 로그인했는지 (문제 점검이 '지난 1시간 몇 번' 을 센다 — 잦은 로그인이면 학교 서버가 맞는 비밀번호도 막는다)
+    login_times: list[float] = []
 
     def login(self, user: str, password: str) -> None:
         MiniIMAP.logins += 1
+        MiniIMAP.login_times.append(time.time())
+        del MiniIMAP.login_times[:-500]
         quoted_user = '"' + user.replace('\\', '\\\\').replace('"', '\\"') + '"'
         quoted_pw = '"' + password.replace('\\', '\\\\').replace('"', '\\"') + '"'
         status, _ = self.cmd(f"LOGIN {quoted_user} {quoted_pw}")
@@ -1134,11 +1138,13 @@ _MONTHS_EN = {
     "jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6,
     "jul": 7, "aug": 8, "sep": 9, "oct": 10, "nov": 11, "dec": 12,
 }
-# 날짜 하나: 9월 18일 / 9/18 / 9.18( / 2026. 9. 18 / Sep.22 / September 22
+# 날짜 하나: 9월 18일 / 9/18 / 9.18( / 11. 30.(월) / 2026. 9. 18 / Sep.22 / September 22 / November 17th
+# 2026-11-12 실측: 'November 17th at 4:30 pm'(EECS&AI Colloquium)·'Nov. 30th'·'11. 30.(월)'(대학원 세미나)를 못 읽어
+# 관심 분야 세미나가 캘린더에 안 올라갔다. 서수 꼬리(st·nd·rd·th)와, 요일 괄호 앞 날짜 뒤의 점을 받는다.
 _DATE_PATTERNS = [
     re.compile(r"(?:(20\d{2})\s*년\s*)?(\d{1,2})\s*월\s*(\d{1,2})\s*일"),
-    re.compile(r"(?:(20\d{2})\s*[./-]\s*)?(\d{1,2})\s*[./]\s*(\d{1,2})(?=\s*[\(（]|\s*\(?[월화수목금토일]|\s*,|\s*~|\s*$|\s)"),
-    re.compile(r"\b(?:(20\d{2})\s*)?(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s*(\d{1,2})\b", re.I),
+    re.compile(r"(?:(20\d{2})\s*[./-]\s*)?(\d{1,2})\s*[./]\s*(\d{1,2})(?=\.?\s*[\(（]|\s*\(?[월화수목금토일]|\s*,|\s*~|\s*$|\s)"),
+    re.compile(r"\b(?:(20\d{2})\s*)?(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s*(\d{1,2})(?:st|nd|rd|th)?\b", re.I),
 ]
 _TIME_RE = re.compile(r"(?:(오전|오후)\s*)?(\d{1,2})\s*[:시]\s*(\d{2})?(?:\s*분)?\s*(AM|PM|am|pm)?")
 # 이 말 뒤에 오는 날짜가 행사일일 가능성이 높다
@@ -1833,6 +1839,12 @@ def imap_session(account: str | None = None, password: str | None = None,
 def session_login_count() -> int:
     """점검용: 이 프로세스가 메일 서버에 로그인한 횟수."""
     return MiniIMAP.logins
+
+
+def recent_logins(seconds: float = 3600) -> int:
+    """점검용: 이 프로세스가 지난 seconds 초 동안 메일 서버에 로그인한 횟수."""
+    since = time.time() - seconds
+    return sum(1 for at in list(MiniIMAP.login_times) if at >= since)
 
 
 def _folder_raw(client: "MiniIMAP", folder_key: str) -> str | None:

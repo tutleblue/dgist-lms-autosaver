@@ -895,7 +895,21 @@ def run_worker(job: str) -> int:
             # package: Store 판(MSIX)이면 작업 프로세스도 같은 패키지 안에서 도는지 (AppData 가상화를 같이 봐야 한다)
             # handed: 앱 본체가 표준 입력으로 넘긴 비밀 값 수 (맥·리눅스, runtime_config._HANDED_SECRETS)
             handed = "-" if runtime_config._HANDED_SECRETS is None else len(runtime_config._HANDED_SECRETS)
-            print(f"smoke-worker ok data={runtime_config.AUTOSAVER_DATA_ROOT} package={runtime_config.msix_package_full_name() or '-'} handed={handed}")
+            # secrets: 설정에 저장된 계정 비밀번호 중 이 작업 프로세스가 실제로 풀어 쓸 수 있는 수 / 저장된 수.
+            # 화면은 풀리는데 작업에서 'dpapi:' 암호문을 그대로 쓰던 일(CLAUDE.md 5)을 문제 점검이 여기서 본다
+            import json
+
+            try:
+                raw = json.loads(Path(runtime_config.CONFIG_JSON_PATH).read_text(encoding="utf-8-sig"))
+            except (OSError, ValueError):
+                raw = {}
+            stored = [k for k in ("LMS_PASSWORD", "SCHOOL_EMAIL_PASSWORD") if isinstance(raw, dict) and raw.get(k)]
+            usable = sum(
+                1 for k in stored
+                if str(getattr(runtime_config, k, "") or "")
+                and not str(getattr(runtime_config, k, "")).startswith(runtime_config.DPAPI_PREFIX)
+            )
+            print(f"smoke-worker ok data={runtime_config.AUTOSAVER_DATA_ROOT} package={runtime_config.msix_package_full_name() or '-'} handed={handed} secrets={usable}/{len(stored)}")
         else:
             print(f"알 수 없는 작업입니다: {job}")
             return 1

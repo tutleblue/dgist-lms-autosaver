@@ -118,6 +118,8 @@ def collect() -> list[str]:
     strings |= html_strings((web / "index.html").read_text(encoding="utf-8"))
     strings |= js_strings((web / "app.js").read_text(encoding="utf-8"))
     strings |= py_messages((ROOT / "web_ui.py").read_text(encoding="utf-8"))
+    # 문제 점검의 단계 이름·까닭·단추 글자는 doctor.py 가 보낸다
+    strings |= py_messages((ROOT / "doctor.py").read_text(encoding="utf-8"))
     # 로그·정규식·경로처럼 화면에 안 나오는 것은 뺀다
     drop = re.compile(r"^[\[\(]?[가-힣]+\]$|\\[dswb]|^\^|[가-힣]\|[가-힣]|^\s*$")
     return sorted(s for s in strings if not drop.search(s) and not is_code(s) and len(s) <= 300)
@@ -129,6 +131,8 @@ def collect() -> list[str]:
 #   - 파일 이름·캘린더(.ics) 내용·정규식 조각: 화면 문구가 아니다
 IGNORE = {
     "(월)", "(화)", "(수)", "(목)", "(금)", "(토)", "(일)",
+    # doctor.py 안에서만 쓰는 것: 한글 찾는 정규식·단계 이름 끝말 비교·빈자리 둘
+    "[ᄀ-ᇿ㄰-㆏가-힣]", "[ᄀ-ᇿ㄰-㆏가-힣]", "닿는지", "{0}{1}",
     "{0}을 {1}", "[{0}] {1}", "가",
     "-비밀번호포함", "Daling-설정-{0}{1}.json",
     "붕어빵 강의자료", "붕어빵 파일 정리",  # 1.12.52 까지 만든 사용자 폴더 이름(web_ui 가 있으면 계속 쓴다)

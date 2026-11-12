@@ -7847,6 +7847,7 @@ function bindEvents() {
       if (newlyOn) runLocalSaveNow({ alreadySaved: true });
       await refreshAll();
       switchView("dashboard");
+      doctorAfterSettingsSaved();
     } catch (error) {
       showToast(error.message);
     }
@@ -8475,14 +8476,13 @@ function jumpToSetting(sectionId, fieldName) {
 // 다른 브라우저로 바꿔 띄우므로(browser_setup.launch_lms_browser) '다시 해 보기' 만 둔다.
 const HEALTH_FIX = {
   account: { label: "계정 넣기", run: () => jumpToSetting("stAccounts", state.health?.failing?.[0]?.kind === "emails" ? "schoolEmail" : "lmsId") },
-  login: {
-    label: "비밀번호 바꾸기",
-    run: () => jumpToSetting("stAccounts", Object.keys(state.health?.authFailed || {})[0] === "emails" ? "schoolEmailPassword" : "lmsPassword"),
-  },
+  // 로그인 거절은 비밀번호가 틀린 것인지, 같은 계정을 여러 기기에서 써 학교 서버가 잠시 막은 것인지 띠만으로는 모른다.
+  // 문제 점검이 서버가 한 말·마지막 성공·비밀번호 모양을 보고 가려 준다 (그 안에 '비밀번호 바꾸기' 단추가 있다)
+  login: { label: "원인 찾기", run: () => openDoctor() },
   drive: { label: "구글 다시 연결", run: () => $("#googleLoginButton")?.click() },
   site: { label: "업데이트 확인", run: () => { openSettings(); checkForUpdate(true); window.setTimeout(() => $("#updateRow")?.scrollIntoView({ block: "center" }), 500); } },
   disk: { label: "저장 위치 보기", run: () => jumpToSetting("stStorage") },
-  unknown: { label: "문제 알리기", run: () => openFeedback() },
+  unknown: { label: "원인 찾기", run: () => openDoctor() },
 };
 
 function healthSig(h) {
@@ -15540,6 +15540,8 @@ async function openFeedback() {
   if (kind.tag === "오류 제보") {
     if (info.lastFailure) lines.push(`- 마지막으로 실패한 작업: ${info.lastFailure}`);
     if (info.lastError) lines.push("", "최근 앱 오류 기록:", info.lastError);
+    // 사흘 안에 '문제 점검' 을 돌렸으면 그 보고서도 (주소는 앞 글자만, 비밀번호는 없음)
+    if (info.doctor) lines.push("", info.doctor);
   }
 
   if (state.view !== "emails") {
@@ -15559,6 +15561,269 @@ async function openFeedback() {
 
 $("#feedbackButton")?.addEventListener("click", openFeedback);
 $("#settingsFeedbackButton")?.addEventListener("click", openFeedback);
+
+
+/* ===== 문제 점검 (doctor.py) =====
+   메일·LMS 가 안 될 때 데이터 폴더 → 저장된 비밀번호 → 계정 칸 → 인터넷·학교 서버 → 시계 → 메일 로그인 → LMS → Google 을
+   차례로 시험한다. 가장 앞에서 막힌 곳이 근본 원인이고, 뒤 단계는 '앞 단계 때문' 으로 건너뛴다. 고칠 수 있는 것은 단추로.
+   2026-11-12 사용자: 친구 컴퓨터에서 메일이 'auth failed' 로 안 받아졌는데 까닭을 알 길이 없었다.
+   서버가 한 말·로그는 화면에 늘어놓지 않고 '보고서 복사' 로만 준다 (2026-11-10 사용자: 오류 글은 짧게). */
+/* 고친 뒤 끝까지 본다 (2026-11-12 사용자: '더 세심하게'): 고치는 단추를 누르면 그 전의 문제 목록(compare)을 쥐고
+   다시 점검해 '해결됐어요 / 아직 그대로예요' 를 보여 준다. 설정으로 보낸 고치기(비밀번호·주소·자동 확인)는 설정을
+   저장하면 점검 창이 다시 열려 확인한다(recheck). 로그인 시험·지금 가져오기는 그 작업이 끝날 때까지 기다린 뒤 다시 본다. */
+const doctorState = { timer: 0, data: null, compare: null, recheck: null, waiting: 0 };
+const DOCTOR_MARK = { ok: "✓", warn: "!", fail: "✕", skip: "–", run: "" };
+const DOCTOR_RECHECK_MS = 20 * 60 * 1000;
+
+function openDoctor(opts = {}) {
+  const dialog = $("#doctorDialog");
+  if (!dialog) return;
+  if (!dialog.open) dialog.showModal();
+  runDoctor(opts);
+}
+
+/** 지금 결과의 문제들 [{id, title}] (고친 뒤 비교용) */
+function doctorIssues() {
+  const steps = doctorState.data?.result ? doctorState.data.steps || [] : [];
+  return steps.filter((s) => s.status === "fail" || s.status === "warn").map((s) => ({ id: s.id, title: s.title }));
+}
+
+async function runDoctor(opts = {}) {
+  window.clearTimeout(doctorState.timer);
+  doctorState.waiting = 0;
+  doctorState.compare = opts.compare || null;
+  $("#doctorCopyButton").disabled = true;
+  $("#doctorAgainButton").disabled = true;
+  $("#doctorBody").innerHTML = `<p class="doctor-wait">${escapeHtml(tr("점검을 시작하는 중…"))}</p>`;
+  try {
+    doctorState.data = await api("/api/doctor/run", { method: "POST", body: JSON.stringify({ force: opts.force || [] }) });
+  } catch (error) {
+    $("#doctorBody").innerHTML = `<p class="doctor-wait">${escapeHtml(humanError(error))}</p>`;
+    $("#doctorAgainButton").disabled = false;
+    return;
+  }
+  pollDoctor();
+}
+
+async function pollDoctor() {
+  try {
+    doctorState.data = await api("/api/doctor");
+  } catch {
+    /* 다음 차례에 다시 묻는다 */
+  }
+  renderDoctor();
+  if (doctorState.data?.running && $("#doctorDialog")?.open) doctorState.timer = window.setTimeout(pollDoctor, 700);
+}
+
+/** 시작한 작업(메일 가져오기·LMS 로그인 시험)이 끝날 때까지 기다린다. 아직 안 떴으면 몇 초 뜨기를 기다린다 */
+async function doctorWaitTask(lane, label) {
+  const token = (doctorState.waiting = Date.now());
+  const started = Date.now();
+  let seen = false;
+  $("#doctorCopyButton").disabled = true;
+  $("#doctorAgainButton").disabled = true;
+  while (doctorState.waiting === token && $("#doctorDialog")?.open && Date.now() - started < 6 * 60 * 1000) {
+    let running = false;
+    try {
+      const task = await api("/api/task");
+      running = Boolean(lane === "mail" ? task.mail?.running : task.running);
+    } catch {
+      running = !seen;
+    }
+    if (running) seen = true;
+    if (!running && (seen || Date.now() - started > 6000)) break;
+    const sec = Math.round((Date.now() - started) / 1000);
+    $("#doctorBody").innerHTML = `<div class="doctor-sum"><strong>${escapeHtml(tr(label))}</strong>
+      <span>${escapeHtml(tr(`${sec}초 · 끝나면 다시 점검해요`))}</span></div>`;
+    await new Promise((resolve) => window.setTimeout(resolve, 1500));
+  }
+  return doctorState.waiting === token && $("#doctorDialog")?.open;
+}
+
+/** 고치기 전 문제와 지금 결과를 견준 줄. 누른 단추의 단계(target)는 결과를 늘 말하고, 다른 문제는 함께 풀린 것만 */
+function doctorCompareHtml(steps) {
+  const before = doctorState.compare?.issues;
+  const target = doctorState.compare?.target;
+  if (!Array.isArray(before) || !before.length) return "";
+  const rows = before
+    .map((item) => {
+      const now = steps.find((s) => s.id === item.id);
+      if (!now || now.status === "skip" || now.status === "run") return "";
+      const solved = now.status === "ok";
+      if (!solved && item.id !== target) return "";
+      return `<li class="${solved ? "ok" : "fail"}"><span class="doctor-mark">${solved ? "✓" : "!"}</span>${escapeHtml(tr(item.title))}
+        <span class="doctor-detail">${escapeHtml(tr(solved ? "해결됐어요" : "아직 그대로예요"))}</span></li>`;
+    })
+    .join("");
+  return rows ? `<div class="doctor-after"><span class="doctor-kicker">${escapeHtml(tr("고친 뒤 다시 봤어요"))}</span><ul>${rows}</ul></div>` : "";
+}
+
+function doctorFixButtons(fixes, stepId = "") {
+  return (fixes || [])
+    .map((fix, at) => `<button class="button compact ${at ? "ghost" : "primary"}" type="button" data-doctor-step="${escapeHtml(stepId)}" data-doctor-fix="${escapeHtml(JSON.stringify(fix))}">${escapeHtml(tr(fix.label))}</button>`)
+    .join("");
+}
+
+function renderDoctor() {
+  const box = $("#doctorBody");
+  const data = doctorState.data || {};
+  const result = !data.running ? data.result : null;
+  const steps = data.steps || [];
+  let head = "";
+  if (!result) {
+    const done = steps.filter((s) => s.status !== "run").length;
+    head = `<div class="doctor-sum"><strong>${escapeHtml(tr("점검하는 중…"))}</strong><span>${escapeHtml(tr(`${done}단계 확인함`))}</span></div>`;
+  } else {
+    const root = steps.find((s) => s.id === result.root);
+    const fixed = (result.fixed || []).map((f) => `<span class="doctor-fixed">${escapeHtml(tr(f))}</span>`).join("");
+    const others = (result.others || []).length;
+    if (root) {
+      head = `<div class="doctor-sum fail">
+        <span class="doctor-kicker">${escapeHtml(tr("가장 먼저 막힌 곳"))}</span>
+        <strong>${escapeHtml(tr(root.title))}</strong>
+        <span>${escapeHtml(tr(root.cause || root.detail))}</span>
+        ${fixed}
+        <div class="doctor-fixes">${doctorFixButtons(root.fixes, root.id)}</div>
+        ${others ? `<span class="doctor-kicker">${escapeHtml(tr(`다른 문제 ${others}개도 아래에 있어요`))}</span>` : ""}
+      </div>`;
+    } else {
+      const warns = steps.filter((s) => s.status === "warn").length;
+      head = `<div class="doctor-sum ok">
+        <strong>${escapeHtml(tr(warns ? "큰 문제는 없어요" : "모두 정상이에요"))}</strong>
+        ${warns ? `<span>${escapeHtml(tr(`살펴볼 것 ${warns}개는 아래에 표시했어요`))}</span>` : ""}
+        ${fixed}
+      </div>`;
+    }
+  }
+  const groups = [];
+  for (const step of steps) {
+    let group = groups.find((g) => g.name === step.group);
+    if (!group) groups.push((group = { name: step.group, steps: [] }));
+    group.steps.push(step);
+  }
+  if (result) head = doctorCompareHtml(steps) + head;
+  const rootId = result?.root;
+  const body = groups.map((g) => `<section class="doctor-group"><h4>${escapeHtml(tr(g.name))}</h4><ul>${g.steps.map((s) => {
+    const open = s.status === "fail" || s.status === "warn";
+    const cause = open && s.cause && s.id !== rootId ? `<span class="doctor-cause">${escapeHtml(tr(s.cause))}</span>` : "";
+    const fixes = open && s.id !== rootId && (s.fixes || []).length ? `<div class="doctor-fixes">${doctorFixButtons(s.fixes, s.id)}</div>` : "";
+    return `<li class="doctor-step ${s.status}"><span class="doctor-mark">${DOCTOR_MARK[s.status] ?? ""}</span>
+      <span class="doctor-title">${escapeHtml(tr(s.title))}<span class="doctor-detail">${escapeHtml(tr(s.detail || ""))}</span></span>${cause}${fixes}</li>`;
+  }).join("")}</ul></section>`).join("");
+  box.innerHTML = head + body;
+  $("#doctorCopyButton").disabled = !data.report;
+  $("#doctorAgainButton").disabled = Boolean(data.running);
+}
+
+async function doctorFix(fix, target = "") {
+  const dialog = $("#doctorDialog");
+  const issues = { target, issues: doctorIssues() };
+  // 설정으로 보내는 고치기: 저장하면 점검 창이 다시 열려 고쳐졌는지 본다 (configForm submit)
+  const leave = () => {
+    doctorState.recheck = { at: Date.now(), issues };
+    dialog?.close();
+  };
+  switch (fix.action) {
+    case "field":
+      leave();
+      jumpToSetting("stAccounts", fix.field);
+      break;
+    case "auto":
+      leave();
+      jumpToSetting("stAuto", fix.field);
+      break;
+    case "ai":
+      leave();
+      jumpToSetting("stAi");
+      break;
+    case "storage":
+      leave();
+      jumpToSetting("stStorage");
+      break;
+    case "google":
+      dialog?.close();
+      $("#googleLoginButton")?.click();
+      break;
+    case "update":
+      dialog?.close();
+      HEALTH_FIX.site.run();
+      break;
+    case "copy":
+      await copyDoctorReport();
+      break;
+    case "retry":
+      runDoctor({ compare: issues });
+      break;
+    case "force-mail":
+      // 막 거절된 계정이라 점검이 일부러 건너뛴 메일 로그인을 한 번 해 본다
+      runDoctor({ force: ["mail"], compare: issues });
+      break;
+    case "server":
+    case "task":
+    case "lms-test": {
+      try {
+        const res = await api("/api/doctor/fix", {
+          method: "POST",
+          body: JSON.stringify({ op: fix.op || fix.action, files: fix.files || [], kind: fix.kind || "", lane: fix.lane || "" }),
+        });
+        showToast(tr(res.message || "고쳤어요."));
+        if (!res.ok) break;
+        if (fix.action === "server") await loadConfig();
+        if (res.lane) {
+          const label = res.lane === "mail" ? "메일을 가져오는 중…" : "LMS 에 로그인해 보는 중…";
+          // 기다림이 도중에 끊겼어도(창을 닫지 않았다면) '0초' 카드에 멈춰 두지 않고 다시 점검한다.
+          // 2026-11-12 개발 서버에서 한 번 그렇게 멈췄다 — 이미 '다시 점검' 이 돌고 있으면 그것을 둔다
+          const waited = await doctorWaitTask(res.lane, label);
+          if (!waited && (!$("#doctorDialog")?.open || doctorState.data?.running)) break;
+        }
+        runDoctor({ compare: issues });
+      } catch (error) {
+        showToast(humanError(error));
+      }
+      break;
+    }
+    default:
+      break;
+  }
+}
+
+async function copyDoctorReport() {
+  const text = doctorState.data?.report || "";
+  if (!text) return;
+  try {
+    await navigator.clipboard.writeText(text);
+    showToast(tr("보고서를 복사했어요. 만든 사람에게 붙여 넣어 보내 주세요."));
+  } catch {
+    showToast(tr("복사하지 못했어요."));
+  }
+}
+
+$("#doctorButton")?.addEventListener("click", openDoctor);
+$("#doctorClose")?.addEventListener("click", () => $("#doctorDialog")?.close());
+$("#doctorAgainButton")?.addEventListener("click", () => runDoctor());
+$("#doctorCopyButton")?.addEventListener("click", copyDoctorReport);
+$("#doctorDialog")?.addEventListener("click", (event) => {
+  if (event.target === event.currentTarget) event.currentTarget.close();
+  const button = event.target.closest("[data-doctor-fix]");
+  if (!button) return;
+  try {
+    doctorFix(JSON.parse(button.dataset.doctorFix), button.dataset.doctorStep || "");
+  } catch {
+    /* 단추 값이 깨졌으면 아무것도 안 한다 */
+  }
+});
+$("#doctorDialog")?.addEventListener("close", () => {
+  window.clearTimeout(doctorState.timer);
+  doctorState.waiting = 0;
+});
+
+/** 설정을 저장한 뒤: 점검에서 설정으로 보낸 고치기였으면 점검 창을 다시 열어 고쳐졌는지 본다 */
+function doctorAfterSettingsSaved() {
+  const pending = doctorState.recheck;
+  doctorState.recheck = null;
+  if (!pending || Date.now() - pending.at > DOCTOR_RECHECK_MS) return;
+  openDoctor({ compare: pending.issues });
+}
 
 
 /* ===== 과목별 교수·조교 =====

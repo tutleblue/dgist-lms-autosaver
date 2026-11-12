@@ -226,6 +226,21 @@
         <div class="whats-new-body" id="whatsNewBody"></div>
       </dialog>
 
+      <!-- 문제 점검 (app.js openDoctor · doctor.py). 서버가 한 말·로그는 화면에 늘어놓지 않고 '보고서 복사' 로만 준다 -->
+      <dialog class="whats-new-dialog doctor-dialog" id="doctorDialog" aria-labelledby="doctorTitle">
+        <div class="whats-new-head">
+          <h2 id="doctorTitle">문제 점검</h2>
+          <button type="button" class="whats-new-close" id="doctorClose" aria-label="닫기">
+            <span class="icon" data-icon="x"></span>
+          </button>
+        </div>
+        <div class="whats-new-body doctor-body" id="doctorBody"></div>
+        <div class="doctor-actions">
+          <button class="button compact ghost" id="doctorCopyButton" type="button" disabled>보고서 복사</button>
+          <button class="button compact" id="doctorAgainButton" type="button" disabled>다시 점검</button>
+        </div>
+      </dialog>
+
       <!-- 앱 안 업데이트: 받기부터 설치까지 이 카드 하나로 보여 준다 (설치 창은 띄우지 않는다) -->
       <dialog class="update-dialog" id="updateDialog" aria-labelledby="updateDialogTitle">
         <img class="update-buddy" id="updateBuddy" src="/img/dalgu/run.png" alt="" />
@@ -1907,6 +1922,14 @@
                   <button class="button compact ghost" id="checkUpdateButton" type="button">다시 확인</button>
                   <button class="button compact primary" id="applyUpdateButton" type="button" hidden>지금 업데이트</button>
                 </div>
+              </div>
+              <!-- 문제 점검: 메일·LMS 가 안 될 때 단계별로 시험해 근본 원인을 찾는다 (doctor.py) -->
+              <div class="st-list-row" id="doctorRow">
+                <div>
+                  <strong>메일이나 동기화가 안 돼요</strong>
+                  <span>인터넷부터 로그인까지 차례로 시험해 원인을 찾아요</span>
+                </div>
+                <button class="button compact primary" id="doctorButton" type="button">문제 점검</button>
               </div>
               <div class="st-list-row">
                 <div>
