@@ -1118,11 +1118,22 @@ async def process_content(page, course_id, content, course_name, downloaded_file
     if leaf_changed:
         leaf_files.extend(extract_body_files(content.get('body', '')))
 
+    # 3) 과제(x-bb-asmt-test-link)의 '과제 지시 사항'에 붙은 파일.
+    #    본문(body)은 비어 있고 파일은 contentHandler.instructions HTML 에 data-bbfile 로 들어 있다.
+    #    attachments API 는 400, assessments API 는 학생에게 403 이라 이것만이 길이다
+    #    (2026-11-11 실측: Academic English R&W 과제 11개 중 7개의 .docx 가 이렇게 빠져 있었다).
+    is_assignment = 'resource/x-bb-asmt' in content_type
+    if is_assignment:
+        seen = {url.split('?')[0] for _, url in leaf_files}
+        for name, url in extract_body_files(content.get('contentHandler', {}).get('instructions', '')):
+            if url.split('?')[0] not in seen:
+                leaf_files.append((name, url))
+
     if leaf_files:
-        # LMS 화면에서 문서(x-bb-document)는 제 이름 아래에 파일을 달고 있다.
+        # LMS 화면에서 문서(x-bb-document)·과제는 제 이름 아래에 파일을 달고 있다.
         # 파일 항목이거나, 문서 이름이 곧 파일 이름인 한 개짜리면 한 칸을 더 두지 않는다.
         leaf_path = folder_path
-        if ('resource/x-bb-document' in content_type and content_title.strip()
+        if (('resource/x-bb-document' in content_type or is_assignment) and content_title.strip()
                 and content_title.strip().lower() not in HIDDEN_FOLDER_TITLES):
             only_stem = (
                 os.path.splitext(leaf_files[0][0])[0].strip().lower()
@@ -1137,7 +1148,7 @@ async def process_content(page, course_id, content, course_name, downloaded_file
                 order=tuple(order) + (position,)
             )
 
-    # 3) 하위 콘텐츠 재귀 (파일 단일 항목은 자식이 없으므로 제외)
+    # 4) 하위 콘텐츠 재귀 (파일 단일 항목은 자식이 없으므로 제외)
     if 'resource/x-bb-file' in content_type:
         return
     try:

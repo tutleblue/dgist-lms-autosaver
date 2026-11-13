@@ -4085,31 +4085,31 @@ tbody tr:hover {
 }
 
 #healthCause { white-space: pre-line; }
-/* 동기화 실패 띠: 실패할 때 남은 로그 (앱을 다시 켜도 health.json 의 failures[kind].tail 에 남는다) */
-.health-log {
-  margin-top: 6px;
-  font-size: 11.5px;
-  color: var(--text-faint);
+/* 인터넷·학교 서버에 닿지 않아 실패한 것은 연결되면 저절로 다시 한다 → 붉은 큰 띠 대신 한 줄로 조용히 (2026-11-10 사용자:
+   '단순히 인터넷이 안 돼서 안 된 것을 대문짝만하게 쓰면 안 된다') */
+/* 고치기·다시 해 보기·나중에·자세히 복사 — 네 줄로 세우면 띠가 너무 길어 두 줄 두 칸으로 */
+.health-banner .alert-actions { flex-direction: row; flex-wrap: wrap; justify-content: flex-end; max-width: 230px; }
+/* 좁은 화면: 단추가 글을 한 글자 폭으로 밀어냈다(375px 실측) → 단추는 글 아래 한 줄로 */
+@media (max-width: 760px) {
+  .health-banner .alert-body { flex-basis: calc(100% - 50px); }
+  .health-banner .alert-actions { max-width: none; flex-basis: 100%; justify-content: flex-start; }
 }
-.health-log summary {
-  cursor: pointer;
-  width: fit-content;
+.health-banner.quiet {
+  align-items: center;
+  gap: 10px;
+  padding: 7px 12px;
+  background: transparent;
+  border-color: var(--border);
 }
-.health-log pre {
-  margin: 6px 0 0;
-  max-height: 180px;
-  overflow: auto;
-  padding: 8px 10px;
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--text) 6%, transparent);
-  color: var(--text-soft);
-  font-family: "Cascadia Code", Consolas, "SF Mono", Menlo, monospace;
-  font-size: 11px;
-  line-height: 1.45;
-  white-space: pre-wrap;
-  word-break: break-all;
-  user-select: text;
-}
+.health-banner.quiet .alert-icon,
+.health-banner.quiet #healthRetryButton,
+.health-banner.quiet #healthLaterButton,
+.health-banner.quiet #healthFixButton { display: none; }
+.health-banner.quiet .alert-body { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.health-banner.quiet .alert-body strong { display: inline; margin: 0; font-size: 12.5px; font-weight: 600; color: var(--text-soft); }
+.health-banner.quiet .alert-body p { font-size: 12px; color: var(--text-faint); }
+.health-banner.quiet .alert-actions { flex-direction: row; }
+.health-banner.quiet .alert-actions .button { padding: 3px 9px; font-size: 11.5px; }
 
 .alert-actions {
   display: flex;
@@ -4782,7 +4782,7 @@ tbody tr:hover {
 .read-body a { color: var(--accent-strong); overflow-wrap: anywhere; }
 
 /* 작성 pane */
-#mailComposePane form { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+#mailComposePane #composeForm { display: flex; flex-direction: column; height: 100%; min-height: 0; }
 .compose-scroll {
   flex: 1;
   overflow-y: auto;
@@ -5225,6 +5225,26 @@ tbody tr:hover {
 }
 .catalog-add:hover { filter: brightness(0.96); }
 .catalog-empty { font-size: 12px; color: var(--text-faint); padding: 16px 10px; margin: 0; }
+/* '시간표 편집' 맨 위: 이번 학기 내 LMS 과목 (/api/timetable/lms-plan).
+   긴 과목명·교수 이름의 글자 폭이 옆 패널 칸(300px)을 403px 로 밀어 검색 칸까지 잘렸다(실측) → 폭은 패널을 따른다 */
+.lms-tt { contain: inline-size; }
+.lms-tt-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 8px 8px 2px; font-size: 11.5px; font-weight: 600; color: var(--text-muted);
+}
+.lms-tt-head .button { padding: 3px 9px; font-size: 11.5px; }
+.lms-tt-badge {
+  flex: none; font-size: 10.5px; color: var(--text-faint); padding: 3px 7px;
+  border: 1px solid var(--border); border-radius: 999px; white-space: nowrap;
+}
+.lms-tt-badge.warn { color: var(--warning, #b7791f); border-color: currentColor; }
+.lms-tt-end { height: 1px; background: var(--border); margin: 6px 8px 4px; }
+.tt-auto-note {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  margin: 6px 0 0; font-size: 12px; color: var(--accent-strong);
+}
+.tt-auto-note[hidden] { display: none; }
+.tt-auto-note .button { padding: 2px 9px; font-size: 11.5px; }
 
 @media (prefers-reduced-motion: reduce) {
   .metrics-stage.peek-open .peek-row { animation: none; }
@@ -7907,6 +7927,65 @@ a:hover { color: var(--accent); }
 .wn-entry h4 { margin: 14px 0 6px; font-size: 12px; color: var(--text-faint); letter-spacing: 0.02em; }
 .wn-entry ul { margin: 0; padding-left: 18px; }
 .wn-entry li { font-size: 13.5px; line-height: 1.7; color: var(--text); }
+
+/* ===== 문제 점검 (doctor.py) ===== */
+.doctor-dialog { width: min(600px, calc(100vw - 32px)); }
+.doctor-body { display: flex; flex-direction: column; gap: 14px; padding-top: 14px; }
+.doctor-wait { margin: 18px 0; color: var(--text-soft); font-size: 13.5px; }
+.doctor-sum {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface-soft);
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+.doctor-sum > strong { font-size: 14.5px; }
+.doctor-sum.ok { background: var(--green-soft); border-color: color-mix(in srgb, var(--green) 30%, transparent); }
+.doctor-sum.fail { background: var(--red-soft); border-color: color-mix(in srgb, var(--red) 30%, transparent); }
+.doctor-sum .doctor-kicker { font-size: 11.5px; font-weight: 700; color: var(--text-faint); letter-spacing: 0.02em; }
+.doctor-sum .doctor-fixed { color: var(--green); font-weight: 600; }
+.doctor-group h4 { margin: 0 0 4px; font-size: 12px; color: var(--text-faint); letter-spacing: 0.02em; }
+.doctor-group ul { margin: 0; padding: 0; list-style: none; }
+.doctor-step { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 2px 8px; padding: 5px 0; font-size: 13px; }
+.doctor-step .doctor-mark {
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  background: var(--text-faint);
+}
+.doctor-step.ok .doctor-mark { background: var(--green); }
+.doctor-step.warn .doctor-mark { background: var(--amber); }
+.doctor-step.fail .doctor-mark { background: var(--red); }
+.doctor-step.skip .doctor-mark { background: transparent; color: var(--text-faint); border: 1px dashed var(--border-strong); }
+.doctor-step.run .doctor-mark { background: transparent; border: 2px solid var(--border-strong); border-top-color: var(--accent); animation: doctor-spin 0.8s linear infinite; }
+@keyframes doctor-spin { to { transform: rotate(360deg); } }
+.doctor-step .doctor-title { min-width: 0; }
+.doctor-step .doctor-detail { color: var(--text-faint); margin-left: 6px; overflow-wrap: anywhere; }
+.doctor-step .doctor-cause { grid-column: 2; color: var(--text-soft); line-height: 1.5; }
+.doctor-fixes { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.doctor-step .doctor-fixes { grid-column: 2; }
+/* 고친 뒤 다시 본 결과 (app.js doctorCompareHtml) */
+.doctor-after { border: 1px solid var(--border); border-radius: 12px; padding: 10px 14px; display: flex; flex-direction: column; gap: 6px; }
+.doctor-after .doctor-kicker { font-size: 11.5px; font-weight: 700; color: var(--text-faint); letter-spacing: 0.02em; }
+.doctor-after ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; }
+.doctor-after li { display: flex; align-items: baseline; gap: 8px; font-size: 13px; flex-wrap: wrap; }
+.doctor-after .doctor-mark { width: 16px; height: 16px; border-radius: 50%; display: inline-grid; place-items: center; flex: none;
+  font-size: 10.5px; font-weight: 800; color: #fff; align-self: center; }
+.doctor-after li.ok .doctor-mark { background: var(--green); }
+.doctor-after li.fail .doctor-mark { background: var(--amber); }
+.doctor-after li.ok .doctor-detail { color: var(--green); font-weight: 600; }
+.doctor-after li.fail .doctor-detail { color: var(--text-soft); }
+.doctor-actions { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 22px 16px; border-top: 1px solid var(--border); }
 
 /* ===== 메일함 안 새로고침 ===== */
 .mail-refresh {
@@ -11792,4 +11871,455 @@ html:has(.lock-screen[open]) { overflow: hidden; }
   html[data-locked] .lock-screen, .lock-screen[open] { animation: none; }
   .lock-dots.wrong { animation: none; }
   .lock-screen.leaving { transition: none; }
+}
+
+/* ===== AI 메일 옆 창 (2026-11-09) =====
+   메일 쓰기 오른쪽에 붙는 대화 창. 넓으면 본문 옆에 나란히, 좁으면(쓰기 칸 860px 아래) 본문 위에 겹쳐 뜬다. */
+#mailComposePane { position: relative; }
+#mailComposePane.ai-open:not([hidden]) { flex-direction: row; }
+#mailComposePane.ai-open > form { flex: 1; min-width: 0; }
+/* 옆 창이 열려 있으면 모델은 옆 창 머리에서 고른다 (위 막대의 같은 단추는 숨김) */
+#mailComposePane.ai-open #aiDraftToggle { display: none !important; }
+/* 옆 창 여닫는 단추: 크롬 확장 단추처럼 테두리·글자 없이 로고만 (2026-11-09 사용자: 글자 단추가 짜친다) */
+.compose-bar > .mail-ai-toggle {
+  width: 36px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+.mail-ai-toggle:hover { background: var(--surface-soft); }
+.mail-ai-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.mail-ai-toggle .ai-logo { width: 20px; height: 20px; vertical-align: 0; }
+#mailAiToggle[aria-pressed="true"] { background: var(--accent-soft); }
+.mail-ai {
+  flex: none;
+  width: 360px;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--border);
+  background: var(--surface-soft);
+}
+@container mailmain (max-width: 860px) {
+  .mail-ai {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 30;
+    width: min(360px, 94%);
+    box-shadow: -14px 0 34px -20px rgba(0, 0, 0, 0.5);
+  }
+}
+/* 2026-11-10 사용자: '더 깔끔하게'. 머리 밑줄·카드 테두리·그림자를 걷고, 대화 글은 말풍선 하나(내 말)와 맨 글(AI)로만 나눈다 */
+.mail-ai-head { display: flex; align-items: center; gap: 2px; padding: 10px 8px 4px 10px; }
+.mail-ai-head .icon-button {
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--text-faint);
+}
+.mail-ai-head .icon-button:hover { background: var(--surface); color: var(--text); }
+.mail-ai-head .icon-button .icon { width: 16px; height: 16px; }
+.mail-ai-model {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  margin-right: auto;
+  padding: 5px 9px;
+  border: 0;
+  border-radius: 9px;
+  background: none;
+  font: 600 13px var(--font-sans);
+  cursor: pointer;
+}
+.mail-ai-model:hover { background: var(--surface); }
+.mail-ai-model span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mail-ai-model .ai-btn-chev { flex: none; font-size: 10px; color: var(--text-faint); }
+.mail-ai-model .icon { width: 16px; height: 16px; color: var(--accent); }
+.mail-ai-log {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 12px 16px 14px;
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+.mail-ai-form {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  margin: 0 12px 12px;
+  padding: 7px 7px 7px 13px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface);
+}
+.mail-ai-form:focus-within { border-color: var(--border-strong); }
+.mail-ai-form textarea,
+.mail-ai-form textarea:focus {
+  flex: 1;
+  min-width: 0;
+  min-height: 22px;
+  max-height: 160px;
+  padding: 4px 0;
+  border: 0;
+  border-radius: 0;
+  outline: none;
+  background: none;
+  box-shadow: none;
+  resize: none;
+  font: 13.5px/1.5 var(--font-sans);
+}
+.mail-ai-send {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 10px;
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+}
+.mail-ai-send:disabled { opacity: 0.4; cursor: default; }
+.mail-ai-send .icon { width: 15px; height: 15px; }
+
+/* 대화 글: 내 말(고른 답 포함)만 말풍선 */
+.mai-user {
+  align-self: flex-end;
+  max-width: 85%;
+  padding: 8px 12px;
+  border-radius: 16px 16px 4px 16px;
+  background: var(--surface);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.mai-think { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-soft); }
+.mai-think .ai-logo { width: 16px; height: 16px; }
+.mai-time { margin-left: auto; font-style: normal; font-size: 12px; color: var(--text-faint); font-variant-numeric: tabular-nums; }
+.mai-err { padding: 8px 11px; border-radius: 10px; background: var(--red-soft); color: var(--red); font-size: 13px; }
+
+/* 되묻기: 질문 한 줄 + 보기 줄. 상자 없이 */
+.mai-ask { display: flex; flex-direction: column; gap: 8px; outline: none; }
+.mai-ask-top { display: flex; align-items: baseline; gap: 10px; }
+.mai-ask-q { flex: 1; margin: 0; font-size: 14px; font-weight: 650; line-height: 1.5; }
+.mai-ask-step { flex: none; font-size: 11.5px; color: var(--text-faint); font-variant-numeric: tabular-nums; }
+.mai-opts { display: flex; flex-direction: column; gap: 4px; }
+.mai-opt,
+.mai-own {
+  box-sizing: border-box;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: none;
+  color: var(--text);
+  font: 13px/1.45 var(--font-sans);
+  text-align: left;
+  cursor: pointer;
+}
+.mai-opt:hover,
+.mai-opt:focus-visible { border-color: var(--border-strong); background: var(--surface); outline: none; }
+.mai-opt kbd,
+.mai-own kbd {
+  flex: none;
+  width: 14px;
+  border: 0;
+  background: none;
+  font: 600 12px var(--font-sans);
+  color: var(--text-faint);
+  text-align: center;
+}
+.mai-opt:hover kbd { color: var(--accent-strong); }
+.mai-own { padding: 3px 4px 3px 10px; cursor: text; }
+.mai-own:focus-within { border-color: var(--border-strong); background: var(--surface); }
+.mai-own input,
+.mai-own input:focus { flex: 1; min-width: 0; height: 30px; padding: 0; border: 0; outline: none; background: none; box-shadow: none; font: inherit; }
+.mai-own button { flex: none; width: 28px; height: 28px; border: 0; border-radius: 8px; background: none; color: var(--text-faint); cursor: pointer; }
+.mai-own button:hover { background: var(--accent); color: #fff; }
+.mai-skip { align-self: flex-start; padding: 2px 4px; border: 0; border-radius: 6px; background: none; color: var(--text-faint); font: 12px var(--font-sans); cursor: pointer; }
+.mai-skip:hover { color: var(--text); text-decoration: underline; text-underline-offset: 3px; }
+
+/* 다 채웠어요 · 고쳤어요: 상자 없이 한 줄 머리 + 받는 사람·참조·제목 */
+.mai-done { display: flex; flex-direction: column; gap: 8px; }
+.mai-done-head { display: flex; align-items: center; gap: 7px; font-size: 13.5px; }
+.mai-done-head small { margin-left: auto; font-size: 11.5px; color: var(--text-faint); }
+.mai-check { flex: none; width: 18px; height: 18px; display: grid; place-items: center; border-radius: 50%; background: var(--green); color: #fff; }
+.mai-check .icon { width: 11px; height: 11px; stroke-width: 3.2; }
+.mai-done dl { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; margin: 0; padding-left: 25px; font-size: 12.5px; }
+.mai-done dt { color: var(--text-faint); line-height: 22px; }
+.mai-done dd { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; min-width: 0; margin: 0; line-height: 1.5; overflow-wrap: anywhere; }
+.mai-who { display: inline-flex; align-items: baseline; gap: 4px; padding: 1px 9px; border-radius: 999px; background: var(--surface); }
+.mai-who small { font-size: 11px; color: var(--text-faint); }
+.mai-miss { color: var(--amber); }
+.mai-note { margin: 0; padding-left: 25px; font-size: 12.5px; line-height: 1.5; color: var(--text-soft); }
+.mai-tip { margin: 0; padding-left: 25px; font-size: 12.5px; color: var(--amber); }
+
+/* 처음 화면: 물음 한 줄 + 예시 */
+.mai-empty { display: flex; flex-direction: column; gap: 12px; margin: auto 0; padding: 4px 0; }
+.mai-hello { display: flex; align-items: center; gap: 9px; font-size: 15.5px; }
+.mai-hello .ai-logo,
+.mai-hello .icon { width: 20px; height: 20px; color: var(--accent); }
+.mai-empty .button { align-self: flex-start; }
+.mai-examples { display: flex; flex-direction: column; gap: 2px; }
+.mai-example {
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  color: var(--text-soft);
+  font: 13px/1.45 var(--font-sans);
+  text-align: left;
+  cursor: pointer;
+}
+.mai-example:hover { background: var(--surface); color: var(--text); }
+/* 답장이면 무엇에 답하는지: 보낸 사람·제목 한 줄 + 회신을 바라는 문장(왼쪽 줄 인용) */
+.mai-reply { display: flex; flex-direction: column; gap: 5px; min-width: 0; padding: 0 10px; }
+.mai-reply-of { display: flex; align-items: center; gap: 7px; min-width: 0; font-size: 12.5px; color: var(--text-soft); }
+.mai-reply-of .icon { flex: none; width: 14px; height: 14px; color: var(--text-faint); }
+.mai-reply-of span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mai-reply-of b { font-weight: 600; color: var(--text); }
+.mai-reply-ask {
+  display: -webkit-box;
+  margin: 0 0 0 6px;
+  padding-left: 13px;
+  overflow: hidden;
+  border-left: 2px solid var(--border-strong);
+  color: var(--text-soft);
+  font-size: 12.5px;
+  line-height: 1.5;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+}
+
+/* 쓰기 칸의 답장 인용: 앱 안에서는 흐리고 작게, 처음엔 머리줄 한 줄만(받는 사람에게는 원문 전체 + 왼쪽 줄이 간다).
+   머리줄 끝의 '원문 보기' 는 data-toggle 글(보내는 글에서는 richHtml 이 뗀다). 누르면 펴고 접는다(bindQuoteGuard) */
+#composeRich [data-quote] { color: var(--text-faint); font-size: 13px; line-height: 1.65; cursor: default; user-select: text; }
+#composeRich [data-quote]:not([data-open]) > blockquote { display: none; }
+#composeRich [data-quote] > blockquote { color: var(--text-soft); border-left-color: var(--border-strong) !important; }
+#composeRich [data-quote] > div[data-toggle] { cursor: pointer; }
+#composeRich [data-quote] > div[data-toggle]::after {
+  content: attr(data-toggle);
+  display: inline-block;
+  margin-left: 8px;
+  padding: 0 9px;
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text-soft);
+  font-size: 12px;
+  line-height: 20px;
+  vertical-align: 1px;
+}
+#composeRich [data-quote] > div[data-toggle]:hover::after { color: var(--text); }
+
+/* 고친 부분만 흘릴 때: [앞 글 + 흘리는 글][깜빡이는 막대][뒤 글] */
+.ai-typing.split::after { display: none; }
+.ai-caret {
+  display: inline-block;
+  width: 2px;
+  height: 1.05em;
+  margin: 0 1px;
+  vertical-align: -0.15em;
+  background: var(--accent);
+  animation: aiCaret 1s steps(1) infinite;
+}
+
+/* ===== 끌어 고른 부분 AI 로 고치기 (2026-11-09) ===== */
+.sel-ai { position: fixed; z-index: 320; font-size: 13px; }
+.sel-ai-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 7px 5px 9px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: 0 8px 22px -10px rgba(0, 0, 0, 0.4);
+  font: 600 12.5px var(--font-sans);
+  cursor: pointer;
+}
+.sel-ai-pill:hover { border-color: var(--accent); color: var(--accent-strong); }
+.sel-ai-pill .icon { width: 14px; height: 14px; color: var(--accent); }
+.sel-ai-pill kbd { padding: 0 4px; border: 1px solid var(--border); border-radius: 5px; font: 600 10.5px var(--font-sans); color: var(--text-faint); }
+.sel-ai.open {
+  width: min(380px, calc(100vw - 16px));
+  box-sizing: border-box;
+  padding: 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: 0 14px 36px -14px rgba(0, 0, 0, 0.45);
+}
+.sel-ai-form { display: flex; align-items: center; gap: 8px; padding-left: 4px; }
+.sel-ai-form input,
+.sel-ai-form input:focus { flex: 1; min-width: 0; height: 32px; padding: 0 2px; border: 0; outline: none; background: none; box-shadow: none; font: 13.5px var(--font-sans); }
+.sel-ai-go { flex: none; width: 28px; height: 28px; border: 0; border-radius: 8px; background: var(--accent); color: #fff; cursor: pointer; }
+.sel-ai-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; padding-top: 7px; border-top: 1px solid var(--border); }
+.sel-ai-chip { padding: 3px 9px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface-soft); color: var(--text-soft); font: 12px var(--font-sans); cursor: pointer; }
+.sel-ai-chip:hover { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-strong); }
+.sel-ai.busy {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px 6px 11px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: 0 8px 22px -10px rgba(0, 0, 0, 0.4);
+  color: var(--accent-strong);
+  font-size: 12.5px;
+}
+.sel-ai-x { padding: 2px 6px; border: 0; border-radius: 6px; background: none; color: var(--text-faint); font: 12px var(--font-sans); cursor: pointer; }
+.sel-ai-x:hover { background: var(--surface-soft); color: var(--text); }
+/* 고른 자리(글에는 손대지 않고 칠만 한다): 칸에 적는 동안·AI 가 고치는 동안에도 어디인지 보이게 */
+::highlight(ai-sel) { background-color: rgba(192, 103, 74, 0.26); }
+@media (prefers-reduced-motion: reduce) { .ai-caret { animation: none; } }
+
+/* ===== 답장할 메일 (2026-11-10) — app.js '답장할 메일' =====
+   대시보드 알림(#replyNudge) · 메일 줄/카드의 꼬리표(.reply-tag) · 읽기 창 위 띠(#readReplyAsk) · 빠른 거르기 '답장할' */
+.mail-quick { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.mail-quick-item.has-reply strong { color: var(--accent-strong); }
+
+.reply-tag {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1.5;
+  color: var(--accent-strong);
+  background: var(--accent-soft);
+  border-radius: 999px;
+  padding: 1px 7px 1px 5px;
+  white-space: nowrap;
+}
+.reply-tag .icon { width: 11px; height: 11px; }
+
+.read-reply-ask {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 18px;
+  padding: 10px 12px 10px 14px;
+  border: 1px solid var(--accent-soft);
+  background: color-mix(in srgb, var(--accent-soft) 55%, transparent);
+  border-radius: var(--radius-sm);
+}
+.read-reply-ask > .icon { flex: none; width: 17px; height: 17px; color: var(--accent-strong); }
+.rra-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.rra-text strong { font-size: 13px; font-weight: 650; color: var(--text); }
+.rra-text span { font-size: 12.5px; line-height: 1.5; color: var(--text-soft); overflow-wrap: anywhere; }
+.rra-actions { flex: none; display: flex; gap: 6px; }
+.read-reply-ask.off { background: var(--surface-soft); border-color: var(--border); padding-block: 6px; }
+.read-reply-ask.off > .icon { color: var(--text-faint); }
+.read-reply-ask.off .rra-text strong { font-weight: 500; color: var(--text-faint); }
+
+@media (max-width: 720px) {
+  .read-reply-ask { flex-wrap: wrap; }
+  .rra-actions { width: 100%; justify-content: flex-end; }
+}
+/* 답장할 메일 알림 (#replyNudge) — 대시보드에 올 때 오른쪽 아래에 잠깐 떴다가 사라진다. 토스트(가운데 아래)와 겹치지 않는 자리 */
+.reply-nudge {
+  position: fixed;
+  right: 22px;
+  bottom: 22px;
+  z-index: 96;
+  width: min(360px, calc(100vw - 32px));
+  padding: 12px 12px 12px 16px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 14px 36px -8px rgba(0, 0, 0, 0.22), 0 2px 8px rgba(0, 0, 0, 0.08);
+  opacity: 0;
+  transform: translateY(14px);
+  transition: opacity 0.22s ease, transform 0.22s ease;
+}
+.reply-nudge.visible { opacity: 1; transform: none; }
+.rn-head { display: flex; align-items: center; gap: 8px; }
+.rn-head > .icon { flex: none; width: 17px; height: 17px; color: var(--accent-strong); }
+.rn-title { flex: 1; min-width: 0; font-size: 13.5px; font-weight: 650; }
+.rn-close {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  margin: -4px -2px -4px 0;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  color: var(--text-faint);
+  cursor: pointer;
+}
+.rn-close:hover { background: var(--surface-soft); color: var(--text); }
+.rn-close .icon { width: 15px; height: 15px; }
+.rn-body { display: flex; flex-direction: column; margin: 6px 0 10px; }
+.rn-mail {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: calc(100% + 12px);
+  margin: 0 -6px;
+  padding: 6px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.rn-mail:hover { background: var(--surface-soft); }
+.rn-mail:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.rn-line { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.rn-from { font-size: 13px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rn-when { margin-left: auto; flex: none; font-size: 11.5px; color: var(--text-faint); }
+.rn-subject { font-size: 12.5px; color: var(--text-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rn-ask {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.rn-more {
+  align-self: flex-start;
+  margin-top: 2px;
+  padding: 3px 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--accent-strong);
+  cursor: pointer;
+}
+.rn-more:hover { text-decoration: underline; }
+.rn-actions { display: flex; justify-content: flex-end; gap: 6px; }
+/* 휴대폰 폭: 아래 탭바 위로 올리고 양옆을 채운다 */
+@media (max-width: 760px) {
+  .reply-nudge { left: 12px; right: 12px; width: auto; bottom: calc(var(--tabbar-h, 64px) + 12px + env(safe-area-inset-bottom, 0px)); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .reply-nudge { transform: none; transition: opacity 0.15s linear; }
 }

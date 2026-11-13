@@ -118,6 +118,8 @@ def collect() -> list[str]:
     strings |= html_strings((web / "index.html").read_text(encoding="utf-8"))
     strings |= js_strings((web / "app.js").read_text(encoding="utf-8"))
     strings |= py_messages((ROOT / "web_ui.py").read_text(encoding="utf-8"))
+    # 문제 점검의 단계 이름·까닭·단추 글자는 doctor.py 가 보낸다
+    strings |= py_messages((ROOT / "doctor.py").read_text(encoding="utf-8"))
     # 로그·정규식·경로처럼 화면에 안 나오는 것은 뺀다
     drop = re.compile(r"^[\[\(]?[가-힣]+\]$|\\[dswb]|^\^|[가-힣]\|[가-힣]|^\s*$")
     return sorted(s for s in strings if not drop.search(s) and not is_code(s) and len(s) <= 300)
@@ -129,12 +131,21 @@ def collect() -> list[str]:
 #   - 파일 이름·캘린더(.ics) 내용·정규식 조각: 화면 문구가 아니다
 IGNORE = {
     "(월)", "(화)", "(수)", "(목)", "(금)", "(토)", "(일)",
+    # doctor.py 안에서만 쓰는 것: 한글 찾는 정규식·단계 이름 끝말 비교·빈자리 둘
+    "[ᄀ-ᇿ㄰-㆏가-힣]", "[ᄀ-ᇿ㄰-㆏가-힣]", "닿는지", "{0}{1}",
     "{0}을 {1}", "[{0}] {1}", "가",
     "-비밀번호포함", "Daling-설정-{0}{1}.json",
     "붕어빵 강의자료", "붕어빵 파일 정리",  # 1.12.52 까지 만든 사용자 폴더 이름(web_ui 가 있으면 계속 쓴다)
     "DESCRIPTION:{0} 마감 하루 전", "X-WR-CALNAME:DGIST 과제 마감",
     "<[^>]*>|\\(today\\)|\\[today\\]|오늘",
     'title="LMS 제출 페이지 열기">제출하러 가기',
+    # AI 메일 쓰기(web_ui.mail_ai_*)가 AI 에게만 보내는 낱말·줄·정규식 — 화면에 나오지 않는다 (2026-11-09)
+    "(학생이 건너뜀 — 알아서 정하거나 [ ] 로 비움)", "- {0} · {1} · 마감 {2}", "[가-힣A-Za-z]{0}", "[가-힣]", "월화수목금토일", "⟦여기⟧",
+    "결석", "내일", "모레", "보내", "보내줘", "부탁", "수업", "시험", "써", "써줘", "연락", "이번", "지난", "질문", "학교", "내 과목", "조직도",
+    "주고받은 메일", "직원",
+    # 메일 제목·답장 인용 머리줄에 들어가는 글(받는 사람에게 가는 글이라 화면 언어로 바꾸지 않는다) (2026-11-11)
+    "[{0} {1}분반]", "일월화수목금토",
+    "올림", "드림",  # 메일 본문 서명 낱말(web_ui._mail_ai_body) — 화면 문구가 아니다
 }
 
 

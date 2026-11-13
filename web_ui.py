@@ -32,6 +32,7 @@ from urllib.parse import parse_qs, quote, urlencode, urlparse
 
 import demo_mode
 import autostart
+import background_sync
 import secret_store
 
 
@@ -431,13 +432,20 @@ def write_config(workspace: UserWorkspace, payload: dict[str, Any]) -> dict[str,
     )
     if "hidePastEmails" in payload:
         values["EMAIL_HIDE_PAST"] = bool(payload.get("hidePastEmails"))
-    # 알림 스위치 (기본은 켜짐)
-    if "notifyDeadlines" in payload:
-        values["NOTIFY_DEADLINES"] = bool(payload.get("notifyDeadlines"))
-    if "notifyNewFiles" in payload:
-        values["NOTIFY_NEW_FILES"] = bool(payload.get("notifyNewFiles"))
     else:
         values["EMAIL_HIDE_PAST"] = bool(existing.get("EMAIL_HIDE_PAST", False))
+    # 알림 스위치 (기본은 켜짐). 스위치 하나만 보낸 저장(누르는 즉시 저장)이 다른 스위치를 기본값으로 되돌리지 않게
+    # 보내지 않은 것은 있던 값을 그대로 둔다 (예전엔 '새 자료 알림' 을 누르면 꺼 둔 '마감 알림' 이 다시 켜졌다)
+    for flag, key in (("notifyDeadlines", "NOTIFY_DEADLINES"), ("notifyNewFiles", "NOTIFY_NEW_FILES")):
+        if flag in payload:
+            values[key] = bool(payload.get(flag))
+        elif key in existing:
+            values[key] = existing.get(key) is not False
+    # 앱을 꺼 둬도 하루 한 번 동기화 (background_sync, 기본 켜짐)
+    if "backgroundSync" in payload:
+        values["BACKGROUND_SYNC"] = bool(payload.get("backgroundSync"))
+    elif "BACKGROUND_SYNC" in existing:
+        values["BACKGROUND_SYNC"] = existing.get("BACKGROUND_SYNC") is not False
 
     # 명시적 삭제 요청 (저장된 비밀 값 제거)
     cleared = [key for flag, key in (("clearGeminiKey", "GEMINI_API_KEY"), ("clearEmailPassword", "EMAIL_PASSWORD"),
@@ -1879,12 +1887,45 @@ def _mark_events(emails: list[dict[str, Any]], config: dict[str, Any], school_ev
                 g["mail"]["schoolEventId"] = ev.get("id")
 
 
+# 답장할 메일(email_reader.replies_needed)에서 뺄 메일: 학생이 '답장 안 해도 돼요' 한 것(dismissed)과
+# 이 앱으로 답장을 보낸 것(replied — 보낸 편지함 사본은 다음 메일 새로고침 때 오므로 그사이에도 사라지게). 60일 지나면 지운다.
+_reply_state_lock = threading.Lock()
+
+
+def _reply_state_path(workspace: UserWorkspace) -> Path:
+    return workspace.root / "reply_state.json"
+
+
+def read_reply_state(workspace: UserWorkspace) -> dict[str, dict[str, str]]:
+    data = read_json(_reply_state_path(workspace), {})
+    data = data if isinstance(data, dict) else {}
+    return {key: dict(data.get(key) or {}) if isinstance(data.get(key), dict) else {} for key in ("dismissed", "replied")}
+
+
+def mark_reply_state(workspace: UserWorkspace, kind: str, mail_ids: list[str], on: bool = True) -> None:
+    from datetime import timedelta
+
+    now = datetime.now()
+    cutoff = (now - timedelta(days=60)).isoformat(timespec="seconds")
+    with _reply_state_lock:
+        state = read_reply_state(workspace)
+        for mail_id in mail_ids:
+            if on:
+                state[kind][mail_id] = now.isoformat(timespec="seconds")
+            else:
+                state[kind].pop(mail_id, None)
+        for key in state:
+            state[key] = {k: v for k, v in state[key].items() if str(v) >= cutoff}
+        atomic_write_text(_reply_state_path(workspace), json.dumps(state, ensure_ascii=False, indent=2))
+
+
 def get_emails(workspace: UserWorkspace) -> dict[str, Any]:
     stamp = (
         str(workspace.emails_log),
         _file_stamp(workspace.emails_log),
         _file_stamp(workspace.config_path),
         _file_stamp(_school_events_path(workspace)),  # 학교 행사가 새로 오면 메일 행사 중복도 다시 본다
+        _file_stamp(_reply_state_path(workspace)),
     )
     if _emails_cache.get("key") == stamp and _emails_cache.get("data") is not None:
         return _emails_cache["data"]
@@ -1916,6 +1957,24 @@ def get_emails(workspace: UserWorkspace) -> dict[str, Any]:
             item["snippet"] = strip_css_text(body)[:300]
         elif "&" in snippet and re.search(r"&(?:[a-z]+|#\d+);", snippet):
             item["snippet"] = html.unescape(snippet).replace("\xa0", " ")
+    # 답장할 메일: 화면은 replyAsk(회신을 바라는 문장)가 있는 메일을 대시보드·'답장할 메일' 거르기에 보인다
+    try:
+        import email_reader
+
+        reply_state = read_reply_state(workspace)
+        raw_config = read_json(workspace.config_path, {})
+        me = str(raw_config.get("SCHOOL_EMAIL") or "") if isinstance(raw_config, dict) else ""
+        need = email_reader.replies_needed([m for m in emails if isinstance(m, dict)], me, skip=set(reply_state["replied"]))
+        for item in listed:
+            info = need.get(str(item.get("id")))
+            if info:
+                item["replyAsk"] = info["ask"]
+                item["replyDays"] = info["days"]
+                # '안 해도 돼요' 한 메일도 문장은 준다 — 읽기 창에서 '다시 넣기' 로 되돌릴 수 있게
+                if str(item.get("id")) in reply_state["dismissed"]:
+                    item["replyDismissed"] = True
+    except Exception as exc:
+        print(f"[메일] 답장할 메일을 고르지 못했습니다: {exc}")
     result = {
         "updatedAt": data.get("updatedAt"),
         "briefing": data.get("briefing", ""),
@@ -2667,6 +2726,29 @@ def note_outside_change() -> None:
     OUTSIDE_CHANGES["n"] += 1
 
 
+def _app_version() -> str:
+    try:
+        return (PROJECT_ROOT / "VERSION").read_text(encoding="utf-8").strip()
+    except OSError:
+        return ""
+
+
+def _os_label() -> str:
+    import platform
+
+    return f"{platform.system()} {platform.release()} {platform.machine()}".strip()
+
+
+def _doctor_last(workspace: UserWorkspace) -> str:
+    try:
+        import doctor
+
+        report = doctor.last_report(workspace)
+        return report.replace("Daling 점검 보고서", f"Daling 점검 보고서 (버전 {_app_version()})", 1) if report else ""
+    except Exception:
+        return ""
+
+
 def get_health(workspace: UserWorkspace) -> dict[str, Any]:
     """마지막 성공 시각과 최근 실패를 알려 준다 (조용한 실패 방지)."""
     data = read_json(workspace.health_path, {})
@@ -2726,12 +2808,11 @@ def get_health(workspace: UserWorkspace) -> dict[str, Any]:
         out["authPaused"] = sorted(auth)
         # 학교 서버는 맞는 비밀번호도 몇 시간씩 거절하다 풀릴 때가 있다(9/27, 10/12 13:44~16:02).
         # 곧장 '비밀번호를 확인하라' 고 하면 멀쩡한 비밀번호를 의심하게 되므로, 2시간 뒤 다시 해 본다는 것을 먼저 알린다.
+        # 서버가 한 말은 화면에 늘어놓지 않고 '자세히 복사' 로만 준다 (authReason, 2026-11-10 사용자: 오류 글은 짧게)
         reasons = [str(v.get("reason")) for v in auth.values() if isinstance(v, dict) and v.get("reason")]
-        said = f" (서버: {reasons[0]})" if reasons else ""
-        out["warning"] = (
-            f"{who} 서버가 로그인을 거절했어요{said}. 2시간 뒤 자동으로 다시 해 볼게요. "
-            "비밀번호를 바꿨다면 설정에서 새 비밀번호를 넣어 주세요."
-        )
+        if reasons:
+            out["authReason"] = reasons[0]
+        out["warning"] = f"{who} 서버가 로그인을 거절했어요. 2시간 뒤 자동으로 다시 해 볼게요."
     elif failing:
         # 예전엔 'deadlines이(가) 7번 연속 실패했습니다' 처럼 횟수만 컸고 왜 실패했는지는 없었다. 횟수는 모든 작업을
         # 합친 수라 실제보다 커 보였다. 이제 작업마다 언제부터 안 되는지와 까닭 갈래(failures[kind])를 말한다
@@ -2848,8 +2929,11 @@ FAILURE_KINDS: list[tuple[str, str, str, tuple[str, ...]]] = [
      (r"Timeout \d+ms exceeded", r"TimeoutError")),
     ("drive", "Google Drive 연결에 문제가 있어요", "설정에서 구글을 다시 연결해 주세요.",
      (r"invalid_grant", r"googleapiclient", r"HttpError", r"RefreshError")),
-    ("disk", "파일을 저장하지 못했어요", "저장 공간이 넉넉한지, 파일이 다른 프로그램에 열려 있지 않은지 확인해 주세요.",
-     (r"No space left", r"Errno 28", r"WinError 32", r"Permission denied", r"PermissionError")),
+    # 다른 프로그램(OneDrive·PDF 뷰어)이 잠깐 쥐고 있는 파일은 놓으면 다음 동기화가 저절로 저장한다 → 화면은 한 줄로(app.js HEALTH_QUIET)
+    ("busy", "파일이 다른 프로그램에 열려 있어요", "그 파일을 닫으면 다음 동기화 때 저절로 저장해요.",
+     (r"WinError 32", r"being used by another process", r"Resource busy")),
+    ("disk", "파일을 저장하지 못했어요", "저장 공간이 넉넉한지, 저장 폴더에 쓸 수 있는지 확인해 주세요.",
+     (r"No space left", r"Errno 28", r"Permission denied", r"PermissionError")),
 ]
 FAILURE_UNKNOWN = ("unknown", "알 수 없는 오류가 났어요", "계속되면 설정의 실행 로그를 보내 주세요.")
 
@@ -3520,15 +3604,22 @@ def get_timetable(workspace: UserWorkspace) -> dict[str, Any]:
     # 채운 값을 파일에 남겨야 다음 요청부터 이 일을 안 한다
     if _fill_missing_credits(workspace, entries):
         try:
-            workspace.root.mkdir(parents=True, exist_ok=True)
-            atomic_write_text(workspace.timetable_path, 
-                json.dumps({"entries": entries, "semester": semester}, ensure_ascii=False, indent=2),
-                encoding="utf-8",
-            )
+            _write_timetable(workspace, entries, semester)
         except OSError:
             pass  # 못 써도 화면은 그대로 나온다
 
-    return {"entries": entries, "semester": semester}
+    # LMS 과목으로 저절로 채웠으면 화면에 한 번 알린다 (auto_fill_timetable)
+    return {"entries": entries, "semester": semester, "lmsAuto": data.get("lmsAuto")}
+
+
+def _write_timetable(workspace: UserWorkspace, entries: list[dict[str, Any]], semester: str) -> None:
+    """수업 칸만 바꾸고 같은 파일의 다른 값(LMS 로 채운 학기 lmsAutoTerm·알림 lmsAuto)은 그대로 둔다.
+    예전엔 칸을 고칠 때마다 entries·semester 만 써서 그런 값이 사라졌다."""
+    raw = read_json(workspace.timetable_path, {})
+    raw = raw if isinstance(raw, dict) else {}
+    raw.update(entries=entries, semester=semester)
+    workspace.root.mkdir(parents=True, exist_ok=True)
+    atomic_write_text(workspace.timetable_path, json.dumps(raw, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def save_timetable_entry(workspace: UserWorkspace, payload: dict[str, Any]) -> dict[str, Any]:
@@ -3573,26 +3664,271 @@ def save_timetable_entry(workspace: UserWorkspace, payload: dict[str, Any]) -> d
     else:
         entries.append(entry)
 
-    workspace.root.mkdir(parents=True, exist_ok=True)
-    atomic_write_text(workspace.timetable_path, 
-        json.dumps(
-            {"entries": entries, "semester": str(payload.get("semester", data.get("semester", "")))},
-            ensure_ascii=False,
-            indent=2,
-        ),
-        encoding="utf-8",
-    )
+    _write_timetable(workspace, entries, str(payload.get("semester", data.get("semester", ""))))
     return {"ok": True, "entry": entry, "entries": entries}
 
 
 def delete_timetable_entry(workspace: UserWorkspace, entry_id: str) -> dict[str, Any]:
     data = get_timetable(workspace)
     remaining = [e for e in data["entries"] if e.get("id") != entry_id]
-    atomic_write_text(workspace.timetable_path, 
-        json.dumps({"entries": remaining, "semester": data["semester"]}, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    _write_timetable(workspace, remaining, data["semester"])
     return {"ok": True, "entries": remaining}
+
+
+# ===== LMS 수강 과목으로 시간표 채우기 (2026-11-10, 1.12.58) =====
+# LMS 과목 이름에는 과목명·분반·학기('일반물리Ⅱ (General PhysicsⅡ )_03[ 2026_2학기 ]', course_meta)가 있고, 개설과목 목록
+# (get_course_catalog)에는 같은 과목·분반의 요일·시간·강의실이 있다. 둘을 과목명+분반으로 맞추면 시간표를 손으로 넣지 않아도 된다.
+# 실측(개발자 2026-2학기): LMS 이번 학기 9과목이 모두 맞았다. '사회과학 특강 Ⅰ' 은 개설과목 쪽 이름에 부제가 붙어
+# ('사회과학 특강Ⅰ - 인지심리학') ' - ' 앞만 견준다.
+# LMS 과목끼리 부딪치는 일(같은 과목 분반 둘·시간 겹침)은 수강신청 변경 때문이다 — 바꾸기 전 과목도 LMS 에 그대로 남는다.
+# 사용자 결정(2026-11-10): 자료가 더 많이 들어온 쪽을 지금 듣는 과목으로 본다. 실측: Academic English 03(10개)·09(8개),
+# 03 과 화요일이 겹치는 사회과학 특강Ⅰ(2개) → 03 만 남고, 사용자가 손으로 만든 시간표와 같았다. 자료 수가 같으면 정하지 않고 고르게 둔다.
+TT_COLORS = ("coral", "blue", "green", "amber", "violet", "teal", "rose", "olive", "indigo", "plum", "sky", "brown")  # app.js 와 같은 순서
+_LMS_EN_RE = re.compile(r"^.*?\((.*)\)\s*_[0-9A-Za-z]+\s*\[")
+
+
+def _tt_norm(text: str) -> str:
+    """'일반화학Ⅱ  ' · '사회과학 특강 Ⅰ' 처럼 띄어쓰기·로마 숫자 꼴이 다른 이름을 같게."""
+    return re.sub(r"[\s()\[\]_\-:.,·]+", "", unicodedata.normalize("NFKC", str(text or ""))).lower()
+
+
+def _tt_names(title: str) -> set[str]:
+    text = str(title or "")
+    return {name for name in (_tt_norm(text), _tt_norm(text.split(" - ", 1)[0])) if name}
+
+
+def _tt_minutes(hhmm: str) -> int:
+    try:
+        hour, minute = str(hhmm).split(":", 1)
+        return int(hour) * 60 + int(minute)
+    except ValueError:
+        return 0
+
+
+def _tt_overlaps(slot: dict[str, Any], entry: dict[str, Any]) -> bool:
+    try:
+        if int(entry.get("day", -1)) != int(slot.get("day", -2)):
+            return False
+    except (TypeError, ValueError):
+        return False
+    # 끝 시각과 시작 시각이 같은 건 겹친 게 아니다 (app.js ttOverlaps 와 같음)
+    return _tt_minutes(slot["start"]) < _tt_minutes(entry.get("end", "")) and _tt_minutes(entry.get("start", "")) < _tt_minutes(slot["end"])
+
+
+def _tt_entry_names(entry: dict[str, Any]) -> set[str]:
+    names = _tt_names(entry.get("title", ""))
+    if str(entry.get("courseNo", "")).strip():
+        names.add("#" + str(entry["courseNo"]).strip().lower())
+    return names
+
+
+def _tt_row_names(row: dict[str, Any]) -> set[str]:
+    names = _tt_names(row.get("title", "")) | _tt_names(row.get("lmsTitle", ""))
+    if row.get("courseNo"):
+        names.add("#" + str(row["courseNo"]).lower())
+    return names
+
+
+def _tt_same_slot(entry: dict[str, Any], slot: dict[str, Any]) -> bool:
+    try:
+        return int(entry.get("day", -1)) == int(slot["day"]) and entry.get("start") == slot["start"]
+    except (TypeError, ValueError):
+        return False
+
+
+def _catalog_match(courses: list[dict[str, Any]], title: str, title_en: str, section: str) -> dict[str, Any] | None:
+    want, want_en = _tt_names(title), _tt_names(title_en)
+    for course in courses:
+        if str(course.get("section", "")).lstrip("0") != str(section).lstrip("0") or not course.get("slots"):
+            continue
+        if want & _tt_names(course.get("title", "")) or (want_en and want_en & _tt_names(course.get("titleEn", ""))):
+            return course
+    return None
+
+
+def lms_timetable_plan(workspace: UserWorkspace) -> dict[str, Any]:
+    """이번 학기 LMS 과목마다 개설과목에서 찾은 수업 시간과, 지금 시간표와 견준 상태.
+
+    state: added(이미 다 들어 있음) · otherSection(같은 과목 다른 분반이 들어 있음)
+           · dropped(부딪치는 LMS 과목에 자료가 더 많아 바꾸기 전 과목으로 봄, keptBy)
+           · duplicate(LMS 에 같은 과목 분반이 둘인데 자료 수가 같음) · overlap(다른 수업과 시간이 겹침) · new(넣을 수 있음)
+    """
+    term = current_term_key()
+    lms = [c for c in get_course_state(workspace)["current"] if course_meta(c.get("name", ""))["term"] == term]
+    materials = _lms_material_counts(workspace)
+    catalogs: list[list[dict[str, Any]]] = []
+    entries = get_timetable(workspace)["entries"]
+    rows, unmatched = [], []
+    for item in lms:
+        name = str(item.get("name", ""))
+        meta = course_meta(name)
+        en = _LMS_EN_RE.match(name)
+        found = None
+        # 학부 먼저, 못 찾으면 대학원 목록 (씨앗·캐시가 없으면 학교 사이트에서 한 번 받아 온다)
+        for index, undergraduate in enumerate((True, False)):
+            if len(catalogs) <= index:
+                try:
+                    catalogs.append(get_course_catalog(workspace, "", undergraduate).get("courses") or [])
+                except Exception:
+                    catalogs.append([])
+            found = _catalog_match(catalogs[index], meta["title"], en.group(1).strip() if en else "", meta["section"])
+            if found:
+                break
+        if not found:
+            # 실험·논문연구처럼 개설과목에 시간이 없는 과목
+            unmatched.append({"id": str(item.get("id", "")), "title": meta["title"], "section": meta["section"]})
+            continue
+        rows.append({
+            "id": str(item.get("id", "")),
+            "lmsTitle": meta["title"],
+            "title": str(found.get("title", "")).strip(),
+            "section": meta["section"],
+            "courseNo": str(found.get("courseNo", "")).strip(),
+            "professor": str(found.get("professor", "")).strip(),
+            "credit": str(found.get("credit", "")).strip(),
+            "slots": found.get("slots") or [],
+            "materials": materials.get(_tt_norm(name), 0),
+        })
+
+    def course_key(row: dict[str, Any]) -> str:
+        return row["courseNo"] or _tt_norm(row["title"])
+
+    def collide(a: dict[str, Any], b: dict[str, Any]) -> bool:
+        return course_key(a) == course_key(b) or any(_tt_overlaps(s, t) for s in a["slots"] for t in b["slots"])
+
+    # 자료가 많은 과목부터 자리를 잡는다. 이미 자리 잡은 과목과 부딪치면: 자료가 적으면 바꾸기 전 과목(dropped),
+    # 같으면 어느 쪽인지 모르니 둘 다 사용자에게 맡긴다(tie).
+    kept: list[dict[str, Any]] = []
+    for row in sorted(rows, key=lambda r: -r["materials"]):
+        rivals = [k for k in kept if collide(row, k)]
+        more = [k for k in rivals if k["materials"] > row["materials"]]
+        if not rivals:
+            kept.append(row)
+        elif more:
+            # 같은 과목 다른 분반이 있으면 그 이름을 댄다 ('Academic English 09' 는 03 때문에 빠짐)
+            row["keptBy"] = next((k for k in more if course_key(k) == course_key(row)), more[0])["title"]
+        else:
+            for rival in rivals:
+                row.setdefault("tie", []).append(rival)
+                rival.setdefault("tie", []).append(row)
+    for row in rows:
+        mine = [e for e in entries if _tt_entry_names(e) & _tt_row_names(row)]
+        ties = row.pop("tie", [])
+        if mine and all(any(_tt_same_slot(e, s) for e in mine) for s in row["slots"]):
+            row["state"] = "added"
+        elif row.get("keptBy"):
+            row["state"] = "dropped"  # 다른 분반이 시간표에 있어도 '변경 전' 이 더 정확한 말
+        elif mine:
+            row["state"] = "otherSection"
+        elif any(course_key(t) == course_key(row) for t in ties):
+            row["state"] = "duplicate"
+        else:
+            clash = sorted({str(e.get("title", "")) for s in row["slots"] for e in entries if _tt_overlaps(s, e)}
+                           | {t["title"] for t in ties})
+            row["state"] = "overlap" if clash else "new"
+            if clash:
+                row["clash"] = clash
+    return {"ok": True, "term": term, "courses": rows, "unmatched": unmatched}
+
+
+def _lms_material_counts(workspace: UserWorkspace) -> dict[str, int]:
+    """LMS 과목 이름(_tt_norm) → 받은 자료 수. file_metadata.json 의 course 는 LMS 과목 이름 그대로다."""
+    counts: dict[str, int] = {}
+    metadata = read_json(workspace.file_metadata_log, {})
+    for meta in (metadata.values() if isinstance(metadata, dict) else []):
+        key = _tt_norm(meta.get("course", "") if isinstance(meta, dict) else meta)
+        counts[key] = counts.get(key, 0) + 1
+    return counts
+
+
+def _tt_color(entries: list[dict[str, Any]], names: set[str]) -> str:
+    """같은 과목이 있으면 그 색, 아니면 아직 안 쓴 색 (app.js pickTtColor 와 같은 규칙)."""
+    used: dict[str, int] = {}
+    for entry in entries:
+        if _tt_entry_names(entry) & names and entry.get("color") in TT_COLORS:
+            return entry["color"]
+        used[str(entry.get("color", ""))] = used.get(str(entry.get("color", "")), 0) + 1
+    free = [color for color in TT_COLORS if color not in used]
+    return free[0] if free else min(TT_COLORS, key=lambda color: used.get(color, 0))
+
+
+def add_lms_courses(workspace: UserWorkspace, rows: list[dict[str, Any]]) -> list[str]:
+    """고른 LMS 과목의 수업 칸을 모두 넣는다. 같은 과목이 같은 요일·시각에 이미 있으면 그 칸은 건너뛴다. 넣은 과목 이름."""
+    added = []
+    for row in rows:
+        entries = get_timetable(workspace)["entries"]
+        names = _tt_row_names(row)
+        color = _tt_color(entries, names)
+        count = 0
+        for slot in row.get("slots") or []:
+            if any(_tt_entry_names(e) & names and _tt_same_slot(e, slot) for e in entries):
+                continue
+            save_timetable_entry(workspace, {
+                "title": row["title"], "day": slot["day"], "start": slot["start"], "end": slot["end"],
+                "room": slot.get("room", ""), "color": color, "credit": row.get("credit", ""),
+                "courseNo": row.get("courseNo", ""), "professor": row.get("professor", ""),
+            })
+            count += 1
+        if count:
+            added.append(row["title"])
+    return added
+
+
+def apply_lms_timetable(workspace: UserWorkspace, course_ids: list[str]) -> dict[str, Any]:
+    """'시간표 편집' 의 내 LMS 과목에서 고른 것을 넣는다. 겹치는 수업이 있어도 사용자가 고른 것이라 그대로 넣는다."""
+    wanted = {str(i) for i in course_ids or []}
+    rows = [row for row in lms_timetable_plan(workspace)["courses"] if row["id"] in wanted and row["state"] != "added"]
+    if not rows:
+        raise ValueError("넣을 과목이 없어요.")
+    added = add_lms_courses(workspace, rows)
+    return {"ok": True, "added": added, **get_timetable(workspace)}
+
+
+def _timetable_raw(workspace: UserWorkspace) -> dict[str, Any]:
+    raw = read_json(workspace.timetable_path, {})
+    return raw if isinstance(raw, dict) else {}
+
+
+def auto_fill_timetable(workspace: UserWorkspace) -> dict[str, Any] | None:
+    """학기마다 한 번: 이번 학기 과목이 시간표에 하나도 없으면 LMS 과목으로 채운다. 동기화가 끝난 뒤 부른다(run_process).
+
+    이미 이번 학기 과목을 하나라도 넣어 둔 사람의 시간표는 건드리지 않는다(손으로 고친 것을 덮지 않게).
+    LMS 과목끼리 부딪치면 자료가 많은 쪽만 넣는다(dropped 는 뺌). 자료 수가 같아 못 정한 것은 '시간표 편집' 에서 고르게 남긴다.
+    넣었으면 화면에 한 번 알린다(lmsAuto).
+    """
+    if demo_mode.active() or MULTI_USER_MODE:
+        return None
+    term = current_term_key()
+    if _timetable_raw(workspace).get("lmsAutoTerm") == term:
+        return None
+    plan = lms_timetable_plan(workspace)
+    if not plan["courses"]:
+        return None  # 이번 학기 LMS 과목을 아직 모른다(학기 초·첫 동기화 전) — 다음 동기화 때 다시 본다
+    notice = None
+    if not any(row["state"] in ("added", "otherSection") for row in plan["courses"]):
+        added = add_lms_courses(workspace, [row for row in plan["courses"] if row["state"] == "new"])
+        if added:
+            notice = {
+                "term": term,
+                "at": now_iso(),
+                "added": added,
+                # 분반이 둘인 과목은 한 번만 센다
+                "skipped": list(dict.fromkeys(row["title"] for row in plan["courses"] if row["state"] in ("duplicate", "overlap"))),
+                "dropped": list(dict.fromkeys(row["title"] for row in plan["courses"] if row["state"] == "dropped")),
+            }
+    raw = _timetable_raw(workspace)
+    raw["lmsAutoTerm"] = term
+    if notice:
+        raw["lmsAuto"] = notice
+    atomic_write_text(workspace.timetable_path, json.dumps(raw, ensure_ascii=False, indent=2), encoding="utf-8")
+    return notice
+
+
+def dismiss_lms_auto_notice(workspace: UserWorkspace) -> dict[str, Any]:
+    raw = _timetable_raw(workspace)
+    if raw.pop("lmsAuto", None) is not None:
+        atomic_write_text(workspace.timetable_path, json.dumps(raw, ensure_ascii=False, indent=2), encoding="utf-8")
+    return {"ok": True}
 
 
 # ===== 미리 탑재한 씨앗 데이터 =====
@@ -4516,6 +4852,327 @@ def mail_flow_for(workspace: UserWorkspace, payload: dict[str, Any]) -> dict[str
     return mail_flow.build(me, to, index)
 
 
+# ===== 메일 쓰기 옆 창: AI 가 받는 사람·참조·제목·본문까지 (2026-11-09 사용자) =====
+# 받는 사람 후보는 서버가 모은다: 이번 학기 내 과목 교수·조교 → 최근 주고받은 사람 → 부탁에 나온 이름·부서(조직도).
+# 모델은 이 목록의 id 로만 고르고(지어낸 주소가 들어가지 않게), 서버가 id 를 주소로 바꾼다.
+_AI_PARTICLE = re.compile(r"(에게서|에게|께서|께|한테|에서|하고|으로|이랑|랑|로|에|을|를|이|가|은|는|의|과|와|도|님)+$")
+_AI_STOP = {"교수", "교수님", "조교", "조교님", "메일", "다음", "이번", "지난", "수업", "결석", "과제", "시험", "부탁", "문의",
+            "질문", "연락", "보내", "보내줘", "써줘", "써", "학생", "학교", "오늘", "내일", "모레", "이메일", "참조", "제목"}
+
+
+def _mail_ai_tokens(text: str) -> list[str]:
+    out = []
+    for raw in re.findall(r"[가-힣A-Za-z]{2,}", text or ""):
+        word = _AI_PARTICLE.sub("", raw) if re.match(r"[가-힣]", raw) else raw
+        if len(word) >= 2 and word not in _AI_STOP and word not in out:
+            out.append(word)
+    return out[:20]
+
+
+def mail_ai_people(workspace: UserWorkspace, text: str = "") -> list[dict[str, Any]]:
+    """[{id, name, email, role, course, dept, tag}] — 모델에 보이는 받는 사람 후보 (90명 안쪽)."""
+    raw_config = read_json(workspace.config_path, {})
+    mine = str((raw_config or {}).get("SCHOOL_EMAIL") or "").strip().lower() if isinstance(raw_config, dict) else ""
+    out: list[dict[str, Any]] = []
+    seen: set[str] = set()
+
+    def add(email: Any, name: Any, role: Any = "", course: str = "", dept: Any = "", tag: str = "") -> None:
+        email = str(email or "").strip().lower()
+        if "@" not in email or email in seen or email == mine or len(out) >= 90:
+            return
+        seen.add(email)
+        out.append({"id": f"p{len(out) + 1}", "email": email, "name": str(name or "").replace(",", " ").strip(),
+                    "role": str(role or ""), "course": course, "dept": str(dept or ""), "tag": tag})
+
+    staff = get_course_staff(workspace).get("courses") or {}
+    for rows in staff.values():
+        for r in rows or []:
+            if r.get("email"):
+                section = f"{r.get('section')}분반" if r.get("section") else ""
+                add(r["email"], r.get("name"), r.get("role"), " ".join(x for x in (str(r.get("title") or ""), section) if x),
+                    r.get("dept"), "내 과목")
+    people = directory_people(workspace)
+    by_email = {str(p.get("email", "")).lower(): p for p in people if p.get("email")}
+    mail = read_json(workspace.emails_log, {}) or {}
+    recent: list[tuple[str, str, str]] = []
+    if isinstance(mail, dict):
+        for m in mail.get("emails") or []:
+            if not isinstance(m, dict):
+                continue
+            if m.get("folder") == "sent":
+                recent.append((str(m.get("date") or ""), str(m.get("toEmail") or ""), str(m.get("toName") or "")))
+            else:
+                recent.append((str(m.get("date") or ""), str(m.get("fromEmail") or ""), str(m.get("fromName") or "")))
+        recent.sort(key=lambda x: x[0], reverse=True)
+        recent += [("", str(c.get("email") or ""), str(c.get("name") or "")) for c in mail.get("contacts") or [] if isinstance(c, dict)]
+    count = 0
+    for _, email, name in recent:
+        if count >= 25:
+            break
+        email = email.strip().lower()
+        if not email or email in seen or re.search(r"no-?reply|noreply|mailer-daemon", email):
+            continue
+        p = by_email.get(email) or {}
+        add(email, p.get("name") or name, p.get("role") or "", "", p.get("dept") or "", "주고받은 메일")
+        count += 1
+    # 부탁에 나온 이름·부서: 이름은 딱 맞을 때만(학생도), 부서는 직원·특별계정·교원 쪽만 (학생 수천 명이 딸려 오지 않게)
+    # 부서 낱말이면 그 부서 대표 주소(특별계정, 예: '학사팀')부터 — 담당자 개인보다 부서 메일로 보내는 게 맞을 때가 많다
+    rank = {"특별계정": 0, "직원": 1, "교원": 2}
+    hits = 0
+    for word in _mail_ai_tokens(text):
+        found = [
+            p for p in people
+            if str(p.get("name") or "") == word
+            or (len(word) >= 3 and str(p.get("role") or "") in rank
+                and (word in str(p.get("dept") or "") or word in str(p.get("name") or "")))
+        ]
+        found.sort(key=lambda p: (str(p.get("name") or "") != word, rank.get(str(p.get("role") or ""), 3)))
+        for p in found[:6]:
+            if hits >= 14:
+                break
+            before = len(out)
+            add(p.get("email"), p.get("name"), p.get("role"), "", p.get("dept"), "조직도")
+            hits += len(out) - before
+    return out
+
+
+def _mail_ai_timetable(workspace: UserWorkspace) -> str:
+    table = read_json(workspace.timetable_path, {})
+    entries = table.get("entries") if isinstance(table, dict) and isinstance(table.get("entries"), list) else []
+    days = "월화수목금토일"
+    groups: dict[str, dict[str, Any]] = {}
+    for e in entries:
+        if not isinstance(e, dict) or not e.get("title"):
+            continue
+        g = groups.setdefault(str(e["title"]), {"no": e.get("courseNo") or "", "prof": e.get("professor") or "", "times": []})
+        try:
+            day = days[int(e.get("day"))]
+        except (TypeError, ValueError, IndexError):
+            day = ""
+        g["times"].append(f"{day} {e.get('start') or ''}-{e.get('end') or ''}".strip())
+    lines = []
+    for title, g in groups.items():
+        no = f"({g['no']})" if g["no"] else ""
+        prof = f" · {g['prof']}" if g["prof"] else ""
+        lines.append(f"- {title}{no}{prof}: " + ", ".join(g["times"]))
+    return "\n".join(lines)
+
+
+def _mail_ai_deadlines(workspace: UserWorkspace) -> str:
+    from datetime import timedelta, timezone
+
+    now = datetime.now(timezone.utc)
+    rows = []
+    for item in get_deadlines(workspace).get("items") or []:
+        if not isinstance(item, dict) or is_deadline_done(item):
+            continue
+        try:
+            due = datetime.fromisoformat(str(item.get("due") or "").replace("Z", "+00:00"))
+            if due.tzinfo is None:
+                due = due.replace(tzinfo=timezone.utc)
+        except ValueError:
+            continue
+        if not (now - timedelta(days=3) <= due <= now + timedelta(days=35)):
+            continue
+        local = due.astimezone()
+        course = str(item.get("courseLabel") or extract_course_label(str(item.get("course") or "")) or "")
+        rows.append((due, f"- {item.get('name') or item.get('title') or ''} · {course} · 마감 {local.strftime('%Y-%m-%d %H:%M')}"))
+    rows.sort(key=lambda x: x[0])
+    return "\n".join(r for _, r in rows[:15])
+
+
+def _mail_ai_address(person: dict[str, Any]) -> str:
+    name = str(person.get("name") or "").replace(",", " ").replace("<", "").replace(">", "").strip()
+    return f"{name} <{person['email']}>" if name else person["email"]
+
+
+def _mail_ai_pick(ids: list[str], people: list[dict[str, Any]], allowed_text: str) -> list[dict[str, Any]]:
+    """모델이 고른 id(또는 학생이 직접 적은 주소) → [{name, email, address}]."""
+    by_id = {p["id"]: p for p in people}
+    by_mail = {p["email"]: p for p in people}
+    out: list[dict[str, Any]] = []
+    for raw in ids:
+        token = str(raw).strip().strip("<>").lower()
+        p = by_id.get(str(raw).strip()) or by_mail.get(token)
+        if not p and re.fullmatch(r"[\w.+-]+@[\w-]+(\.[\w-]+)+", token) and token in allowed_text.lower():
+            p = {"name": "", "email": token}
+        if p and all(x["email"] != p["email"] for x in out):
+            out.append({"name": p.get("name") or "", "email": p["email"], "address": _mail_ai_address(p),
+                        "role": p.get("role") or "", "course": p.get("course") or ""})
+    return out
+
+
+_MAIL_AI_ID = re.compile(r"\s*\(\s*p\d+(?:\s*[,·/]\s*p\d+)*\s*\)|(?<![A-Za-z0-9])p\d+(?![0-9])")
+
+
+def _mail_ai_text(text: Any, limit: int = 300) -> str:
+    """AI 가 쓴 한 줄(메모·질문·보기)에서 후보 id('(p1)', 'p2')를 뗀다. 실측: '담당 교수님(p1)께 보내며 … 김OO님(p2)'."""
+    return re.sub(r"\s{2,}", " ", _MAIL_AI_ID.sub("", str(text or ""))).strip()[:limit]
+
+
+def _mail_ai_ask(ask: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [{"q": _mail_ai_text(a.get("q")), "options": [_mail_ai_text(o, 160) for o in a.get("options") or []]}
+            for a in ask if isinstance(a, dict)]
+
+
+def _mail_ai_body(segs: list[dict[str, Any]], content: str, frame: dict[str, Any] | None = None, lang: str = "ko") -> str:
+    """호칭 줄(mail_flow) + 인사·자기소개(AI) + 용건(AI) + 맺음(AI) + 서명(mail_flow, 끝인사 낱말만 AI) 으로 잇는다.
+
+    2026-11-11 사용자: '인삿말, 끝말이 정형화해서 모든 것을 같게 하지 말고, 맥락과 대상과 본문의 내용에 맞게'.
+    호칭(받는 사람 이름·직함)과 서명(내 이름·학번)은 틀리면 안 되는 사실이라 mail_flow 가 쓰고, 그 사이는 모델이 용건에
+    맞게 고른다. frame 에 없는 칸은 mail_flow 의 기본 꼴을 쓴다(모델이 칸을 빠뜨리거나 격식에 어긋났을 때)."""
+    frame = frame or {}
+    by = {s["kind"]: s.get("text") or "" for s in segs}
+    greeting = by.get("greeting", "")
+    # 한국어 조각은 '김민수 교수님께,\n안녕하십니까.' — 첫 줄이 호칭이고 나머지가 인사. 호칭 없이 '안녕하십니까.' 만일 때도 있다
+    if lang == "ko":
+        head, _, rest = greeting.partition("\n")
+        address, hello = (head, rest) if re.search(r"께\s*,?$", head) else ("", greeting)
+    else:
+        address, hello = greeting, ""
+    hello = frame.get("hello", hello)
+    intro = frame.get("intro", by.get("intro", ""))
+    closing = frame.get("closing", by.get("closing", ""))
+    sign = by.get("signoff", "")
+    word = frame.get("signoff") or ""
+    if sign and word:
+        if lang == "ko" and word in ("올림", "드림"):
+            sign = re.sub(r"(올림|드림)(?=\n|$)", word, sign, count=1)
+        elif lang == "en" and not re.search(r"[가-힣]", word):
+            first, sep, rest = sign.partition("\n")
+            if re.match(r"^(sincerely|best regards|kind regards|regards|best wishes|respectfully|yours)\b", first, re.I):
+                sign = word + sep + rest
+    # 한국어는 호칭 줄 바로 다음 줄에 인사('김민수 교수님께,\n교수님, 안녕하십니까.'), 영어는 호칭 뒤 빈 줄
+    opening = "\n".join(x for x in (address, hello.strip()) if x) if lang == "ko" else address
+    parts = [x for x in (opening, (hello.strip() if lang != "ko" else ""), intro.strip(), content.strip(), closing.strip(), sign) if x]
+    return "\n\n".join(parts)
+
+
+_SUBJECT_JUNK = re.compile("[\U0001F300-\U0001FAFF☀-➿]|[ㅠㅜㅎㅋ]+|[!~]+")
+
+
+def _mail_ai_subject(subject: str, current: str, lang: str, me: dict[str, Any], course: dict[str, Any] | None) -> str:
+    """AI 가 지은 제목을 격식 꼴로 맞춘다 (2026-11-11 사용자: '제목 형식을 규칙처럼 지켜지게').
+
+    꼴은 사용자가 준 '대학생을 위한 이메일 작성법'(2026-11-11)을 따른다 — 한국어 '[과목명 분반] 용건_학번 이름',
+    영어 '용건 – 과목 코드 (Section 분반)'(영어 제목에는 이름을 넣지 않는다).
+    - 답장(지금 제목이 'Re:')은 제목을 바꾸지 않는다.
+    - 이모티콘·ㅠ·느낌표·물결을 뗀다.
+    - 과목 일인데 과목 표시가 빠졌으면 붙이고, 한국어 제목 끝의 '_학번 이름' 이 빠졌으면 붙인다(이름이나 학번이 이미
+      있으면 둔다 — 연구실 문의의 '_기초학부 1학년 홍길동' 같은 꼴). 모델이 자주 잊는 부분이라 코드로 지킨다."""
+    if re.match(r"\s*(re|fwd?)\s*:", current or "", re.I):
+        return current.strip()
+    text = re.sub(r"\s{2,}", " ", _SUBJECT_JUNK.sub("", subject or "")).strip(" ?.")
+    if not text:
+        return current.strip()
+    sec = str((course or {}).get("section") or "").strip()
+    if lang == "en":
+        code = str((course or {}).get("courseNo") or "").strip()
+        if course and code and code.replace(" ", "").lower() not in text.replace(" ", "").lower():
+            text = f"{text} – {code}" + (f" (Section {sec})" if sec else "")
+        return text[:200]
+    if course and not text.startswith("["):
+        title = str(course.get("title") or "").strip()
+        tag = f"[{title} {sec}분반]" if title and sec else (f"[{title}]" if title else "")
+        text = f"{tag} {text}".strip()
+    sid = str(me.get("studentId") or "").strip()
+    name = str(me.get("name") or "").strip()
+    if sid and sid not in text and not (name and name in text):
+        text = f"{text}_{sid} {name}".rstrip()
+    return text[:200]
+
+
+def mail_ai_compose(workspace: UserWorkspace, payload: dict[str, Any], provider: str | None, model: str) -> dict[str, Any]:
+    """옆 창의 첫 부탁(과 되물은 답) → {ask[]} 또는 {mail: {to[], cc[], subject, body, lang}}.
+
+    본문은 '호칭(mail_flow) + 인사·자기소개·용건·맺음(AI, 받는 사람과 용건에 맞게) + 서명(mail_flow)' — _mail_ai_body."""
+    import ai_cli
+    import mail_flow
+
+    request = str(payload.get("request") or "").strip()
+    if not request:
+        raise ValueError("무엇을 보낼지 한 줄 적어 주세요.")
+    answers = [a for a in payload.get("answers") or [] if isinstance(a, dict)][:9]
+    current = payload.get("current") if isinstance(payload.get("current"), dict) else {}
+    answer_text = " ".join(str(a.get("a") or "") for a in answers)
+    people = mail_ai_people(workspace, f"{request} {answer_text}")
+    me = mail_me(workspace)["me"]
+    extra = {
+        "timetable": _mail_ai_timetable(workspace),
+        "deadlines": _mail_ai_deadlines(workspace),
+        "current": {**{k: str(current.get(k) or "")[:500] for k in ("to", "cc", "subject")},
+                    "body": str(current.get("body") or "")[:3000]},  # 학생이 본문에 이미 쓴 글
+        "quote": str(payload.get("quote") or "")[:4000],
+    }
+    # 두 번째로 묻고 나면 더 묻지 않는다(학생이 질문만 받다 끝나지 않게)
+    force = bool(payload.get("force")) or int(payload.get("round") or 0) >= 2
+    res = ai_cli.compose_mail(request, answers, people, me, extra, force, provider, model)
+    allowed = " ".join([request, answer_text, str(current.get("to") or ""), str(current.get("cc") or "")])
+    to = _mail_ai_pick(res.get("to") or [], people, allowed)
+    cc = [p for p in _mail_ai_pick(res.get("cc") or [], people, allowed) if all(p["email"] != t["email"] for t in to)]
+    meta = {"engine": res.get("modelLabel") or ai_cli.LABELS.get(res.get("provider"), ""), "seconds": res.get("seconds")}
+    if res.get("ask"):
+        return {"ok": True, "ask": _mail_ai_ask(res["ask"]), "to": to, "cc": cc, **meta}
+    # 받는 사람 칸에 이미 있던 사람(답장)을 모델이 빼먹으면 그대로 둔다
+    if not to and current.get("to"):
+        m = re.search(r"[\w.+-]+@[\w-]+(\.[\w-]+)+", str(current.get("to")))
+        if m:
+            to = [{"name": "", "email": m.group(0).lower(), "address": str(current.get("to")).split(",")[0].strip(),
+                   "role": "", "course": ""}]
+    staff = get_course_staff(workspace).get("courses") or {}
+    table = read_json(workspace.timetable_path, {})
+    entries = table.get("entries") if isinstance(table, dict) and isinstance(table.get("entries"), list) else []
+    first = to[0] if to else {"email": "", "name": ""}
+    who = mail_flow.recipient(first["email"], first.get("name") or "", staff, directory_people(workspace), entries)
+    want = re.sub(r"\s+", "", res.get("course") or "")
+    index = 0
+    for i, c in enumerate(who.get("courses") or []):
+        title = re.sub(r"\s+", "", str(c.get("title") or ""))
+        if want and title and (want in title or title in want):
+            index = i
+            break
+    lang = res.get("lang") or ("en" if who.get("foreign") else "ko")
+    segs = mail_flow.segments(me, who, index).get(lang) or []
+    frame = {k: res[k] for k in ("hello", "intro", "closing", "signoff") if isinstance(res.get(k), str)}
+    body = _mail_ai_body(segs, res.get("content") or "", frame, lang)
+    course = (who.get("courses") or [None])[index] if want and who.get("courses") else None
+    subject = _mail_ai_subject(res.get("subject") or "", str(current.get("subject") or ""), lang, me, course)
+    return {
+        "ok": True,
+        "mail": {"to": to, "cc": cc, "subject": subject, "body": body, "lang": lang, "courseIndex": index},
+        "note": _mail_ai_text(res.get("note")),
+        **meta,
+    }
+
+
+def mail_ai_revise(workspace: UserWorkspace, payload: dict[str, Any], provider: str | None, model: str) -> dict[str, Any]:
+    """다 쓴 메일 고치기 — 옆 창의 이어지는 말, 본문의 '/ai 지시'(⟦여기⟧ 자리)."""
+    import ai_cli
+
+    instruction = str(payload.get("instruction") or "").strip()
+    if not instruction:
+        raise ValueError("어떻게 고칠지 적어 주세요.")
+    mail = {k: str(payload.get(k) or "") for k in ("to", "cc", "subject", "body")}
+    mail["quote"] = str(payload.get("quote") or "")[:4000]  # 답장하는 원문(참고만)
+    people = mail_ai_people(workspace, instruction)
+    res = ai_cli.revise_mail(instruction, mail, people, provider, model, allow_ask=not payload.get("noAsk"))
+    meta = {"engine": res.get("modelLabel") or ai_cli.LABELS.get(res.get("provider"), ""), "seconds": res.get("seconds")}
+    if res.get("ask"):
+        return {"ok": True, "ask": _mail_ai_ask(res["ask"]), **meta}
+    out: dict[str, Any] = {k: res[k] for k in ("body", "insert", "subject") if k in res}
+    if "subject" in out:
+        # 답장 제목('Re: …')은 그대로 두고, 새 제목은 이모티콘·느낌표만 뗀다(과목·학번 꼴은 처음 쓸 때 맞췄다)
+        if re.match(r"\s*(re|fwd?)\s*:", mail["subject"], re.I) and not re.search(r"제목", instruction):
+            out.pop("subject")
+        else:
+            out["subject"] = re.sub(r"\s{2,}", " ", _SUBJECT_JUNK.sub("", out["subject"])).strip() or mail["subject"]
+    allowed = " ".join([instruction, mail["to"], mail["cc"]])
+    for key in ("to", "cc"):
+        if key in res:
+            out[key] = _mail_ai_pick(res[key], people, allowed)
+    return {"ok": True, "mail": out, "note": _mail_ai_text(res.get("note")), **meta}
+
+
 def import_directory(workspace: UserWorkspace, people: list[dict[str, Any]]) -> dict[str, Any]:
     import directory
 
@@ -5141,6 +5798,15 @@ def run_process(workspace: UserWorkspace, kind: str, command: list[str] | None, 
                 f"[알림] 실패 까닭: {info.get('title', '알 수 없음')} (이 작업 연속 {info.get('count', 1)}회). {info.get('hint', '')}",
             )
 
+    # 학기마다 한 번: 이번 학기 과목이 시간표에 없으면 LMS 과목으로 채운다 (동기화가 courses_state.json 을 새로 적은 뒤라야 안다)
+    if kind in ("sync", "deadlines") and return_code == 0:
+        try:
+            notice = auto_fill_timetable(workspace)
+            if notice:
+                append_log(key, f"[시간표] LMS 과목 {len(notice['added'])}개로 이번 학기 시간표를 채웠습니다.")
+        except Exception as exc:
+            append_log(key, f"[시간표] LMS 과목으로 채우지 못했습니다: {exc}")
+
     # 메일을 새로 읽어온 뒤 구글 캘린더 자동 동기화 (설정에서 켠 경우에만)
     if kind in ("emails", "sync") and return_code == 0:
         auto_sync_calendar(workspace)
@@ -5196,6 +5862,9 @@ def start_task(workspace: UserWorkspace, kind: str, sync_mode: str = "fast", aut
     if demo_mode.active():
         # 체험 중: LMS·메일 서버에 가짜 계정으로 로그인하러 가지 않는다 (자동 실행도 여기서 멈춘다)
         return False, demo_mode.BLOCK_MESSAGE
+    if kind in ("sync", "deadlines", "emails") and background_sync.busy(workspace.root):
+        # 앱을 꺼 둔 사이 시작한 하루 한 번 동기화(app.run_background)가 아직 돈다. LMS·메일 로그인이 겹치지 않게
+        return False, "뒤에서 하루 한 번 가져오기를 하는 중이에요. 끝나면 화면에 바로 보여요."
     if kind in ("sync", "deadlines", "emails") and secret_store.waiting():
         # 맥: 키체인 허락을 기다리는 중이면 빈 비밀번호로 로그인하러 가지 않는다. 가면 실패가 쌓이고
         # '서버가 로그인을 거절' 로 2시간 쉬기까지 한다. 허락하면 다음 자동 확인부터 그대로 돈다
@@ -5617,6 +6286,13 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         if route == "/api/timetable":
             self.send_json(get_timetable(workspace))
             return
+        if route == "/api/timetable/lms-plan":
+            # 이번 학기 LMS 과목과 개설과목의 수업 시간 ('시간표 편집' 위쪽 '내 LMS 과목')
+            try:
+                self.send_json(lms_timetable_plan(workspace))
+            except Exception as exc:
+                self.send_json({"ok": False, "courses": [], "message": str(exc)}, HTTPStatus.BAD_REQUEST)
+            return
         if route == "/api/notices":
             try:
                 self.send_json(
@@ -5714,6 +6390,13 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             return
         if route == "/api/whats-new":
             self.send_json(get_whats_new(workspace))
+            return
+        if route == "/api/background-sync":
+            # 앱을 꺼 둬도 하루 한 번 동기화 (background_sync.py). 공유 웹사이트·Store 판에서는 supported=False
+            status = background_sync.status(workspace.root, read_config(workspace))
+            if MULTI_USER_MODE:
+                status.update(supported=False, enabled=False)
+            self.send_json(status)
             return
         if route == "/api/autostart":
             # 맥·리눅스 '컴퓨터를 켤 때 Daling 켜기' (autostart.py). Windows 는 설치 파일이 맡아 supported=False
@@ -5877,6 +6560,15 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         if route == "/api/health":
             self.send_json(get_health(workspace))
             return
+        if route == "/api/doctor":
+            # 점검 진행 상황·결과 (doctor.py). 보고서 글은 화면이 '보고서 복사' 로 쓴다
+            import doctor
+
+            snap = doctor.snapshot(workspace)
+            if snap.get("result"):
+                snap["report"] = doctor.report_text(snap["result"], _app_version(), _os_label())
+            self.send_json(snap)
+            return
         if route == "/api/config/export":
             try:
                 self.send_json(export_settings(workspace, params.get("secrets", ["0"])[0] == "1"))
@@ -5930,6 +6622,8 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 "installed": bool(getattr(sys, "frozen", False)),
                 "lastFailure": f"{failure.get('kind', '')} {failure.get('at', '')}".strip() if failure else "",
                 "lastError": last_error,
+                # 사흘 안에 '문제 점검' 을 돌렸으면 그 보고서 (주소는 앞 글자만, 비밀번호는 없음)
+                "doctor": _doctor_last(workspace),
             })
             return
         if route == "/api/update/check":
@@ -6106,7 +6800,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
     DEMO_BLOCKED_POST = {
         "/api/config", "/api/config/import", "/api/run", "/api/verify", "/api/refresh-deadlines", "/api/refresh-emails",
         "/api/update/apply", "/api/update/open-download", "/api/send-email", "/api/mail/save-draft",
-        "/api/mail/big-cancel", "/api/drive/share",
+        "/api/mail/big-cancel", "/api/drive/share", "/api/doctor/run", "/api/doctor/fix",
         "/api/mail/move", "/api/mail/folder-create", "/api/mail/translate", "/api/timetable/import-image",
         "/api/timetable/import-link", "/api/samsung-notes/send", "/api/samsung-notes/organize", "/api/organize-files",
         "/api/assignment/open", "/api/storage/cleanup", "/api/storage/trash-browser", "/api/google/credentials", "/api/google/connect",
@@ -6114,9 +6808,9 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         # 내 컴퓨터(문서·다운로드 폴더)에 가짜 자료를 쓰지 않는다
         "/api/save-local", "/api/export-ics",
         # AI CLI 는 바깥 서비스에 묻는다
-        "/api/ai/search", "/api/ai/draft", "/api/ai/polish", "/api/ai/continue", "/api/ai/login",
-        # 로그인 항목(LaunchAgents·~/.config/autostart)에 쓰지 않는다
-        "/api/autostart",
+        "/api/ai/search", "/api/ai/compose", "/api/ai/revise", "/api/ai/rewrite", "/api/ai/login",
+        # 로그인 항목(LaunchAgents·~/.config/autostart)·운영체제 예약 작업에 쓰지 않는다
+        "/api/autostart", "/api/background-sync",
         # Claude 연결(중계 서버 mcp.gudaling.dev)
         "/api/claude-link/enable", "/api/claude-link/pair", "/api/claude-link/revoke",
     }
@@ -6364,6 +7058,9 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         if route == "/api/config":
             payload = self.read_body_json()
             values = write_config(workspace, payload)
+            if not MULTI_USER_MODE and "scheduleTime" in payload:
+                # 매일 전체 확인 시각을 바꿨으면 앱을 꺼 둬도 도는 예약 시각도 함께 (schtasks 가 느려 뒤에서)
+                threading.Thread(target=background_sync.refresh, args=(workspace.root, values), daemon=True).start()
             self.send_json({"ok": True, "config": safe_public_config(workspace), "values": bool(values)})
             return
         if route == "/api/run":
@@ -6493,6 +7190,17 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                     message += f" (서버가 거절한 주소: {', '.join(result['refused'])})"
                 if not result.get("savedToSent"):
                     message += " · 보낸 편지함에 사본은 못 남겼어요"
+                # 답장을 보냈으면 그 메일은 '답장할 메일' 에서 바로 뺀다 (보낸 편지함 사본은 다음 새로고침 때 온다)
+                replied_to = str(payload.get("inReplyTo", "")).strip()
+                if replied_to:
+                    try:
+                        mails = (read_json(workspace.emails_log, {}) or {}).get("emails") or []
+                        ids = [str(m.get("id")) for m in mails if isinstance(m, dict) and m.get("folder") == "inbox"
+                               and str(m.get("messageId") or "").strip() == replied_to]
+                        if ids:
+                            mark_reply_state(workspace, "replied", ids)
+                    except Exception as exc:
+                        print(f"[메일] 답장한 메일을 적어 두지 못했습니다: {exc}")
                 self.send_json({"ok": True, "message": message, **result})
             except Exception as exc:
                 self.send_json({"ok": False, "message": f"메일 발송 실패: {exc}"}, HTTPStatus.BAD_REQUEST)
@@ -6544,6 +7252,31 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                                 "link": meta.get("webViewLink") or f"https://drive.google.com/file/d/{file_id}/view"})
             except Exception as exc:
                 self.send_json({"ok": False, "message": str(exc)}, HTTPStatus.BAD_REQUEST)
+            return
+        if route == "/api/doctor/run":
+            # 문제 점검: 인터넷·계정·메일 로그인·LMS·Google 을 차례로 시험해 근본 원인을 찾는다 (doctor.py, 뒤에서 돈다)
+            import doctor
+
+            # force: ['mail'] 이면 막 거절된 메일 계정도 한 번 시험한다 ('그래도 지금 시험' 단추).
+            # 포트는 다른 Daling 이 함께 켜져 있는지 볼 때 나를 빼려고 넘긴다
+            payload = self.read_body_json()
+            force = tuple(str(f) for f in (payload.get("force") or []) if str(f) in ("mail",))
+            try:
+                own_port = int(self.server.server_address[1])
+            except Exception:
+                own_port = None
+            self.send_json({"ok": True, **doctor.start(workspace, force, own_port)})
+            return
+        if route == "/api/doctor/fix":
+            import doctor
+
+            payload = self.read_body_json()
+            files = payload.get("files")
+            try:
+                self.send_json(doctor.apply_fix(workspace, str(payload.get("op", "")), files if isinstance(files, list) else [],
+                                                str(payload.get("kind", "")), str(payload.get("lane", ""))))
+            except Exception as exc:
+                self.send_json({"ok": False, "message": f"고치지 못했어요: {exc}"}, HTTPStatus.BAD_REQUEST)
             return
         if route == "/api/mail/save-draft":
             # 임시저장을 서버의 '임시 보관함'에 넣는다 (웹메일·휴대폰에서도 이어서 쓰게)
@@ -6704,6 +7437,16 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 self.send_json({"ok": True, **result})
             except Exception as exc:
                 self.send_json({"ok": False, "message": str(exc)}, HTTPStatus.BAD_REQUEST)
+            return
+        if route == "/api/mail/reply-dismiss":
+            # 답장할 메일에서 빼기 {id, undo}. 메일 서버에는 손대지 않고 데이터 폴더의 reply_state.json 에만 적는다
+            payload = self.read_body_json()
+            mail_id = str(payload.get("id") or "").strip()[:120]
+            if not mail_id:
+                self.send_json({"ok": False, "message": "어느 메일인지 알 수 없어요."}, HTTPStatus.BAD_REQUEST)
+                return
+            mark_reply_state(workspace, "dismissed", [mail_id], on=not payload.get("undo"))
+            self.send_json({"ok": True, "id": mail_id, "dismissed": not payload.get("undo")})
             return
         if route in ("/api/mail/star", "/api/mail/move", "/api/mail/folder-create", "/api/mail/reminder"):
             try:
@@ -6899,10 +7642,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 if not isinstance(entries, list) or not entries:
                     raise ValueError("추가할 수업이 없습니다.")
                 if payload.get("replace"):
-                    atomic_write_text(workspace.timetable_path, 
-                        json.dumps({"entries": [], "semester": ""}, ensure_ascii=False),
-                        encoding="utf-8",
-                    )
+                    _write_timetable(workspace, [], "")
                 saved = 0
                 for item in entries:
                     try:
@@ -6913,6 +7653,17 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 self.send_json({"ok": True, "saved": saved, **get_timetable(workspace)})
             except Exception as exc:
                 self.send_json({"ok": False, "message": str(exc)}, HTTPStatus.BAD_REQUEST)
+            return
+        if route == "/api/timetable/lms-apply":
+            # '시간표 편집' 의 내 LMS 과목에서 고른 과목 넣기 (apply_lms_timetable)
+            try:
+                ids = self.read_body_json().get("ids")
+                self.send_json(apply_lms_timetable(workspace, ids if isinstance(ids, list) else []))
+            except Exception as exc:
+                self.send_json({"ok": False, "message": str(exc)}, HTTPStatus.BAD_REQUEST)
+            return
+        if route == "/api/timetable/lms-seen":
+            self.send_json(dismiss_lms_auto_notice(workspace))
             return
         if route == "/api/timetable/save":
             try:
@@ -6974,6 +7725,18 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             # 앱을 보고 있는지 (메일 자동 확인 주기, effective_minutes)
             PRESENCE.update(viewing=bool(self.read_body_json().get("viewing")), at=time.time())
             self.send_json({"ok": True})
+            return
+        if route == "/api/background-sync":
+            try:
+                if MULTI_USER_MODE:
+                    raise ValueError("공유 웹사이트 모드에서는 쓰지 않습니다.")
+                on = bool(self.read_body_json().get("on"))
+                result = background_sync.apply(workspace.root, on, str(read_config(workspace).get("SCHEDULE_TIME", "08:00")))
+                if result.get("ok"):
+                    write_config(workspace, {"backgroundSync": on})
+                self.send_json(result, HTTPStatus.OK if result.get("ok") else HTTPStatus.BAD_REQUEST)
+            except Exception as exc:
+                self.send_json({"ok": False, "message": str(exc)}, HTTPStatus.BAD_REQUEST)
             return
         if route == "/api/autostart":
             try:
@@ -7224,7 +7987,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             except (ai_cli.AIError, ValueError) as exc:
                 self.send_json({"ok": False, "message": str(exc)}, HTTPStatus.BAD_REQUEST)
             return
-        if route in ("/api/ai/profile", "/api/ai/search", "/api/ai/draft", "/api/ai/polish", "/api/ai/continue"):
+        if route in ("/api/ai/profile", "/api/ai/search", "/api/ai/compose", "/api/ai/revise", "/api/ai/rewrite"):
             # AI CLI 도우미 (ai_cli.py). 답이 10초쯤 걸리지만 서버가 요청마다 스레드를 써서 화면은 멈추지 않는다.
             import ai_cli
 
@@ -7248,23 +8011,21 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 if route == "/api/ai/search":
                     index = payload.get("index") if isinstance(payload.get("index"), list) else []
                     res = ai_cli.search(str(payload.get("query") or ""), index, provider, model=model)
-                elif route == "/api/ai/polish":
-                    # 메일 쓰기 흐름의 가운데(용건)만 다듬는다. 인사·소개·서명은 화면이 이미 넣었다.
-                    flow = payload.get("flow") if isinstance(payload.get("flow"), dict) else {}
-                    res = ai_cli.polish(str(payload.get("text") or ""), str(payload.get("lang") or "ko"), flow,
-                                        provider, model=model)
-                elif route == "/api/ai/continue":
-                    # 메일 쓰기 칸의 '/ai 지시' 자리에 들어갈 글 (앞 글에 이어지고 뒤 글과 겹치지 않게)
-                    flow = payload.get("flow") if isinstance(payload.get("flow"), dict) else {}
-                    res = ai_cli.continue_text(str(payload.get("instruction") or ""), str(payload.get("before") or ""),
-                                               str(payload.get("after") or ""), str(payload.get("lang") or "ko"), flow,
-                                               provider, model=model)
+                elif route == "/api/ai/compose":
+                    # 메일 쓰기 옆 창: 부탁 한 마디 → 받는 사람·참조·제목·본문 (모자라면 되묻기)
+                    self.send_json(mail_ai_compose(workspace, payload, provider, model))
+                    return
+                elif route == "/api/ai/revise":
+                    # 다 쓴 메일 고치기 (옆 창의 이어지는 말, 본문의 '/ai 지시')
+                    self.send_json(mail_ai_revise(workspace, payload, provider, model))
+                    return
                 else:
-                    context = payload.get("context") if isinstance(payload.get("context"), dict) else {}
-                    # 이름·학번·소속은 직접 적은 값이 없으면 LMS·조직도에서 가져온 값으로
-                    me = mail_me(workspace)["me"]
-                    merged = {**profile, **{k: str(me.get(k) or "") for k in ("name", "nameEn", "studentId", "dept", "deptEn", "year")}}
-                    res = ai_cli.draft(str(payload.get("request") or ""), merged, context, provider, model=model)
+                    # 본문에서 끌어 고른 부분만 고치기 (고른 자리에 댓글 달듯)
+                    flow = payload.get("flow") if isinstance(payload.get("flow"), dict) else {}
+                    res = ai_cli.rewrite_part(str(payload.get("instruction") or ""), str(payload.get("selection") or ""),
+                                              str(payload.get("before") or ""), str(payload.get("after") or ""), flow,
+                                              provider, model=model, subject=str(payload.get("subject") or ""),
+                                              quote=str(payload.get("quote") or ""))
                 res["engine"] = res.get("modelLabel") or ai_cli.LABELS.get(res.get("provider"), "")
                 self.send_json(res)
             except ai_cli.AIError as exc:
