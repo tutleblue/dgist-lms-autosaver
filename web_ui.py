@@ -436,7 +436,8 @@ def write_config(workspace: UserWorkspace, payload: dict[str, Any]) -> dict[str,
         values["EMAIL_HIDE_PAST"] = bool(existing.get("EMAIL_HIDE_PAST", False))
     # 알림 스위치 (기본은 켜짐). 스위치 하나만 보낸 저장(누르는 즉시 저장)이 다른 스위치를 기본값으로 되돌리지 않게
     # 보내지 않은 것은 있던 값을 그대로 둔다 (예전엔 '새 자료 알림' 을 누르면 꺼 둔 '마감 알림' 이 다시 켜졌다)
-    for flag, key in (("notifyDeadlines", "NOTIFY_DEADLINES"), ("notifyNewFiles", "NOTIFY_NEW_FILES")):
+    for flag, key in (("notifyDeadlines", "NOTIFY_DEADLINES"), ("notifyNewFiles", "NOTIFY_NEW_FILES"),
+                      ("autoCopyAuthCode", "AUTO_COPY_AUTH_CODE")):
         if flag in payload:
             values[key] = bool(payload.get(flag))
         elif key in existing:
@@ -1919,6 +1920,26 @@ def mark_reply_state(workspace: UserWorkspace, kind: str, mail_ids: list[str], o
         atomic_write_text(_reply_state_path(workspace), json.dumps(state, ensure_ascii=False, indent=2))
 
 
+_auth_code_memo: dict[tuple[str, int], str] = {}
+# 메일 가져오기가 잘 끝나면 부를 것들 (app 이 넣는다: 인증번호 자동 복사). web_ui 는 app 을 부를 수 없어 이렇게 잇는다
+MAIL_FETCHED_HOOKS: list = []
+
+
+def auth_code_of(mail: dict) -> str:
+    """메일 한 통의 인증번호 (없으면 ''). 같은 메일은 다시 훑지 않는다 — 목록은 5분마다 새로 읽힌다."""
+    body = str(mail.get("body") or "")
+    if not body.strip() and mail.get("bodyHtml"):
+        body = html.unescape(re.sub(r"<[^>]+>", " ", str(mail.get("bodyHtml"))))
+    key = (str(mail.get("id") or ""), len(body))
+    if key not in _auth_code_memo:
+        import email_reader
+
+        if len(_auth_code_memo) > 5000:
+            _auth_code_memo.clear()
+        _auth_code_memo[key] = email_reader.find_auth_code(str(mail.get("subject") or ""), body)
+    return _auth_code_memo[key]
+
+
 def get_emails(workspace: UserWorkspace) -> dict[str, Any]:
     stamp = (
         str(workspace.emails_log),
@@ -1975,6 +1996,17 @@ def get_emails(workspace: UserWorkspace) -> dict[str, Any]:
                     item["replyDismissed"] = True
     except Exception as exc:
         print(f"[메일] 답장할 메일을 고르지 못했습니다: {exc}")
+    # 인증번호: 목록·읽기 창에서 바로 복사하게 본문에서 골라 둔다 (내가 보낸 메일·임시 보관함은 빼고)
+    try:
+        for item in listed:
+            if item.get("folder") in ("sent", "draft"):
+                continue
+            mail = by_id.get(str(item.get("id"))) or {}
+            code = auth_code_of(mail)
+            if code:
+                item["authCode"] = code
+    except Exception as exc:
+        print(f"[메일] 인증번호를 고르지 못했습니다: {exc}")
     result = {
         "updatedAt": data.get("updatedAt"),
         "briefing": data.get("briefing", ""),
@@ -3958,11 +3990,22 @@ def get_whats_new(workspace: UserWorkspace) -> dict[str, Any]:
     # 앱 안 '지금 업데이트' 로 방금 바뀌었으면 화면이 '업데이트를 마쳤어요' 카드를 띄운다
     marker = read_json(updater.update_marker_path(), {})
     just = marker if isinstance(marker, dict) and str(marker.get("to", "")) == version else None
+    # 설치를 넘겼는데 옛 버전 그대로 켜졌다: 설치가 중간에 그만둔 것 (설치 프로그램이 옛 앱을 다시 켜 준다,
+    # daling.iss DeinitializeSetup). 말없이 '업데이트' 단추만 남아 있었으니 한 번 알린다
+    failed = None
+    if (isinstance(marker, dict) and not just and str(marker.get("from", "")) == version
+            and not updater.updating()):
+        failed = marker
+        try:
+            updater.update_marker_path().unlink(missing_ok=True)
+        except OSError:
+            pass
     return {
         "version": version,
         "seen": str((seen or {}).get("seen", "")) if isinstance(seen, dict) else "",
         "entries": entries,
         "justUpdated": just,
+        "updateFailed": failed,
     }
 
 
@@ -4003,6 +4046,13 @@ def _window_chrome_call(action, payload=None):
         return {"custom": False, "maximized": False}
     if action in ("minimize", "maximize", "close"):
         return window_chrome.command(action)
+    if action == "zoom":
+        # 화면이 Ctrl+휠·핀치를 받아 보낸다 (window_chrome.zoom 설명)
+        try:
+            step = max(-1, min(1, int((payload or {}).get("step") or 0)))
+        except (TypeError, ValueError):
+            step = 0
+        return {**window_chrome.state(), **window_chrome.zoom(step)}
     return window_chrome.state()
 
 
@@ -5544,6 +5594,7 @@ def safe_public_config(workspace: UserWorkspace) -> dict[str, Any]:
         "hidePastEmails": bool(config.get("EMAIL_HIDE_PAST", False)),
         "notifyDeadlines": config.get("NOTIFY_DEADLINES", True) is not False,
         "notifyNewFiles": config.get("NOTIFY_NEW_FILES", True) is not False,
+        "autoCopyAuthCode": config.get("AUTO_COPY_AUTH_CODE", True) is not False,
         "localSavePath": config.get("LOCAL_SAVE_PATH", ""),
         "autoLocalSave": local_autosave_mode(config),
         "localSaveFolder": str(get_local_save_dir(workspace)),
@@ -5779,6 +5830,14 @@ def run_process(workspace: UserWorkspace, kind: str, command: list[str] | None, 
         except Exception as exc:
             append_log(key, f"[자동 저장] 저장하지 못했습니다: {exc}")
 
+    # 메일을 새로 받았으면 바로 (app.check_auth_code_alerts — 막 온 인증번호 복사)
+    if kind == "emails" and return_code == 0:
+        for hook in list(MAIL_FETCHED_HOOKS):
+            try:
+                hook(workspace)
+            except Exception as exc:
+                append_log(key, f"[인증번호] 건너뜀: {exc}")
+
     # 성공/실패 기록 (조용한 실패를 사용자에게 알리기 위함)
     if kind in ("sync", "emails", "deadlines"):
         # 서버가 로그인 자체를 거절했는지 (네트워크 오류와 구분해 자동 재시도를 멈춘다)
@@ -5862,6 +5921,10 @@ def start_task(workspace: UserWorkspace, kind: str, sync_mode: str = "fast", aut
     if demo_mode.active():
         # 체험 중: LMS·메일 서버에 가짜 계정으로 로그인하러 가지 않는다 (자동 실행도 여기서 멈춘다)
         return False, demo_mode.BLOCK_MESSAGE
+    if _app_updating():
+        # 업데이트를 받는 사이 자동 확인이 작업 프로세스를 띄우면, 그 프로세스가 설치할 파일을 쥐어
+        # 조용한 설치가 말없이 그만뒀다 (2026-11-13 재현). 설치가 끝나 다시 켜지면 그대로 돈다
+        return False, "업데이트를 설치하는 중이에요. 다시 켜지면 이어서 할게요."
     if kind in ("sync", "deadlines", "emails") and background_sync.busy(workspace.root):
         # 앱을 꺼 둔 사이 시작한 하루 한 번 동기화(app.run_background)가 아직 돈다. LMS·메일 로그인이 겹치지 않게
         return False, "뒤에서 하루 한 번 가져오기를 하는 중이에요. 끝나면 화면에 바로 보여요."
@@ -5946,6 +6009,53 @@ def start_task(workspace: UserWorkspace, kind: str, sync_mode: str = "fast", aut
     thread = threading.Thread(target=run_process, args=(workspace, kind, command, extra_env, auto), daemon=True)
     thread.start()
     return True, "작업을 시작했습니다."
+
+
+def _app_updating() -> bool:
+    try:
+        import updater
+
+        return updater.updating()
+    except Exception:
+        return False
+
+
+def stop_workers_for_update(timeout: float = 8.0) -> int:
+    """앱 안 업데이트 직전: 이 앱이 띄운 작업 프로세스(Daling.exe --autosaver-job …)를 모두 끝낸다. 끝낸 수.
+
+    os._exit 로 앱이 꺼져도 작업 프로세스는 따로 살아남아 설치할 파일(Daling.exe·_internal)을 쥐고 있었다.
+    창이 없어 설치 프로그램(Restart Manager)도 닫지 못하고, /VERYSILENT /SUPPRESSMSGBOXES 설치는 말없이
+    그만둬 앱이 꺼진 채 남았다 (2026-11-13 사용자 신고, 내려받는 사이 마감 확인을 띄워 그대로 재현).
+    작업은 '멈추기' 단추와 같게 끝낸다 — 데이터 파일은 atomic_write 라 중간에 끊겨도 깨지지 않는다.
+    자식(Playwright 브라우저)까지 끝내려고 Windows 는 taskkill /T.
+    """
+    with task_lock:
+        procs = [p for p in current_processes.values() if p is not None and p.poll() is None]
+    try:
+        import email_reader
+
+        email_reader.abort_refresh()  # 서버 안에서 도는 메일 새로고침은 앱과 함께 꺼진다. 연결만 먼저 놓는다
+    except Exception:
+        pass
+    for proc in procs:
+        try:
+            if os.name == "nt":
+                subprocess.run(["taskkill", "/F", "/T", "/PID", str(proc.pid)], capture_output=True,
+                               timeout=10, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+            else:
+                proc.terminate()
+        except Exception:
+            pass
+    deadline = time.time() + timeout
+    for proc in procs:
+        try:
+            proc.wait(timeout=max(0.1, deadline - time.time()))
+        except Exception:
+            try:
+                proc.kill()
+            except Exception:
+                pass
+    return len(procs)
 
 
 def stop_task(workspace: UserWorkspace, lane: str = "") -> tuple[bool, str]:
@@ -7135,7 +7245,8 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                     # 설치 프로그램이 파일을 바꿀 수 있게 앱을 끈다. 화면이 '설치 중' 을 받아 갈 틈을 준다.
                     threading.Timer(2.0, lambda: os._exit(0)).start()
 
-                self.send_json(updater.apply_update(on_ready_to_exit=exit_for_installer))
+                self.send_json(updater.apply_update(on_ready_to_exit=exit_for_installer,
+                                                    before_install=stop_workers_for_update))
             except Exception as exc:
                 self.send_json({"ok": False, "message": str(exc)}, HTTPStatus.BAD_REQUEST)
             return
@@ -7720,6 +7831,17 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 self.send_json(open_external_url(self.read_body_json()))
             except Exception as exc:
                 self.send_json({"ok": False, "message": str(exc)}, HTTPStatus.BAD_REQUEST)
+            return
+        if route == "/api/clipboard":
+            # 인증번호 복사 단추 (app.js copyAuthCode). 화면의 navigator.clipboard 대신 운영체제에 직접 넣어
+            # Win+V 기록·클라우드 클립보드에 남기지 않는다(system_clipboard). 번호만 받으므로 짧게 자른다
+            text = str(self.read_body_json().get("text") or "").strip()[:64]
+            if MULTI_USER_MODE or not text:
+                self.send_json({"ok": False})
+                return
+            import system_clipboard
+
+            self.send_json({"ok": system_clipboard.copy_text(text, sensitive=True)})
             return
         if route == "/api/presence":
             # 앱을 보고 있는지 (메일 자동 확인 주기, effective_minutes)

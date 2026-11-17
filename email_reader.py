@@ -2040,6 +2040,86 @@ def reply_ask_sentence(body: str) -> str:
     return ""
 
 
+# ===== 인증번호 찾기 (2026-11-17) =====
+# 생활관·포털·바깥 서비스가 '인증코드는 003490 입니다' 같은 메일을 보낸다. 메일을 열어 숫자를 골라 복사하는 대신
+# 목록에서 바로 복사하고, 막 온 것은 저절로 복사되게(app.check_auth_code_alerts) 여기서 숫자를 찾아 둔다.
+# 저절로 복사는 클립보드를 덮어쓰므로 '드레스 코드는 크리스마스'(실제 행사 메일) 같은 말에 걸리지 않게
+# 낱말은 '인증·확인·보안 + 번호·코드', 'verification code' 처럼 짝으로만 본다.
+# 실제 생활관 메일에는 같은 본문에 전화번호(053-720-7882~3)가 함께 있었다 — 이어진 숫자 묶음의 한 토막은 고르지 않는다.
+_AUTH_KEY = re.compile(
+    r"인증\s*(?:번호|코드)|확인\s*(?:번호|코드)|보안\s*(?:번호|코드)|승인\s*번호|일회용\s*(?:비밀\s*번호|번호|코드)|로그인\s*코드|"
+    r"\b(?:verification|authentication|security|confirmation|login|log-?in|sign-?in|sign-?up|one-?time|access|temporary|"
+    r"2fa|otp|mfa|auth)\s+(?:pass)?code\b|\bpasscode\b|\bone-?time\s+password\b|\bOTP\b",
+    re.I,
+)
+# 123 456 · 123-456 · ABC-123 · 003490 · A1B2C3 (대문자만 — 낱말을 코드로 잘못 고르지 않게)
+_AUTH_TOKEN = re.compile(r"(?<![0-9A-Za-z])(\d{3}[ -]\d{3}|[A-Z0-9]{2,5}-[A-Z0-9]{2,5}|[A-Z0-9]{4,8})")
+_AUTH_UNIT_AFTER = re.compile(r"\s*(?:원|년|월|일|시|분|초|개|명|건|회|학|%|달러|won\b|krw\b|usd\b|years?\b|min|sec|hours?\b|days?\b)", re.I)
+_AUTH_DATE_AFTER = re.compile(r"\s*[.년/-]\s*\d{1,2}\s*[.월/-]")
+
+
+def _auth_token_ok(text: str, match: re.Match) -> bool:
+    token = match.group(1)
+    compact = token.replace(" ", "").replace("-", "")
+    if not any(ch.isdigit() for ch in compact):
+        return False
+    if any(ch.isalpha() for ch in compact) and not 6 <= len(compact) <= 8:
+        return False
+    start, end = match.start(1), match.end(1)
+    nxt = text[end:end + 2]
+    if nxt[:1].isascii() and nxt[:1].isalnum():
+        return False  # 더 긴 숫자·낱말의 앞 토막 (9자리 학번 등)
+    if nxt[:1] in "-./:," and nxt[1:2].isdigit():
+        return False  # 날짜·시각·금액·전화번호의 앞 토막
+    prev = text[max(0, start - 2):start]
+    if prev[-1:] in "-./:," and prev[:1].isdigit():
+        return False  # 전화번호·날짜의 뒤 토막 (053-720-7882)
+    if prev[-1:] in "#$₩€£":
+        return False  # 주문 번호·금액
+    if len(compact) == 4 and compact.isdigit() and 1990 <= int(compact) <= 2099:
+        return False  # '[2026 DGIST] 확인 코드 안내' 의 연도
+    after = text[end:end + 12]
+    if _AUTH_UNIT_AFTER.match(after) or _AUTH_DATE_AFTER.match(after):
+        return False
+    # 주소·메일·링크 안의 숫자 (…/verify?code=123456, 학번@dgist.ac.kr) 는 고르지 않는다
+    head = re.search(r"\S*$", text[max(0, start - 80):start]).group(0)
+    tail = re.match(r"\S*", text[end:end + 80]).group(0)
+    return not re.search(r"@|://|=|www\.|\.(?:com|kr|net|org)\b", head + token + tail, re.I)
+
+
+def _auth_compact(token: str) -> str:
+    # 숫자만 나뉜 것(123 456·123-456)은 붙여서 — 입력 칸 대부분이 숫자만 받는다. ABC-123 은 그대로
+    return re.sub(r"[ -]", "", token) if re.fullmatch(r"\d{3}[ -]\d{3}", token) else token
+
+
+def find_auth_code(subject: str, body: str) -> str:
+    """메일 제목·본문에서 인증번호 하나를 고른다. 없으면 빈 문자열.
+
+    '인증번호'·'verification code' 같은 말 바로 뒤(160자 안)에 처음 나오는 코드를 고르고,
+    뒤에 없으면 앞 60자 안('123456 is your code')에서 가장 가까운 것을 고른다. 여러 번 나오면 말과 가장 가까운 것.
+    """
+    text = f"{subject or ''}\n{(body or '')[:6000]}"
+    if not _AUTH_KEY.search(text):
+        return ""
+    best: tuple[int, str] | None = None
+    for key in _AUTH_KEY.finditer(text):
+        found: tuple[int, str] | None = None
+        for match in _AUTH_TOKEN.finditer(text, key.end(), min(len(text), key.end() + 160)):
+            if _auth_token_ok(text, match):
+                found = (match.start(1) - key.end(), _auth_compact(match.group(1)))
+                break
+        if found is None:
+            for match in reversed(list(_AUTH_TOKEN.finditer(text, max(0, key.start() - 60), key.start()))):
+                if _auth_token_ok(text, match):
+                    found = (key.start() - match.end(1) + 40, _auth_compact(match.group(1)))
+                    break
+        if found and (best is None or found[0] < best[0]):
+            best = found
+        if best and best[0] <= 2:
+            break
+    return best[1] if best else ""
+
+
 def _naive_time(value: Any) -> datetime | None:
     try:
         when = datetime.fromisoformat(str(value or ""))

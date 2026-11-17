@@ -373,6 +373,63 @@ def check_announcement_alerts(workspace, config: dict) -> None:
     notify(f"새 공지 {len(fresh)}건", "\n".join(lines), private=True)
 
 
+# ===== 인증번호 자동 복사 (2026-11-17) =====
+# 생활관·포털·바깥 서비스 인증 메일이 오면 메일을 열 필요 없이 번호를 클립보드에 넣고 알린다.
+# 인증번호는 보통 3~10분 안에 끝나므로 막 온 것(10분 안)만, 한 통에 한 번만. 화면의 navigator.clipboard 는
+# 창이 뒤에 있으면 거절당해 운영체제 클립보드에 직접 넣는다(system_clipboard).
+AUTH_COPY_MINUTES = 10
+_auth_copy_lock = threading.Lock()
+_auth_copied: set[str] = set()  # alerts.json 은 다른 알림 검사와 함께 고쳐 써서 이 기록이 덮일 수 있다 — 켜져 있는 동안은 여기로 막는다
+
+
+def check_auth_code_alerts(workspace, config: dict) -> None:
+    """막 온 인증 메일의 번호를 클립보드에 복사하고 알린다 (설정 '인증번호 자동 복사', 기본 켬)."""
+    if not _alert_on(config, "AUTO_COPY_AUTH_CODE"):
+        return
+    if web_ui.app_locked():
+        # 잠가 두고 자리를 비운 사이 남이 요청한 인증번호가 클립보드에 들어가 있으면 안 된다
+        return
+    now = datetime.now().astimezone()
+    with _auth_copy_lock:
+        fresh = []
+        for mail in web_ui.get_emails(workspace).get("emails", []):
+            mail_id = str(mail.get("id") or "")
+            if not mail.get("authCode") or mail.get("folder") not in ("inbox", "promo") or mail_id in _auth_copied:
+                continue
+            try:
+                when = datetime.fromisoformat(str(mail.get("date") or "")).astimezone()
+            except ValueError:
+                continue
+            # 보낸 쪽 시계가 조금 빠를 수 있어 앞으로 5분까지는 받아 준다
+            if -300 <= (now - when).total_seconds() <= AUTH_COPY_MINUTES * 60:
+                fresh.append((when, mail_id, mail))
+        if not fresh:
+            return
+        data = _load_alerts(workspace)
+        done = data.get("authCopied") if isinstance(data.get("authCopied"), list) else []
+        _auth_copied.update(str(i) for i in done)
+        fresh = [item for item in fresh if item[1] not in _auth_copied]
+        if not fresh:
+            return
+        _auth_copied.update(item[1] for item in fresh)
+        data["authCopied"] = list(dict.fromkeys(done + [item[1] for item in fresh]))[-200:]
+        _save_alerts(workspace, data)
+    _when, _mail_id, mail = max(fresh, key=lambda item: item[0])  # 여러 통이면 가장 늦게 온 것
+    code = str(mail["authCode"])
+    import system_clipboard
+
+    if not system_clipboard.copy_text(code, sensitive=True):
+        notify(f"인증번호 {code}", "클립보드에 넣지 못했어요. Daling 메일에서 복사해 주세요.")
+        return
+    sender = str(mail.get("fromName") or mail.get("fromEmail") or mail.get("subject") or "").strip()
+    paste = "⌘V" if sys.platform == "darwin" else "Ctrl+V"
+    notify(f"인증번호 {code} 복사했어요", f"{sender[:40]} · {paste} 로 붙여 넣으면 돼요")
+
+
+def _after_mail_fetched(workspace) -> None:
+    check_auth_code_alerts(workspace, web_ui.read_config(workspace))
+
+
 def upcoming_deadline_summary(workspace, hours: int = 48) -> str:
     """N시간 내 미제출 마감 요약 문자열 (없으면 빈 문자열)."""
     deadlines = web_ui.get_deadlines(workspace)
@@ -488,6 +545,7 @@ def scheduler_loop() -> None:
                 check_deadline_alerts(workspace, config)
                 check_new_file_alerts(workspace, config)
                 check_announcement_alerts(workspace, config)
+                check_auth_code_alerts(workspace, config)
             except Exception:
                 pass
 
@@ -1194,6 +1252,8 @@ def main() -> None:
         web_ui.BOOT.update(start=_process_started_at(), server=time.time(), **_marks)
         threading.Thread(target=_prewarm_first_screen, daemon=True).start()
         threading.Thread(target=scheduler_loop, daemon=True).start()
+        # 메일을 받아 오자마자 인증번호를 복사한다 (스케줄러의 30초 차례를 기다리지 않게)
+        web_ui.MAIL_FETCHED_HOOKS.append(_after_mail_fetched)
         # Claude 연결: 설정에서 켠 사람만 중계 서버에 잇는다. 꺼 두면 스레드는 기다리기만 한다 (claude_link)
         import claude_link
 

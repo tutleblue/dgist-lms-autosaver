@@ -2635,5 +2635,19 @@
  "{0}: 연결됨": "{0}: connected",
  "메일 AI 연결": "Mail AI connection",
  "메일 쓰기의 AI 가 쓰는 {0} 로그인이 만료됐어요. 이때 AI 는 'auth·token 실패' 같은 말로 멈춰요. 설정 → AI 연결에서 다시 연결해 주세요.": "The {0} sign-in used by the mail-writing AI has expired. When that happens the AI stops with messages like 'auth/token failed'. Reconnect in Settings → AI connection.",
- "상태를 확인하지 못함": "Couldn't check the status"
+ "상태를 확인하지 못함": "Couldn't check the status",
+ "v{0} 업데이트를 마치지 못했어요. 왼쪽 아래 '새 버전 설치'를 다시 눌러 주세요.": "Couldn't finish updating to v{0}. Press 'Install update' at the bottom left again.",
+ "업데이트를 설치하는 중이에요. 다시 켜지면 이어서 할게요.": "Installing an update. This will continue after the app reopens.",
+ "[인증번호] 건너뜀: {0}": "[Verification code] Skipped: {0}",
+ "마감 알림을 껐어요": "Deadline alerts off",
+ "마감 알림을 켰어요": "Deadline alerts on",
+ "새 자료·공지 알림을 껐어요": "New file & notice alerts off",
+ "새 자료·공지 알림을 켰어요": "New file & notice alerts on",
+ "인증번호": "Verification code",
+ "인증번호 복사": "Copy verification code",
+ "인증번호 {0} 복사했어요. Ctrl+V 로 붙여 넣으세요.": "Copied verification code {0}. Paste it with Ctrl+V.",
+ "인증번호 메일이 막 오면 번호를 클립보드에 넣고 알려 줍니다. 붙여 넣기만 하면 돼요. 앱을 잠가 두었을 때는 하지 않습니다.": "When a verification-code email just arrived, the code is put on your clipboard and you get a notification. Just paste it. This doesn't happen while the app is locked.",
+ "인증번호 자동 복사": "Auto-copy verification codes",
+ "인증번호 자동 복사를 껐어요": "Verification code auto-copy off",
+ "인증번호 자동 복사를 켰어요": "Verification code auto-copy on"
 }

@@ -178,24 +178,60 @@ begin
       if (V <> '') and (V <> '0.0.0.0') then Result := True;
 end;
 
+var
+  InstallFinished: Boolean; // 파일을 다 깔았는지 (DeinitializeSetup 이 본다)
+
 // 예전 설치 폴더(Programs\붕어빵)에서 도는 앱·작업을 닫는다. CloseApplications 는 새 폴더({app}) 파일만 보므로
 // 예전 앱이 켜진 채로 남아 그 폴더를 지우지 못한다. 앱 안 업데이트도 예전 앱이 이 설치 파일을 띄운다(updater.py).
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 var
   Code: Integer;
-  OldDir: String;
+  OldDir, AppDir: String;
 begin
   OldDir := ExpandConstant('{localappdata}\Programs\{#OldFolder}\');
   if DirExists(OldDir) then
     Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
       '-NoProfile -ExecutionPolicy Bypass -Command "Get-CimInstance Win32_Process | Where-Object { $_.ExecutablePath -and $_.ExecutablePath.StartsWith(''' + OldDir + ''', [StringComparison]::OrdinalIgnoreCase) } | ForEach-Object { taskkill.exe /F /T /PID $_.ProcessId }"',
       '', SW_HIDE, ewWaitUntilTerminated, Code);
+  // 뒤에서 도는 작업(Daling.exe --autosaver-job …·하루 한 번 동기화 --autosaver-background)은 창이 없어
+  // CloseApplications(Restart Manager)가 닫지 못한다. 앱 안 업데이트(/VERYSILENT /SUPPRESSMSGBOXES)는 그 파일을
+  // 못 바꾸면 아무 말 없이 설치를 그만두어, 앱은 꺼진 채 다시 켜지지도 업데이트되지도 않았다
+  // (2026-11-13 사용자 신고 · 내려받는 사이 마감 확인을 띄워 그대로 재현: 작업만 남고 설치 프로그램이 9초 만에 끝남).
+  // 이 설치 폴더의 작업 프로세스만 닫는다. 창 있는 앱은 Restart Manager 가 묻고 닫게 둔다(설치 창으로 깔 때).
+  AppDir := ExpandConstant('{app}\');
+  Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
+    '-NoProfile -ExecutionPolicy Bypass -Command "Get-CimInstance Win32_Process | Where-Object { $_.ExecutablePath -and $_.ExecutablePath.StartsWith(''' + AppDir + ''', [StringComparison]::OrdinalIgnoreCase) -and $_.Name -notlike ''unins*'' -and ($_.CommandLine -like ''*--autosaver-*'' -or $_.ExecutablePath.StartsWith(''' + AppDir + '_internal\'', [StringComparison]::OrdinalIgnoreCase)) } | ForEach-Object { taskkill.exe /F /T /PID $_.ProcessId }"',
+    '', SW_HIDE, ewWaitUntilTerminated, Code);
   Result := '';
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+begin
+  if CurStep = ssPostInstall then
+    InstallFinished := True;
 end;
 
 function ShouldRelaunch: Boolean;
 begin
   Result := WizardSilent and (ExpandConstant('{param:relaunch|0}') = '1');
+end;
+
+// 앱 안 업데이트(/RELAUNCH=1)인데 설치를 마치지 못하고 끝나면(파일이 쓰이는 중 등), 앱은 이미 스스로 꺼져 있어
+// 아무것도 안 보인 채 끝났다. 하던 앱(옛 버전)이라도 다시 켜 둔다. 켜진 앱이 '업데이트를 마치지 못했어요' 를 알린다.
+procedure DeinitializeSetup;
+var
+  Code: Integer;
+  Exe: String;
+begin
+  if InstallFinished or not ShouldRelaunch then
+    Exit;
+  try
+    Exe := ExpandConstant('{app}\{#AppExe}');
+  except
+    Exe := ExpandConstant('{localappdata}\Programs\{#AppFolder}\{#AppExe}');
+  end;
+  if FileExists(Exe) then
+    ExecAsOriginalUser(Exe, '', ExtractFileDir(Exe), SW_SHOWNORMAL, ewNoWait, Code);
 end;
 
 function NeedsWebView2: Boolean;

@@ -997,6 +997,15 @@
                             <button class="button compact ghost" id="readReplyAskDismiss" type="button">안 해도 돼요</button>
                           </div>
                         </div>
+                        <!-- 인증번호: 본문에서 고른 번호와 복사 단추 (app.js paintReadAuthCode) -->
+                        <div class="read-auth-code" id="readAuthCode" hidden>
+                          <span class="icon" data-icon="key" aria-hidden="true"></span>
+                          <span class="rac-label">인증번호</span>
+                          <strong class="rac-code" id="readAuthCodeValue"></strong>
+                          <button class="button compact primary" id="readAuthCodeCopy" type="button">
+                            <span class="icon" data-icon="copy" aria-hidden="true"></span>복사
+                          </button>
+                        </div>
                         <!-- 첨부: 누르면 받는다 (renderReadAttachments) -->
                         <div class="read-attachments" id="readAttachments" hidden></div>
                         <!-- HTML 메일은 스크립트를 막은 iframe 안에서 그린다 -->
@@ -1822,6 +1831,13 @@
                   <button type="button" class="hint" data-hint="LMS에 새 강의자료·과목 공지가 올라오거나 자료가 고쳐 다시 올라오면 알려 줍니다.">?</button>
                 </span>
                 <span class="toggle"><input type="checkbox" name="notifyNewFiles" id="notifyNewFiles" /><span class="track"></span></span>
+              </label>
+              <label class="st-auto-item">
+                <span class="icon" data-icon="key"></span>
+                <span class="st-auto-label">인증번호 자동 복사
+                  <button type="button" class="hint" data-hint="인증번호 메일이 막 오면 번호를 클립보드에 넣고 알려 줍니다. 붙여 넣기만 하면 돼요. 앱을 잠가 두었을 때는 하지 않습니다.">?</button>
+                </span>
+                <span class="toggle"><input type="checkbox" name="autoCopyAuthCode" id="autoCopyAuthCode" /><span class="track"></span></span>
               </label>
               <!-- 맥·리눅스만 (/api/autostart). Windows 는 설치할 때 고른다 -->
               <label class="st-auto-item" id="autostartRow" hidden>

@@ -63,6 +63,8 @@ hiddenimports = [
     "mail_flow",
     # 문제 점검 (web_ui 가 함수 안에서 불러온다)
     "doctor",
+    # 인증번호 자동 복사 (app.check_auth_code_alerts · web_ui /api/clipboard 가 함수 안에서 불러온다)
+    "system_clipboard",
     # Claude 연결 (app.main 이 함수 안에서 불러온다). websockets 는 google-genai 도 쓰지만 sync 쪽은 이것만 쓴다
     "claude_link",
     "websockets.sync.client",
