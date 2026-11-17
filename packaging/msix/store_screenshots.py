@@ -163,7 +163,10 @@ def main() -> None:
     theme = "dark" if args.theme == "dark" else "claude"
     # 소개·새 업데이트 창이 화면을 덮지 않게 본 것으로 둔다
     version = (args.src / "VERSION").read_text(encoding="utf-8").strip()
-    (root / "tutorial.json").write_text(json.dumps({"done": True, "skipped": True, "step": 0}), encoding="utf-8")
+    # views '*' = 화면별 소개(2026-10-21~)까지 다 봄. 예전처럼 skipped 만 두면 화면에 들어갈 때마다 소개가 떠
+    # 어둡게 하는 막(.tour-dim)이 누르기를 가로챘다 (2026-11-17)
+    (root / "tutorial.json").write_text(json.dumps({"done": True, "skipped": False, "step": 0, "views": ["*"]}),
+                                        encoding="utf-8")
     (root / "whats_new.json").write_text(json.dumps({"seen": version}), encoding="utf-8")
     server = subprocess.Popen([str(python), "-X", "utf8", "scripts/dev_server.py"], cwd=args.src, env=env,
                               stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)

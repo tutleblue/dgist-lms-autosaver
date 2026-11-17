@@ -241,6 +241,13 @@ _job_lock = threading.Lock()
 _job: dict = {"running": False, "stage": "", "done": 0, "total": 0, "message": "", "ok": None}
 
 
+def updating() -> bool:
+    """앱 안 업데이트를 받는 중이거나 설치를 넘긴 뒤(곧 앱이 꺼짐)인지. 이때는 새 작업을 띄우지 않는다
+    (web_ui.start_task). 새로 뜬 작업 프로세스가 설치할 파일을 쥐고 있으면 설치가 말없이 그만둔다."""
+    with _job_lock:
+        return bool(_job.get("running")) or (_job.get("ok") is True and _job.get("stage") == "설치")
+
+
 def get_update_job() -> dict:
     with _job_lock:
         return dict(_job)
@@ -292,7 +299,7 @@ def _write_update_marker(old: str, new: str) -> None:
         pass
 
 
-def _run_update(on_ready_to_exit) -> None:
+def _run_update(on_ready_to_exit, before_install=None) -> None:
     try:
         _set_job(stage="확인", message="새 버전을 확인하는 중")
         release = _get_json(LATEST_RELEASE_API)
@@ -328,6 +335,10 @@ def _run_update(on_ready_to_exit) -> None:
             # 다시 켜진 앱이 '업데이트를 마쳤어요' 를 보여 줄 수 있게 적어 둔다 (web_ui.get_whats_new)
             _write_update_marker(local_version(), latest)
         else:
+            if before_install:
+                # 뒤에서 도는 작업(Daling.exe --autosaver-job …)을 먼저 끝낸다. 창이 없는 이 프로세스는 설치 프로그램이
+                # 닫지 못하고, 조용한 설치는 쓰이는 파일을 못 바꾸면 말없이 그만둬 앱이 꺼진 채 남았다 (2026-11-13 재현)
+                before_install()
             _write_update_marker(local_version(), latest)
             # 설치 프로그램이 켜져 있는 앱을 닫고(CloseApplications) 파일을 바꾼 뒤 다시 켠다(/RELAUNCH=1).
             # 진행은 앱 안 업데이트 카드가 보여 주므로 설치 창은 띄우지 않는다(/VERYSILENT).
@@ -445,7 +456,7 @@ def _start_mac_install(dmg: Path, handoff: Path | None = None) -> None:
         )
 
 
-def apply_update(on_ready_to_exit=None) -> dict:
+def apply_update(on_ready_to_exit=None, before_install=None) -> dict:
     """설치형 앱: 최신 설치 파일을 받아 확인한 뒤 설치를 시작한다(뒤에서 돈다)."""
     if _store_edition():
         return {"ok": False, "store": True, "message": STORE_NOTE}
@@ -465,7 +476,7 @@ def apply_update(on_ready_to_exit=None) -> dict:
         if _job["running"]:
             return {"ok": False, "busy": True, "message": "이미 업데이트하는 중입니다."}
         _job.update(running=True, stage="확인", done=0, total=0, message="", ok=None)
-    threading.Thread(target=_run_update, args=(on_ready_to_exit,), name="app-update", daemon=True).start()
+    threading.Thread(target=_run_update, args=(on_ready_to_exit, before_install), name="app-update", daemon=True).start()
     return {"ok": True, "started": True, "message": "새 버전을 내려받는 중입니다."}
 
 

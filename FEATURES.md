@@ -459,6 +459,7 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 | `/api/timetable/lms-plan` (GET), `/api/timetable/lms-apply`, `/api/timetable/lms-seen` | LMS 과목으로 시간표 채우기, 채웠다는 알림 닫기 |
 | `/api/my-events/save`, `/api/my-events/delete`, `/api/export-ics` | 내 일정, ics 저장 |
 | `/api/mark-read`, `/api/mark-all-read`, `/api/delete-email`, `/api/restore-email` | 메일 상태 |
+| `/api/clipboard` (POST `{text}`) | 인증번호를 운영체제 클립보드에 (64자까지, Win+V 기록에 안 남김) |
 | `/api/mail/star`, `/api/mail/move`, `/api/mail/folder-create`, `/api/mail/reminder`, `/api/mail/translate` | 메일 기능 |
 | `/api/mail/reply-dismiss` | 답장할 메일에서 빼기·다시 넣기 `{id, undo}` (`reply_state.json` 에만 씀, 메일 서버는 그대로) |
 | `/api/mail/open-link` | 메일 본문 링크를 기본 브라우저로 (http·https 만) |
@@ -531,6 +532,7 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 | `BACKGROUND_SYNC` | 앱을 꺼 둬도 하루 한 번 동기화 (운영체제 예약, `background_sync.py`) | `true` |
 | `AUTO_EMAIL_MINUTES`, `AUTO_DEADLINE_MINUTES`, `AUTO_SYNC_MINUTES` | 자동 주기(분), 0이면 끔 | 5, 60, 180 |
 | `GCAL_SYNC_ENABLED`, `GCAL_CALENDAR_NAME` | 구글 캘린더 | 꺼짐, `DGIST 메일 일정` |
+| `AUTO_COPY_AUTH_CODE` | 막 온 인증 메일의 번호를 클립보드에 넣고 알림 (화면 `autoCopyAuthCode`, 누르는 즉시 저장) | true |
 | `EMAIL_INTEREST_TAGS`, `EMAIL_INTERESTS_CUSTOM`, `EMAIL_HIDE_PAST` | 메일 관심사, 지난 일정 숨김 | |
 | `LMS_URL`, `LOGIN_URL` | LMS 주소 | |
 
@@ -658,6 +660,7 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 
 - 설치 창 디자인: `daling.iss` 의 WizardStyle(modern dynamic windows11 hidebevels)·WizardBackColor(앱 --bg)·WizardImageFile(+DynamicDark). 그림은 `scripts/make_installer_art.py` (시스템 파이썬 Pillow, Noto Serif KR 제목 + 달구) → `packaging/art/`. 단계는 환영 → 추가 옵션 → 설치 → 완료 (언어·위치·준비됨 창은 뺐다). 문구는 [Messages] 에 앱 말투로.
 - 앱 안 업데이트 화면: `#updateDialog` 카드(`setUpdateStep`, 확인→내려받기→검사→설치). 설치는 /VERYSILENT 라 윈도우 설치 창이 안 뜬다. 설치 직전 `update_done.json`(데이터 폴더)에 from/to 를 적고, 다시 켜진 앱은 `/api/whats-new` 의 `justUpdated` 로 '업데이트를 마쳤어요' 카드를 연다(본 뒤 지운다).
+- 업데이트 뒤 앱이 꺼진 채 남던 일(2026-11-13, 1.12.65, 사용자 신고 '내려받고 꺼지기까진 되는데 다시 안 켜지고 업데이트도 안 됨'): 내려받는 사이 자동 확인이 띄운 작업 프로세스(`Daling.exe --autosaver-job …`)는 `os._exit` 로 앱이 꺼져도 살아남아 설치할 파일을 쥔다. 창이 없어 Restart Manager 가 닫지 못하고, `/SUPPRESSMSGBOXES` 설치는 'file in use' 에서 `Defaulting to Abort` 로 말없이 되돌린다. 재현: 1.12.63 에서 업데이트를 누르고 0.8초 뒤 마감 확인 → 작업만 남고 설치 9초 만에 끝, 1.12.63 그대로·다시 안 켜짐(작업이 없으면 같은 길로 26초에 1.12.64 로 다시 켜짐). 고침: ① `daling.iss` `PrepareToInstall` 이 이 설치 폴더의 작업 프로세스(`--autosaver-` 또는 `_internal\` 아래)를 닫는다(창 있는 앱은 Restart Manager 에게) ② 그래도 못 마치면 `DeinitializeSetup` 이 /RELAUNCH=1 일 때 하던 앱을 다시 켠다 ③ 앱은 받는 중·설치 넘긴 뒤 새 작업을 띄우지 않고(`updater.updating`, `start_task`) 설치 직전 작업을 끝낸다(`web_ui.stop_workers_for_update`, taskkill /T, 이 PC 0.8초) ④ 옛 버전으로 다시 켜지면 `/api/whats-new` 의 `updateFailed` 로 한 번 알린다. ①② 는 새 설치 파일이 도는 순간부터라 1.12.64 에서 1.12.65 로 갈 때부터 듣는다. 확인: 같은 재현에서 새 설치 파일이 8초에 작업을 닫고 17초에 1.12.65 로 다시 켬, 파일 하나를 잡아 설치를 일부러 실패시키면 되돌린 뒤 하던 앱을 다시 켬.
 
 
 ### 영어 화면 (i18n)
@@ -911,6 +914,16 @@ GitHub raw에서 `UPDATE_FILES`를 모두 받은 뒤에만 덮어씁니다.
 - 배포는 `cloud/daling-mcp` 에서 `npm run deploy`(= `wrangler deploy --env=`, 사용자 계정). 비밀값은 지금 필요 없다 — 생기면 `wrangler secret put` 으로만.
 - `smoke_test.SWEEP_GET`·`SWEEP_POST` 에 `/api/claude-link…` 4개를 넣었다(체험 중 POST 는 409). 이때 1.12.54 의 `/api/ai/connections`(GET)·`/api/ai/login`(로그인 터미널을 여니 `SWEEP_POST_SKIP`)이 빠져 소스 점검이 처음부터 멈춰 있던 것도 고쳤다. 소스·설치본 점검 모두 18개 통과(GET 59·POST 67).
 
+## 인증번호 복사 (2026-11-17, 1.12.66)
+사용자: '인증메일 같은 거 오면 자동복사 기능이나 그냥 복사해 주는 기능'.
+- 찾기: `email_reader.find_auth_code(subject, body)`. '인증·확인·보안 + 번호·코드', '승인번호', '일회용 비밀번호', 'verification/security/login/sign-in… code', 'passcode', 'OTP' 같은 **짝 낱말** 뒤 160자 안의 첫 코드(없으면 앞 60자 안 — '123456 is your code'). 코드: 숫자 4~8자리(앞 0 그대로), `123 456`·`123-456`(붙여서 복사), 대문자+숫자 6~8자(`ABC-123`, 글자만인 것은 안 고름).
+- 안 고르는 것: 전화번호·날짜·시각의 토막(`053-720-7882`, `2026.11.20`), 단위가 붙은 수(원·년·분·%…), 4자리 연도(1990~2099), `#`·`$` 뒤, 주소·메일·링크 안(`?code=`, `@`). '드레스 코드는 크리스마스'(실제 행사 메일)처럼 짝이 아닌 '코드' 는 보지 않는다. 시험: 실제 메일 125통에서 생활관 인증 메일 한 통만 고름, 9ms. 만든 예 16개(네이버·구글·MS·Slack·전화번호·학번·링크 섞인 것) 모두 맞음.
+- 목록: `web_ui.get_emails` 가 보낸·임시 보관 메일을 빼고 `authCode` 를 붙인다(`auth_code_of`, 메일 id·본문 길이로 기억). 화면은 메일 줄·카드에 초록 꼬리표(`.auth-code-chip`, 누르면 열지 않고 복사), 읽기 창 위 띠(`#readAuthCode`, 큰 글씨 + 복사 단추).
+- 복사: 화면 → `/api/clipboard` → `system_clipboard.copy_text(sensitive=True)`. Windows 는 user32 클립보드 API 에 `CanIncludeInClipboardHistory`·`CanUploadToCloudClipboard` = 0 을 함께 넣어 Win+V 기록·클라우드 클립보드에 번호가 남지 않게 한다. 맥 `/usr/bin/pbcopy`, 리눅스 wl-copy·xclip·xsel. 서버가 못 하면 화면의 `navigator.clipboard` 로.
+- 저절로 복사: `app.check_auth_code_alerts`. 받은 편지함·프로모션의 `authCode` 메일 가운데 **받은 지 10분 안**(`AUTH_COPY_MINUTES`, 보낸 쪽 시계가 5분 빨라도 받음)이고 아직 안 한 것 중 가장 늦게 온 것 하나를 복사하고 '인증번호 ○○ 복사했어요' 알림. 메일 가져오기가 끝나자마자(`web_ui.MAIL_FETCHED_HOOKS` — web_ui 는 app 을 부를 수 없어 app 이 넣는다) + 스케줄러 30초 차례에도. 한 번 한 메일은 `alerts.json` 의 `authCopied`(200개) + 메모리 집합(다른 알림 검사와 alerts.json 을 함께 고쳐 써 기록이 덮일 수 있어서)으로 다시 하지 않는다.
+- 하지 않을 때: 스위치 `AUTO_COPY_AUTH_CODE` 끔, **앱 잠금 중**(잠가 두고 자리를 비운 사이 남이 요청한 번호가 클립보드에 들어가 있으면 안 됨), 체험 모드(스케줄러가 쉼). 메일은 5분(안 볼 때 15분)마다 오므로 급하면 메일함 새로고침.
+- 화면의 navigator.clipboard 만 쓰지 않은 까닭: 사용자가 누른 순간에만 되고, 창이 뒤에 있거나 트레이에 있으면 '문서에 초점이 없다' 며 거절한다.
+
 ## 메일 분류 규칙 (2026-10-12)
 - `email_reader.rule_based_category` 순서: 답신 → 계정·알림(인증번호·패스키·계정 생성) → 수업·LMS(Blackboard 발신, 제목의 `[2026_2학기]`, 일일 통지·제출물 수신함·강의성찰) → 학생회 → 교수님(발신자 이름에 교수) → 세미나·행사(한·영 낱말: Seminar·Colloquium·Symposium·Lecture Series·Workshop·Forum·투어·마라톤…) → 취업·진로(창업·공모전·해커톤·트랙…) → 행정·학생팀(보낸 부서) → 동아리·문화 → 기타.
 - 내용(행사·진로)을 보낸 부서(행정)보다 먼저 본다: 창업지원팀 공모전·총무구매팀 마라톤이 행정으로 갔었다.
@@ -1132,6 +1145,7 @@ Microsoft Store 정책 10.3.1(로그인 앱은 심사용 시험 계정을 줄 �
 
 - `window_chrome.py`: WinForms 테두리는 그대로 두고 `WM_NCCALCSIZE` 에서 제목 줄 높이만 클라이언트로 돌려 회색 제목 줄을 없앤다(크기 조절·Aero 스냅·그림자 유지). `frameless=True` 는 이것들이 다 사라져 쓰지 않았다.
 - 끌기: WebView2 `IsNonClientRegionSupportEnabled` 를 첫 페이지 전에 켜고 CSS `app-region: drag`. 두 번 누르면 최대화·화면 끝 스냅도 진짜 제목 줄처럼 된다.
+- 확대(2026-11-13, 1.12.65): 사용자 신고 — 메일 본문 위에서 손가락으로 벌리자 상단 바·왼쪽이 창 밖으로 잘렸다. WebView2 핀치 확대는 배치를 두고 화면만 키우는 돋보기(page scale)라 잘린 곳으로 돌아갈 길이 없고, pywebview 가 Ctrl+휠을 막는 스크립트(`zoomable=False`)는 맨 위 문서에만 들어가 메일 본문 iframe 에서 샜다. `IsPinchZoomEnabled=False`(같은 `on_webview_ready` 끼움), 화면은 Ctrl+휠·핀치(ctrlKey wheel)를 맨 위 문서와 본문 iframe 에서 받아(`guardAppZoom`) `/api/window {action:'zoom', step}` → `window_chrome.zoom`(WebView2 `ZoomFactor`, Edge 단계 0.5~3). 시험 창 실측: 배율 1→1.1→1.25→1.5 에 innerWidth 987→897→789→658(배치를 다시 짬). Ctrl+= / - / 0 은 WebView2 그대로. 맥 WKWebView 는 핀치 확대가 원래 꺼져 있어 손대지 않음.
 - 끌기 자리는 빈 곳의 사각형 몇 개뿐(1.12.42): 상단 바 위·아래 8px 띠(`.topbar::before/::after`), 왼쪽 메뉴 맨 위 여백(`.sidebar::before`), 같은 줄 단추 묶음 사이 24px 넘는 틈(`.drag-gap`, `app.js placeDragGaps` — ResizeObserver 로 재고 값이 같으면 안 건드림). no-drag 구멍은 쓰지 않는다.
   - 틈은 상단 바 위아래 끝까지(1.12.43): 예전엔 이웃 단추 높이(40px)만큼만이었다. 줄바꿈된 다른 줄 단추가 위·아래에 있으면 그 4px 앞에서 자른다. 넓은 창의 검색칸은 520→440px(`flex: 0 1 440px`)로 줄여 오른쪽 틈을 넓혔다. 창 1307px(CSS) 대시보드: 오른쪽 틈 28×40 → 68×61px(진행 칩 없을 때 82×61), 메일함 81×40 → 81×61px. 끌기 조각 10개, 진행 칩을 띄운 채 20초 WM_NULL 0/40번 멈춤(최대 9ms).
   - 좁은 창(1.12.44, 사용자: '앱 크기를 줄이면 끌어서 옮기기가 전혀 안 된다'): CSS 1100px 이하는 검색칸이 남는 자리를 다 채워 틈이 0개라, 옮길 수 있는 곳이 아래 8px 띠와 왼쪽 위 75×4px 뿐이었다(위 8px 띠는 HTTOP). 761~1100px: 검색칸 `flex: 0 1 280px` + 오른쪽 64px 여백, 단추 묶음은 한 줄(`flex: none`), 진행 칩 150px, 960px 이하 ←/→ 빼기, 860px 이하 시계 날짜 빼기 → 검색칸 오른쪽에 늘 72px 넘는 틈. 760px 이하(휴대폰 배치): 시계를 글자 폭만(`justify-self: start`) 써서 시계 옆이 틈, `placeDragGaps` 가 줄 끝(오른쪽 이웃 없음)도 틈으로 잡아 창 단추 아래 검색칸 오른쪽(146px)이 틈. 창 단추 칸 높이(`--winctl-h`)는 단추 묶음 줄 가운데에 맞춘다(64→56px, 둘째 줄을 가리지 않게).

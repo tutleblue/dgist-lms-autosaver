@@ -188,6 +188,15 @@ def enable_webview_drag_regions() -> None:
                 sender.CoreWebView2.Settings.IsNonClientRegionSupportEnabled = True
         except Exception:
             pass  # 오래된 WebView2 런타임: 끌기가 안 될 뿐 앱은 그대로 뜬다
+        try:
+            if args.IsSuccess:
+                # 손가락 두 개로 벌리는 확대(핀치)는 글자 배치를 그대로 둔 채 화면만 돋보기처럼 키워, 상단 바와
+                # 왼쪽이 창 밖으로 잘리고 마우스로 돌아갈 길이 없었다(2026-11-13 사용자 신고, 메일 본문 위에서).
+                # pywebview 가 Ctrl+휠을 막는 스크립트는 맨 위 문서에만 들어가 메일 본문 iframe 에선 새었다.
+                # 핀치는 여기서 끄고, 확대는 화면이 Ctrl+휠·핀치를 받아 진짜 페이지 확대(zoom)로 바꾼다.
+                sender.CoreWebView2.Settings.IsPinchZoomEnabled = False
+        except Exception:
+            pass  # 오래된 WebView2 런타임(설정5 없음): 예전처럼 핀치가 될 뿐
         return original(self, sender, args)
 
     on_webview_ready._daling_patched = True
@@ -212,6 +221,42 @@ def command(action: str) -> dict:
     if action == "maximize":
         st["maximized"] = not st["maximized"]  # 메시지는 비동기라 아직 안 바뀌었다
     return st
+
+
+# Edge·Chrome 의 Ctrl+휠 단계와 같게 (WebView2 가 Ctrl+= / Ctrl+- 로 쓰는 단계와도 맞물린다)
+ZOOM_STEPS = (0.5, 0.67, 0.75, 0.8, 0.9, 1.0, 1.1, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0)
+
+
+def zoom(step: int) -> dict:
+    """페이지 확대 한 단계(+1 크게 · -1 작게 · 0 원래대로). 글자 배치를 다시 짜는 진짜 확대(WebView2 ZoomFactor).
+
+    창 테두리를 바꾸지 못했어도(ENABLED=False) 확대는 된다. 바뀐 배율을 돌려준다(못 바꾸면 zoom 없음).
+    """
+    if os.name != "nt":
+        return {}
+    try:
+        import webview
+        from System import Func, Type  # pythonnet: pywebview 가 이미 불러 둔 것
+
+        form = webview.windows[0].native
+        control = form.webview
+        result: dict = {}
+
+        def _apply():
+            now = float(control.ZoomFactor)
+            if step == 0:
+                new = 1.0
+            elif step > 0:
+                new = next((z for z in ZOOM_STEPS if z > now + 0.001), ZOOM_STEPS[-1])
+            else:
+                new = next((z for z in reversed(ZOOM_STEPS) if z < now - 0.001), ZOOM_STEPS[0])
+            control.ZoomFactor = new
+            result["zoom"] = new
+
+        form.Invoke(Func[Type](_apply))
+        return result
+    except Exception:
+        return {}
 
 
 def focus_existing(title: str) -> bool:

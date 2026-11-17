@@ -54,6 +54,7 @@ const icons = {
   // FGLP 학교 상세의 바깥 링크 (홈페이지 · 지도 · 새 창)
   globe: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>',
   map: '<svg viewBox="0 0 24 24"><path d="M14.1 5.55a2 2 0 0 0 1.8 0l3.66-1.83A1 1 0 0 1 21 4.62v12.76a1 1 0 0 1-.55.9l-4.55 2.27a2 2 0 0 1-1.8 0l-4.2-2.1a2 2 0 0 0-1.8 0l-3.66 1.83A1 1 0 0 1 3 19.38V6.62a1 1 0 0 1 .55-.9L8.1 3.45a2 2 0 0 1 1.8 0z"/><path d="M15 5.76v15"/><path d="M9 3.24v15"/></svg>',
+  copy: '<svg viewBox="0 0 24 24"><rect width="13" height="13" x="9" y="9" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>',
   external: '<svg viewBox="0 0 24 24"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>',
 };
 
@@ -1441,6 +1442,7 @@ function newsCard(mail, featured = false) {
         <input type="checkbox" class="mail-pick" aria-label="선택" />
         <span class="category-chip ${color}">${escapeHtml(mail.category || "기타")}</span>
         ${needsReply(mail) ? replyTagHtml(mail) : ""}
+        ${mail.authCode ? authCodeChipHtml(mail) : ""}
         ${mail.unread ? '<span class="unread-dot" title="안 읽은 메일"></span>' : ""}
         <span class="card-actions">
           <button type="button" class="mail-act" data-act="read" title="${mail.unread ? "읽음 표시" : "안읽음 표시"}">
@@ -1606,6 +1608,11 @@ async function renderMailBody(mail) {
     blendMailBackground(frame);
     bindMailLinks(frame);
     sizeMailFrame(frame);
+    try {
+      guardAppZoom(frame.contentDocument); // 본문 위에서 Ctrl+휠·핀치도 같은 확대로 (guardAppZoom 설명)
+    } catch (error) {
+      /* 본문 문서를 못 읽으면 넘어간다 */
+    }
   };
   if (bar) bar.hidden = true;
 }
@@ -1686,6 +1693,7 @@ function openEmailDetail(mail) {
   }
 
   paintReadReplyAsk(mail);
+  paintReadAuthCode(mail);
   renderMailBody(mail);
   state.replyContext = mail;
   // 읽음/안읽음 토글 아이콘
@@ -3823,6 +3831,7 @@ function emailListRow(mail) {
         <div class="list-head">
           <span class="list-folder-tag">${escapeHtml(MAIL_FOLDER_TAG[mail.folder] || "메일")}</span>
           ${needsReply(mail) ? replyTagHtml(mail) : ""}
+          ${mail.authCode ? authCodeChipHtml(mail) : ""}
           <span class="list-from">${
             (mail.folder === "sent" || mail.folder === "draft") && (mail.toName || mail.toEmail)
               ? `→ ${escapeHtml(shortText(mail.toName || mail.toEmail, 22))}`
@@ -3878,6 +3887,53 @@ function replySig(s) {
 function replyAgo(days) {
   const n = Number(days) || 0;
   return n <= 0 ? "오늘 받음" : n === 1 ? "어제 받음" : `${n}일째`;
+}
+
+/* ===== 인증번호 복사 (2026-11-17) =====
+   사용자: '인증메일 같은 거 오면 자동복사 기능이나 그냥 복사해 주는 기능'.
+   서버(email_reader.find_auth_code)가 본문에서 고른 번호를 authCode 로 붙여 준다. 메일 줄·카드의 꼬리표를 누르면
+   메일을 열지 않고 복사하고, 읽기 창 위 띠에도 복사 단추가 있다. 막 온 인증 메일은 앱이 저절로 복사하고
+   컴퓨터 알림을 띄운다(app.check_auth_code_alerts, 설정 '인증번호 자동 복사').
+   복사는 서버(/api/clipboard)가 운영체제에 직접 넣는다 — Win+V 기록·클라우드 클립보드에 번호가 남지 않게.
+   서버가 못 하면(리눅스에 복사 도구가 없을 때) 화면의 navigator.clipboard 로 한다. */
+function authCodeChipHtml(mail) {
+  return `<button type="button" class="auth-code-chip" data-copy-code="${escapeHtml(mail.authCode)}"
+    title="${escapeHtml(tr("인증번호 복사"))}" aria-label="${escapeHtml(tr("인증번호 복사"))}">${iconHtml("copy")}<span>${escapeHtml(mail.authCode)}</span></button>`;
+}
+
+async function copyAuthCode(code, button = null) {
+  let ok = false;
+  try {
+    ok = Boolean((await api("/api/clipboard", { method: "POST", body: JSON.stringify({ text: code }) }))?.ok);
+  } catch {
+    ok = false;
+  }
+  if (!ok) {
+    try {
+      await navigator.clipboard.writeText(code);
+      ok = true;
+    } catch {
+      ok = false;
+    }
+  }
+  if (!ok) {
+    showToast(tr("복사하지 못했어요."));
+    return;
+  }
+  showToast(keyLabel(tr("인증번호 {0} 복사했어요. Ctrl+V 로 붙여 넣으세요.").replace("{0}", code)));
+  if (button) {
+    button.classList.add("copied");
+    setTimeout(() => button.classList.remove("copied"), 1500);
+  }
+}
+
+function paintReadAuthCode(mail) {
+  const band = $("#readAuthCode");
+  if (!band) return;
+  const code = mail?.authCode || "";
+  band.hidden = !code;
+  band.dataset.code = code;
+  $("#readAuthCodeValue").textContent = code;
 }
 
 function replyTagHtml(mail) {
@@ -6560,6 +6616,7 @@ async function populateSettings() {
   form.elements.hidePastEmails.checked = Boolean(state.config?.hidePastEmails);
   if (form.elements.notifyDeadlines) form.elements.notifyDeadlines.checked = state.config?.notifyDeadlines !== false;
   if (form.elements.notifyNewFiles) form.elements.notifyNewFiles.checked = state.config?.notifyNewFiles !== false;
+  if (form.elements.autoCopyAuthCode) form.elements.autoCopyAuthCode.checked = state.config?.autoCopyAuthCode !== false;
   loadAutostart();
   loadBackgroundSync();
   loadAiConnections();
@@ -7019,7 +7076,7 @@ function bindEvents() {
     grid.addEventListener("pointerdown", (event) => {
       if (event.button !== 0) return;
       // 별표·버튼·체크박스를 누른 것은 끌기가 아니다
-      if (event.target.closest("[data-star], [data-act], .mail-pick")) return;
+      if (event.target.closest("[data-star], [data-act], [data-copy-code], .mail-pick")) return;
       const row = event.target.closest("[data-mail-id]");
       if (!row) return;
       const rows = rowsNow();
@@ -7142,6 +7199,13 @@ function bindEvents() {
   const handleMailClick = (event) => {
     const item = event.target.closest(".news-card, .email-list-row");
     if (!item) return;
+    // 인증번호 꼬리표는 '복사'지 '열기'가 아니다
+    const codeBtn = event.target.closest("[data-copy-code]");
+    if (codeBtn) {
+      event.stopPropagation();
+      copyAuthCode(codeBtn.dataset.copyCode, codeBtn);
+      return;
+    }
     // 별표는 '중요 표시'지 '열기'가 아니다
     if (event.target.closest("[data-star]")) {
       event.stopPropagation();
@@ -7831,6 +7895,7 @@ function bindEvents() {
     payload.hidePastEmails = event.currentTarget.elements.hidePastEmails.checked;
     payload.notifyDeadlines = event.currentTarget.elements.notifyDeadlines?.checked !== false;
     payload.notifyNewFiles = event.currentTarget.elements.notifyNewFiles?.checked !== false;
+    payload.autoCopyAuthCode = event.currentTarget.elements.autoCopyAuthCode?.checked !== false;
     payload.gcalSyncEnabled = event.currentTarget.elements.gcalSyncEnabled.checked;
     payload.driveUpload = event.currentTarget.elements.driveUpload.checked;
     Object.assign(payload, savePlacePayload());
@@ -12634,6 +12699,14 @@ async function loadWhatsNew() {
   }
   renderWhatsNewButton();
   if (state.whatsNew?.justUpdated) window.setTimeout(openWhatsNew, 600);
+  // 지난번 '지금 업데이트' 가 설치를 마치지 못하고 옛 버전으로 다시 켜졌다 (web_ui.get_whats_new). 예전엔 아무 말이 없었다
+  const failed = state.whatsNew?.updateFailed;
+  if (failed) {
+    window.setTimeout(
+      () => showToast(tr(`v${failed.to || ""} 업데이트를 마치지 못했어요. 왼쪽 아래 '새 버전 설치'를 다시 눌러 주세요.`)),
+      900,
+    );
+  }
 }
 
 // 'a.b.c' 끼리 숫자로 비교. a 가 크면 양수
@@ -14633,13 +14706,18 @@ window.setInterval(reportPresence, 60 * 1000);
 reportPresence();
 
 /* 알림 스위치는 누르는 즉시 저장한다 ('설정 저장' 을 안 눌러 도로 꺼지는 일이 없게) */
-["notifyDeadlines", "notifyNewFiles"].forEach((name) => {
+const ALERT_SWITCH_TOAST = {
+  notifyDeadlines: ["마감 알림을 켰어요", "마감 알림을 껐어요"],
+  notifyNewFiles: ["새 자료·공지 알림을 켰어요", "새 자료·공지 알림을 껐어요"],
+  autoCopyAuthCode: ["인증번호 자동 복사를 켰어요", "인증번호 자동 복사를 껐어요"],
+};
+Object.keys(ALERT_SWITCH_TOAST).forEach((name) => {
   $(`#${name}`)?.addEventListener("change", async (event) => {
     const on = event.target.checked;
     try {
       await api("/api/config", { method: "POST", body: JSON.stringify({ [name]: on }) });
       if (state.config) state.config[name] = on;
-      showToast(`${name === "notifyDeadlines" ? "마감 알림" : "새 자료·공지 알림"}을 ${on ? "켰어요" : "껐어요"}`);
+      showToast(tr(ALERT_SWITCH_TOAST[name][on ? 0 : 1]));
     } catch (error) {
       event.target.checked = !on;
       showToast(humanError(error));
@@ -15866,6 +15944,11 @@ async function copyDoctorReport() {
   }
 }
 
+$("#readAuthCodeCopy")?.addEventListener("click", (event) => {
+  const code = $("#readAuthCode")?.dataset.code;
+  if (code) copyAuthCode(code, event.currentTarget);
+});
+
 $("#doctorButton")?.addEventListener("click", openDoctor);
 $("#doctorClose")?.addEventListener("click", () => $("#doctorDialog")?.close());
 $("#doctorAgainButton")?.addEventListener("click", () => runDoctor());
@@ -16352,6 +16435,36 @@ function macDragRegions() {
     })
     .catch(() => {});
 })();
+
+/* 앱 창 확대: Ctrl+휠·터치패드 핀치(크롬 계열은 핀치를 ctrlKey 붙은 wheel 로 보낸다)를 진짜 페이지 확대로.
+   WebView2 의 핀치 확대는 배치를 그대로 둔 채 화면만 돋보기처럼 키워 상단 바·왼쪽이 창 밖으로 잘렸다
+   (2026-11-13 사용자 신고, 메일 본문 위에서). pywebview 가 Ctrl+휠을 막는 스크립트는 맨 위 문서에만 들어가
+   메일 본문 iframe 에선 샜다. 핀치는 window_chrome 이 끄고, 여기서 /api/window {action:"zoom"} 로 ZoomFactor 를
+   바꾼다(글자 배치를 다시 짬). Ctrl+= / Ctrl+- / Ctrl+0 은 WebView2 가 원래 하는 대로 둔다.
+   Windows 앱 창에서만 — 브라우저(개발 서버)는 브라우저 확대를, 맥 WKWebView 는 핀치 확대가 원래 꺼져 있다. */
+function guardAppZoom(doc) {
+  if (!doc || doc.__dalingZoom) return;
+  doc.__dalingZoom = true;
+  doc.addEventListener("wheel", appZoomWheel, { passive: false });
+}
+function appZoomWheel(event) {
+  if (!event.ctrlKey || !window.pywebview || IS_MAC || !/Win/.test(navigator.platform || "")) return;
+  event.preventDefault();
+  const zoom = (appZoomWheel.state ||= { acc: 0, busy: false });
+  const delta = event.deltaMode === 1 ? event.deltaY * 40 : event.deltaY;
+  zoom.acc += delta;
+  // 마우스 휠은 한 칸에 한 단계(크게 확대해 있으면 deltaY 가 작아져 25 로 잡음), 핀치는 작은 값이 이어 오므로 모아서
+  if ((Math.abs(delta) < 25 && Math.abs(zoom.acc) < 60) || zoom.busy) return;
+  const step = zoom.acc < 0 ? 1 : -1;
+  zoom.acc = 0;
+  zoom.busy = true;
+  api("/api/window", { method: "POST", body: JSON.stringify({ action: "zoom", step }) })
+    .catch(() => {})
+    .finally(() => {
+      zoom.busy = false;
+    });
+}
+guardAppZoom(document);
 
 // 제목 줄 모드에서는 동기화 시각 글을 숨기므로, 같은 글을 새로고침 단추의 풍선 도움말로 옮겨 둔다
 (function mirrorLastSync() {
